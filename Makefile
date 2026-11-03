@@ -66,10 +66,11 @@ lint: web-stub node-check $(GOLANGCI_LINT)
 	$(PNPM) run check
 	$(PNPM) run lint
 
-# Design doc item 2. sqlc joins here in a later P1 task.
+# Design doc item 2: oapi-codegen, openapi-typescript and sqlc (Docker image).
 generate: web-stub node-check
 	go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
 	$(PNPM) run gen:api
+	docker run --rm -u $$(id -u):$$(id -g) -v $(CURDIR):/src -w /src $(SQLC_IMAGE) generate
 
 # Fails on a modified or untracked generated file, not on unrelated uncommitted work.
 check-generated: generate
