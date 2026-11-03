@@ -45,5 +45,6 @@ jobs:
       - run: make lint GOLANGCI_LINT=golangci-lint
       - run: make test
       - run: make vuln
+      - run: make check-generated
       # Last, so every check above ran with only the web stub (Verification Plan, "Clean checkout").
       - run: make build

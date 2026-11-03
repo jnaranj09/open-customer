@@ -12,6 +12,7 @@
 		"dev": "vite dev",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"lint": "eslint . && prettier --check . && knip && jscpd",
+		"gen:api": "openapi-typescript ../api/openapi.yaml -o src/lib/api/schema.d.ts",
 		"format": "prettier --write .",
 		"test": "vitest run --passWithNoTests"
 	},

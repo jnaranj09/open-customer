@@ -1298,7 +1298,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | Target | What it runs |
     | --- | --- |
     | `generate` | oapi-codegen, sqlc, openapi-typescript (from P1; P0 has no spec or queries) |
-    | `check-generated` | `generate`, then fails if `git status --porcelain` shows any change, so new untracked generated files are caught too |
+    | `check-generated` | `generate`, then fails if `git status --porcelain` shows a change under `internal/httpapi/gen`, `internal/db/sqlc` or `web/src/lib/api/schema.d.ts`, so modified and new untracked generated files are caught, but unrelated uncommitted work is not |
     | `check-pins` | Runs `scripts/check-pins.sh`. Scans only `deploy/compose.yaml`, `deploy/backup/Dockerfile`, `.github/workflows/ci.yml` and the root `Dockerfile` (each once it exists; never `docs/` or `*.md`). Fails if a `postgres:` tag differs from `PG_IMAGE`, if the `Dockerfile`'s `node:`, `golang:` and `pnpm@` versions differ from `engines.node`, the `toolchain` line and `packageManager`, or if the CI golangci-lint `version:` differs from `GOLANGCI_LINT_VERSION` (see "Pins") |
     | `web-stub` | Creates `web/build/index.html` with the text "Run make web" if the file is missing. Never overwrites a real build. |
     | `node-check` | Fails unless `node --version` equals `engines.node` (with fnm: `fnm use` in `web/`). `web`, `test` and `lint` depend on it |
@@ -2087,7 +2087,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   Dependencies (shipped in the bundle): `dexie`, `openapi-fetch`, `zod` (runtime parsing of API responses and cache rows, items 66–67).
     *   Dev dependencies (build and check tools; the app is static, so nothing else ships): `@sveltejs/kit` (v3), `@sveltejs/adapter-static`, `@sveltejs/vite-plugin-svelte`, `vite`, `svelte` 5, `tailwindcss` v4 + `@tailwindcss/vite`, `typescript` (6.0.x: typescript-eslint and SvelteKit do not accept 7 yet), `openapi-typescript`, `vitest`, `@playwright/test` (exact version), `eslint`, `@eslint/js`, `globals`, `typescript-eslint`, `eslint-plugin-svelte`, `@vitest/eslint-plugin`, `eslint-plugin-playwright`, `prettier`, `prettier-plugin-svelte`, `svelte-check`, `knip`, `jscpd`, `@types/node`, `fake-indexeddb`, `pg` and `@types/pg` (for `seed.ts`, item 80).
-    *   Scripts: `build`, `dev`, `check` (`svelte-kit sync && svelte-check --fail-on-warnings`), `lint` (`eslint . && prettier --check . && knip && jscpd`), `format`, `test` (`vitest run --passWithNoTests`); `e2e` comes in P6 and `gen:api` in P1.
+    *   Scripts: `build`, `dev`, `check` (`svelte-kit sync && svelte-check --fail-on-warnings`), `lint` (`eslint . && prettier --check . && knip && jscpd`), `format`, `test` (`vitest run --passWithNoTests`); `e2e` comes in P6. `gen:api` (`openapi-typescript ../api/openapi.yaml -o src/lib/api/schema.d.ts`) exists since P1.
     *   `web/pnpm-workspace.yaml` is written by pnpm (its release-age settings) and committed. `web/eslint-suppressions.json` is the ESLint bulk-suppressions file (`{}` at P0), pinned by the web `suppression-budget` guard.
     *   Created in P0 with a minimal `web/src/app.html` and a placeholder `web/src/routes/+page.svelte` (one line of text), so `make lint test build` work from the first commit. P5 replaces both (items 64 and 72).
 

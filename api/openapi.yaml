@@ -1,0 +1,81 @@
+openapi: 3.0.3
+info:
+  title: open-customer API
+  version: 1.0.0
+  description: >-
+    The contract for the open-customer API. It holds only the endpoints of the current build
+    phase (design doc item 15).
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /setup/status:
+    get:
+      operationId: getSetupStatus
+      summary: Whether the first-run setup is still open
+      description: >-
+        Has no authentication on purpose: the setup wizard calls it before any user or session
+        exists, to decide whether to show the wizard.
+      security: []
+      responses:
+        "200":
+          description: Setup state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupStatus"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: oc_session
+  schemas:
+    SetupStatus:
+      type: object
+      required: [needs_setup]
+      properties:
+        needs_setup:
+          type: boolean
+    Problem:
+      type: object
+      description: An RFC 9457 problem, sent as application/problem+json.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          enum:
+            - urn:open-customer:problem:validation
+            - urn:open-customer:problem:not-found
+            - urn:open-customer:problem:unauthorized
+            - urn:open-customer:problem:invalid-credentials
+            - urn:open-customer:problem:must-change-password
+            - urn:open-customer:problem:forbidden-origin
+            - urn:open-customer:problem:setup-closed
+            - urn:open-customer:problem:setup-token-invalid
+            - urn:open-customer:problem:overlap
+            - urn:open-customer:problem:duplicate-phone
+            - urn:open-customer:problem:invalid-transition
+            - urn:open-customer:problem:payload-too-large
+            - urn:open-customer:problem:unsupported-media-type
+            - urn:open-customer:problem:rate-limited
+            - urn:open-customer:problem:internal
+        title:
+          type: string
+        status:
+          type: integer
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+        retry_after_s:
+          type: integer
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string

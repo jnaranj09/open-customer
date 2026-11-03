@@ -5,7 +5,6 @@
 		"openapi-fetch",
 		"zod",
 		"tailwindcss",
-		"openapi-typescript",
 		"fake-indexeddb",
 		"@playwright/test",
 		"pg",

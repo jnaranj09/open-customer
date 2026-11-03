@@ -1,0 +1,10 @@
+# oapi-codegen config (design doc item 16). No strict-server: handlers get (w, r, params), so
+# headers, multipart and streaming need no workaround.
+package: gen
+output: internal/httpapi/gen/api.gen.go
+generate:
+  std-http-server: true
+  models: true
+  embedded-spec: true
+output-options:
+  nullable-type: true

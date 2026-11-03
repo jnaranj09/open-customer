@@ -29,7 +29,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -65,6 +65,16 @@ lint: web-stub node-check $(GOLANGCI_LINT)
 	shellcheck $(SHELL_FILES)
 	$(PNPM) run check
 	$(PNPM) run lint
+
+# Design doc item 2. sqlc joins here in a later P1 task.
+generate: web-stub node-check
+	go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+	$(PNPM) run gen:api
+
+# Fails on a modified or untracked generated file, not on unrelated uncommitted work.
+check-generated: generate
+	@out=$$(git status --porcelain -- internal/httpapi/gen internal/db/sqlc web/src/lib/api/schema.d.ts); \
+	if [ -n "$$out" ]; then echo "generated files differ from the committed ones (run make generate and commit):" >&2; echo "$$out" >&2; exit 1; fi
 
 check-pins:
 	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) scripts/check-pins.sh
