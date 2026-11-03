@@ -602,7 +602,7 @@ Session and request rules:
 *   **Username:** trimmed and lowercased by the server on setup and login, then 3–32 characters of `a–z`, `0–9`, `.`, `_` and `-` (422 otherwise). The inputs use `autocapitalize="off"`, `autocorrect="off"` and `autocomplete` (`username`, `new-password`, `current-password`), so iOS does not capitalize the first letter and iCloud Keychain can fill them.
 *   **Tokens:** the setup token and the session token are 32 random bytes, written as unpadded base64url in the link and the cookie, and stored as a SHA-256 hash.
 *   **Session cookie:** `oc_session`. `HttpOnly; Secure; SameSite=Lax; Path=/`. `Secure` is left off only when `PUBLIC_URL` is `http://localhost` or `http://127.0.0.1` (development and e2e), because WebKit does not store a `Secure` cookie over plain http. 90-day expiry that slides forward. `last_seen_at` is written at most once per hour per session; the same write extends `expires_at` and re-sends the cookie with a new 90-day `Max-Age`.
-*   **Writes:** every non-GET request must have an `Origin` header equal to `PUBLIC_URL`, or it gets a 403. The check is the same in development: `make dev` sets `PUBLIC_URL` to the Vite address (item 2).
+*   **Writes:** every request except GET and HEAD must have an `Origin` header equal to `PUBLIC_URL`, or it gets a 403. The check is the same in development: `make dev` sets `PUBLIC_URL` to the Vite address (item 2).
 *   **Login rate limit:** 5 attempts per minute per client IP, plus a growing delay per username after failures (exact rule in item 41). The client IP is `CF-Connecting-IP` only when the TCP peer is in `TRUSTED_PROXY_CIDRS` (default: the private ranges, which include the Compose network). Otherwise it is the TCP peer address.
 *   **No device list:** there is no screen that lists sessions. If she loses a phone, she changes her password from another device (Ajustes → "Cambiar contraseña"), which closes every other session (item 39). If she has no other device, the author runs `reset-password`, which closes all of them.
 
@@ -1783,11 +1783,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Middleware.
 *   **Proposed Changes**: Applied in this order. Steps 1–5 are built in P1. Steps 6–8 are built in P2, because they need `auth.Authenticate`.
-    1.  Request ID + logging.
+    1.  Request ID + logging. The layer just inside step 5 (around the mux) records the matched route pattern with `logging.SetRoute`, because the `r.WithContext` copies in steps 2–5 keep the mux's `r.Pattern` from reaching the log line.
     2.  `X-App-Version` header. It is set before any handler or the recovery code runs, so every response from the app has it, including errors and panics; the PWA uses its absence to detect "server off".
     3.  Panic recovery: logs the stack with the request ID and answers `internal` through `problem.Write`.
     4.  Client IP (`CF-Connecting-IP` only from `TRUSTED_PROXY_CIDRS`).
-    5.  Origin check on non-GET requests.
+    5.  Origin check on every method except GET and HEAD (the mux routes HEAD to GET handlers).
     6.  Session loading, plus the hourly sliding write from "Session and request rules" (`last_seen_at`, `expires_at` and a new `Set-Cookie`).
     7.  Auth required for `/api/v1/*` except `GET /setup/status`, `GET /setup/options`, `POST /setup`, `POST /auth/login` and `GET /push/key`.
     8.  The `must_change_password` gate. It allows exactly `POST /auth/password`, `GET /me` and `POST /auth/logout`, and answers every other `/api/v1` route with `must-change-password`.
