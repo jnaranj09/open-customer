@@ -26,7 +26,8 @@ once by breaking what they protect, then restored.
 - **T2 Hooks.** Registered in `.claude/settings.json`. Proven: a TS and a Go type error fail the edit
   hook; a missing shellcheck fails it naming T1; a failing Go test blocks Stop once, then stands down.
 - **T3 CI.** `.github/workflows/ci.yml` runs the gate plus gitleaks and `pnpm audit --audit-level
-  high`. **Not run yet:** it first runs after `git init` and a push to GitHub.
+  high`. First run green on the first push (run 41729156000): every step passed, which is the P0
+  exit check ("CI green").
 - **T4 Strictness.** Strict TS flags, typescript-eslint `strictTypeChecked`, golangci-lint
   `exhaustive`, `wrapcheck`, `nilerr`, `nolintlint`. `$effect` copies: `svelte/prefer-writable-derived`
   (named in `.claude/rules/ui.md`). Suppression pins: 0 `//nolint`, 0 bulk, 0 inline (the real totals).
