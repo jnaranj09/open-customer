@@ -21,14 +21,17 @@ run.
 | Command | What it does |
 | --- | --- |
 | `make check-pins` | Image and tool versions agree across the Makefile, `go.mod`, `web/package.json`, the Dockerfile and CI |
-| `make lint` | golangci-lint, shellcheck, svelte-check, eslint, prettier |
+| `make lint` | `go mod tidy -diff`, golangci-lint, deadcode, shellcheck, svelte-check, eslint, prettier |
 | `make test` | Go unit tests and Vitest |
+| `make generate` | oapi-codegen, sqlc (Docker image) and openapi-typescript |
+| `make check-generated` | `generate`, then fails if a generated file differs from the committed one |
+| `make test-db` | Go tests tagged `db` against a testcontainers Postgres (needs Docker) |
 | `make vuln` | govulncheck |
 | `make build` | The web build, then `bin/open-customer` |
 | `make image` | The app Docker image |
 
-The gate before any change is done: `make check-pins lint test vuln build`. Later phases add
-targets (`generate`, `check-generated`, `test-db`, `cover`, `dev`, `e2e`); the design doc's
+The gate before any change is done: `make check-pins lint test vuln build`. From P1 the gate adds
+`check-generated test-db`; later phases add targets (`cover`, `dev`, `e2e`); the design doc's
 "Build order" says when.
 
 ## Release checklist

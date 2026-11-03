@@ -29,7 +29,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -51,6 +51,10 @@ test: web-stub node-check
 	go test $(GO_PKGS)
 	$(PNPM) test
 
+# Tests tagged db use testcontainers Postgres (PG_IMAGE, exported above); Docker must be running.
+test-db: web-stub
+	go test -tags db $(GO_PKGS)
+
 vuln: web-stub
 	go tool govulncheck $(GO_PKGS)
 
@@ -58,8 +62,9 @@ $(GOLANGCI_LINT):
 	GOBIN=$(CURDIR)/$(dir $@) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 lint: web-stub node-check $(GOLANGCI_LINT)
+	go mod tidy -diff
 	$(GOLANGCI_LINT) run $(GO_DIRS)
-	@n=$$(go tool deadcode -test $(GO_PKGS) | tee /dev/stderr | wc -l); \
+	@n=$$(go tool deadcode -test -tags db $(GO_PKGS) | tee /dev/stderr | wc -l); \
 	if [ "$$n" -ne $(DEADCODE_BUDGET) ]; then \
 		echo "deadcode: $$n unreachable functions, DEADCODE_BUDGET is $(DEADCODE_BUDGET) (remove the new one, or lower the budget)" >&2; exit 1; fi
 	shellcheck $(SHELL_FILES)

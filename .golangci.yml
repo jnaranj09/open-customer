@@ -1,5 +1,10 @@
 version: "2"
 
+run:
+  # Lint the db-tagged tests too (make test-db runs them).
+  build-tags:
+    - db
+
 linters:
   default: none
   enable:
@@ -93,6 +98,11 @@ linters:
     presets:
       - std-error-handling
     rules:
+      # db.DBTX is the name the design doc fixes for the interface modules take (item 25).
+      - path: internal/db/db\.go
+        linters:
+          - revive
+        text: type name will be used as db\.DBTX
       # Tests may repeat setup; duplication is measured on shipped code (TASKS.md T7).
       - path: _test\.go
         linters:
