@@ -1,0 +1,8 @@
+.git
+bin
+web/node_modules
+web/build
+web/.svelte-kit
+web/.eslintcache
+deploy/.env
+coverage*

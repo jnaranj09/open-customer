@@ -1,0 +1,10 @@
+web/build
+web/node_modules
+web/.svelte-kit
+web/.eslintcache
+deploy/.env
+bin/
+coverage*
+.claude/settings.local.json
+web/.stryker-tmp
+web/reports

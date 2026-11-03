@@ -1,0 +1,25 @@
+# Design doc item 10. postgres, node and golang are bumped by hand, every copy in one commit
+# (design doc "Pins"); make check-pins keeps them equal. P7 adds /deploy/backup (docker) and
+# deploy/compose.yaml (docker-compose).
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: postgres
+      - dependency-name: node
+      - dependency-name: golang
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

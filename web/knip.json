@@ -1,0 +1,14 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"ignoreDependencies": [
+		"dexie",
+		"openapi-fetch",
+		"zod",
+		"tailwindcss",
+		"openapi-typescript",
+		"fake-indexeddb",
+		"@playwright/test",
+		"pg",
+		"@types/pg"
+	]
+}

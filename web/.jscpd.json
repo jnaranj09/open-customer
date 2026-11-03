@@ -1,0 +1,11 @@
+{
+	"path": ["src"],
+	"format": ["typescript", "javascript", "svelte"],
+	"ignore": ["**/*.test.ts", "**/schema.d.ts"],
+	"minLines": 10,
+	"minTokens": 60,
+	"threshold": 0,
+	"reporters": ["console"],
+	"exitCode": 1,
+	"gitignore": true
+}

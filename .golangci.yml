@@ -1,0 +1,104 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Design doc item 5.
+    - govet
+    - staticcheck
+    - errcheck
+    - gosec
+    - revive
+    - depguard
+    # TASKS.md T4 (strictness), T5 (test rules), T7 (decay sensors).
+    - exhaustive
+    - wrapcheck
+    - nilerr
+    - nolintlint
+    - thelper
+    - tparallel
+    - unused
+    - dupl
+  settings:
+    exhaustive:
+      # A switch on a tagged union lists every case; a default does not count as covering them.
+      default-signifies-exhaustive: false
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    dupl:
+      # AST tokens: a pasted 20-line function trips it at 80, not at 90 (measured at T7).
+      threshold: 80
+    depguard:
+      # Only the coarse module rules (design doc "Code layout and module rules"); the per-module
+      # allow-list is a review check.
+      rules:
+        domain-never-imports-httpapi:
+          files:
+            - "**/internal/**"
+            - "!**/internal/httpapi/**"
+          deny:
+            - pkg: github.com/jnaranj09/open-customer/internal/httpapi
+              desc: domain modules never import httpapi or its generated code
+        auth-imports-no-domain-module:
+          files:
+            - "**/internal/auth/**"
+          deny:
+            - pkg: github.com/jnaranj09/open-customer/internal/starter
+              desc: auth gets the seeder as a function from cmd
+            - pkg: github.com/jnaranj09/open-customer/internal/settings
+              desc: auth gets the settings creator as a function from cmd
+            - pkg: github.com/jnaranj09/open-customer/internal/attributes
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/clients
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/services
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/appointments
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/media
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/templates
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/reminders
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/push
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/scheduler
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/exporter
+              desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/status
+              desc: auth imports no domain module
+        reminders-only-from-orchestrators:
+          files:
+            - "$all"
+            - "!**/internal/reminders/**"
+            - "!**/internal/httpapi/**"
+            - "!**/internal/scheduler/**"
+            - "!**/internal/starter/**"
+            - "!**/cmd/open-customer/**"
+          deny:
+            - pkg: github.com/jnaranj09/open-customer/internal/reminders
+              desc: only httpapi, scheduler, starter and cmd import reminders
+        starter-only-from-cmd:
+          files:
+            - "$all"
+            - "!**/internal/starter/**"
+            - "!**/cmd/open-customer/**"
+          deny:
+            - pkg: github.com/jnaranj09/open-customer/internal/starter
+              desc: only cmd/open-customer imports starter
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Tests may repeat setup; duplication is measured on shipped code (TASKS.md T7).
+      - path: _test\.go
+        linters:
+          - dupl
+          - wrapcheck
+
+formatters:
+  enable:
+    - gofmt
