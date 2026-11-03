@@ -1748,7 +1748,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   A catch-all `/api/` handler answers every unknown path and every wrong method under `/api/` with 404 `not-found` problem JSON. Without it, the `/` fallback in item 35 would answer them with `index.html` and a 200.
     *   Handler shape: generated handlers take `(w, r, <path params>, params)`, for example `(w, r, id, params)`.
     *   Shared helpers: `decodeJSON(w, r, &v)` (decodes into the generated request type with `DisallowUnknownFields`, because the web client is ours and an unknown field is a bug; then calls the type's hand-written `Validate() error` where a field has rules; a body over the limit, `*http.MaxBytesError`, gives `payload-too-large`; any other decode failure gives `validation`; the multipart readers check `MaxBytesError` the same way) and `writeJSON(w, status, v)`. Response values are the generated `gen` types, so field names come from the spec.
-    *   Body limits: before the generated routes, `server.go` wraps `r.Body` in `http.MaxBytesReader` for `POST /api/v1/media` (12 MB) and `POST /api/v1/settings/icon` (2 MB). Every other JSON body is limited to 1 MB. A body over the limit answers `payload-too-large`.
+    *   Body limits are applied by the code that reads the body, not by path in `server.go`: `decodeJSON` wraps `r.Body` in `http.MaxBytesReader` at 1 MB and also rejects trailing data after the value; each multipart handler wraps it with its own limit, `POST /media` (12 MB) and `POST /settings/icon` (2 MB). A body over the limit answers `payload-too-large`.
+    *   The SPA handler (item 35) is mounted on `/` for GET and HEAD only; any other method on a path outside `/api/` gets 405 with `Allow: GET, HEAD`. (`GET /` cannot be registered next to the method-less `/api/` catch-all: the standard mux rejects the pair as conflicting.)
 
     **Module methods.** Every method also takes `ctx` and `q db.DBTX` first; they are left out below. Types are the module's own structs, named after the API schemas (item 15). `scheduler` and `starter` are not called by `httpapi`.
 
@@ -1819,7 +1820,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   client IP trust;
     *   the SPA fallback and cache headers, and `GET /index.html` answering 200 with the HTML, not a redirect;
     *   for each endpoint of the phase, the success status and the body fields match the tables in item 15 (the check strict mode would have made at compile time);
-    *   problem JSON shape, including a bad UUID path parameter and a bad date query parameter (422 problem JSON, not `text/plain`);
+    *   problem JSON shape, including a bad UUID path parameter and a bad date query parameter (422 problem JSON, not `text/plain`). P1 has no route with parameters, so P1 tests the `ErrorHandlerFunc` directly; the per-route tests come with the first such routes in P3;
     *   `X-App-Version` present and non-empty on success, error and generated responses;
     *   409 overlap responses (P3).
     *   An unknown `/api/v1` path and a wrong method both return 404 problem JSON, not HTML.
@@ -2067,8 +2068,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Health and status.
 *   **Proposed Changes**:
-    *   `/healthz` (P1).
-    *   `/readyz` (DB ping + no pending migrations, through `db.HasPending`) (P1).
+    *   `/healthz` (P1): `200` with the plain-text body `ok`.
+    *   `/readyz` (DB ping + no pending migrations, through `db.HasPending`) (P1): `200 ok`, or `503` with the plain-text body `not ready`.
     *   `Status()` (P4). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content (`backupstatus.Read`), and media volume free space via `golang.org/x/sys/unix.Statfs`.
     *   The client-error log endpoint, rate limited to 10 per minute per session (P4).
 

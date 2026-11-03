@@ -51,7 +51,7 @@ return { kind: 'ok', value: parsed.data };
 | Boundary | Parse site | On bad input | Bad-input test |
 | --- | --- | --- | --- |
 | JSON request body | `decodeJSON` in the httpapi server (typed struct, `DisallowUnknownFields`, `Validate()`) | 422 `validation` or 413 `payload-too-large` problem JSON | httpapi tests: unknown field, malformed JSON, over-limit body (P1, item 37) |
-| Path and query params | oapi-codegen binding, `ErrorHandlerFunc` | 422 `validation` problem JSON | httpapi tests: bad UUID in `{id}`, bad date (P1, item 37) |
+| Path and query params | oapi-codegen binding, `ErrorHandlerFunc` | 422 `validation` problem JSON | `ErrorHandlerFunc` unit test (P1); per-route bad UUID and bad date (P3, item 37) |
 | `Origin` header, session cookie | httpapi middleware | 403 / 401 problem JSON | middleware tests: wrong Origin (P1), bad cookie (P2) (item 37) |
 | Photo and icon uploads (multipart) | media and settings handlers, `MaxBytesReader` | 413, 415 or 422 problem JSON; nothing stored | media tests: oversize, wrong type (P3, item 52); icon tests (P2, item 44) |
 | `.env` variables | platform config | `serve` exits non-zero with one message listing every bad variable | `TestLoadRejectsBadValues`, `TestLoadListsEveryMissingVariable` in the config package (P0) |
