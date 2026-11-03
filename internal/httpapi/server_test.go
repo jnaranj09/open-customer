@@ -125,17 +125,18 @@ type decodeTarget struct {
 func TestDecodeJSON(t *testing.T) {
 	tooLarge := `{"name":"` + strings.Repeat("a", 1<<20) + `"}`
 	cases := []struct {
-		name     string
-		body     string
-		wantType string
-		wantCode string
+		name       string
+		body       string
+		wantStatus int
+		wantType   string
+		wantCode   string
 	}{
-		{"an unknown field is 422 validation", `{"name":"x","extra":1}`, "validation", "body_invalid"},
-		{"malformed JSON is 422 validation", `{"name":`, "validation", "body_invalid"},
-		{"an empty body is 422 validation", ``, "validation", "body_invalid"},
-		{"trailing data after the object is 422 validation", `{"name":"x"}{}`, "validation", "body_invalid"},
-		{"a wrong field type is 422 validation", `{"count":"three"}`, "validation", "body_invalid"},
-		{"a body over 1 MB is 413 payload-too-large", tooLarge, "payload-too-large", "payload_too_large"},
+		{"an unknown field is 422 validation", `{"name":"x","extra":1}`, 422, "validation", "body_invalid"},
+		{"malformed JSON is 422 validation", `{"name":`, 422, "validation", "body_invalid"},
+		{"an empty body is 422 validation", ``, 422, "validation", "body_invalid"},
+		{"trailing data after the object is 422 validation", `{"name":"x"}{}`, 422, "validation", "body_invalid"},
+		{"a wrong field type is 422 validation", `{"count":"three"}`, 422, "validation", "body_invalid"},
+		{"a body over 1 MB is 413 payload-too-large", tooLarge, 413, "payload-too-large", "payload_too_large"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -146,21 +147,27 @@ func TestDecodeJSON(t *testing.T) {
 			if err := decodeJSON(rec, req, &v); err == nil {
 				t.Fatal("decodeJSON returned nil, want an error")
 			}
-			status := http.StatusUnprocessableEntity
-			if tc.wantType == "payload-too-large" {
-				status = http.StatusRequestEntityTooLarge
-			}
-			if got := problemType(t, rec, status); got != problem.TypePrefix+tc.wantType {
+			if got := problemType(t, rec, tc.wantStatus); got != problem.TypePrefix+tc.wantType {
 				t.Fatalf("type = %q, want %q", got, problem.TypePrefix+tc.wantType)
 			}
 			if !strings.Contains(logs.String(), `"code":"`+tc.wantCode+`"`) ||
 				!strings.Contains(logs.String(), `"path":"/decode-test"`) {
 				t.Fatalf("log lacks code=%s and the path: %s", tc.wantCode, logs)
 			}
-			if strings.Contains(logs.String(), "three") || strings.Contains(logs.String(), "extra") {
-				t.Fatalf("log leaks the body or the decode error: %s", logs)
-			}
 		})
+	}
+}
+
+// The unknown-field decode error quotes the field name, so logging the error would leak it.
+func TestDecodeJSONLogNeverQuotesTheDecodeError(t *testing.T) {
+	logs := captureDefaultLog(t)
+	req := httptest.NewRequest(http.MethodPost, "/decode-test", strings.NewReader(`{"zzleakfield":1}`))
+	var v decodeTarget
+	if err := decodeJSON(httptest.NewRecorder(), req, &v); err == nil {
+		t.Fatal("decodeJSON returned nil, want an error")
+	}
+	if !strings.Contains(logs.String(), `"code":"body_invalid"`) || strings.Contains(logs.String(), "zzleakfield") {
+		t.Fatalf("log lacks code=body_invalid or quotes the decode error: %s", logs)
 	}
 }
 
