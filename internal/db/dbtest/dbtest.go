@@ -52,6 +52,10 @@ var (
 
 	templateOnce sync.Once
 	templateErr  error
+
+	// Postgres refuses CREATE DATABASE ... TEMPLATE while another session is copying or using the
+	// same template, so the copies are made one at a time.
+	copyMu sync.Mutex
 )
 
 // startServer starts the process-wide container. The image comes from PG_IMAGE, which make exports.
@@ -133,6 +137,10 @@ func newDatabase(t *testing.T, s server, template string) Conn {
 	create := "CREATE DATABASE " + name
 	if template != "" {
 		create += " TEMPLATE " + template
+	}
+	if template != "" {
+		copyMu.Lock()
+		defer copyMu.Unlock()
 	}
 	if err := s.admin(ctx, create); err != nil {
 		t.Fatalf("create database: %v", err)

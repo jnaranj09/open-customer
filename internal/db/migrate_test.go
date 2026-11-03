@@ -3,10 +3,14 @@
 package db_test
 
 import (
+	"bytes"
 	"context"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -226,5 +230,72 @@ func TestDBTestPoolIsMigratedAndIsolated(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("second database has %d business_settings rows, want 0", n)
+	}
+}
+
+func TestMigrateBlocksOnNullLastCopy(t *testing.T) {
+	t.Parallel()
+	pool := poolAtVersionOne(t)
+	err := db.MigrateFS(t.Context(), pool, twoMigrations(), optionsAt(writeStatus(t, `{"last_copy_at":null}`)))
+	if err == nil || err.Error() != guardMessage {
+		t.Fatalf("MigrateFS error = %v, want %q", err, guardMessage)
+	}
+	if tableExists(t, pool, "second_table") {
+		t.Fatal("the second migration was applied despite the guard")
+	}
+}
+
+func TestMigrateBlocksOnMissingStatusFile(t *testing.T) {
+	t.Parallel()
+	pool := poolAtVersionOne(t)
+	err := db.MigrateFS(t.Context(), pool, twoMigrations(), optionsAt(filepath.Join(t.TempDir(), "absent.json")))
+	if err == nil || err.Error() != guardMessage {
+		t.Fatalf("MigrateFS error = %v, want %q", err, guardMessage)
+	}
+	if tableExists(t, pool, "second_table") {
+		t.Fatal("the second migration was applied despite the guard")
+	}
+}
+
+func TestMigrateBlocksAndLogsCodeOnUnreadableStatusFile(t *testing.T) {
+	t.Parallel()
+	pool := poolAtVersionOne(t)
+	var logs bytes.Buffer
+	opts := optionsAt(t.TempDir()) // a directory: reading it fails with an error other than "missing"
+	opts.Logger = slog.New(slog.NewJSONHandler(&logs, nil))
+	err := db.MigrateFS(t.Context(), pool, twoMigrations(), opts)
+	if err == nil || err.Error() != guardMessage {
+		t.Fatalf("MigrateFS error = %v, want %q", err, guardMessage)
+	}
+	if !strings.Contains(logs.String(), `"code":"backup_status_invalid"`) {
+		t.Fatalf("log = %q, want code backup_status_invalid", logs.String())
+	}
+	if strings.Contains(logs.String(), opts.BackupStatusFile) {
+		t.Fatal("the log contains the status file path")
+	}
+}
+
+func TestMigrateErrorsWithoutClockWhenGuardRuns(t *testing.T) {
+	t.Parallel()
+	pool := poolAtVersionOne(t)
+	opts := db.MigrateOptions{BackupStatusFile: filepath.Join(t.TempDir(), "absent.json")}
+	err := db.MigrateFS(t.Context(), pool, twoMigrations(), opts)
+	if err == nil || err.Error() == guardMessage {
+		t.Fatalf("MigrateFS error = %v, want a missing-Clock error", err)
+	}
+	if tableExists(t, pool, "second_table") {
+		t.Fatal("the second migration was applied without a guard decision")
+	}
+}
+
+func TestDBTestPoolSupportsParallelCalls(t *testing.T) {
+	t.Parallel()
+	for i := range 6 {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
+			if !tableExists(t, dbtest.Pool(t), "users") {
+				t.Fatal("dbtest.Pool database has no users table")
+			}
+		})
 	}
 }

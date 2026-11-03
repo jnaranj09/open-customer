@@ -38,8 +38,17 @@ type MigrateOptions struct {
 	AllowWithoutBackup bool
 	// BackupStatusFile is the path of the backup container's status.json (BACKUP_STATUS_FILE).
 	BackupStatusFile string
-	// Clock supplies "now" for the age of the last copy.
+	// Clock supplies "now" for the age of the last copy. Required unless AllowWithoutBackup is set.
 	Clock clock.Clock
+	// Logger receives the guard's warnings; nil means slog.Default().
+	Logger *slog.Logger
+}
+
+func (o MigrateOptions) logger() *slog.Logger {
+	if o.Logger == nil {
+		return slog.Default()
+	}
+	return o.Logger
 }
 
 // embeddedMigrations returns the embedded migrations at the root of the FS, which is where the
@@ -115,22 +124,29 @@ func checkGuard(ctx context.Context, p *goose.Provider, opts MigrateOptions) err
 	if version == 0 {
 		return nil
 	}
-	if guardBlocks(pending, version, lastCopy(opts.BackupStatusFile), opts.Clock.Now()) {
+	if opts.Clock == nil {
+		return errors.New("db: Migrate needs a Clock unless AllowWithoutBackup is set")
+	}
+	if guardBlocks(pending, version, lastCopy(ctx, opts), opts.Clock.Now()) {
 		return noRecentBackupError{}
 	}
 	return nil
 }
 
-// lastCopy returns last_copy_at, or nil when the file is missing, invalid or the field is null.
-func lastCopy(path string) *time.Time {
-	st, err := backupstatus.Read(path)
+// lastCopy returns last_copy_at, or nil when the file is missing, unreadable or invalid, or the
+// field is null. Every unreadable case fails closed (nil blocks) and logs a code, never the path.
+func lastCopy(ctx context.Context, opts MigrateOptions) *time.Time {
+	st, err := backupstatus.Read(opts.BackupStatusFile)
 	switch {
 	case err == nil:
 		return st.LastCopyAt
+	case errors.Is(err, backupstatus.ErrMissing):
+		return nil
 	case errors.Is(err, backupstatus.ErrInvalid):
-		slog.Warn("backup status file unreadable", "code", "backup_status_invalid")
+		opts.logger().WarnContext(ctx, "backup status file invalid", "code", "backup_status_invalid")
 		return nil
 	default:
+		opts.logger().WarnContext(ctx, "backup status file could not be read", "code", "backup_status_unreadable")
 		return nil
 	}
 }

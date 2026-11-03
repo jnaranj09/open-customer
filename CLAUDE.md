@@ -30,8 +30,8 @@ with fnm, `fnm use` in web/).
 - `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript (from P1).
 - `make check-generated`: `generate`, then fails on any diff (from P1).
 - `make check-pins`: Postgres, Node, Go and golangci-lint pins agree across files.
-- `make lint`: `go mod tidy -diff`, golangci-lint, deadcode (exact `DEADCODE_BUDGET`), shellcheck, svelte-check, eslint,
-  prettier check, knip, jscpd.
+- `make lint`: `go mod tidy -diff`, golangci-lint, deadcode (exact `DEADCODE_BUDGET`), shellcheck,
+  svelte-check, eslint, prettier check, knip, jscpd.
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
   (testcontainers; from P1).
 - `make cover`: the 90% gate on the packages in `COVER_PKGS` (from P2).
