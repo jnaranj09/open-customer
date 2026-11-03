@@ -40,6 +40,10 @@ once by breaking what they protect, then restored.
 - **T8 Boundary.** Every row of the `.claude/rules/boundaries.md` table names its parse site and its
   bad-input test; `DisallowUnknownFields` is in design doc item 32. The tests themselves land with
   each parse site, in the phase that builds it.
+- **P1 exit.** The exit check passed on a clean clone: `make check-pins lint test vuln build
+  check-generated test-db` exits 0, and `serve` against Docker Postgres returns 200 on `/readyz` and
+  `{"needs_setup":true}` on `/api/v1/setup/status`, also after a restart. CI run ID: pending (the
+  branch is not pushed yet; the owner fills it in after the first push).
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 

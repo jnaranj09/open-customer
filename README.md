@@ -31,9 +31,8 @@ run.
 | `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
 | `make image` | The app Docker image |
 
-The gate before any change is done: `make check-pins lint test vuln build`. From P1 the gate adds
-`check-generated test-db`; later phases add targets (`cover`, `e2e`); the design doc's
-"Build order" says when.
+The gate before any change is done: `make check-pins lint test vuln build check-generated test-db`.
+Later phases add targets (`cover`, `e2e`); the design doc's "Build order" says when.
 
 ## Release checklist
 
