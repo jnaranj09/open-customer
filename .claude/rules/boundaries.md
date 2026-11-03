@@ -3,6 +3,7 @@ paths:
   - 'cmd/**'
   - 'internal/httpapi/**'
   - 'internal/platform/config/**'
+  - 'internal/platform/backupstatus/**'
   - 'internal/status/**'
   - 'internal/media/**'
   - 'internal/push/**'
@@ -55,7 +56,7 @@ return { kind: 'ok', value: parsed.data };
 | Photo and icon uploads (multipart) | media and settings handlers, `MaxBytesReader` | 413, 415 or 422 problem JSON; nothing stored | media tests: oversize, wrong type (P3, item 52); icon tests (P2, item 44) |
 | `.env` variables | platform config | `serve` exits non-zero with one message listing every bad variable | `TestLoadRejectsBadValues`, `TestLoadListsEveryMissingVariable` in the config package (P0) |
 | CLI args | cmd/open-customer | exit 1 with a one-line stderr message | `TestRun` in cmd/open-customer (P0; each phase adds its subcommands) |
-| Backup status file | status (`BackupRed`) and the migration guard | per the design doc's "Upgrades and the migration guard" and "Status screen" | status and migrate tests: missing, malformed, stale file (P1, items 27 and 60) |
+| Backup status file | `internal/platform/backupstatus` (`Read`), used by the migration guard (P1, item 27) and status `BackupRed` (P4, item 60) | per the design doc's "Upgrades and the migration guard" and "Status screen" | status and migrate tests: missing, malformed, stale file (P1, items 27 and 60) |
 | Stored attribute values (jsonb) | attributes `Validate` on write; typed decode on read | write: 422 `validation`; read: logs `code=`, the rest of the list still renders | attributes tests: bad value on write, bad stored row on read (P3, item 46) |
 | Web Push service responses | push `SendAll` | counted as not delivered; never fails the daily timer | push tests: 410 and 5xx from a fake push service (P4, item 57) |
 | API responses (web) | zod in the web API client | typed error shown to her, not "Offline" | `client.ts` test: a 200 body that fails its schema → `response_invalid` (P5, item 78) |

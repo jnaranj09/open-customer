@@ -300,7 +300,7 @@ Monorepo. The Go module is the repo root. The web app lives in `web/`.
 cmd/open-customer/        main + subcommands
 api/openapi.yaml          the API contract (OpenAPI 3.0.3), source of truth
 internal/
-  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457)
+  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json)
   db/                     pgx pool, migrations (goose, embedded), sqlc output
   httpapi/                generated server interface, handlers that call domain modules, middleware (incl. the Origin check)
   auth/                   users, sessions, setup tokens, rate limiting
@@ -1694,7 +1694,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: Migrations.
 *   **Proposed Changes**: Embeds `migrations/*.sql` with `//go:embed migrations/*.sql` and passes `fs.Sub(embedFS, "migrations")` to goose, because the Provider looks for files at the root of the FS it gets. Opens a `*sql.DB` from the pool with `pgx/v5/stdlib` (`stdlib.OpenDBFromPool`), then runs these steps:
     1.  Build a goose v3 `Provider` (`goose.NewProvider(goose.DialectPostgres, db, fs)`). The pinned goose version must include `HasPending` (check it when pinning).
-    2.  Unless `ALLOW_MIGRATE_WITHOUT_BACKUP=true`, return an error when all three conditions from "Upgrades and the migration guard" hold: `HasPending` is true, AND the goose version (the Provider's `GetDBVersion`) is above 0, AND `last_copy_at` in `BACKUP_STATUS_FILE` (default `/backup-status/status.json`) is missing or more than 60 minutes old.
+    2.  Unless `ALLOW_MIGRATE_WITHOUT_BACKUP=true`, return an error when all three conditions from "Upgrades and the migration guard" hold: `HasPending` is true, AND the goose version (the Provider's `GetDBVersion`) is above 0, AND `last_copy_at` in `BACKUP_STATUS_FILE` (default `/backup-status/status.json`, read with `backupstatus.Read`) is missing or more than 60 minutes old.
     3.  Call `Up`.
 
     It also exports `Version(ctx, pool)` (the goose version) and `HasPending(ctx, pool)`, for `status` and `/readyz`.
@@ -1765,7 +1765,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `reminders` | `Preview(body, clientID?) Preview` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem`; `Record(LogEntry) (created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(date) []LogItem` |
     | `push` | `PublicKey() string`; `Subscribe(userID, Subscription) (id, created bool)`; `CountSubscriptions() int`; `EnsureKeys()`; `SendAll(Payload) SendResult` (`attempted`, `delivered`) |
     | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction) |
-    | `status` | `Health()`; `Ready() bool`; `Status() Status`; `BackupRed() bool` (reads `BACKUP_STATUS_FILE`, no `q`); `LogClientError(sessionID, ClientError)` |
+    | `status` | `Health()`; `Ready() bool`; `Status() Status`; `BackupRed() bool` (reads `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(sessionID, ClientError)` |
 
     Every method returns `error` last. Errors are `problem` types (item 24).
 
@@ -2069,7 +2069,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   `/healthz` (P1).
     *   `/readyz` (DB ping + no pending migrations, through `db.HasPending`) (P1).
-    *   `Status()` (P4). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content, and media volume free space via `golang.org/x/sys/unix.Statfs`.
+    *   `Status()` (P4). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content (`backupstatus.Read`), and media volume free space via `golang.org/x/sys/unix.Statfs`.
     *   The client-error log endpoint, rate limited to 10 per minute per session (P4).
 
     Tests: missing or corrupt `status.json` gives `backup.red: true` with null times, not a crash; each red rule from "Backups" (old `last_copy_at`, `last_error` set, old `checked_at`); a file written in the exact `backup.sh` time form parses.
