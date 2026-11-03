@@ -17,7 +17,7 @@ var allowedDrops = map[string]struct {
 	count int
 	why   string
 }{
-	"cmd/open-customer/main.go":            {3, "writes to stdout/stderr; nothing useful can be done if they fail, and the exit code still says what happened"},
+	"cmd/open-customer/main.go":            {1, "printf writes to stdout/stderr; nothing useful can be done if they fail, and the exit code still says what happened"},
 	"internal/platform/logging/logging.go": {1, "crypto/rand.Read never returns an error since Go 1.24"},
 }
 

@@ -11,27 +11,43 @@ func TestRun(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       []string
+		env        map[string]string
 		wantCode   int
 		wantStdout string
-		wantStderr string
+		wantStderr []string
 	}{
 		{name: "version prints the build version", args: []string{"version"}, wantCode: 0, wantStdout: "dev\n"},
-		{name: "no subcommand prints usage", args: nil, wantCode: 1, wantStderr: "usage:"},
-		{name: "unknown subcommand is named", args: []string{"bogus"}, wantCode: 1, wantStderr: `unknown command "bogus"`},
+		{name: "no subcommand prints usage", args: nil, wantCode: 1, wantStderr: []string{"usage: open-customer serve|version"}},
+		{name: "unknown subcommand is named", args: []string{"bogus"}, wantCode: 1, wantStderr: []string{`unknown command "bogus"`, "usage:"}},
+		{name: "serve with an extra argument prints usage", args: []string{"serve", "extra"}, wantCode: 1, wantStderr: []string{"usage:"}},
+		{
+			name: "serve with the required variables missing names each one", args: []string{"serve"}, wantCode: 1,
+			wantStderr: []string{"PUBLIC_URL", "DB_PASSWORD", "VAPID_SUBJECT"},
+		},
+		{
+			name: "serve with a plain-http PUBLIC_URL on a real host exits 1", args: []string{"serve"}, wantCode: 1,
+			env: map[string]string{
+				"PUBLIC_URL": "http://example.test", "DB_PASSWORD": "pw", "VAPID_SUBJECT": "mailto:dev@example.test",
+			},
+			wantStderr: []string{"invalid: PUBLIC_URL"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var stdout, stderr bytes.Buffer
-			code := run(tc.args, &stdout, &stderr)
+			getenv := func(k string) string { return tc.env[k] }
+			code := run(t.Context(), tc.args, getenv, &stdout, &stderr)
 			if code != tc.wantCode {
 				t.Errorf("exit code = %d, want %d", code, tc.wantCode)
 			}
 			if stdout.String() != tc.wantStdout {
 				t.Errorf("stdout = %q, want %q", stdout.String(), tc.wantStdout)
 			}
-			if !strings.Contains(stderr.String(), tc.wantStderr) {
-				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tc.wantStderr)
+			for _, want := range tc.wantStderr {
+				if !strings.Contains(stderr.String(), want) {
+					t.Errorf("stderr = %q, want it to contain %q", stderr.String(), want)
+				}
 			}
 		})
 	}

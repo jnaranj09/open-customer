@@ -21,15 +21,20 @@ GO_DIRS := $(shell go list -e -f '{{.Dir}}' ./... | grep -v /node_modules/ | sed
 # CI installs golangci-lint with its action and sets GOLANGCI_LINT=golangci-lint.
 GOLANGCI_LINT ?= bin/tools/golangci-lint-$(GOLANGCI_LINT_VERSION)/golangci-lint
 
-# Unreachable functions `deadcode -test` may report; matched exactly, so it only falls. 1 at P0:
-# clock.Real.Now, which serve starts using in P1 (then lower this to 0).
-DEADCODE_BUDGET := 1
+# Unreachable functions `deadcode -test` may report; matched exactly, so it only falls. 0 since P1
+# (serve uses clock.Real.Now, the one P0 entry).
+DEADCODE_BUDGET := 0
+
+# make dev's Postgres container (design doc item 2). The password is for this local container only.
+DEV_PG_CONTAINER := open-customer-dev
+DEV_PG_PORT ?= 5433
+DEV_PG_PASSWORD := devpassword
 
 SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -not -path './.git/*')
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db dev
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -84,6 +89,24 @@ check-generated: generate
 
 check-pins:
 	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) scripts/check-pins.sh
+
+# Postgres in Docker (started or reused), serve on :8080 in the background, and Vite on :5173 in
+# the foreground; the trap stops serve when Vite exits. serve runs as a built binary, not through
+# `go run`: go run does not pass SIGTERM on, so the trap would leave the server running. There is
+# no backup status file in dev, so the migration guard is off.
+dev: web-stub node-check
+	@if ! docker container inspect $(DEV_PG_CONTAINER) >/dev/null 2>&1; then \
+		docker run -d --name $(DEV_PG_CONTAINER) -p $(DEV_PG_PORT):5432 \
+			-e POSTGRES_USER=open_customer -e POSTGRES_DB=open_customer -e POSTGRES_PASSWORD=$(DEV_PG_PASSWORD) \
+			$(PG_IMAGE) >/dev/null; \
+	else docker start $(DEV_PG_CONTAINER) >/dev/null; fi
+	@until docker exec $(DEV_PG_CONTAINER) pg_isready -q -U open_customer -d open_customer; do sleep 1; done
+	go build -o bin/dev/open-customer ./cmd/open-customer
+	@PUBLIC_URL=http://localhost:5173 DB_HOST=localhost DB_PORT=$(DEV_PG_PORT) DB_PASSWORD=$(DEV_PG_PASSWORD) \
+		VAPID_SUBJECT=mailto:dev@localhost ALLOW_MIGRATE_WITHOUT_BACKUP=true \
+		bin/dev/open-customer serve & server=$$!; \
+	trap 'kill $$server 2>/dev/null || true' EXIT; \
+	$(PNPM) dev
 
 image:
 	docker build --build-arg VERSION=$(VERSION) -t open-customer:$(VERSION) .

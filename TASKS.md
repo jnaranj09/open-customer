@@ -35,7 +35,7 @@ once by breaking what they protect, then restored.
   lint rules; `thelper`, `tparallel`. Proven: `it.only` fails the run, `it.skip` fails lint, a bare
   `t.Skip` fails guard `forbid-only`, `allowOnly: true` fails the web `forbid-only` guard.
 - **T6 Guards.** Go in `internal/guards`, web in `web/tests/guards`, all run by `make test`.
-- **T7 Decay sensors.** `deadcode -test` (exact `DEADCODE_BUDGET` = 1), `unused`, `dupl` (80), knip,
+- **T7 Decay sensors.** `deadcode -test` (exact `DEADCODE_BUDGET`, 0 since P1), `unused`, `dupl` (80), knip,
   jscpd, all in `make lint`. knip and jscpd both read `.svelte` files (checked).
 - **T8 Boundary.** Every row of the `.claude/rules/boundaries.md` table names its parse site and its
   bad-input test; `DisallowUnknownFields` is in design doc item 32. The tests themselves land with
@@ -65,8 +65,6 @@ own change.
 - This PC's default Node (fnm) is 24; the pin is 26.13.0. `make` fails fast (`node-check`) and the
   hooks switch with fnm. Run `fnm default 26.13.0` if you want it everywhere.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.
-- `DEADCODE_BUDGET` is 1 (`clock.Real.Now`, first used by `serve` in P1): lower it to 0 then.
-- The image's `CMD ["serve"]` has no `serve` until P1; the image runs `version` only.
 - Owner exception recorded: the design doc keeps the 90% `make cover` floor, which the bootstrap
   skill would not use. Kept by owner decision.
 - Public repo: the old review reports in `docs/designs/history/review-release-1/round-1/` and the root
