@@ -41,7 +41,8 @@ with fnm, `fnm use` in web/).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db` (P1), plus `cover` from P2. CI (`.github/workflows/ci.yml`) also runs gitleaks and `pnpm audit --audit-level high`.
+`make check-pins lint test vuln build check-generated test-db` (P1), plus `cover` from P2. CI
+(`.github/workflows/ci.yml`) also runs gitleaks and `pnpm audit --audit-level high`.
 
 A check that could not run is reported as NOT RUN, never as passing.
 
