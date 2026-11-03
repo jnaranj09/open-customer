@@ -8,3 +8,6 @@ coverage*
 .claude/settings.local.json
 web/.stryker-tmp
 web/reports
+
+# Agent plan workspaces (local only)
+.superpowers/
