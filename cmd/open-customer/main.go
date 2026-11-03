@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	// The distroless image has no zoneinfo; this embeds time zone data so LoadLocation works.
+	_ "time/tzdata"
 )
 
 // version is set at build time with -ldflags "-X main.version=<version>".

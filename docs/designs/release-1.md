@@ -2077,7 +2077,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 61. `internal/locale/locale.go`, `es.go`, `locale_test.go` (Create)
 
 *   **Type / Scope**: Formatting.
-*   **Proposed Changes**: Day and month names, date and time formats, number and currency formats per locale. `import _ "time/tzdata"`. Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
+*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller. `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
 
 #### Web app (`web/`)
 
