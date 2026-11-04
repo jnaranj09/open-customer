@@ -63,3 +63,14 @@ const (
 	MsgPhoneInvalid      = "Número de teléfono no válido"
 	MsgNotesTooLong      = "Escribe hasta 2000 caracteres"
 )
+
+// Field messages for appointments (design doc item 50).
+const (
+	MsgStatusInvalid         = "Estado no válido"
+	MsgServiceUnavailable    = "Un servicio no existe o está archivado"
+	MsgTooManyServices       = "Elige hasta 20 servicios"
+	MsgClientUnavailable     = "Esa clienta no existe o está archivada"
+	MsgServicesOrEndRequired = "Elige al menos un servicio o la hora de fin"
+	MsgEndBeforeStart        = "La hora de fin debe ser después del inicio"
+	MsgPaidInvalid           = "El monto pagado no puede ser negativo"
+)
