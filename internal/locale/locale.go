@@ -23,6 +23,8 @@ type Locale struct {
 	varLabels      map[string]string // "ns.key" to the label of a fixed template variable
 	sampleClient   string            // name of the sample client used in template previews
 	sampleServices []string          // service names of the sample appointment
+	pushOne        string            // daily push body for one due item
+	pushMany       string            // daily push body for n due items, %d the count
 }
 
 // For returns the locale for lang. Only "es" exists; any other value is an error.
@@ -84,6 +86,15 @@ func (l Locale) SampleClientName() string { return l.sampleClient }
 // SampleServiceNames lists the service names of the sample appointment that template previews use.
 // The slice is a copy.
 func (l Locale) SampleServiceNames() []string { return slices.Clone(l.sampleServices) }
+
+// PushBody is the daily push text for n due items, for example "Tienes 3 mensajes para enviar
+// hoy". One item has its own singular text.
+func (l Locale) PushBody(n int) string {
+	if n == 1 {
+		return l.pushOne
+	}
+	return fmt.Sprintf(l.pushMany, n)
+}
 
 // LocalDay returns midnight of t's calendar day in loc.
 func LocalDay(t time.Time, loc *time.Location) time.Time {

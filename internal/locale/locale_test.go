@@ -164,3 +164,22 @@ func TestSampleTexts(t *testing.T) {
 		t.Errorf("SampleServiceNames() = %q, want [Servicio de ejemplo]", got)
 	}
 }
+
+func TestPushBody(t *testing.T) {
+	l := spanish(t)
+	tests := []struct {
+		name string
+		n    int
+		want string
+	}{
+		{"one item is singular", 1, "Tienes 1 mensaje para enviar hoy"},
+		{"three items are plural", 3, "Tienes 3 mensajes para enviar hoy"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := l.PushBody(tt.n); got != tt.want {
+				t.Errorf("PushBody(%d) = %q, want %q", tt.n, got, tt.want)
+			}
+		})
+	}
+}

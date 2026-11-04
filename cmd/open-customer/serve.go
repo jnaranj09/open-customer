@@ -26,6 +26,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/push"
 	"github.com/jnaranj09/open-customer/internal/reminders"
+	"github.com/jnaranj09/open-customer/internal/scheduler"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
@@ -40,6 +41,8 @@ const (
 	shutdownTimeout = 10 * time.Second
 	// readHeaderTimeout bounds a client that never finishes its request headers.
 	readHeaderTimeout = 10 * time.Second
+	// timerInterval is the daily timer's tick (design doc "Process model").
+	timerInterval = time.Minute
 )
 
 // serve runs the server until ctx is done. The steps (design doc item 18):
@@ -48,9 +51,11 @@ const (
 //  3. ensure the VAPID keys exist;
 //  4. print the setup link while no user exists;
 //  5. build the modules and the HTTP server;
-//  6. start the daily timer (not built yet: a later P4 task);
+//  6. start the daily timer (scheduler.Run, one tick a minute);
 //  7. serve on :8080;
 //  8. shut down gracefully on SIGTERM.
+//
+// The timer stops with ctx, and serve waits for it before it returns.
 //
 // It returns 0 after a graceful shutdown and 1 on a config, database, migration or listen error,
 // which it prints to stderr.
@@ -75,13 +80,28 @@ func serveOn(ctx context.Context, cfg config.Config, ln net.Listener, stdout, st
 	// Every slog.Default() line (problem.Write, decodeJSON, migrate, status) goes to the JSON log.
 	slog.SetDefault(log)
 
-	srv, pool, err := startup(ctx, cfg, log, stdout)
+	srv, timer, pool, err := startup(ctx, cfg, log, stdout)
 	if err != nil {
 		closeListener(ln)
 		printf(stderr, "%v\n", err)
 		return 1
 	}
 	defer pool.Close()
+
+	// Step 6. Deferred after pool.Close, so it runs first: the timer is stopped and has returned
+	// before the pool closes, and no goroutine outlives serve.
+	ticker := time.NewTicker(timerInterval)
+	timerCtx, stopTimer := context.WithCancel(ctx)
+	timerDone := make(chan struct{})
+	go func() {
+		defer close(timerDone)
+		timer.Run(timerCtx, ticker.C)
+	}()
+	defer func() {
+		stopTimer()
+		<-timerDone
+		ticker.Stop()
+	}()
 
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
@@ -111,11 +131,12 @@ func serveOn(ctx context.Context, cfg config.Config, ln net.Listener, stdout, st
 }
 
 // startup opens the pool, runs the migrations behind the backup guard, ensures the VAPID keys,
-// prints the setup link while no user exists and builds the HTTP server. On an error the pool is already closed.
-func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io.Writer) (*http.Server, *pgxpool.Pool, error) {
+// prints the setup link while no user exists and builds the HTTP server and the daily timer. On an
+// error the pool is already closed.
+func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io.Writer) (*http.Server, *scheduler.Scheduler, *pgxpool.Pool, error) {
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	err = db.Migrate(ctx, pool, db.MigrateOptions{
 		AllowWithoutBackup: cfg.AllowMigrateWithoutBackup,
@@ -125,12 +146,12 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	})
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	mods, err := newModules(cfg)
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	// EnsureKeys writes the two keys as two inserts, so it runs in its own write transaction: a
 	// half key pair never persists.
@@ -139,16 +160,16 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	})
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: vapid keys: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: vapid keys: %w", err)
 	}
 	if err := printSetupLink(ctx, cfg, pool, mods.auth, stdout); err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	static, err := fs.Sub(web.Build, "build")
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
 	}
 	handler, err := httpapi.New(httpapi.Options{
 		Pool:           pool,
@@ -172,14 +193,17 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	})
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
+	timer := scheduler.New(scheduler.Options{
+		Clock: clock.Real{}, Pool: pool, Settings: mods.settings, Reminders: mods.reminders, Push: mods.push,
+	})
 	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
 		// net/http's own errors (a bad TLS handshake, a broken connection) go to the JSON log too.
 		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelWarn),
-	}, pool, nil
+	}, timer, pool, nil
 }
 
 // modules are the domain modules serve and the admin subcommands build.

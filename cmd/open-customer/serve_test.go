@@ -266,3 +266,24 @@ func TestServeExitsOneWhenMigrateFails(t *testing.T) {
 		t.Errorf("listener still accepts after serveOn failed (conn %v)", c.LocalAddr())
 	}
 }
+
+// TestServeStartsDailyTimer: the timer's first tick runs at start and writes the heartbeat. The
+// test waits on that row (each poll is one query), then serve still shuts down cleanly with the
+// timer stopped.
+func TestServeStartsDailyTimer(t *testing.T) {
+	c := dbtest.Empty(t)
+	s := startServe(t, serveConfig(t, c))
+	pool := openPool(t, c)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	for {
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM scheduler_state WHERE name = 'heartbeat'`).Scan(&n); err != nil {
+			t.Fatalf("read the heartbeat: %v", err)
+		}
+		if n == 1 {
+			break
+		}
+	}
+	s.stop(t)
+}

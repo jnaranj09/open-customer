@@ -290,7 +290,9 @@ One binary, `open-customer`, with subcommands:
 The **daily timer** is one goroutine in `serve`. Every minute it does two things:
 
 1.  Writes a heartbeat time to `scheduler_state`.
-2.  If the business-local time is past the push hour, and today's push has not been sent yet, and it is before 20:00, it counts the items `DueList` returns (see "Due-list computation"; late items included, the same list as "Para enviar hoy") and sends one summary push when the count is above 0. Then it records today's date in `scheduler_state`, even when the count was 0, so a quiet day does not re-check every minute and no second push goes out later that day. If the count fails (for example the database is not ready yet after boot), it records nothing and tries again the next minute. When it sends, it also records the last push result in `scheduler_state` (`last_push`: the date, how many subscriptions it tried, how many accepted it). If the PC was off at the push hour, the push goes out when the PC comes back, up to 20:00. Before setup there is no settings row, so the timer writes only the heartbeat.
+2.  If the business-local time is past the push hour, and today's push has not been sent yet, and it is before 20:00, it counts the items `DueList` returns (see "Due-list computation"; late items included, the same list as "Para enviar hoy") and sends one summary push when the count is above 0. Then it records today's date in `scheduler_state`, even when the count was 0, so a quiet day does not re-check every minute and no second push goes out later that day. If the count fails (for example the database is not ready yet after boot), it records nothing and tries again the next minute. When it sends, it also records the last push result in `scheduler_state` (`last_push`: the date, how many subscriptions it tried, how many accepted it). If the PC was off at the push hour, the push goes out when the PC comes back, up to 20:00. Before setup there is no settings row, so the timer writes only the heartbeat. If the send fails before it tries any subscription, it records nothing and tries again the next minute; if it stops part way (deleting a gone subscription failed), it logs `code=push_send_partial` and still records the day and `last_push`, so the morning push is not sent again every minute.
+
+The timer is `scheduler.Run(ctx, ticks)`: it calls `Tick` once at start and then on every value from `ticks`, until `ctx` is done. `serve` passes `time.NewTicker(time.Minute).C`, cancels the timer on shutdown and waits for `Run` to return. A failed `Tick` returns its error, and `Run` logs `code=scheduler_tick_failed` and tries again on the next tick. Tests call `Tick` directly with the fake clock, never sleeping. The push sender is the one interface (`scheduler.Sender`), so the tests use a fake.
 
 Nothing stores a "completed" status: `IsDone` computes it on every read (see "Reminder rules" below), so no stored value can disagree with it.
 
@@ -580,7 +582,7 @@ sequenceDiagram
 *   On first start, `push` creates a VAPID key pair in `server_keys`. There is no env override: the pair is in the database, so the backup covers it. `VAPID_SUBJECT` (a `mailto:` address) is required.
 *   The installed PWA subscribes after she taps "Allow". The subscription is saved with `POST /push/subscriptions`, which inserts it or, for a known endpoint, updates its keys.
 *   **Re-subscribe:** each time the installed app opens, it calls `pushManager.getSubscription()`. If there is one, it posts it again, so a subscription the server deleted comes back. If permission is not granted yet, or there is no subscription, `push.ts` reports "needs activation", and "Hoy" and the status screen show an "Activar notificaciones" button. The same button does the first request in CUJ 1 and any later re-subscribe, because iOS asks for permission only after a user tap.
-*   The daily timer sends one notification: "Tienes N mensajes para enviar hoy", with `TTL` 28800 s (8 h) and `Urgency: normal`, so a phone that was off does not get the morning count the next day. The service worker also sets the app badge to N.
+*   The daily timer sends one notification: "Tienes N mensajes para enviar hoy" ("Tienes 1 mensaje para enviar hoy" when N is 1; `locale.PushBody`), with `TTL` 28800 s (8 h) and `Urgency: normal`, so a phone that was off does not get the morning count the next day. The service worker also sets the app badge to N.
 *   **The badge follows the list.** After each refresh and each successful log `POST`, the app calls `navigator.setAppBadge(n)` with the current due count, or `clearAppBadge()` at 0, so the Home Screen number never shows the morning count all day.
 *   **A 0-day item for an early appointment gets no push.** If the appointment starts before the push hour, the item is hidden at `starts_at` (see "Reminder rules"), so the push does not count it. She sees it only if she opens the app before the appointment.
 *   A 404 or 410 answer from the push service deletes that subscription.
@@ -1636,7 +1638,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `GET /export` | — | 200 `application/zip` (binary), `Content-Disposition: attachment; filename="open-customer-<YYYY-MM-DD>.zip"` |
     | `GET /status` | — | 200 `Status` |
 
-    **Push payload** (JSON, encrypted by Web Push): `{"title": <business name>, "body": "Tienes N mensajes para enviar hoy", "count": N, "url": "/enviar"}`.
+    **Push payload** (JSON, encrypted by Web Push): `{"title": <business name>, "body": "Tienes N mensajes para enviar hoy", "count": N, "url": "/enviar"}` (the body is singular for N = 1: "Tienes 1 mensaje para enviar hoy").
 
 ##### 16. `api/oapi-codegen.yaml` (Create)
 
@@ -1659,7 +1661,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     3.  Ensures the VAPID keys exist, with `push.EnsureKeys` in its own `db.WithTx` (the two keys are two inserts, so a half pair never persists). (P4, built)
     4.  Prints the setup link if there are no users: `Setup: <PUBLIC_URL>/setup#<token>`, one plain stdout line, not slog (see "Auth, sessions and handover"). `NewSetupToken` runs in its own `db.WithTx`. (P2)
     5.  Builds the modules and `httpapi.Server`. (P1, with each phase adding its modules)
-    6.  Starts `scheduler.Run`. (P4)
+    6.  Starts `scheduler.Run` in a goroutine on a one-minute ticker; on shutdown it cancels it and waits for it to return. (P4, built)
     7.  Serves on `:8080`. (P1)
     8.  Shuts down gracefully on SIGTERM. (P1)
 
@@ -1751,6 +1753,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `appointments.sql`: the overlap check and the window load.
     *   `reminders.sql`: the candidate loads for `DueList`, the log insert with `ON CONFLICT DO NOTHING`, the log reads (`GetLogItem`, `ListLogForClient`, `ListLogInRange`) and the existence checks `Record` needs.
     *   `push.sql`: the `server_keys` read and insert-if-missing, the subscription upsert (`ON CONFLICT (endpoint)`, returning whether the row is new), list, delete and count.
+    *   `scheduler.sql`: `UpsertState` (name, value, `updated_at` from the clock) and `ListState`, on `scheduler_state`.
     *   `export.sql`: one keyset-paged query per table (`WHERE id > $1 ORDER BY id LIMIT 500`), as in "Export". sqlc `:many` loads all rows of a query into a slice, so paging is what keeps memory bounded.
 
 ##### 30. `internal/db/sqlc/` (Create, generated)
@@ -2084,12 +2087,19 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
     Tests (`db`-tagged) use a fake push service from `httptest.NewTLSServer`, with its `Client()` as `Options.HTTPClient`, and generate every key at test time.
 
-##### 58. `internal/scheduler/scheduler.go`, `scheduler_test.go` (Create)
+##### 58. `internal/scheduler/scheduler.go`, `scheduler_db_test.go` (Create)
 
 *   **Type / Scope**: Daily timer.
 *   **Proposed Changes**:
-    *   `Run`: the one-minute tick exactly as in "Process model" (heartbeat; one push per local day between `push_hour` and 20:00 when the count is above 0; `last_push`; heartbeat only before setup).
-    *   `State(ctx, q)`: reads the `scheduler_state` keys (heartbeat, `push_checked_date`, `last_push`) for `status`.
+    *   `Run(ctx, ticks)`: `Tick` at start, then per tick, as in "Process model".
+    *   `Tick(ctx)`, in this order:
+        1.  Writes `heartbeat` = now (RFC 3339) on the pool; an error is returned.
+        2.  `settings.Get`: `NotFound` (before setup) returns nil; another error is returned.
+        3.  In the business time zone: before `push_hour`, from 20:00, or when `push_checked_date` is already today (`YYYY-MM-DD`), it returns nil.
+        4.  Counts `DueList` in a read-only `REPEATABLE READ` transaction; an error is returned and nothing is recorded.
+        5.  When the count is above 0, `SendAll` with `{title: business name, body: locale.PushBody(n), count: n, url: "/enviar"}`. An error with no attempt is returned; an error after some attempts logs `code=push_send_partial` and goes on.
+        6.  In one write transaction: `push_checked_date` = today and, when it sent, `last_push` = `{date, attempted, delivered}`.
+    *   `State(ctx, q)`: reads the `scheduler_state` keys (heartbeat, `push_checked_date`, `last_push`) for `status`. A stored heartbeat or `last_push` it cannot parse is nil and logs `code=heartbeat_invalid` or `code=last_push_invalid`.
 
     Tests (fake clock):
     *   Push sent once.
@@ -2097,6 +2107,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   No push when the count is 0.
     *   The day boundary in the business time zone.
     *   `last_push` records attempted and delivered counts; no settings row means no push and no error.
+    *   A count failure records nothing; a send that fails with no attempt records nothing; a partial send still records the day.
+    *   A corrupt `last_push` or heartbeat row logs its code; `Run` ticks at start and per tick until cancelled.
 
 ##### 59. `internal/exporter/export.go`, `export_test.go` (Create)
 
