@@ -29,3 +29,22 @@ func TestTrim(t *testing.T) {
 		})
 	}
 }
+
+func TestNotes(t *testing.T) {
+	s := func(v string) *string { return &v }
+	if got, ok := Notes(nil); got != nil || !ok {
+		t.Errorf("nil: got %v, %v; want nil, true", got, ok)
+	}
+	if got, ok := Notes(s("   ")); got != nil || !ok {
+		t.Errorf("blank: got %q, %v; want nil, true", *got, ok)
+	}
+	if got, ok := Notes(s("  Prefiere tardes ")); got == nil || *got != "Prefiere tardes" || !ok {
+		t.Errorf("text: got %v, %v; want trimmed, true", got, ok)
+	}
+	if got, ok := Notes(s(strings.Repeat("ñ", MaxNotes))); got == nil || !ok {
+		t.Errorf("MaxNotes runes: got %v, %v; want accepted", got, ok)
+	}
+	if got, ok := Notes(s(strings.Repeat("a", MaxNotes+1))); got != nil || ok {
+		t.Errorf("MaxNotes+1 runes: got %v, %v; want nil, false", got, ok)
+	}
+}

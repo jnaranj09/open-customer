@@ -10,6 +10,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/platform/nullval"
 )
 
 // CreateAttribute adds an attribute. The scope and type strings are parsed by the module, so an
@@ -121,7 +122,7 @@ func toGenOption(o attributes.Option) gen.Option {
 		parent = &o.ParentID.UUID
 	}
 	return gen.Option{
-		Id: o.ID, AttributeId: o.AttributeID, ParentId: nullableOf(parent), Label: o.Label,
+		Id: o.ID, AttributeId: o.AttributeID, ParentId: nullval.Of(parent), Label: o.Label,
 		Position: o.Position, Archived: o.Archived,
 	}
 }

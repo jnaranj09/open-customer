@@ -354,8 +354,10 @@ func TestCreateLineInsertFailureLeavesNoAppointment(t *testing.T) {
 		_, err := f.m.Create(t.Context(), tx, AppointmentInput{ClientID: c, StartsAt: at, ServiceIDs: svcIDs(a.ID)})
 		return err
 	})
-	if err == nil {
-		t.Fatal("Create succeeded, want the line insert error")
+	// The error must be the trigger's, from the line insert: not a later statement failing on
+	// the aborted transaction.
+	if err == nil || !strings.Contains(err.Error(), "insert appointment service") || !strings.Contains(err.Error(), "made-up") {
+		t.Fatalf("err = %v, want the line insert error raised by the trigger", err)
 	}
 	if n := f.count(t, "appointments"); n != 0 {
 		t.Fatalf("appointments = %d, want 0 after the rollback", n)

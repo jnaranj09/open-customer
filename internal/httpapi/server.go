@@ -19,7 +19,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/oapi-codegen/nullable"
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
@@ -287,13 +286,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Warn("response not written", "code", "response_write_failed")
 	}
-}
-
-// nullableOf is a nullable response field: a nil p is an explicit null, so the JSON always has
-// the key.
-func nullableOf[T any](p *T) nullable.Nullable[T] {
-	if p == nil {
-		return nullable.NewNullNullable[T]()
-	}
-	return nullable.NewNullableWithValue(*p)
 }

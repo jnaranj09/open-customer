@@ -19,14 +19,12 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/archive"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/ids"
+	"github.com/jnaranj09/open-customer/internal/platform/nullval"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/platform/text"
 )
 
-const (
-	maxNameLen  = 120
-	maxNotesLen = 2000
-)
+const maxNameLen = 120
 
 // Client is one stored client. PhoneE164, PhoneDigits and Notes are nil when unset.
 type Client struct {
@@ -115,11 +113,13 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in ClientInput, region s
 		errs = append(errs, problem.FieldError{Field: "name", Message: problem.MsgClientNameInvalid})
 	}
 	e164, digits, perr := phoneFields(in.Phone, region)
-	errs = appendFields(errs, perr)
-	notes, nerr := notesField(in.Notes)
-	errs = appendFields(errs, nerr)
+	problem.CollectFields(&errs, perr)
+	notes, ok := text.Notes(in.Notes)
+	if !ok {
+		errs = append(errs, notesTooLong)
+	}
 	attrs, aerr := m.attrs.Validate(ctx, q, attributes.ScopeClient, nil, in.Attrs, true)
-	if aerr != nil && !asValidation(aerr, &errs) {
+	if aerr != nil && !problem.CollectFields(&errs, aerr) {
 		return Client{}, fmt.Errorf("validate client attrs: %w", aerr)
 	}
 	if len(errs) > 0 {
@@ -172,18 +172,20 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ClientPa
 		}
 	}
 	if p.Phone.IsSpecified() {
-		e164, digits, perr := phoneFields(nullableValue(p.Phone), region)
-		errs = appendFields(errs, perr)
+		e164, digits, perr := phoneFields(nullval.Ptr(p.Phone), region)
+		problem.CollectFields(&errs, perr)
 		params.PhoneE164, params.PhoneDigits = e164, digits
 	}
 	if p.Notes.IsSpecified() {
-		notes, nerr := notesField(nullableValue(p.Notes))
-		errs = appendFields(errs, nerr)
+		notes, ok := text.Notes(nullval.Ptr(p.Notes))
+		if !ok {
+			errs = append(errs, notesTooLong)
+		}
 		params.Notes = notes
 	}
 	if p.Attrs != nil {
 		attrs, aerr := m.attrs.Validate(ctx, q, attributes.ScopeClient, row.Attrs, p.Attrs, false)
-		if aerr != nil && !asValidation(aerr, &errs) {
+		if aerr != nil && !problem.CollectFields(&errs, aerr) {
 			return Client{}, fmt.Errorf("validate client attrs: %w", aerr)
 		}
 		params.Attrs = attrs
@@ -219,6 +221,9 @@ func checkDuplicate(ctx context.Context, queries *sqlc.Queries, e164 string, sel
 	return nil
 }
 
+// notesTooLong is the notes error of Create and Update.
+var notesTooLong = problem.FieldError{Field: "notes", Message: problem.MsgNotesTooLong}
+
 // phoneFields normalizes an optional phone; nil or "" is no phone.
 func phoneFields(raw *string, region string) (e164, digits *string, err error) {
 	if raw == nil || *raw == "" {
@@ -231,55 +236,11 @@ func phoneFields(raw *string, region string) (e164, digits *string, err error) {
 	return &e, &d, nil
 }
 
-// notesField trims optional notes; nil or blank is stored as NULL.
-func notesField(raw *string) (*string, error) {
-	if raw == nil {
-		return nil, nil
-	}
-	notes, ok := text.Trim(*raw, 0, maxNotesLen)
-	if !ok {
-		return nil, problem.Validation{Errors: []problem.FieldError{{Field: "notes", Message: problem.MsgNotesTooLong}}}
-	}
-	if notes == "" {
-		return nil, nil
-	}
-	return &notes, nil
-}
-
-// nullableValue is the value of a specified nullable, or nil for an explicit null.
-func nullableValue(n nullable.Nullable[string]) *string {
-	v, err := n.Get()
-	if err != nil {
-		return nil
-	}
-	return &v
-}
-
 func phoneChanged(stored, next *string) bool {
 	if stored == nil || next == nil {
 		return stored != next
 	}
 	return *stored != *next
-}
-
-// appendFields adds the field errors of err (a problem.Validation or nil) to errs.
-func appendFields(errs []problem.FieldError, err error) []problem.FieldError {
-	var v problem.Validation
-	if errors.As(err, &v) {
-		return append(errs, v.Errors...)
-	}
-	return errs
-}
-
-// asValidation appends the field errors of err to errs and reports whether err was a
-// problem.Validation.
-func asValidation(err error, errs *[]problem.FieldError) bool {
-	var v problem.Validation
-	if !errors.As(err, &v) {
-		return false
-	}
-	*errs = append(*errs, v.Errors...)
-	return true
 }
 
 func clientsFrom(rows []sqlc.Client) []Client {

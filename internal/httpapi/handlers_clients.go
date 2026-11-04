@@ -9,6 +9,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/platform/nullval"
 )
 
 // ListClients answers the active clients, or the archived ones with archived=true.
@@ -95,7 +96,7 @@ func (s *Server) UpdateClient(w http.ResponseWriter, r *http.Request, id openapi
 
 func toGenClient(c clients.Client) gen.Client {
 	return gen.Client{
-		Id: c.ID, Name: c.Name, PhoneE164: nullableOf(c.PhoneE164), PhoneDigits: nullableOf(c.PhoneDigits),
-		Notes: nullableOf(c.Notes), Attrs: c.Attrs, Archived: c.Archived, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+		Id: c.ID, Name: c.Name, PhoneE164: nullval.Of(c.PhoneE164), PhoneDigits: nullval.Of(c.PhoneDigits),
+		Notes: nullval.Of(c.Notes), Attrs: c.Attrs, Archived: c.Archived, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }

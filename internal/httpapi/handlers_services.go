@@ -8,6 +8,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/platform/nullval"
 	"github.com/jnaranj09/open-customer/internal/services"
 )
 
@@ -59,7 +60,7 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id openap
 
 func toGenService(v services.Service) gen.Service {
 	return gen.Service{
-		Id: v.ID, Name: v.Name, DurationMin: v.DurationMin, PriceCents: nullableOf(v.PriceCents),
+		Id: v.ID, Name: v.Name, DurationMin: v.DurationMin, PriceCents: nullval.Of(v.PriceCents),
 		Color: v.Color, Position: v.Position, Archived: v.Archived,
 	}
 }

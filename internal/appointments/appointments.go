@@ -19,12 +19,11 @@ import (
 	"github.com/jnaranj09/open-customer/internal/locale"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/ids"
+	"github.com/jnaranj09/open-customer/internal/platform/nullval"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/platform/text"
 	"github.com/jnaranj09/open-customer/internal/services"
 )
-
-const maxNotesLen = 2000
 
 // Status is where an appointment stands. Done is not a status: see IsDone.
 type Status string
@@ -127,8 +126,8 @@ func (m *Module) Get(ctx context.Context, q db.DBTX, id uuid.UUID) (Appointment,
 // and stores the appointment as scheduled with its lines copied from the current services.
 func (m *Module) Create(ctx context.Context, q db.DBTX, in AppointmentInput) (Appointment, error) {
 	queries := sqlc.New(q)
-	var errs fieldErrors
-	if err := activeClient(ctx, queries, in.ClientID); err != nil && !errs.take(err) {
+	var errs []problem.FieldError
+	if err := activeClient(ctx, queries, in.ClientID); err != nil && !problem.CollectFields(&errs, err) {
 		return Appointment{}, err
 	}
 	found, err := m.services.GetMany(ctx, q, in.ServiceIDs)
@@ -136,7 +135,7 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AppointmentInput) (Ap
 		return Appointment{}, fmt.Errorf("get appointment services: %w", err)
 	}
 	lines, lerr := planLines(in.ServiceIDs, found, nil)
-	errs.take(lerr)
+	problem.CollectFields(&errs, lerr)
 	end, known := time.Time{}, true
 	switch {
 	case in.EndsAt != nil:
@@ -144,19 +143,22 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AppointmentInput) (Ap
 	case lerr != nil:
 		known = false // the service_ids error is already reported
 	case len(lines) == 0:
-		errs.add("service_ids", problem.MsgServicesOrEndRequired)
+		errs = append(errs, field("service_ids", problem.MsgServicesOrEndRequired))
 		known = false
 	default:
 		end = in.StartsAt.Add(durationOf(lines))
 	}
 	if known && !end.After(in.StartsAt) {
-		errs.add("ends_at", problem.MsgEndBeforeStart)
+		errs = append(errs, field("ends_at", problem.MsgEndBeforeStart))
 	}
 	attrs, err := m.attrs.Validate(ctx, q, attributes.ScopeAppointment, nil, in.Attrs, true)
-	if err != nil && !errs.take(err) {
+	if err != nil && !problem.CollectFields(&errs, err) {
 		return Appointment{}, fmt.Errorf("validate appointment attrs: %w", err)
 	}
-	notes := errs.notes(in.Notes)
+	notes, ok := text.Notes(in.Notes)
+	if !ok {
+		errs = append(errs, field("notes", problem.MsgNotesTooLong))
+	}
 	if len(errs) > 0 {
 		return Appointment{}, problem.Validation{Errors: errs}
 	}
@@ -191,7 +193,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Appointm
 	if err != nil {
 		return Appointment{}, err
 	}
-	var errs fieldErrors
+	var errs []problem.FieldError
 	start := cur.StartsAt
 	if p.StartsAt != nil {
 		start = *p.StartsAt
@@ -204,7 +206,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Appointm
 			return Appointment{}, fmt.Errorf("get appointment services: %w", err)
 		}
 		lines, lerr = planLines(*p.ServiceIDs, found, cur.Services)
-		errs.take(lerr)
+		problem.CollectFields(&errs, lerr)
 		total = totalCents(lines)
 	}
 	end, known := cur.EndsAt, true
@@ -214,7 +216,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Appointm
 	case p.ServiceIDs != nil && lerr != nil:
 		known = false // the service_ids error is already reported
 	case p.ServiceIDs != nil && len(lines) == 0:
-		errs.add("service_ids", problem.MsgServicesOrEndRequired)
+		errs = append(errs, field("service_ids", problem.MsgServicesOrEndRequired))
 		known = false
 	case p.ServiceIDs != nil:
 		end = start.Add(durationOf(lines))
@@ -222,23 +224,29 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Appointm
 		end = cur.EndsAt.Add(start.Sub(cur.StartsAt))
 	}
 	if known && !end.After(start) {
-		errs.add("ends_at", problem.MsgEndBeforeStart)
+		errs = append(errs, field("ends_at", problem.MsgEndBeforeStart))
 	}
 	attrs := cur.Attrs
 	if p.Attrs != nil {
 		merged, err := m.attrs.Validate(ctx, q, attributes.ScopeAppointment, cur.Attrs, p.Attrs, false)
-		if err != nil && !errs.take(err) {
+		if err != nil && !problem.CollectFields(&errs, err) {
 			return Appointment{}, fmt.Errorf("validate appointment attrs: %w", err)
 		}
 		attrs = merged
 	}
 	paid := cur.PaidCents
 	if p.PaidCents.IsSpecified() {
-		paid = errs.paid(p.PaidCents)
+		paid = nullval.Ptr(p.PaidCents)
+		if paid != nil && *paid < 0 {
+			errs = append(errs, field("paid_cents", problem.MsgPaidInvalid))
+		}
 	}
 	notes := cur.Notes
 	if p.Notes.IsSpecified() {
-		notes = errs.notes(valueOrNil(p.Notes))
+		var ok bool
+		if notes, ok = text.Notes(nullval.Ptr(p.Notes)); !ok {
+			errs = append(errs, field("notes", problem.MsgNotesTooLong))
+		}
 	}
 	if len(errs) > 0 {
 		return Appointment{}, problem.Validation{Errors: errs}
@@ -400,58 +408,5 @@ func (m *Module) withLines(ctx context.Context, q db.DBTX, rows []sqlc.GetAppoin
 	return out, nil
 }
 
-// fieldErrors collects the field errors of one write, so every bad field is reported at once.
-type fieldErrors []problem.FieldError
-
-func (e *fieldErrors) add(field, msg string) {
-	*e = append(*e, problem.FieldError{Field: field, Message: msg})
-}
-
-// take appends the field errors of err when it is a problem.Validation, and reports whether it was.
-func (e *fieldErrors) take(err error) bool {
-	var v problem.Validation
-	if !errors.As(err, &v) {
-		return false
-	}
-	*e = append(*e, v.Errors...)
-	return true
-}
-
-// notes trims optional notes; nil or blank is NULL, and more than maxNotesLen runes is a 422 on
-// notes.
-func (e *fieldErrors) notes(raw *string) *string {
-	if raw == nil {
-		return nil
-	}
-	notes, ok := text.Trim(*raw, 0, maxNotesLen)
-	if !ok {
-		e.add("notes", problem.MsgNotesTooLong)
-		return nil
-	}
-	if notes == "" {
-		return nil
-	}
-	return &notes
-}
-
-// paid is a specified paid_cents: null clears it, and a negative amount is a 422.
-func (e *fieldErrors) paid(n nullable.Nullable[int64]) *int64 {
-	v, err := n.Get()
-	if err != nil {
-		return nil
-	}
-	if v < 0 {
-		e.add("paid_cents", problem.MsgPaidInvalid)
-		return nil
-	}
-	return &v
-}
-
-// valueOrNil is the value of a specified nullable, or nil for an explicit null.
-func valueOrNil(n nullable.Nullable[string]) *string {
-	v, err := n.Get()
-	if err != nil {
-		return nil
-	}
-	return &v
-}
+// field is one field error of a write.
+func field(name, msg string) problem.FieldError { return problem.FieldError{Field: name, Message: msg} }

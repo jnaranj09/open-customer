@@ -304,7 +304,7 @@ Monorepo. The Go module is the repo root. The web app lives in `web/`.
 cmd/open-customer/        main + subcommands
 api/openapi.yaml          the API contract (OpenAPI 3.0.3), source of truth
 internal/
-  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json), color, files, text, position (the 0..Max position rule), archive (the archived_at rule)
+  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json), color, files, text (trim and length checks, the notes rule), position (the 0..Max position rule), archive (the archived_at rule), nullval (nullable fields to and from pointers)
   db/                     pgx pool, migrations (goose, embedded), sqlc output
   httpapi/                generated server interface, handlers that call domain modules, middleware (incl. the Origin check)
   auth/                   users, sessions, setup tokens, rate limiting

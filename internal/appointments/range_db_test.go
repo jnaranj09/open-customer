@@ -63,6 +63,24 @@ func TestListRangeUsesBusinessLocalDays(t *testing.T) {
 	wantIDs(t, f.listRange(t, day(2026, 10, 24), day(2026, 10, 25), madrid), late24, late25)
 }
 
+// The spring-forward day (2026-03-29 in Europe/Madrid) has 23 hours.
+func TestListRangeSpringForwardDay(t *testing.T) {
+	f := newFixture(t)
+	madrid, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := f.client(t, "Marta Solano")
+	// 23:30 local on the 28th (CET, +1) is 22:30Z.
+	late28 := f.book(t, c, time.Date(2026, 3, 28, 22, 30, 0, 0, time.UTC), time.Date(2026, 3, 28, 22, 50, 0, 0, time.UTC))
+	// 23:30 local on the 29th (CEST, +2, after the change) is 21:30Z.
+	late29 := f.book(t, c, time.Date(2026, 3, 29, 21, 30, 0, 0, time.UTC), time.Date(2026, 3, 29, 21, 50, 0, 0, time.UTC))
+	// 00:30 local on the 30th is 22:30Z on the 29th: inside a 24-hour window, outside the day.
+	f.book(t, c, time.Date(2026, 3, 29, 22, 30, 0, 0, time.UTC), time.Date(2026, 3, 29, 22, 50, 0, 0, time.UTC))
+	wantIDs(t, f.listRange(t, day(2026, 3, 28), day(2026, 3, 28), madrid), late28)
+	wantIDs(t, f.listRange(t, day(2026, 3, 29), day(2026, 3, 29), madrid), late29)
+}
+
 func TestListRangeIncludesAllStatuses(t *testing.T) {
 	f := newFixture(t)
 	c := f.client(t, "Marta Solano")
