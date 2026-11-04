@@ -659,11 +659,11 @@ Status changes:
 *   **Concurrent edits:** last write wins. There is one user and no offline edits, so the only possible conflict is her Safari tab against the installed app. Version checks (`If-Match` / 412) come with staff accounts; a `version` column can be added then without changing existing data.
 *   **Services:** the price and duration of each service are copied at save time. Changing the service later does not change past appointments.
 *   **Editing:** every field can be edited at any time, also on past and done appointments, so she can fix mistakes.
-    *   `PATCH` with `service_ids` replaces the whole service list: each line is copied again from the current service, and `total_cents` is recomputed. `paid_cents` is never changed by this.
+    *   `PATCH` with `service_ids` replaces the whole service list: each line of an active service is copied again from the current service, at today's name, price and duration, also when that service was already on the appointment, so a past visit's lines and `total_cents` move when a price changed. `total_cents` is recomputed. `paid_cents` is never changed by this.
     *   If the same `PATCH` has no `ends_at`, `ends_at` is recomputed as `starts_at` + the new durations. If it has `ends_at`, that value is kept. No "set by hand" flag is stored.
     *   Changing `starts_at` without `ends_at` moves `ends_at` by the same amount.
-    *   The overlap check counts only `scheduled` and `confirmed` appointments, and runs on every create, on any update that changes the times, and on "Reactivar".
-    *   An archived client or service cannot be put on an appointment (422). Lines already copied from a service archived later stay as they are.
+    *   The overlap check counts only `scheduled` and `confirmed` appointments, and always leaves out the appointment being saved. It runs on every create, on an update that changes the times of a `scheduled` or `confirmed` appointment (a notes-only edit, or an edit of a cancelled one, skips it), and on "Reactivar". It takes no lock, so two saves at the same moment can both pass it (see "Accepted risks").
+    *   An archived client or service cannot be put on an appointment (422 on `client_id` or `service_ids`). Lines already copied from a service archived later stay as they are: a `service_ids` that still lists that service keeps its old line, matched by service ID as many times as the appointment has it. Only a newly added archived or unknown service is a 422.
 *   **Payment:** `paid_cents` is a column, because the export and future reports need a number. There is no built-in payment-method field; she can create a select attribute for it like any other.
 
 ### API
@@ -877,6 +877,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 *   **Backups stay in the same house.** Fire or theft can take the PC and the USB disk together. Off-site backup is a future improvement.
 *   **Cloudflare sees decrypted traffic** at its edge, because TLS ends there. Accepted for the reference install and written in `deploy/README.md`.
 *   **A dead push subscription shows only on "Estado del sistema".** The re-subscribe check fixes most cases on the next open. Otherwise she notices it as the missing morning notification.
+*   **The overlap check is not race-safe.** It takes no lock and has no exclusion constraint, and an edit reads then writes. One owner is effectively one writer, so the cost is a rare double booking when two of her devices save at the same moment; she sees both appointments in the day view and can move one.
 *   **Ley 8968 (Costa Rica personal data law) is not checked yet.** Before her real data goes in, the author checks her obligations (consent, archive-only deletion, data held on a home PC). This is a step in the pre-handover checklist in `deploy/README.md`, next to the restore drill.
 
 ### Handled risks
@@ -1780,7 +1781,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `attributes` | `List() []Attribute`; `Create(AttributeInput) Attribute`; `Update(id, AttributePatch) Attribute`; `AddOption(attrID, OptionInput) Option`; `UpdateOption(attrID, optionID, OptionPatch) Option`; `Validate(scope, stored, request, isCreate) (attrs, error)` |
     | `clients` | `List(archived bool) []Client` (`List(false)` is the active list); `Get(id) Client`; `Create(ClientInput, region) Client`; `Update(id, ClientPatch, region) Client` (`region` is `settings.country_code`, read by the handler) |
     | `services` | `List() []Service`; `GetMany(ids) map[id]Service`; `Create(ServiceInput) Service`; `Update(id, ServicePatch) Service` |
-    | `appointments` | `ListRange(from, to, loc *time.Location) []Appointment` (the handler passes the business time zone); `ListForClient(clientID) []Appointment`; `Get(id) Appointment`; `Create(AppointmentInput) Appointment`; `Update(id, AppointmentPatch) Appointment`; `SetStatus(id, status, allowOverlap) Appointment` (returns `overlap` 409 when the change is to `scheduled` and an overlap exists) |
+    | `appointments` | `ListRange(from, to, loc *time.Location) []Appointment` (the handler passes the business time zone; every status is listed; `to` before `from` is a 422 on `to`, and there is no length limit here: `GET /appointments` checks its 31-day limit and bootstrap reads a longer window); `ListForClient(clientID) []Appointment`; `Get(id) Appointment`; `Create(AppointmentInput) Appointment`; `Update(id, AppointmentPatch) Appointment`; `SetStatus(id, status, allowOverlap) Appointment` (returns `overlap` 409 when the change is to `scheduled` and an overlap exists) |
     | `media` | `Save(MediaInput) Media`; `Open(id, thumb bool) (io.ReadCloser, Media)`; `ListForClient(clientID) []Media`; `SetArchived(id, archived) Media` |
     | `templates` | `List() []Template`; `Vars() []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)` and `SampleData(locale, countryCode)` are plain functions with no `q`. |
     | `reminders` | `Preview(body, clientID?) Preview` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem` (messages and booking prompts, `DueItem.mode`); `Record(LogEntry) (created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(date) []LogItem` |
@@ -1968,8 +1969,9 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `IsDone` at the `ends_at` boundary, and for cancelled and no-show.
     *   Price snapshot unchanged after a service edit.
     *   Overlap detection and `allow_overlap`, also on "Reactivar" through `SetStatus`.
-    *   A create whose service-line insert fails leaves no `appointments` row (the handler's transaction rolls back).
-    *   An archived client or service in a create or `service_ids` is rejected.
+    *   A create whose service-line insert fails leaves no `appointments` row (the handler's transaction rolls back). The test installs a `BEFORE INSERT` trigger on `appointment_services` that raises, and runs `Create` inside `db.WithTx`.
+    *   An archived client or service in a create or `service_ids` is rejected; a line of a service archived later is kept on a `service_ids` edit, and an active service is copied again at today's price.
+    *   `ListRange` uses the business's local days, also across a DST change (`Europe/Madrid`).
     *   The same service twice in one appointment.
     *   The editing rules: `service_ids` re-copies lines and recomputes `total_cents` but not `paid_cents`; `ends_at` recomputed without `ends_at` in the request and kept with it; moving `starts_at` moves `ends_at`; a past done appointment can be edited.
 

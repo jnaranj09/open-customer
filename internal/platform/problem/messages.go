@@ -73,4 +73,7 @@ const (
 	MsgServicesOrEndRequired = "Elige al menos un servicio o la hora de fin"
 	MsgEndBeforeStart        = "La hora de fin debe ser después del inicio"
 	MsgPaidInvalid           = "El monto pagado no puede ser negativo"
+	// MsgRangeInvalid is a list range whose "to" is before "from", or longer than the endpoint's
+	// 31-day limit.
+	MsgRangeInvalid = "Elige un rango válido de hasta 31 días"
 )
