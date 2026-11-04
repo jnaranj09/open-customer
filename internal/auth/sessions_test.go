@@ -39,7 +39,7 @@ func newSessionFixture(t *testing.T) sessionFixture {
 	t.Helper()
 	pool := dbtest.Pool(t)
 	fake := clock.NewFake(sessionsStart)
-	a := New(Options{Clock: fake})
+	a := NewForTest(t, fake, Options{})
 	userID := uuid.New()
 	if err := sqlc.New(pool).InsertUser(t.Context(), sqlc.InsertUserParams{
 		ID: userID, Username: "made-up-owner", PasswordHash: "x", CreatedAt: sessionsStart,

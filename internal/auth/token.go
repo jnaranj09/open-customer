@@ -30,7 +30,8 @@ func newToken() (string, []byte, error) {
 }
 
 // parseToken is the one parse site for a token from outside. Anything that does not decode to
-// exactly 32 bytes is Unauthorized. It returns the stored hash, never the raw bytes.
+// exactly 32 bytes is Unauthorized (setup answers SetupTokenInvalid instead). It returns the stored
+// hash, never the raw bytes.
 func parseToken(s string) ([]byte, error) {
 	if len(s) != tokenLength {
 		return nil, problem.Unauthorized{}

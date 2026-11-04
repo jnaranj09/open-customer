@@ -19,6 +19,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/config"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
+	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
 	"github.com/jnaranj09/open-customer/web"
 )
@@ -113,13 +114,23 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
 	}
+	authModule, err := auth.New(auth.Options{
+		Clock:           clock.Real{},
+		SettingsCreator: settingsCreator(settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})),
+		// starter.Seed in P4.
+		Seeder: func(context.Context, db.DBTX, string) error { return nil },
+	})
+	if err != nil {
+		pool.Close()
+		return nil, nil, fmt.Errorf("serve: %w", err)
+	}
 	handler := httpapi.New(httpapi.Options{
 		Pool:           pool,
 		Version:        version,
 		PublicURL:      cfg.PublicURL,
 		TrustedProxies: cfg.TrustedProxyCIDRs,
 		Static:         static,
-		Auth:           auth.New(auth.Options{Clock: clock.Real{}}),
+		Auth:           authModule,
 		Status:         status.New(version),
 		Log:            log,
 	})
@@ -129,6 +140,20 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		// net/http's own errors (a bad TLS handshake, a broken connection) go to the JSON log too.
 		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}, pool, nil
+}
+
+// settingsCreator is the setup settings creator auth gets (design doc item 40): it converts
+// auth.SetupSettings to settings.SettingsInput and calls Create, dropping the returned Settings.
+func settingsCreator(m *settings.Module) auth.SettingsCreator {
+	return func(ctx context.Context, q db.DBTX, s auth.SetupSettings) error {
+		if _, err := m.Create(ctx, q, settings.SettingsInput{
+			Name: s.Name, Timezone: s.Timezone, Locale: s.Locale, Currency: s.Currency,
+			CountryCode: s.CountryCode, AccentColor: s.AccentColor, PushHour: s.PushHour,
+		}); err != nil {
+			return fmt.Errorf("create settings: %w", err)
+		}
+		return nil
+	}
 }
 
 // closeListener closes a listener serveOn will not serve on. A close error leaves nothing to do

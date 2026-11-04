@@ -27,3 +27,12 @@ DELETE FROM sessions WHERE user_id = @user_id AND token_hash <> @keep_token_hash
 
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = @user_id;
+
+-- name: DeleteSetupTokens :exec
+DELETE FROM setup_tokens;
+
+-- name: InsertSetupToken :exec
+INSERT INTO setup_tokens (token_hash, expires_at) VALUES (@token_hash, @expires_at);
+
+-- name: LockSetupToken :one
+SELECT expires_at, used_at FROM setup_tokens WHERE token_hash = @token_hash FOR UPDATE;

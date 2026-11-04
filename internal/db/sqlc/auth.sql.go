@@ -35,6 +35,15 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	return err
 }
 
+const deleteSetupTokens = `-- name: DeleteSetupTokens :exec
+DELETE FROM setup_tokens
+`
+
+func (q *Queries) DeleteSetupTokens(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteSetupTokens)
+	return err
+}
+
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = $1
 `
@@ -96,6 +105,20 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) er
 	return err
 }
 
+const insertSetupToken = `-- name: InsertSetupToken :exec
+INSERT INTO setup_tokens (token_hash, expires_at) VALUES ($1, $2)
+`
+
+type InsertSetupTokenParams struct {
+	TokenHash []byte
+	ExpiresAt time.Time
+}
+
+func (q *Queries) InsertSetupToken(ctx context.Context, arg InsertSetupTokenParams) error {
+	_, err := q.db.Exec(ctx, insertSetupToken, arg.TokenHash, arg.ExpiresAt)
+	return err
+}
+
 const insertUser = `-- name: InsertUser :exec
 INSERT INTO users (id, username, password_hash, created_at)
 VALUES ($1, $2, $3, $4)
@@ -116,6 +139,22 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 		arg.CreatedAt,
 	)
 	return err
+}
+
+const lockSetupToken = `-- name: LockSetupToken :one
+SELECT expires_at, used_at FROM setup_tokens WHERE token_hash = $1 FOR UPDATE
+`
+
+type LockSetupTokenRow struct {
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
+func (q *Queries) LockSetupToken(ctx context.Context, tokenHash []byte) (LockSetupTokenRow, error) {
+	row := q.db.QueryRow(ctx, lockSetupToken, tokenHash)
+	var i LockSetupTokenRow
+	err := row.Scan(&i.ExpiresAt, &i.UsedAt)
+	return i, err
 }
 
 const touchSession = `-- name: TouchSession :execrows

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jnaranj09/open-customer/internal/auth"
+	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
@@ -33,12 +35,22 @@ func newTestServer(t *testing.T, pool *pgxpool.Pool) http.Handler {
 	if err != nil {
 		t.Fatalf("parse test origin: %v", err)
 	}
+	// No route here runs setup yet (POST /setup comes in Task 20), so the creator and seeder do
+	// nothing.
+	a, err := auth.New(auth.Options{
+		Clock:           clock.NewFake(time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)),
+		SettingsCreator: func(context.Context, db.DBTX, auth.SetupSettings) error { return nil },
+		Seeder:          func(context.Context, db.DBTX, string) error { return nil },
+	})
+	if err != nil {
+		t.Fatalf("auth.New: %v", err)
+	}
 	return New(Options{
 		Pool:      pool,
 		Version:   testVersion,
 		PublicURL: public,
 		Static:    testBuild(),
-		Auth:      auth.New(auth.Options{Clock: clock.NewFake(time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC))}),
+		Auth:      a,
 		Status:    status.New(testVersion),
 		Log:       logging.New(io.Discard, slog.LevelInfo),
 	})
