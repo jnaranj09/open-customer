@@ -1,6 +1,6 @@
 package locale
 
-// spanish is the only locale in release 1. All day and month names, and the labels of the fixed template variables, live here.
+// spanish is the only locale in release 1. All day and month names, and the labels of the fixed template variables and the sample preview texts live here.
 var spanish = Locale{
 	weekdays: [7]string{"domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"},
 	months: [12]string{
@@ -12,6 +12,8 @@ var spanish = Locale{
 	pm:             "p. m.",
 	decimalMark:    ",",
 	listAnd:        "y",
+	sampleClient:   "Ana Pérez",
+	sampleServices: []string{"Servicio de ejemplo"},
 	varLabels: map[string]string{
 		"client.name":          "Nombre",
 		"client.first_name":    "Primer nombre",

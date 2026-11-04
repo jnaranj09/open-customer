@@ -4,6 +4,7 @@ package locale
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ type Locale struct {
 	decimalMark    string
 	listAnd        string
 	varLabels      map[string]string // "ns.key" to the label of a fixed template variable
+	sampleClient   string            // name of the sample client used in template previews
+	sampleServices []string          // service names of the sample appointment
 }
 
 // For returns the locale for lang. Only "es" exists; any other value is an error.
@@ -74,6 +77,13 @@ func (l Locale) JoinList(items []string) string {
 // VarLabel returns the label of a fixed template variable such as ("client", "first_name"), or ""
 // when the pair is not a fixed variable.
 func (l Locale) VarLabel(ns, key string) string { return l.varLabels[ns+"."+key] }
+
+// SampleClientName is the name of the sample client that template previews use.
+func (l Locale) SampleClientName() string { return l.sampleClient }
+
+// SampleServiceNames lists the service names of the sample appointment that template previews use.
+// The slice is a copy.
+func (l Locale) SampleServiceNames() []string { return slices.Clone(l.sampleServices) }
 
 // LocalDay returns midnight of t's calendar day in loc.
 func LocalDay(t time.Time, loc *time.Location) time.Time {

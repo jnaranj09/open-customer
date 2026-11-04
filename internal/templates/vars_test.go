@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
@@ -70,5 +71,20 @@ func TestEveryFixedVariableHasALabel(t *testing.T) {
 		if es.VarLabel(f.NS, f.Key) == "" {
 			t.Errorf("fixed variable %s.%s has no label in the locale", f.NS, f.Key)
 		}
+	}
+}
+
+func TestUnknownVarsKeepsBodyOrder(t *testing.T) {
+	parsed, err := Parse("{{client.b}} {{client.name}} {{appointment.a}} {{client.b}}")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	var got []string
+	for _, v := range UnknownVars(parsed, nil) {
+		got = append(got, v.NS+"."+v.Key)
+	}
+	want := []string{"client.b", "appointment.a", "client.b"}
+	if !slices.Equal(got, want) {
+		t.Errorf("UnknownVars = %v, want %v", got, want)
 	}
 }

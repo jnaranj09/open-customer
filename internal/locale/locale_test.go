@@ -153,3 +153,14 @@ func TestVarLabelUnknownPairIsEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestSampleTexts(t *testing.T) {
+	l := spanish(t)
+	if got := l.SampleClientName(); got != "Ana Pérez" {
+		t.Errorf("SampleClientName() = %q, want %q", got, "Ana Pérez")
+	}
+	got := l.SampleServiceNames()
+	if len(got) != 1 || got[0] != "Servicio de ejemplo" {
+		t.Errorf("SampleServiceNames() = %q, want [Servicio de ejemplo]", got)
+	}
+}
