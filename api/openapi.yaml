@@ -1109,6 +1109,32 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /export:
+    get:
+      operationId: exportData
+      summary: Download every record as a ZIP
+      description: >-
+        A ZIP of clientas.csv, citas.csv, servicios.csv and datos.json, read in one snapshot and
+        streamed. The file name is open-customer-YYYY-MM-DD.zip, the business-local date. An error
+        before the first byte is a normal problem response; after it the connection is closed, so the
+        download fails instead of ending as a ZIP that looks complete.
+      responses:
+        "200":
+          description: The ZIP.
+          headers:
+            Content-Disposition:
+              description: attachment; filename="open-customer-YYYY-MM-DD.zip".
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /status:
     get:
       operationId: getStatus

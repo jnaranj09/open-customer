@@ -173,13 +173,9 @@ func (s *Server) ListReminderLog(w http.ResponseWriter, r *http.Request, params 
 // logForDate reads the rows acted on during the business-local day of date (a Date is midnight UTC
 // of the calendar day asked for).
 func (s *Server) logForDate(r *http.Request, date time.Time) ([]reminders.LogItem, error) {
-	cfg, err := s.settings.Get(r.Context(), s.pool)
+	loc, err := s.businessZone(r.Context(), s.pool)
 	if err != nil {
-		return nil, fmt.Errorf("get settings: %w", err)
-	}
-	loc, err := time.LoadLocation(cfg.Timezone)
-	if err != nil {
-		return nil, fmt.Errorf("load the business time zone: %w", err)
+		return nil, err
 	}
 	y, m, d := date.Date()
 	items, err := s.reminders.LogForDate(r.Context(), s.pool, time.Date(y, m, d, 0, 0, 0, 0, loc), loc)

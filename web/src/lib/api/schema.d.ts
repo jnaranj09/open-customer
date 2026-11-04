@@ -641,6 +641,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download every record as a ZIP
+         * @description A ZIP of clientas.csv, citas.csv, servicios.csv and datos.json, read in one snapshot and streamed. The file name is open-customer-YYYY-MM-DD.zip, the business-local date. An error before the first byte is a normal problem response; after it the connection is closed, so the download fails instead of ending as a ZIP that looks complete.
+         */
+        get: operations["exportData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/status": {
         parameters: {
             query?: never;
@@ -2302,6 +2322,30 @@ export interface operations {
             401: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ZIP. */
+            200: {
+                headers: {
+                    /** @description attachment; filename="open-customer-YYYY-MM-DD.zip". */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

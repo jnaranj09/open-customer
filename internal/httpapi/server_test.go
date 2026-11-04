@@ -27,6 +27,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
+	"github.com/jnaranj09/open-customer/internal/exporter"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/media"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
@@ -116,6 +117,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Reminders:      reminders.New(reminders.Options{Clock: fake, Attributes: attrsModule}),
 		Push:           push.New(push.Options{Clock: fake, Subject: "mailto:dev@example.com"}),
 		Status:         testStatus(t, fake, cfg.mediaDir),
+		Exporter:       exporter.New(exporter.Options{Clock: fake, Settings: settingsModule, Attributes: attrsModule}),
 		Clock:          fake,
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -481,7 +483,10 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		Reminders: reminders.New(reminders.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Push:      push.New(push.Options{Clock: clock.NewFake(testStart), Subject: "mailto:dev@example.com"}),
 		Status:    testStatus(t, clock.NewFake(testStart), t.TempDir()),
-		Clock:     clock.NewFake(testStart),
+		Exporter: exporter.New(exporter.Options{
+			Clock: clock.NewFake(testStart), Settings: settings.New(settings.Options{Clock: clock.NewFake(testStart)}), Attributes: attrs,
+		}),
+		Clock: clock.NewFake(testStart),
 	}
 	for _, tc := range []struct {
 		name   string
@@ -498,6 +503,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		{"a nil Reminders is refused", func(o *Options) { o.Reminders = nil }},
 		{"a nil Push is refused", func(o *Options) { o.Push = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
+		{"a nil Exporter is refused", func(o *Options) { o.Exporter = nil }},
 		{"a nil Clock is refused", func(o *Options) { o.Clock = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

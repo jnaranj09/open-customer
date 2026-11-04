@@ -19,6 +19,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
+	"github.com/jnaranj09/open-customer/internal/exporter"
 	"github.com/jnaranj09/open-customer/internal/httpapi"
 	"github.com/jnaranj09/open-customer/internal/media"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
@@ -190,6 +191,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Reminders:      mods.reminders,
 		Push:           mods.push,
 		Appointments:   mods.appointments,
+		Exporter:       exporter.New(exporter.Options{Clock: clock.Real{}, Settings: mods.settings, Attributes: mods.attributes}),
 		Status: status.New(status.Options{
 			Version: version, Clock: clock.Real{}, MediaDir: cfg.MediaDir, BackupStatusFile: cfg.BackupStatusFile,
 			Push: mods.push, Scheduler: timer,

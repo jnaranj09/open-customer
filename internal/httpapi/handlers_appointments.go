@@ -26,14 +26,9 @@ func (s *Server) ListAppointments(w http.ResponseWriter, r *http.Request, params
 		writeError(w, r, problem.Field("to", problem.MsgRangeInvalid))
 		return
 	}
-	cfg, err := s.settings.Get(r.Context(), s.pool)
+	loc, err := s.businessZone(r.Context(), s.pool)
 	if err != nil {
-		writeError(w, r, fmt.Errorf("get settings: %w", err))
-		return
-	}
-	loc, err := time.LoadLocation(cfg.Timezone)
-	if err != nil {
-		writeError(w, r, fmt.Errorf("load the business time zone: %w", err))
+		writeError(w, r, err)
 		return
 	}
 	list, err := s.appointments.ListRange(r.Context(), s.pool, params.From.Time, params.To.Time, loc)

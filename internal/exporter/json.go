@@ -15,8 +15,9 @@ import (
 )
 
 // The datos.json element types. Each one has the JSON keys of the API schema of the same name
-// (design doc item 15), because the exporter may not import the generated API types; a key
-// change here or in the spec must change both.
+// (design doc item 15), because the exporter may not import the generated API types.
+// httpapi's TestExportJSONMatchesSchemas compares the json tag names and omitempty flags of each
+// type with its generated twin, so a key change here or in the spec fails that test.
 
 // Settings is the API Settings schema.
 type Settings struct {
