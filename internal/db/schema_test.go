@@ -93,6 +93,13 @@ func TestSchemaRejectsInvalidRows(t *testing.T) {
 			code: checkViolation,
 		},
 		{
+			name:  "before_appointment rule with a return_service_id",
+			setup: []string{insertService, insertTemplate},
+			stmt: `INSERT INTO reminder_rules (id, kind, offset_days, template_id, return_service_id)
+				VALUES ('` + ruleID + `', 'before_appointment', 1, '` + tmplID + `', '` + serviceID + `')`,
+			code: checkViolation,
+		},
+		{
 			name:  "appointment status outside the four values",
 			setup: []string{insertClient},
 			stmt: `INSERT INTO appointments (id, client_id, starts_at, ends_at, status)

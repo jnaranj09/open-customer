@@ -125,14 +125,15 @@ type ReminderLog struct {
 }
 
 type ReminderRule struct {
-	ID          uuid.UUID
-	Kind        string
-	ServiceID   uuid.NullUUID
-	OffsetDays  int32
-	AppliesFrom *time.Time
-	TemplateID  uuid.UUID
-	ArchivedAt  *time.Time
-	CreatedAt   time.Time
+	ID              uuid.UUID
+	Kind            string
+	ServiceID       uuid.NullUUID
+	OffsetDays      int32
+	AppliesFrom     *time.Time
+	TemplateID      uuid.UUID
+	ArchivedAt      *time.Time
+	CreatedAt       time.Time
+	ReturnServiceID uuid.NullUUID
 }
 
 type SchedulerState struct {

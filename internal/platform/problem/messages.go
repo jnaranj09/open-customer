@@ -96,3 +96,13 @@ const (
 	MsgTemplateUnknownVar  = "La variable '%s' no existe"
 	MsgTemplateBodyInvalid = "Escribe un mensaje de hasta 2000 caracteres"
 )
+
+// Field messages for reminder rules (design doc item 55).
+const (
+	MsgRuleKindInvalid       = "Elige un tipo de recordatorio"
+	MsgOffsetInvalid         = "Escribe un número de días de 0 a 365"
+	MsgComeBackOffsetInvalid = "Escribe un número de días de 1 a 365"
+	MsgServiceRequired       = "Elige un servicio"
+	MsgServiceNotAllowed     = "Este recordatorio no lleva servicio"
+	MsgTemplateUnavailable   = "Esa plantilla no existe o está archivada"
+)
