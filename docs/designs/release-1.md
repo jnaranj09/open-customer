@@ -90,7 +90,7 @@ Each goal has a check. Release 1 is done when all checks pass.
     Check: creating an appointment with client, service(s), date and attributes takes under 30 seconds for an existing client.
 3.  **Reminders are correct.**
     Checks:
-    *   `internal/reminders/due_test.go` has a passing case for every row and bullet of the rules table, including the last four checks below.
+    *   The due-list tests in `internal/reminders` (`due_test.go`, `due_comeback_test.go` and the `DueList` database tests) have a passing case for every row and bullet of the rules table, including the last four checks below.
     *   During the 4-week gate (Goal 4), every reminder she expected but did not see is logged as a bug, and none is open at the end. A reminder missed because the PC was off is not a bug (see "Accepted risks").
     *   A "before" reminder is never shown after the appointment has started.
     *   A come-back reminder is never missing because she forgot to mark an appointment as done.
@@ -536,10 +536,10 @@ There are two rule kinds:
     *   For each come-back candidate client, the appointments (not cancelled or no-show) that start after that client's earliest candidate `ends_at`, with their `starts_at` and service lines (`service_id`, `name`). The skip rule and the booking prompt both read these.
     *   Log rows for the candidate appointments.
     *   Both candidate loads skip appointments whose client is archived.
-3.  For each (rule, appointment) pair, compute `anchor_at` (`starts_at` for "before", none for `come_back`) and the due day, and apply the table above. For a remaining `come_back` item, the earliest later appointment that starts after `now` and lacks the return service makes it a booking prompt ("Booking prompt" above).
+3.  For each (rule, appointment) pair, compute `anchor_at` (`starts_at` for "before", none for `come_back`) and the due day, and apply the table above. A `come_back` rule pairs only with appointments that have one of its lines on the rule's service. For a remaining `come_back` item, the earliest later appointment that starts after `now` and lacks the return service makes it a booking prompt ("Booking prompt" above).
 4.  Drop pairs that already have a log row: a "before" item matches on `(rule_id, appointment_id, anchor_at)`, a `come_back` item on `(rule_id, appointment_id)`.
 5.  Render each remaining item's text with `templates`, and build its `wa.me` link from `phone_digits`. A booking prompt gets the same text and link (for "Enviar mensaje"), plus the future appointment's ID, start and service names and the return service's ID and name.
-6.  Finally, return the items as "Para enviar hoy" (due today or earlier), sorted by due day (oldest first), then client name. Each item carries a `late` flag when its due day is before today.
+6.  Finally, return the items as "Para enviar hoy" (due today or earlier), sorted by due day (oldest first), then client name, then the item ID, so the order is fixed. Each item carries a `late` flag when its due day is before today.
 
 The 60-day look-back means a come-back item she never handles drops out of the list 60 days after its due day (it is dropped when the due day is more than 60 days before today). The visit stays in the client's history; the reminder is no longer listed. A log row is only written when she acts on an item.
 
@@ -2033,10 +2033,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `log.go` also has `LogForClient(clientID)` and `LogForDate(day)`. Both join the appointment and client, so each row carries `client_id` and `client_name` (`LogItem`). `LogForDate` filters `acted_at` on the local day in the business time zone.
     *   `links.go`: `WhatsAppLink(digits, text)`. This is the only place that builds the link: `https://wa.me/<digits>?text=<encoded>`. It switches to `whatsapp://send?phone=<digits>&text=<encoded>` only if the Open Questions test on her iPhone fails with `wa.me`. The text is percent-encoded with spaces as `%20`: Go's `url.QueryEscape` writes `+`, which WhatsApp may show as a literal plus (not checked), so the encoder replaces it. The replace runs after `QueryEscape`, so a literal plus in the text stays `%2B`.
 
-##### 56. `internal/reminders/due_test.go` (Create)
+##### 56. `internal/reminders/due_test.go`, `due_comeback_test.go` (Create)
 
 *   **Type / Scope**: Tests (fake clock, DB-backed).
-*   **Proposed Changes**: One case per row and bullet of the rules table:
+*   **Proposed Changes**: One case per row and bullet of the rules table. The unit tests of `compute` (`due_test.go`, `due_comeback_test.go`) cover the cases it owns; the cases that need the database (a cancelled later booking or a return service taken off it, an archived client, the `include_overdue` default, the push count) are `DueList` tests:
     *   A 1-day "before" rule is not skipped by its own appointment (the SAD bug: its skip rule counted the appointment itself as a later one).
     *   It is hidden after `starts_at`.
     *   One item for a two-service appointment.
@@ -2068,7 +2068,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   A come-back item counts at 00:01 local time on its due day, so the push at `push_hour` includes it.
     *   A 0-day "before" item whose appointment starts before `push_hour` is not in the list at `push_hour`.
     *   A rule created without `include_overdue` behaves as "Solo de hoy en adelante".
-    *   Items are sorted by due day, then client name.
+    *   Items are sorted by due day, then client name, then item ID.
 
 ##### 57. `internal/push/push.go`, `push_test.go` (Create)
 
