@@ -120,3 +120,36 @@ func TestForUnknownLocale(t *testing.T) {
 		t.Fatal("For(en) returned no error")
 	}
 }
+
+func TestVarLabelGivesEachFixedLabel(t *testing.T) {
+	l := spanish(t)
+	for name, c := range map[string]struct{ ns, key, want string }{
+		"client name":          {"client", "name", "Nombre"},
+		"client first name":    {"client", "first_name", "Primer nombre"},
+		"appointment date":     {"appointment", "date", "Fecha de la cita"},
+		"appointment time":     {"appointment", "time", "Hora de la cita"},
+		"appointment services": {"appointment", "services", "Servicios"},
+		"business name":        {"business", "name", "Nombre del negocio"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := l.VarLabel(c.ns, c.key); got != c.want {
+				t.Errorf("VarLabel(%q, %q) = %q, want %q", c.ns, c.key, got, c.want)
+			}
+		})
+	}
+}
+
+func TestVarLabelUnknownPairIsEmpty(t *testing.T) {
+	l := spanish(t)
+	for name, c := range map[string]struct{ ns, key string }{
+		"unknown key":        {"client", "nope"},
+		"key in wrong scope": {"business", "first_name"},
+		"unknown namespace":  {"other", "name"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := l.VarLabel(c.ns, c.key); got != "" {
+				t.Errorf("VarLabel(%q, %q) = %q, want empty", c.ns, c.key, got)
+			}
+		})
+	}
+}

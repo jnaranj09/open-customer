@@ -90,6 +90,7 @@ const (
 // Field messages for message templates (design doc "Message templates"). MsgTemplateUnclosed takes
 // the 1-based rune position of the bad "{{"; MsgTemplateUnknownVar takes the variable key only.
 const (
-	MsgTemplateUnclosed   = "Hay un {{ sin cerrar (posición %d)"
-	MsgTemplateUnknownVar = "La variable '%s' no existe"
+	MsgTemplateUnclosed    = "Hay un {{ sin cerrar (posición %d)"
+	MsgTemplateUnknownVar  = "La variable '%s' no existe"
+	MsgTemplateBodyInvalid = "Escribe un mensaje de hasta 2000 caracteres"
 )

@@ -19,6 +19,7 @@ type Locale struct {
 	am, pm         string
 	decimalMark    string
 	listAnd        string
+	varLabels      map[string]string // "ns.key" to the label of a fixed template variable
 }
 
 // For returns the locale for lang. Only "es" exists; any other value is an error.
@@ -69,6 +70,10 @@ func (l Locale) JoinList(items []string) string {
 		return strings.Join(items[:last], ", ") + " " + l.listAnd + " " + items[last]
 	}
 }
+
+// VarLabel returns the label of a fixed template variable such as "client", "first_name", or ""
+// when the pair is not a fixed variable.
+func (l Locale) VarLabel(ns, key string) string { return l.varLabels[ns+"."+key] }
 
 // LocalDay returns midnight of t's calendar day in loc.
 func LocalDay(t time.Time, loc *time.Location) time.Time {
