@@ -342,12 +342,32 @@ func TestPublicOrigin(t *testing.T) {
 func TestDeadlockIsInternalAndLogsOnlyTheSQLState(t *testing.T) {
 	logBuf := captureDefaultLog(t)
 	rec := httptest.NewRecorder()
-	err := fmt.Errorf("db: tx: %w", &pgconn.PgError{Code: "40P01", Message: "deadlock on made-up-owner"})
+	err := fmt.Errorf("db: tx: %w", &pgconn.PgError{
+		Code: "40P01", Message: "deadlock on made-up-owner", Detail: "Process 7 waits for made-up-detail",
+		TableName: "sessions",
+	})
 	writeError(rec, httptest.NewRequest(http.MethodPost, "/api/v1/setup", nil), err)
 	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
 		t.Fatalf("type = %q, want internal", got)
 	}
-	if logs := logBuf.String(); !strings.Contains(logs, "40P01") || strings.Contains(logs, "made-up-owner") {
-		t.Fatalf("log = %q, want SQLSTATE 40P01 and not the Postgres message", logs)
+	logs := logBuf.String()
+	if !strings.Contains(logs, "db: tx: ") || !strings.Contains(logs, "40P01") || !strings.Contains(logs, "sessions") {
+		t.Fatalf("log = %q, want the wrap path, SQLSTATE 40P01 and the table", logs)
+	}
+	if strings.Contains(logs, "made-up-owner") || strings.Contains(logs, "made-up-detail") {
+		t.Fatalf("log = %q, want neither the Postgres message nor its detail", logs)
+	}
+}
+
+func TestDBErrorInsideAJoinLogsNoPostgresText(t *testing.T) {
+	logBuf := captureDefaultLog(t)
+	rec := httptest.NewRecorder()
+	err := errors.Join(&pgconn.PgError{Code: "23505", Message: "key made-up-owner exists"}, errors.New("rollback failed"))
+	writeError(rec, httptest.NewRequest(http.MethodPost, "/api/v1/setup", nil), err)
+	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
+		t.Fatalf("type = %q, want internal", got)
+	}
+	if logs := logBuf.String(); !strings.Contains(logs, "23505") || strings.Contains(logs, "made-up-owner") {
+		t.Fatalf("log = %q, want SQLSTATE 23505 and not the Postgres message", logs)
 	}
 }

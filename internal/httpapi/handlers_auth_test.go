@@ -273,7 +273,8 @@ func TestPostSetupNoOriginIs403(t *testing.T) {
 }
 
 // TestPostSetupDBErrorLogsNoRawMessage: a unique violation (here from a seeder that inserts the
-// same username) is a 500 internal, and the log names neither the username nor the Postgres text.
+// same username) is a 500 internal. The log keeps the wrap path, the SQLSTATE, the constraint and
+// the table, and names neither the username nor the Postgres message.
 func TestPostSetupDBErrorLogsNoRawMessage(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool, seeder: func(ctx context.Context, q db.DBTX, _ string) error {
@@ -286,9 +287,14 @@ func TestPostSetupDBErrorLogsNoRawMessage(t *testing.T) {
 	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
 		t.Fatalf("type = %q, want internal", got)
 	}
-	if logs := logBuf.String(); !strings.Contains(logs, "23505") ||
-		strings.Contains(logs, "ana") || strings.Contains(logs, "duplicate") {
-		t.Fatalf("log = %q, want SQLSTATE 23505 and neither the username nor the Postgres message", logs)
+	logs := logBuf.String()
+	for _, want := range []string{"seed the starter data", "23505", "users_username_key", "users"} {
+		if !strings.Contains(logs, want) {
+			t.Fatalf("log = %q, want it to keep %q (the wrap path, SQLSTATE, constraint and table)", logs, want)
+		}
+	}
+	if strings.Contains(logs, "ana") || strings.Contains(logs, "duplicate") {
+		t.Fatalf("log = %q, want neither the username nor the Postgres message", logs)
 	}
 	assertSetupStillOpen(t, app, pool)
 }
@@ -375,6 +381,15 @@ func assertRateLimited(t *testing.T, rec *httptest.ResponseRecorder) {
 	}
 	if got := rec.Header().Get("Retry-After"); got != strconv.Itoa(body.RetryAfterS) {
 		t.Fatalf("Retry-After = %q, want %d", got, body.RetryAfterS)
+	}
+}
+
+func TestLoginOversizeIs413(t *testing.T) {
+	app := newTestApp(t, testServerConfig{pool: dbtest.Pool(t)})
+	body := `{"username":"` + strings.Repeat("a", maxJSONBody) + `"}`
+	rec := post(app.handler, loginPath, testOrigin, body, nil)
+	if got := problemType(t, rec, http.StatusRequestEntityTooLarge); !strings.HasSuffix(got, ":payload-too-large") {
+		t.Fatalf("type = %q, want payload-too-large", got)
 	}
 }
 

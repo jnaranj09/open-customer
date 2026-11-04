@@ -160,14 +160,22 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	return p
 }
 
-// writeError writes err as a problem. A Postgres error is replaced by its SQLSTATE first, because
-// problem.Write logs an internal error's text and a Postgres message can quote input (a unique
-// violation names the key, an invalid-input error quotes the value). A unique violation or a
-// deadlock is then a plain 500 internal.
+// writeError writes err as a problem. problem.Write logs an internal error's text, and a Postgres
+// message or detail can quote input (a unique violation names the key, an invalid-input error
+// quotes the value). So a Postgres error in the chain is first replaced, in place, by its SQLSTATE,
+// constraint and table: the log keeps the wrap path (our own fixed prefixes) and never the message
+// or detail. A unique violation or a deadlock is then a plain 500 internal.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		err = fmt.Errorf("database error (SQLSTATE %s)", pgErr.Code)
+		redacted := fmt.Sprintf("database error (SQLSTATE %s, constraint %q, table %q)",
+			pgErr.Code, pgErr.ConstraintName, pgErr.TableName)
+		path, found := strings.CutSuffix(err.Error(), pgErr.Error())
+		if !found || pgErr.Message != "" && strings.Contains(path, pgErr.Message) {
+			// The Postgres text is not a plain suffix (a joined error): keep none of the text.
+			path = ""
+		}
+		err = errors.New(path + redacted)
 	}
 	problem.Write(w, r, err)
 }
