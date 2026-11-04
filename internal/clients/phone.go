@@ -14,7 +14,7 @@ import (
 func NormalizePhone(raw, region string) (e164, digits string, err error) {
 	num, perr := phonenumbers.Parse(raw, region)
 	if perr != nil || !phonenumbers.IsValidNumber(num) {
-		return "", "", problem.Validation{Errors: []problem.FieldError{{Field: "phone", Message: problem.MsgPhoneInvalid}}}
+		return "", "", problem.Field("phone", problem.MsgPhoneInvalid)
 	}
 	e164 = phonenumbers.Format(num, phonenumbers.E164)
 	return e164, strings.TrimPrefix(e164, "+"), nil

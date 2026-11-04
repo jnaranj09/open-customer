@@ -148,7 +148,7 @@ func nameError() problem.FieldError {
 // errors followed by every unknown variable in body order. Any other error is a database failure.
 func (m *Module) checkBody(ctx context.Context, q db.DBTX, body string) error {
 	if strings.TrimSpace(body) == "" || utf8.RuneCountInString(body) > maxBodyLen {
-		return problem.Validation{Errors: []problem.FieldError{{Field: "body", Message: problem.MsgTemplateBodyInvalid}}}
+		return problem.Field("body", problem.MsgTemplateBodyInvalid)
 	}
 	parsed, parseErr := Parse(body)
 	var errs []problem.FieldError

@@ -74,7 +74,7 @@ func (f mediaFixture) send(method, target, body string) *httptest.ResponseRecord
 }
 
 // upload sends parts as POST /media.
-func (f mediaFixture) upload(t *testing.T, parts ...iconPart) *httptest.ResponseRecorder {
+func (f mediaFixture) upload(t *testing.T, parts ...formPart) *httptest.ResponseRecorder {
 	t.Helper()
 	body, ct := multipartBody(t, nil, parts...)
 	return f.uploadRaw(ct, body.String())
@@ -88,14 +88,14 @@ func (f mediaFixture) uploadRaw(contentType, body string) *httptest.ResponseReco
 }
 
 // validParts is a well-formed upload for the client: full 40×30, thumb 8×6.
-func (f mediaFixture) validParts(t *testing.T, extra ...iconPart) []iconPart {
+func (f mediaFixture) validParts(t *testing.T, extra ...formPart) []formPart {
 	t.Helper()
-	parts := []iconPart{{"full", testJPEG(t, 40, 30)}, {"thumb", testJPEG(t, 8, 6)}}
+	parts := []formPart{{"full", testJPEG(t, 40, 30)}, {"thumb", testJPEG(t, 8, 6)}}
 	return append(parts, extra...)
 }
 
-func (f mediaFixture) clientPart() iconPart {
-	return iconPart{"client_id", []byte(f.client.Id.String())}
+func (f mediaFixture) clientPart() formPart {
+	return formPart{"client_id", []byte(f.client.Id.String())}
 }
 
 // storedFiles lists the files (not folders) under the media folder.
@@ -164,7 +164,7 @@ func TestUploadMediaWithAppointmentFillsClient(t *testing.T) {
 	booking := bookingFixture{app: f.app, cookie: f.cookie, client: f.client,
 		service: createService(t, f.app, f.cookie, `{"name":"Acrílico","duration_min":90,"price_cents":2500,"color":"#AA3366"}`)}
 	appt := booking.book(t, "2026-11-10T10:00:00Z")
-	got := decodeInto[gen.Media](t, f.upload(t, f.validParts(t, iconPart{"appointment_id", []byte(appt.Id.String())})...), http.StatusCreated)
+	got := decodeInto[gen.Media](t, f.upload(t, f.validParts(t, formPart{"appointment_id", []byte(appt.Id.String())})...), http.StatusCreated)
 	if got.ClientId != f.client.Id || got.AppointmentId.MustGet() != appt.Id {
 		t.Fatalf("media = %+v, want the appointment's client and the appointment", got)
 	}
@@ -190,28 +190,28 @@ func TestUploadMediaCommitFailureRemovesFiles(t *testing.T) {
 
 func TestUploadMediaNotJPEGIs415(t *testing.T) {
 	f := newMediaFixture(t, nil)
-	parts := []iconPart{{"full", []byte("GIF89a made-up image")}, {"thumb", testJPEG(t, 8, 6)}, f.clientPart()}
+	parts := []formPart{{"full", []byte("GIF89a made-up image")}, {"thumb", testJPEG(t, 8, 6)}, f.clientPart()}
 	assertProblem(t, f.upload(t, parts...), http.StatusUnsupportedMediaType, ":unsupported-media-type")
 	f.assertNothingStored(t)
 }
 
 func TestUploadMediaFullOver10MBIs413(t *testing.T) {
 	f := newMediaFixture(t, nil)
-	parts := []iconPart{{"full", paddedJPEG(t, media.MaxFullBytes+1)}, {"thumb", testJPEG(t, 8, 6)}, f.clientPart()}
+	parts := []formPart{{"full", paddedJPEG(t, media.MaxFullBytes+1)}, {"thumb", testJPEG(t, 8, 6)}, f.clientPart()}
 	assertProblem(t, f.upload(t, parts...), http.StatusRequestEntityTooLarge, ":payload-too-large")
 	f.assertNothingStored(t)
 }
 
 func TestUploadMediaThumbOver1MBIs413(t *testing.T) {
 	f := newMediaFixture(t, nil)
-	parts := []iconPart{{"full", testJPEG(t, 40, 30)}, {"thumb", paddedJPEG(t, media.MaxThumbBytes+1)}, f.clientPart()}
+	parts := []formPart{{"full", testJPEG(t, 40, 30)}, {"thumb", paddedJPEG(t, media.MaxThumbBytes+1)}, f.clientPart()}
 	assertProblem(t, f.upload(t, parts...), http.StatusRequestEntityTooLarge, ":payload-too-large")
 	f.assertNothingStored(t)
 }
 
 func TestUploadMediaRequestOver12MBIs413(t *testing.T) {
 	f := newMediaFixture(t, nil)
-	parts := []iconPart{{"full", paddedJPEG(t, media.MaxFullBytes)}, {"thumb", paddedJPEG(t, media.MaxThumbBytes)}, {"client_id", bytes.Repeat([]byte("0"), 3<<20)}}
+	parts := []formPart{{"full", paddedJPEG(t, media.MaxFullBytes)}, {"thumb", paddedJPEG(t, media.MaxThumbBytes)}, {"client_id", bytes.Repeat([]byte("0"), 3<<20)}}
 	assertProblem(t, f.upload(t, parts...), http.StatusRequestEntityTooLarge, ":payload-too-large")
 	f.assertNothingStored(t)
 }
@@ -231,7 +231,7 @@ func TestUploadMediaMismatchIs422(t *testing.T) {
 		service: createService(t, f.app, f.cookie, `{"name":"Acrílico","duration_min":90,"price_cents":2500,"color":"#AA3366"}`)}
 	appt := booking.book(t, "2026-11-10T10:00:00Z")
 	other := createClient(t, f.app, f.cookie, `{"name":"Marta Solano"}`)
-	parts := f.validParts(t, iconPart{"appointment_id", []byte(appt.Id.String())}, iconPart{"client_id", []byte(other.Id.String())})
+	parts := f.validParts(t, formPart{"appointment_id", []byte(appt.Id.String())}, formPart{"client_id", []byte(other.Id.String())})
 	errs := fieldErrors(t, f.upload(t, parts...))
 	if len(errs) != 1 || errs[0].Field != "client_id" {
 		t.Fatalf("errors = %+v, want one on client_id", errs)
@@ -243,7 +243,7 @@ func TestUploadMediaBadIdIs422(t *testing.T) {
 	f := newMediaFixture(t, nil)
 	for _, field := range []string{"client_id", "appointment_id"} {
 		t.Run("a bad "+field+" is 422 on that field", func(t *testing.T) {
-			errs := fieldErrors(t, f.upload(t, f.validParts(t, iconPart{field, []byte("not-a-uuid")})...))
+			errs := fieldErrors(t, f.upload(t, f.validParts(t, formPart{field, []byte("not-a-uuid")})...))
 			if len(errs) != 1 || errs[0].Field != field {
 				t.Fatalf("errors = %+v, want one on %s", errs, field)
 			}
@@ -263,11 +263,11 @@ func TestUploadMediaMissingPartIs422(t *testing.T) {
 	valid := f.validParts(t, f.clientPart())
 	for _, tc := range []struct {
 		name  string
-		parts []iconPart
+		parts []formPart
 		field string
 	}{
-		{"a missing thumb is 422 on thumb", []iconPart{valid[0], valid[2]}, "thumb"},
-		{"a missing full is 422 on full", []iconPart{valid[1], valid[2]}, "full"},
+		{"a missing thumb is 422 on thumb", []formPart{valid[0], valid[2]}, "thumb"},
+		{"a missing full is 422 on full", []formPart{valid[1], valid[2]}, "full"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			errs := fieldErrors(t, f.upload(t, tc.parts...))
@@ -284,10 +284,10 @@ func TestUploadMediaRepeatedOrUnknownPartIs422(t *testing.T) {
 	valid := f.validParts(t, f.clientPart())
 	for _, tc := range []struct {
 		name  string
-		parts []iconPart
+		parts []formPart
 	}{
-		{"a repeated part is 422", append(append([]iconPart{}, valid...), valid[1])},
-		{"an unknown part is 422", append(append([]iconPart{}, valid...), iconPart{"extra", []byte("x")})},
+		{"a repeated part is 422", append(append([]formPart{}, valid...), valid[1])},
+		{"an unknown part is 422", append(append([]formPart{}, valid...), formPart{"extra", []byte("x")})},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assertProblem(t, f.upload(t, tc.parts...), http.StatusUnprocessableEntity, ":validation")

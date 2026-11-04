@@ -120,3 +120,15 @@ func TestCollectFields(t *testing.T) {
 		t.Fatalf("errs = %v, want name then notes", errs)
 	}
 }
+
+func TestFieldIsAValidationOfThatOneField(t *testing.T) {
+	t.Parallel()
+	err := Field("phone", "Teléfono no válido")
+	var v Validation
+	if !errors.As(err, &v) {
+		t.Fatalf("Field returned %T, want Validation", err)
+	}
+	if want := []FieldError{{Field: "phone", Message: "Teléfono no válido"}}; fmt.Sprint(v.Errors) != fmt.Sprint(want) {
+		t.Fatalf("errors = %v, want %v", v.Errors, want)
+	}
+}

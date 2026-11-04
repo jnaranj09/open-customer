@@ -47,15 +47,15 @@ func patchSettings(h http.Handler, body string, c *http.Cookie) *httptest.Respon
 	return rec
 }
 
-// iconPart is one multipart part: its form name and its bytes.
-type iconPart struct {
+// formPart is one multipart part: its form name and its bytes.
+type formPart struct {
 	name string
 	data []byte
 }
 
 // multipartBody encodes parts as multipart/form-data, after preamble (bytes before the first
 // boundary, which the reader skips), and returns the body and its Content-Type.
-func multipartBody(t *testing.T, preamble []byte, parts ...iconPart) (*bytes.Buffer, string) {
+func multipartBody(t *testing.T, preamble []byte, parts ...formPart) (*bytes.Buffer, string) {
 	t.Helper()
 	body := bytes.NewBuffer(preamble)
 	mw := multipart.NewWriter(body)
@@ -88,7 +88,7 @@ func uploadIcon(h http.Handler, contentType string, body io.Reader, c *http.Cook
 }
 
 // uploadParts uploads parts as multipart/form-data with c.
-func uploadParts(t *testing.T, h http.Handler, c *http.Cookie, parts ...iconPart) *httptest.ResponseRecorder {
+func uploadParts(t *testing.T, h http.Handler, c *http.Cookie, parts ...formPart) *httptest.ResponseRecorder {
 	t.Helper()
 	body, ct := multipartBody(t, nil, parts...)
 	return uploadIcon(h, ct, body, c)
@@ -109,9 +109,9 @@ func testPNG(t *testing.T, size int) []byte {
 }
 
 // validIcons is a well-formed upload: a 512 px and a 180 px PNG.
-func validIcons(t *testing.T) []iconPart {
+func validIcons(t *testing.T) []formPart {
 	t.Helper()
-	return []iconPart{{"icon512", testPNG(t, 512)}, {"icon180", testPNG(t, 180)}}
+	return []formPart{{"icon512", testPNG(t, 512)}, {"icon180", testPNG(t, 180)}}
 }
 
 // get sends a GET without a cookie and asserts a 200.
@@ -281,7 +281,7 @@ func TestUploadIconOK(t *testing.T) {
 func TestUploadIconNotPNGIs415(t *testing.T) {
 	app, _, c := signedInOwner(t)
 	before512, before180 := get(t, app.handler, icon512Path).Body.Bytes(), get(t, app.handler, appleTouchIconPath).Body.Bytes()
-	rec := uploadParts(t, app.handler, c, iconPart{"icon512", []byte("GIF89a made-up image")}, iconPart{"icon180", testPNG(t, 180)})
+	rec := uploadParts(t, app.handler, c, formPart{"icon512", []byte("GIF89a made-up image")}, formPart{"icon180", testPNG(t, 180)})
 	assertProblem(t, rec, http.StatusUnsupportedMediaType, ":unsupported-media-type")
 	assertIconUnchanged(t, app.handler, before512, before180)
 }
@@ -290,7 +290,7 @@ func TestUploadIconPartOver1MBIs413(t *testing.T) {
 	app, _, c := signedInOwner(t)
 	before512, before180 := get(t, app.handler, icon512Path).Body.Bytes(), get(t, app.handler, appleTouchIconPath).Body.Bytes()
 	big := append(testPNG(t, 512), make([]byte, 1<<20)...)
-	rec := uploadParts(t, app.handler, c, iconPart{"icon512", big}, iconPart{"icon180", testPNG(t, 180)})
+	rec := uploadParts(t, app.handler, c, formPart{"icon512", big}, formPart{"icon180", testPNG(t, 180)})
 	assertProblem(t, rec, http.StatusRequestEntityTooLarge, ":payload-too-large")
 	assertIconUnchanged(t, app.handler, before512, before180)
 }
@@ -311,11 +311,11 @@ func TestUploadIconMissingPartIs422(t *testing.T) {
 	icons := validIcons(t)
 	for _, tc := range []struct {
 		name  string
-		parts []iconPart
+		parts []formPart
 	}{
 		{"a missing icon180 is 422", icons[:1]},
 		{"a missing icon512 is 422", icons[1:]},
-		{"an unknown part name is 422", append(slices.Clone(icons), iconPart{"icon64", testPNG(t, 64)})},
+		{"an unknown part name is 422", append(slices.Clone(icons), formPart{"icon64", testPNG(t, 64)})},
 		{"a repeated part is 422", append(slices.Clone(icons), icons[0])},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -75,9 +75,10 @@ type AppointmentInput struct {
 	AllowOverlap bool
 }
 
-// AppointmentPatch holds the fields Update changes; a nil or unspecified field is left as it is. A zero StartsAt or EndsAt is a 422.
-// ServiceIDs replaces the whole line list. Attrs is merged by key; nil means absent. Notes and
-// PaidCents distinguish unspecified (kept), null (cleared) and a value (set).
+// AppointmentPatch holds the fields Update changes; a nil or unspecified field is left as it is. A
+// zero StartsAt or EndsAt is a 422. ServiceIDs replaces the whole line list. Attrs is merged by
+// key; nil means absent. Notes and PaidCents distinguish unspecified (kept), null (cleared) and a
+// value (set).
 type AppointmentPatch struct {
 	StartsAt, EndsAt *time.Time
 	ServiceIDs       *[]uuid.UUID
@@ -311,7 +312,7 @@ func (m *Module) ListRange(ctx context.Context, q db.DBTX, from, to time.Time, l
 	first := time.Date(fy, fm, fd, 0, 0, 0, 0, loc)
 	last := time.Date(ty, tm, td, 0, 0, 0, 0, loc)
 	if last.Before(first) {
-		return nil, problem.Validation{Errors: []problem.FieldError{{Field: "to", Message: problem.MsgRangeInvalid}}}
+		return nil, problem.Field("to", problem.MsgRangeInvalid)
 	}
 	rows, err := sqlc.New(q).ListAppointmentsInRange(ctx, sqlc.ListAppointmentsInRangeParams{
 		RangeStart: first, RangeEnd: locale.AddDays(last, 1, loc),
@@ -367,7 +368,7 @@ func zeroTimes(errs *[]problem.FieldError, start, end *time.Time) bool {
 func activeClient(ctx context.Context, queries *sqlc.Queries, id uuid.UUID) error {
 	archivedAt, err := queries.GetClientState(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && archivedAt != nil) {
-		return problem.Validation{Errors: []problem.FieldError{{Field: "client_id", Message: problem.MsgClientUnavailable}}}
+		return problem.Field("client_id", problem.MsgClientUnavailable)
 	}
 	if err != nil {
 		return fmt.Errorf("get client state: %w", err)

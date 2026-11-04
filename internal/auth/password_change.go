@@ -46,7 +46,7 @@ func (a *Auth) ChangePassword(ctx context.Context, q db.DBTX, session Session, c
 		return err
 	}
 	if !ok {
-		return problem.Validation{Errors: []problem.FieldError{{Field: "current_password", Message: problem.MsgCurrentPasswordWrong}}}
+		return problem.Field("current_password", problem.MsgCurrentPasswordWrong)
 	}
 	a.limiter.recordSuccess(user.Username)
 	if err := validatePassword("new_password", next); err != nil {

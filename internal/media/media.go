@@ -149,34 +149,30 @@ func (m *Module) writeFiles(key, thumbKey string, in MediaInput) error {
 // resolveOwner resolves the client of an upload and checks the client is active.
 func resolveOwner(ctx context.Context, queries *sqlc.Queries, in MediaInput) (uuid.UUID, error) {
 	if !in.ClientID.Valid && !in.AppointmentID.Valid {
-		return uuid.Nil, fieldProblem("client_id", problem.MsgMediaOwnerRequired)
+		return uuid.Nil, problem.Field("client_id", problem.MsgMediaOwnerRequired)
 	}
 	clientID := in.ClientID.UUID
 	if in.AppointmentID.Valid {
 		apptClient, err := queries.GetAppointmentOwner(ctx, in.AppointmentID.UUID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, fieldProblem("appointment_id", problem.MsgAppointmentUnknown)
+			return uuid.Nil, problem.Field("appointment_id", problem.MsgAppointmentUnknown)
 		}
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("get appointment owner: %w", err)
 		}
 		if in.ClientID.Valid && in.ClientID.UUID != apptClient {
-			return uuid.Nil, fieldProblem("client_id", problem.MsgMediaOwnerMismatch)
+			return uuid.Nil, problem.Field("client_id", problem.MsgMediaOwnerMismatch)
 		}
 		clientID = apptClient
 	}
 	archivedAt, err := queries.GetClientArchivedAt(ctx, clientID)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && archivedAt != nil) {
-		return uuid.Nil, fieldProblem("client_id", problem.MsgClientUnavailable)
+		return uuid.Nil, problem.Field("client_id", problem.MsgClientUnavailable)
 	}
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("get client state: %w", err)
 	}
 	return clientID, nil
-}
-
-func fieldProblem(field, msg string) error {
-	return problem.Validation{Errors: []problem.FieldError{{Field: field, Message: msg}}}
 }
 
 // keys returns the storage keys of a photo, relative to MediaDir: <yyyy>/<mm> is the UTC month of

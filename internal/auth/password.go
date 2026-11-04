@@ -121,7 +121,7 @@ func parseParam(field, prefix string) (uint64, error) {
 // validatePassword checks the minimum length; field names the input in the Validation error.
 func validatePassword(field, pw string) error {
 	if utf8.RuneCountInString(pw) < minPasswordLength {
-		return problem.Validation{Errors: []problem.FieldError{{Field: field, Message: problem.MsgPasswordTooShort}}}
+		return problem.Field(field, problem.MsgPasswordTooShort)
 	}
 	return nil
 }

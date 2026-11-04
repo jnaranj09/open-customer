@@ -13,7 +13,7 @@ func ParseStatus(s string) (Status, error) {
 	case Scheduled, Confirmed, Cancelled, NoShow:
 		return st, nil
 	}
-	return "", problem.Validation{Errors: []problem.FieldError{{Field: "status", Message: problem.MsgStatusInvalid}}}
+	return "", problem.Field("status", problem.MsgStatusInvalid)
 }
 
 // IsDone reports whether an appointment that is still active has ended by now. A cancelled or

@@ -11,6 +11,10 @@ const (
 	MsgCurrentPasswordWrong = "La contraseña actual no es correcta"
 	// MsgNullNotAllowed is a PATCH field sent as null that cannot be cleared (design doc item 32).
 	MsgNullNotAllowed = "Este dato no se puede dejar vacío"
+	// MsgIDInvalid is an id field that is not a valid id.
+	MsgIDInvalid = "Identificador no válido"
+	// MsgFieldRequired is a required field that is missing.
+	MsgFieldRequired = "Este dato es obligatorio"
 )
 
 // Field messages for the business settings (design doc item 44).
@@ -83,8 +87,6 @@ const (
 	MsgMediaOwnerRequired = "Falta la clienta o la cita"
 	MsgMediaOwnerMismatch = "La foto no es de esa clienta"
 	MsgAppointmentUnknown = "Esa cita no existe"
-	MsgIDInvalid          = "Identificador no válido"
-	MsgFieldRequired      = "Este dato es obligatorio"
 )
 
 // Field messages for message templates (design doc "Message templates"). MsgTemplateUnclosed takes

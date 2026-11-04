@@ -19,14 +19,14 @@ const maxServices = 20
 // service_ids. The result is never nil.
 func planLines(ids []uuid.UUID, found map[uuid.UUID]services.Service, keep []Line) ([]Line, error) {
 	if len(ids) > maxServices {
-		return nil, serviceIDsError(problem.MsgTooManyServices)
+		return nil, problem.Field("service_ids", problem.MsgTooManyServices)
 	}
 	used := make([]bool, len(keep))
 	out := make([]Line, 0, len(ids))
 	for _, id := range ids {
 		s, ok := found[id]
 		if !ok {
-			return nil, serviceIDsError(problem.MsgServiceUnavailable)
+			return nil, problem.Field("service_ids", problem.MsgServiceUnavailable)
 		}
 		if !s.Archived {
 			out = append(out, Line{ServiceID: s.ID, Name: s.Name, PriceCents: s.PriceCents, DurationMin: s.DurationMin})
@@ -34,7 +34,7 @@ func planLines(ids []uuid.UUID, found map[uuid.UUID]services.Service, keep []Lin
 		}
 		i := firstUnused(keep, used, id)
 		if i < 0 {
-			return nil, serviceIDsError(problem.MsgServiceUnavailable)
+			return nil, problem.Field("service_ids", problem.MsgServiceUnavailable)
 		}
 		used[i] = true
 		out = append(out, keep[i])
@@ -50,10 +50,6 @@ func firstUnused(keep []Line, used []bool, id uuid.UUID) int {
 		}
 	}
 	return -1
-}
-
-func serviceIDsError(msg string) error {
-	return problem.Validation{Errors: []problem.FieldError{{Field: "service_ids", Message: msg}}}
 }
 
 // totalCents sums the line prices; a line without a price adds nothing.

@@ -87,9 +87,10 @@ var _ gen.ServerInterface = (*Server)(nil)
 
 // New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
 // /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
-// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates, Status) is
-// missing, or when the embedded spec cannot be read or its security or
-// x-oc-allowed-while-must-change-password values are not ones steps 7–8 can enforce.
+// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes,
+// Services, Clients, Appointments, Media, Templates, Status) is missing, or when the embedded spec
+// cannot be read or its security or x-oc-allowed-while-must-change-password values are not ones
+// steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
 	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Status == nil {
 		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates and Status are required")

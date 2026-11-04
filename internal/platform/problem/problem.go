@@ -66,6 +66,11 @@ type FieldError struct {
 // Validation is a 422 with the bad fields.
 type Validation struct{ Errors []FieldError }
 
+// Field returns a Validation with the one bad field name and its message.
+func Field(name, msg string) error {
+	return Validation{Errors: []FieldError{{Field: name, Message: msg}}}
+}
+
 // CollectFields appends the field errors of err to errs when err is a Validation, and reports
 // whether it was. A nil err or any other error is not, so the caller returns it instead.
 func CollectFields(errs *[]FieldError, err error) bool {

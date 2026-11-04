@@ -28,6 +28,10 @@ linters:
     exhaustive:
       # A switch on a tagged union lists every case; a default does not count as covering them.
       default-signifies-exhaustive: false
+    wrapcheck:
+      # problem.Field builds the problem the HTTP layer answers; wrapping it would hide its type.
+      ignore-package-globs:
+        - github.com/jnaranj09/open-customer/internal/platform/problem
     nolintlint:
       require-explanation: true
       require-specific: true

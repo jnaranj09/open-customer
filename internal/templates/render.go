@@ -26,11 +26,11 @@ func Render(body string, data Data) string {
 func value(ref VarRef, data Data) string {
 	var m map[string]string
 	switch ref.NS {
-	case "client":
+	case nsClient:
 		m = data.Client
-	case "appointment":
+	case nsAppointment:
 		m = data.Appointment
-	case "business":
+	case nsBusiness:
 		m = data.Business
 	}
 	if v := m[ref.Key]; v != "" {

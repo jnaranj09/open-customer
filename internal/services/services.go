@@ -126,7 +126,7 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in ServiceInput) (Servic
 	}
 	next, ok := position.Next(last)
 	if !ok {
-		return Service{}, problem.Validation{Errors: []problem.FieldError{{Field: "position", Message: problem.MsgPositionInvalid}}}
+		return Service{}, problem.Field("position", problem.MsgPositionInvalid)
 	}
 	if err := queries.InsertService(ctx, sqlc.InsertServiceParams{
 		ID: id, Name: name, DurationMin: duration, PriceCents: in.PriceCents, Color: hex, Position: next,

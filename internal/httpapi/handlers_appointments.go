@@ -23,7 +23,7 @@ const maxAppointmentRangeDays = 31
 func (s *Server) ListAppointments(w http.ResponseWriter, r *http.Request, params gen.ListAppointmentsParams) {
 	// A Date is midnight UTC, so the difference is a whole number of calendar days.
 	if params.To.Sub(params.From.Time) > maxAppointmentRangeDays*24*time.Hour {
-		writeError(w, r, problem.Validation{Errors: []problem.FieldError{{Field: "to", Message: problem.MsgRangeInvalid}}})
+		writeError(w, r, problem.Field("to", problem.MsgRangeInvalid))
 		return
 	}
 	cfg, err := s.settings.Get(r.Context(), s.pool)

@@ -81,7 +81,7 @@ func ParseScope(s string) (Scope, error) {
 	case ScopeClient, ScopeAppointment:
 		return Scope(s), nil
 	}
-	return "", fieldError("scope", problem.MsgScopeInvalid)
+	return "", problem.Field("scope", problem.MsgScopeInvalid)
 }
 
 // ParseType reads a type from a request body; anything else is a 422 on "type".
@@ -90,11 +90,7 @@ func ParseType(s string) (Type, error) {
 	case TypeText, TypeNumber, TypeDate, TypeSelect, TypeMultiselect:
 		return Type(s), nil
 	}
-	return "", fieldError("type", problem.MsgAttrTypeInvalid)
-}
-
-func fieldError(field, msg string) error {
-	return problem.Validation{Errors: []problem.FieldError{{Field: field, Message: msg}}}
+	return "", problem.Field("type", problem.MsgAttrTypeInvalid)
 }
 
 // msg fills a value message with the attribute label.
@@ -176,10 +172,10 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AttributeInput) (Attr
 		errs = append(errs, problem.FieldError{Field: "label", Message: problem.MsgNameInvalid})
 	}
 	if _, err := ParseScope(string(in.Scope)); err != nil {
-		errs = append(errs, problem.FieldError{Field: "scope", Message: problem.MsgScopeInvalid})
+		problem.CollectFields(&errs, err)
 	}
 	if _, err := ParseType(string(in.Type)); err != nil {
-		errs = append(errs, problem.FieldError{Field: "type", Message: problem.MsgAttrTypeInvalid})
+		problem.CollectFields(&errs, err)
 	}
 	if len(errs) > 0 {
 		return Attribute{}, problem.Validation{Errors: errs}
@@ -203,7 +199,7 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AttributeInput) (Attr
 	}
 	next, ok := position.Next(last)
 	if !ok {
-		return Attribute{}, fieldError("position", problem.MsgPositionInvalid)
+		return Attribute{}, problem.Field("position", problem.MsgPositionInvalid)
 	}
 	a := Attribute{
 		ID: id, Key: GenerateKey(label, taken), Label: label, Scope: in.Scope, Type: in.Type,
@@ -283,7 +279,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Attribut
 func (m *Module) AddOption(ctx context.Context, q db.DBTX, attrID uuid.UUID, in OptionInput) (Option, error) {
 	label, ok := text.Trim(in.Label, 1, maxLabelLen)
 	if !ok {
-		return Option{}, fieldError("label", problem.MsgNameInvalid)
+		return Option{}, problem.Field("label", problem.MsgNameInvalid)
 	}
 	queries := sqlc.New(q)
 	attr, err := queries.GetAttribute(ctx, attrID)
@@ -296,10 +292,10 @@ func (m *Module) AddOption(ctx context.Context, q db.DBTX, attrID uuid.UUID, in 
 	switch Type(attr.Type) {
 	case TypeSelect, TypeMultiselect:
 	case TypeText, TypeNumber, TypeDate:
-		return Option{}, fieldError("type", problem.MsgOptionsNotAllowed)
+		return Option{}, problem.Field("type", problem.MsgOptionsNotAllowed)
 	}
 	if attr.ArchivedAt != nil {
-		return Option{}, fieldError("attribute", problem.MsgAttributeArchived)
+		return Option{}, problem.Field("attribute", problem.MsgAttributeArchived)
 	}
 	if in.ParentID.Valid {
 		parent, err := queries.GetAttributeOption(ctx, in.ParentID.UUID)
@@ -308,9 +304,9 @@ func (m *Module) AddOption(ctx context.Context, q db.DBTX, attrID uuid.UUID, in 
 		}
 		switch {
 		case errors.Is(err, pgx.ErrNoRows) || parent.AttributeID != attrID:
-			return Option{}, fieldError("parent_id", problem.MsgParentInvalid)
+			return Option{}, problem.Field("parent_id", problem.MsgParentInvalid)
 		case parent.ArchivedAt != nil:
-			return Option{}, fieldError("parent_id", problem.MsgParentArchived)
+			return Option{}, problem.Field("parent_id", problem.MsgParentArchived)
 		}
 	}
 	id, err := ids.New()
@@ -323,7 +319,7 @@ func (m *Module) AddOption(ctx context.Context, q db.DBTX, attrID uuid.UUID, in 
 	}
 	next, ok := position.Next(last)
 	if !ok {
-		return Option{}, fieldError("position", problem.MsgPositionInvalid)
+		return Option{}, problem.Field("position", problem.MsgPositionInvalid)
 	}
 	o := Option{ID: id, AttributeID: attrID, ParentID: in.ParentID, Label: label, Position: int(next)}
 	if err := queries.InsertAttributeOption(ctx, sqlc.InsertAttributeOptionParams{
