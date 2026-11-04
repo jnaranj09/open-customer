@@ -1,16 +1,19 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -66,9 +69,9 @@ var _ gen.ServerInterface = (*Server)(nil)
 
 // New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
 // /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
-// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Status) is missing, or when the embedded
-// spec cannot be read or its security or x-oc-allowed-while-must-change-password values are not
-// ones steps 7–8 can enforce.
+// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Status) is
+// missing, or when the embedded spec cannot be read or its security or
+// x-oc-allowed-while-must-change-password values are not ones steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
 	if opts.Auth == nil || opts.Settings == nil || opts.Status == nil {
 		return nil, errors.New("httpapi: Options.Auth, Settings and Status are required")
@@ -178,6 +181,47 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	if err == nil {
 		return nil
 	}
+	return rejectBody(w, r, err)
+}
+
+// decodePatch is decodeJSON for a PATCH body, plus one rule: a top-level field sent as null is
+// 422 validation on that field, unless it is in nullable (the spec's "may be null to clear").
+// The generated patch fields are pointers, and a null would otherwise decode as "not sent".
+func decodePatch(w http.ResponseWriter, r *http.Request, v any, nullable ...string) error {
+	var raw json.RawMessage
+	if err := decodeJSON(w, r, &raw); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return rejectBody(w, r, err)
+	}
+	// v decoded as a struct, so raw is a JSON object or a bare null (a nil map), which is refused.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return rejectBody(w, r, fmt.Errorf("patch body is not an object: %w", err))
+	}
+	var nulls []problem.FieldError
+	for _, name := range slices.Sorted(maps.Keys(fields)) {
+		if string(fields[name]) == "null" && !slices.Contains(nullable, name) {
+			nulls = append(nulls, problem.FieldError{Field: name, Message: problem.MsgNullNotAllowed})
+		}
+	}
+	if len(nulls) == 0 {
+		return nil
+	}
+	slog.WarnContext(r.Context(), "body rejected",
+		"code", "null_field", "path", r.URL.Path, "request_id", logging.RequestID(r.Context()))
+	p := problem.Validation{Errors: nulls}
+	problem.Write(w, r, p)
+	return p
+}
+
+// rejectBody writes the problem for a body that did not decode (413 when it was over the limit,
+// else 422), logs its code and returns the problem. The error is never logged: it can quote the
+// body.
+func rejectBody(w http.ResponseWriter, r *http.Request, err error) error {
 	var p error = problem.Validation{}
 	code := "body_invalid"
 	var tooBig *http.MaxBytesError

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
@@ -32,10 +33,11 @@ const (
 	icon180Size = 180
 )
 
-// UpdateSettings changes the fields sent and answers the stored settings, after the commit.
+// UpdateSettings changes the fields sent and answers the stored settings, after the commit. No
+// field may be null.
 func (s *Server) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var body gen.SettingsPatch
-	if decodeJSON(w, r, &body) != nil {
+	if decodePatch(w, r, &body) != nil {
 		return
 	}
 	patch := settings.SettingsPatch{
@@ -60,7 +62,7 @@ func (s *Server) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 // UploadIcon stores the two icon PNGs. The body is at most 3 MB and each part is read up to one
 // byte past 1 MB; settings.SetIcons checks the PNG signature and the 1 MB limit. A body that is
-// not multipart is 415; a missing, repeated or unknown part, or broken multipart, is 422.
+// not multipart/form-data is 415; a missing, repeated or unknown part, or broken multipart, is 422.
 func (s *Server) UploadIcon(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxIconRequest)
 	icons, err := readIconParts(r)
@@ -82,10 +84,12 @@ func (s *Server) UploadIcon(w http.ResponseWriter, r *http.Request) {
 // readIconParts reads exactly the parts icon512 and icon180. Its errors are problems only (never
 // a reader error, whose text can quote the body).
 func readIconParts(r *http.Request) (map[string][]byte, error) {
-	mr, err := r.MultipartReader()
-	if errors.Is(err, http.ErrNotMultipart) {
+	// MultipartReader also takes multipart/mixed and other multipart types; only form-data is ours.
+	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mt != "multipart/form-data" {
 		return nil, problem.UnsupportedMediaType{}
 	}
+	mr, err := r.MultipartReader()
 	if err != nil {
 		return nil, problem.Validation{}
 	}
@@ -170,15 +174,15 @@ func (s *Server) icon(w http.ResponseWriter, r *http.Request, size int) {
 	http.ServeContent(w, r, "", updatedAt, bytes.NewReader(b))
 }
 
-// withoutFileText returns err unless its text can name a file path. The problems SetIcons and Icon
-// return and a Postgres error (writeError redacts it) pass through; any other error is a file
-// error, replaced by op and a fixed text, because problem.Write logs an internal error's text and
-// a path must never reach the log.
+// withoutFileText returns err only when its text is known to be safe to log: the problems
+// SetIcons and Icon return, and a Postgres error (writeError redacts it). Any other error (a file
+// error, or another error whose text is not known to be safe) is replaced by op and a fixed text,
+// because problem.Write logs an internal error's text and a path must never reach the log.
 func withoutFileText(op string, err error) error {
 	var pgErr *pgconn.PgError
 	if err == nil || errors.As(err, &problem.UnsupportedMediaType{}) || errors.As(err, &problem.PayloadTooLarge{}) ||
 		errors.As(err, &problem.NotFound{}) || errors.As(err, &pgErr) {
 		return err
 	}
-	return fmt.Errorf("%s: file error (text withheld: it can name a path)", op)
+	return fmt.Errorf("%s: error text withheld (it can name a path)", op)
 }

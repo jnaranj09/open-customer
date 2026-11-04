@@ -18,7 +18,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/jnaranj09/open-customer/internal/db/dbtest"
+	"github.com/jnaranj09/open-customer/internal/db/sqlc"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 )
 
@@ -130,6 +133,17 @@ func assertIconUnchanged(t *testing.T, h http.Handler, before512, before180 []by
 	}
 }
 
+// storedSettings reads the settings row through a fresh pool query, outside any handler
+// transaction, so it sees only committed data.
+func storedSettings(t *testing.T, pool *pgxpool.Pool) sqlc.GetSettingsRow {
+	t.Helper()
+	row, err := sqlc.New(pool).GetSettings(t.Context())
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	return row
+}
+
 func assertProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, suffix string) {
 	t.Helper()
 	if got := problemType(t, rec, status); !strings.HasSuffix(got, suffix) {
@@ -138,7 +152,7 @@ func assertProblem(t *testing.T, rec *httptest.ResponseRecorder, status int, suf
 }
 
 func TestPatchSettingsOK(t *testing.T) {
-	app, _, c := signedInOwner(t)
+	app, pool, c := signedInOwner(t)
 	rec := patchSettings(app.handler, `{"name":"Estudio Nuevo"}`, c)
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("got %d %q %q, want 200 application/json", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
@@ -162,6 +176,9 @@ func TestPatchSettingsOK(t *testing.T) {
 	if s != wantSettings {
 		t.Fatalf("Settings = %+v, want %+v", s, wantSettings)
 	}
+	if stored := storedSettings(t, pool); stored.Name != "Estudio Nuevo" {
+		t.Fatalf("stored name = %q after the 200, want Estudio Nuevo (committed)", stored.Name)
+	}
 }
 
 func TestPatchSettingsCurrencyIs422(t *testing.T) {
@@ -179,21 +196,36 @@ func TestPatchSettingsBadAccentIs422Field(t *testing.T) {
 }
 
 func TestPatchSettingsBadInput(t *testing.T) {
-	app, _, c := signedInOwner(t)
+	app, pool, c := signedInOwner(t)
+	before := storedSettings(t, pool)
 	for _, tc := range []struct {
 		name, body string
 		status     int
 		suffix     string
+		fields     []string
 	}{
-		{"a malformed body is 422", `{"name":`, http.StatusUnprocessableEntity, ":validation"},
-		{"an unknown field is 422", `{"name":"Estudio","color":"#000000"}`, http.StatusUnprocessableEntity, ":validation"},
-		{"a field fixed at setup (country_code) is 422", `{"country_code":"PT"}`, http.StatusUnprocessableEntity, ":validation"},
-		{"a field fixed at setup (locale) is 422", `{"locale":"es"}`, http.StatusUnprocessableEntity, ":validation"},
+		{"a malformed body is 422", `{"name":`, http.StatusUnprocessableEntity, ":validation", nil},
+		{"an unknown field is 422", `{"name":"Estudio","color":"#000000"}`, http.StatusUnprocessableEntity, ":validation", nil},
+		{"a field fixed at setup (country_code) is 422", `{"country_code":"PT"}`, http.StatusUnprocessableEntity, ":validation", nil},
+		{"a field fixed at setup (locale) is 422", `{"locale":"es"}`, http.StatusUnprocessableEntity, ":validation", nil},
 		{"an oversized body is 413", `{"name":"` + strings.Repeat("a", maxJSONBody) + `"}`,
-			http.StatusRequestEntityTooLarge, ":payload-too-large"},
+			http.StatusRequestEntityTooLarge, ":payload-too-large", nil},
+		{"a bare null body is 422", `null`, http.StatusUnprocessableEntity, ":validation", nil},
+		{"an array body is 422", `[]`, http.StatusUnprocessableEntity, ":validation", nil},
+		{"a null name is 422 on name", `{"name":null}`, http.StatusUnprocessableEntity, ":validation", []string{"name"}},
+		{"a null push_hour is 422 on push_hour", `{"push_hour":null}`, http.StatusUnprocessableEntity, ":validation", []string{"push_hour"}},
+		{"a null next to a valid field is 422 and the valid field is not written", `{"name":null,"push_hour":9}`,
+			http.StatusUnprocessableEntity, ":validation", []string{"name"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			assertProblem(t, patchSettings(app.handler, tc.body, c), tc.status, tc.suffix)
+			rec := patchSettings(app.handler, tc.body, c)
+			assertProblem(t, rec, tc.status, tc.suffix)
+			if fields := fieldNames(t, rec); !slices.Equal(fields, tc.fields) {
+				t.Fatalf("errors[].field = %v, want %v", fields, tc.fields)
+			}
+			if after := storedSettings(t, pool); after != before {
+				t.Fatalf("stored settings changed to %+v, want %+v (nothing written)", after, before)
+			}
 		})
 	}
 }
@@ -297,6 +329,26 @@ func TestUploadIconNotMultipartIs415(t *testing.T) {
 	app, _, c := signedInOwner(t)
 	rec := uploadIcon(app.handler, "application/json", strings.NewReader(`{"icon512":"x"}`), c)
 	assertProblem(t, rec, http.StatusUnsupportedMediaType, ":unsupported-media-type")
+}
+
+// TestUploadIconOtherMultipartIs415: well-formed parts sent as multipart/mixed (or with no
+// Content-Type) are refused; only multipart/form-data is accepted.
+func TestUploadIconOtherMultipartIs415(t *testing.T) {
+	app, _, c := signedInOwner(t)
+	before512, before180 := get(t, app.handler, icon512Path).Body.Bytes(), get(t, app.handler, appleTouchIconPath).Body.Bytes()
+	for _, tc := range []struct {
+		name        string
+		contentType func(formData string) string
+	}{
+		{"multipart/mixed is 415", func(ct string) string { return strings.Replace(ct, "multipart/form-data", "multipart/mixed", 1) }},
+		{"no Content-Type is 415", func(string) string { return "" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, ct := multipartBody(t, nil, validIcons(t)...)
+			assertProblem(t, uploadIcon(app.handler, tc.contentType(ct), body, c), http.StatusUnsupportedMediaType, ":unsupported-media-type")
+		})
+	}
+	assertIconUnchanged(t, app.handler, before512, before180)
 }
 
 func TestUploadIconMalformedMultipartIs422(t *testing.T) {

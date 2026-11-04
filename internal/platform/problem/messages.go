@@ -9,6 +9,8 @@ const (
 	MsgPasswordTooShort = "La contraseña debe tener al menos 8 caracteres"
 	// MsgCurrentPasswordWrong is a wrong current_password on POST /auth/password (item 42).
 	MsgCurrentPasswordWrong = "La contraseña actual no es correcta"
+	// MsgNullNotAllowed is a PATCH field sent as null that cannot be cleared (design doc item 32).
+	MsgNullNotAllowed = "Este dato no se puede dejar vacío"
 )
 
 // Field messages for the business settings (design doc item 44).
