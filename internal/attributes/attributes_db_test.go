@@ -5,6 +5,7 @@ package attributes
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -139,6 +140,39 @@ func TestCreateRejectsBadInput(t *testing.T) {
 	}
 }
 
+func TestCreateRecordsClockTime(t *testing.T) {
+	f := newFixture(t)
+	f.clock.Set(start.Add(36 * time.Hour))
+	a := f.create(t, "Talla", ScopeClient, TypeText)
+	var at time.Time
+	if err := f.pool.QueryRow(t.Context(), `SELECT created_at FROM attribute_definitions WHERE id = $1`, a.ID).Scan(&at); err != nil {
+		t.Fatalf("read created_at: %v", err)
+	}
+	if want := start.Add(36 * time.Hour); !at.Equal(want) {
+		t.Errorf("created_at = %v, want %v", at, want)
+	}
+}
+
+func TestCreateAfterMaxPositionReturnsStoredPosition(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, "Talla", ScopeClient, TypeText)
+	top := math.MaxInt32 - 1
+	if _, err := f.m.Update(t.Context(), f.pool, a.ID, AttributePatch{Position: &top}); err != nil {
+		t.Fatalf("Update to the largest allowed position: %v", err)
+	}
+	b, err := f.m.Create(t.Context(), f.pool, AttributeInput{Label: "Edad", Scope: ScopeClient, Type: TypeText})
+	if err != nil {
+		t.Fatalf("Create after the max: %v", err)
+	}
+	var stored int
+	if err := f.pool.QueryRow(t.Context(), `SELECT position FROM attribute_definitions WHERE id = $1`, b.ID).Scan(&stored); err != nil {
+		t.Fatalf("read position: %v", err)
+	}
+	if b.Position != math.MaxInt32 || stored != b.Position {
+		t.Errorf("returned %d, stored %d, want both %d", b.Position, stored, math.MaxInt32)
+	}
+}
+
 func TestCreateAcceptsEightyRuneLabel(t *testing.T) {
 	f := newFixture(t)
 	label := strings.Repeat("ñ", 80)
@@ -173,9 +207,31 @@ func TestUpdateChangesOnlyGivenFields(t *testing.T) {
 	}
 }
 
+func TestUpdateKeepsFieldsNotInThePatch(t *testing.T) {
+	f := newFixture(t)
+	a, err := f.m.Create(t.Context(), f.pool, AttributeInput{Label: "Talla", Scope: ScopeClient, Type: TypeNumber, Required: true})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	pos := 3
+	got, err := f.m.Update(t.Context(), f.pool, a.ID, AttributePatch{Position: &pos})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	list, err := f.m.List(t.Context(), f.pool)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("List = %+v, %v", list, err)
+	}
+	for _, d := range []Attribute{got, list[0]} {
+		if !d.Required || d.Label != "Talla" || d.Position != 3 {
+			t.Errorf("attribute = %+v, want Required, label Talla, position 3", d)
+		}
+	}
+}
+
 func TestUpdateRejectsBadPatch(t *testing.T) {
 	bad := " "
-	neg := -1
+	neg, big := -1, math.MaxInt32
 	tests := []struct {
 		name  string
 		patch AttributePatch
@@ -184,6 +240,7 @@ func TestUpdateRejectsBadPatch(t *testing.T) {
 	}{
 		{"empty label", AttributePatch{Label: &bad}, "label", problem.MsgNameInvalid},
 		{"negative position", AttributePatch{Position: &neg}, "position", problem.MsgPositionInvalid},
+		{"position above the limit", AttributePatch{Position: &big}, "position", problem.MsgPositionInvalid},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -281,11 +338,67 @@ func TestOptionForeignParentRejected(t *testing.T) {
 	}
 }
 
-func TestOptionOnTextAttributeRejected(t *testing.T) {
+func TestOptionOnTypeWithoutOptionsRejected(t *testing.T) {
+	for _, typ := range []Type{TypeText, TypeNumber, TypeDate} {
+		t.Run(string(typ), func(t *testing.T) {
+			f := newFixture(t)
+			a := f.create(t, "Notas", ScopeClient, typ)
+			_, err := f.m.AddOption(t.Context(), f.pool, a.ID, OptionInput{Label: "Norte"})
+			wantField(t, err, "type", problem.MsgOptionsNotAllowed)
+		})
+	}
+}
+
+func TestUpdateReturnsOptions(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, "Zona", ScopeClient, TypeSelect)
+	o := f.option(t, a, "Norte", uuid.NullUUID{})
+	label := "Área"
+	got, err := f.m.Update(t.Context(), f.pool, a.ID, AttributePatch{Label: &label})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if len(got.Options) != 1 || got.Options[0].ID != o.ID {
+		t.Errorf("options = %+v, want the one option", got.Options)
+	}
+}
+
+func TestAttributesWithoutOptionsHaveEmptySlice(t *testing.T) {
 	f := newFixture(t)
 	a := f.create(t, "Notas", ScopeClient, TypeText)
-	_, err := f.m.AddOption(t.Context(), f.pool, a.ID, OptionInput{Label: "Norte"})
-	wantField(t, err, "type", problem.MsgOptionsNotAllowed)
+	label := "Notas 2"
+	updated, err := f.m.Update(t.Context(), f.pool, a.ID, AttributePatch{Label: &label})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	list, err := f.m.List(t.Context(), f.pool)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("List = %+v, %v", list, err)
+	}
+	if updated.Options == nil || list[0].Options == nil {
+		t.Errorf("Update options nil = %v, List options nil = %v, want empty non-nil slices", updated.Options == nil, list[0].Options == nil)
+	}
+}
+
+func TestUpdateOptionArchiveKeepsTheFirstArchiveTime(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, "Zona", ScopeClient, TypeSelect)
+	o := f.option(t, a, "Norte", uuid.NullUUID{})
+	yes := true
+	if _, err := f.m.UpdateOption(t.Context(), f.pool, a.ID, o.ID, OptionPatch{Archived: &yes}); err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	f.clock.Advance(time.Hour)
+	if _, err := f.m.UpdateOption(t.Context(), f.pool, a.ID, o.ID, OptionPatch{Archived: &yes}); err != nil {
+		t.Fatalf("archive again: %v", err)
+	}
+	var at time.Time
+	if err := f.pool.QueryRow(t.Context(), `SELECT archived_at FROM attribute_options WHERE id = $1`, o.ID).Scan(&at); err != nil {
+		t.Fatalf("read archived_at: %v", err)
+	}
+	if !at.Equal(start) {
+		t.Errorf("archived_at = %v, want %v", at, start)
+	}
 }
 
 func TestOptionOnMultiselectAccepted(t *testing.T) {
@@ -362,6 +475,9 @@ func TestUpdateOptionRejectsBadPatch(t *testing.T) {
 	_, err := f.m.UpdateOption(t.Context(), f.pool, a.ID, o.ID, OptionPatch{Label: &bad})
 	wantField(t, err, "label", problem.MsgNameInvalid)
 	_, err = f.m.UpdateOption(t.Context(), f.pool, a.ID, o.ID, OptionPatch{Position: &neg})
+	wantField(t, err, "position", problem.MsgPositionInvalid)
+	big := math.MaxInt32
+	_, err = f.m.UpdateOption(t.Context(), f.pool, a.ID, o.ID, OptionPatch{Position: &big})
 	wantField(t, err, "position", problem.MsgPositionInvalid)
 }
 

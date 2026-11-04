@@ -162,7 +162,7 @@ func (m *Module) List(ctx context.Context, q db.DBTX) ([]Attribute, error) {
 		out = append(out, Attribute{
 			ID: r.ID, Key: r.Key, Label: r.Label, Scope: Scope(r.Scope), Type: Type(r.Type),
 			Required: r.Required, Position: int(r.Position), Archived: r.ArchivedAt != nil,
-			Options: byAttr[r.ID],
+			Options: optionsOrEmpty(byAttr[r.ID]),
 		})
 	}
 	return out, nil
@@ -203,11 +203,11 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AttributeInput) (Attr
 	}
 	a := Attribute{
 		ID: id, Key: GenerateKey(label, taken), Label: label, Scope: in.Scope, Type: in.Type,
-		Required: in.Required, Position: int(last) + 1,
+		Required: in.Required, Position: int(last + 1),
 	}
 	if err := queries.InsertAttribute(ctx, sqlc.InsertAttributeParams{
 		ID: a.ID, Key: a.Key, Label: a.Label, Scope: string(a.Scope), Type: string(a.Type),
-		Required: a.Required, Position: column(a.Position), Now: m.clock.Now(),
+		Required: a.Required, Position: last + 1, Now: m.clock.Now(),
 	}); err != nil {
 		return Attribute{}, fmt.Errorf("insert attribute: %w", err)
 	}
@@ -225,8 +225,12 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Attribut
 			errs = append(errs, problem.FieldError{Field: "label", Message: problem.MsgNameInvalid})
 		}
 	}
-	if p.Position != nil && *p.Position < 0 {
-		errs = append(errs, problem.FieldError{Field: "position", Message: problem.MsgPositionInvalid})
+	var pos int32
+	if p.Position != nil {
+		var ok bool
+		if pos, ok = position(*p.Position); !ok {
+			errs = append(errs, problem.FieldError{Field: "position", Message: problem.MsgPositionInvalid})
+		}
 	}
 	if len(errs) > 0 {
 		return Attribute{}, problem.Validation{Errors: errs}
@@ -249,7 +253,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Attribut
 		params.Required = *p.Required
 	}
 	if p.Position != nil {
-		params.Position = column(*p.Position)
+		params.Position = pos
 	}
 	params.ArchivedAt = archivedAt(p.Archived, row.ArchivedAt, m.clock.Now())
 	if err := queries.UpdateAttribute(ctx, params); err != nil {
@@ -262,6 +266,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Attribut
 	a := Attribute{
 		ID: id, Key: row.Key, Label: params.Label, Scope: Scope(row.Scope), Type: Type(row.Type),
 		Required: params.Required, Position: int(params.Position), Archived: params.ArchivedAt != nil,
+		Options: make([]Option, 0, len(opts)),
 	}
 	for _, o := range opts {
 		a.Options = append(a.Options, optionFrom(o))
@@ -312,9 +317,10 @@ func (m *Module) AddOption(ctx context.Context, q db.DBTX, attrID uuid.UUID, in 
 	if err != nil {
 		return Option{}, fmt.Errorf("max option position: %w", err)
 	}
-	o := Option{ID: id, AttributeID: attrID, ParentID: in.ParentID, Label: label, Position: int(last) + 1}
+	next := last + 1
+	o := Option{ID: id, AttributeID: attrID, ParentID: in.ParentID, Label: label, Position: int(next)}
 	if err := queries.InsertAttributeOption(ctx, sqlc.InsertAttributeOptionParams{
-		ID: o.ID, AttributeID: attrID, ParentID: in.ParentID, Label: label, Position: column(o.Position),
+		ID: o.ID, AttributeID: attrID, ParentID: in.ParentID, Label: label, Position: next,
 	}); err != nil {
 		return Option{}, fmt.Errorf("insert attribute option: %w", err)
 	}
@@ -332,8 +338,12 @@ func (m *Module) UpdateOption(ctx context.Context, q db.DBTX, attrID, optionID u
 			errs = append(errs, problem.FieldError{Field: "label", Message: problem.MsgNameInvalid})
 		}
 	}
-	if p.Position != nil && *p.Position < 0 {
-		errs = append(errs, problem.FieldError{Field: "position", Message: problem.MsgPositionInvalid})
+	var pos int32
+	if p.Position != nil {
+		var ok bool
+		if pos, ok = position(*p.Position); !ok {
+			errs = append(errs, problem.FieldError{Field: "position", Message: problem.MsgPositionInvalid})
+		}
 	}
 	if len(errs) > 0 {
 		return Option{}, problem.Validation{Errors: errs}
@@ -347,16 +357,18 @@ func (m *Module) UpdateOption(ctx context.Context, q db.DBTX, attrID, optionID u
 		return Option{}, fmt.Errorf("get attribute option: %w", err)
 	}
 	o := optionFrom(row)
+	storedPos := row.Position
 	if p.Label != nil {
 		o.Label = label
 	}
 	if p.Position != nil {
-		o.Position = int(column(*p.Position))
+		o.Position = int(pos)
+		storedPos = pos
 	}
 	at := archivedAt(p.Archived, row.ArchivedAt, m.clock.Now())
 	o.Archived = at != nil
 	if err := queries.UpdateAttributeOption(ctx, sqlc.UpdateAttributeOptionParams{
-		ID: optionID, Label: o.Label, Position: column(o.Position), ArchivedAt: at,
+		ID: optionID, Label: o.Label, Position: storedPos, ArchivedAt: at,
 	}); err != nil {
 		return Option{}, fmt.Errorf("update attribute option: %w", err)
 	}
@@ -391,8 +403,24 @@ func archivedAt(archived *bool, stored *time.Time, now time.Time) *time.Time {
 	return &now
 }
 
-// column converts a validated position to the column type; the clamp keeps it in range.
-func column(n int) int32 { return int32(min(max(n, 0), math.MaxInt32)) }
+// maxPosition leaves room for the "last + 1" of Create and AddOption.
+const maxPosition = math.MaxInt32 - 1
+
+// position checks a requested position and converts it to the column type.
+func position(n int) (int32, bool) {
+	if n < 0 || n > maxPosition {
+		return 0, false
+	}
+	return int32(n), true
+}
+
+// optionsOrEmpty gives an attribute without options an empty slice, so its JSON is [] and never null.
+func optionsOrEmpty(o []Option) []Option {
+	if o == nil {
+		return []Option{}
+	}
+	return o
+}
 
 func optionFrom(o sqlc.AttributeOption) Option {
 	return Option{

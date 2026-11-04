@@ -48,5 +48,5 @@ const (
 	MsgParentInvalid     = "La opción superior no es de este dato"
 	MsgParentArchived    = "La opción superior está archivada"
 	MsgAttributeArchived = "Este dato está archivado"
-	MsgPositionInvalid   = "La posición no puede ser negativa"
+	MsgPositionInvalid   = "La posición no es válida"
 )
