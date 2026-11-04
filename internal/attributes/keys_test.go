@@ -1,7 +1,6 @@
 package attributes
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 	"testing"
@@ -27,6 +26,7 @@ func TestGenerateKey(t *testing.T) {
 		{"taken", "Bebida favorita", map[string]bool{"bebida_favorita": true}, "bebida_favorita_2"},
 		{"taken twice", "Bebida favorita", map[string]bool{"bebida_favorita": true, "bebida_favorita_2": true}, "bebida_favorita_3"},
 		{"cut to 40", strings.Repeat("a", 60), nil, strings.Repeat("a", 40)},
+		{"cut base taken", strings.Repeat("a", 60), map[string]bool{strings.Repeat("a", 40): true}, strings.Repeat("a", 40) + "_2"},
 		{"cut does not end in underscore", strings.Repeat("a", 39) + " bb", nil, strings.Repeat("a", 39)},
 	}
 	for _, tt := range tests {
@@ -63,22 +63,14 @@ func TestParseScopeAndType(t *testing.T) {
 			t.Errorf("ParseType(%q) = %q, %v", s, got, err)
 		}
 	}
-	assertField(t, parseScopeErr("service"), "scope", problem.MsgScopeInvalid)
+	wantOneValidation(t, parseScopeErr("service"), "scope", problem.MsgScopeInvalid)
 	for _, s := range []string{"image", "payment_method", ""} {
 		_, err := ParseType(s)
-		assertField(t, err, "type", problem.MsgAttrTypeInvalid)
+		wantOneValidation(t, err, "type", problem.MsgAttrTypeInvalid)
 	}
 }
 
 func parseScopeErr(s string) error {
 	_, err := ParseScope(s)
 	return err
-}
-
-func assertField(t *testing.T, err error, field, message string) {
-	t.Helper()
-	var v problem.Validation
-	if !errors.As(err, &v) || len(v.Errors) != 1 || v.Errors[0].Field != field || v.Errors[0].Message != message {
-		t.Errorf("error = %#v, want one validation error on %q with %q", err, field, message)
-	}
 }

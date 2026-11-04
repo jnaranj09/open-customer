@@ -2,6 +2,7 @@ package attributes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -36,6 +37,8 @@ func defs() []Attribute {
 		{Key: "obligatorio", Label: "Obligatorio", Scope: ScopeClient, Type: TypeText, Required: true},
 		{Key: "viejo", Label: "Viejo", Scope: ScopeClient, Type: TypeText, Archived: true},
 		{Key: "cita_nota", Label: "Nota de cita", Scope: ScopeAppointment, Type: TypeText},
+		{Key: "viejo_req", Label: "Viejo obligatorio", Scope: ScopeClient, Type: TypeText, Required: true, Archived: true},
+		{Key: "cita_req", Label: "Obligatorio de cita", Scope: ScopeAppointment, Type: TypeText, Required: true},
 	}
 }
 
@@ -53,39 +56,54 @@ func wantOneError(t *testing.T, errs []problem.FieldError, field, message string
 	}
 }
 
-func TestValidateValuesByType(t *testing.T) {
-	long := strings.Repeat("ñ", 501)
+func TestValidateAcceptedValues(t *testing.T) {
 	tests := []struct {
-		name    string
-		body    string
-		wantMsg string // empty means accepted
-		field   string
-		label   string
+		name string
+		body string
+		want string
 	}{
-		{"text", `{"nota":"Café negro","obligatorio":"x"}`, "", "", ""},
-		{"number", `{"peso":12.5,"obligatorio":"x"}`, "", "", ""},
-		{"date", `{"cumple":"2026-10-24","obligatorio":"x"}`, "", "", ""},
-		{"select", fmt.Sprintf(`{"color":%q,"obligatorio":"x"}`, optA), "", "", ""},
-		{"multiselect", fmt.Sprintf(`{"gustos":[%q,%q],"obligatorio":"x"}`, optA, optB), "", "", ""},
-		{"text too long", fmt.Sprintf(`{"nota":%q,"obligatorio":"x"}`, long), problem.MsgAttrTextInvalid, "attrs.nota", "Nota"},
-		{"text not a string", `{"nota":5,"obligatorio":"x"}`, problem.MsgAttrTextInvalid, "attrs.nota", "Nota"},
-		{"number as string", `{"peso":"12","obligatorio":"x"}`, problem.MsgAttrNumberInvalid, "attrs.peso", "Peso"},
-		{"date with time", `{"cumple":"2026-10-24T10:00:00Z","obligatorio":"x"}`, problem.MsgAttrDateInvalid, "attrs.cumple", "Cumpleaños"},
-		{"date unpadded", `{"cumple":"2026-2-3","obligatorio":"x"}`, problem.MsgAttrDateInvalid, "attrs.cumple", "Cumpleaños"},
-		{"option of another attribute", fmt.Sprintf(`{"color":%q,"obligatorio":"x"}`, optOth), problem.MsgAttrOptionInvalid, "attrs.color", "Color"},
-		{"select not a string", `{"color":3,"obligatorio":"x"}`, problem.MsgAttrOptionInvalid, "attrs.color", "Color"},
-		{"repeated id", fmt.Sprintf(`{"gustos":[%q,%q],"obligatorio":"x"}`, optA, optA), problem.MsgAttrOptionRepeated, "attrs.gustos", "Gustos"},
+		{"text", `{"nota":"Café negro","obligatorio":"x"}`, `{"nota":"Café negro","obligatorio":"x"}`},
+		{"text trimmed", `{"nota":" hola ","obligatorio":"x"}`, `{"nota":"hola","obligatorio":"x"}`},
+		{"text of exactly 500 runes", fmt.Sprintf(`{"nota":%q,"obligatorio":"x"}`, strings.Repeat("ñ", 500)),
+			fmt.Sprintf(`{"nota":%q,"obligatorio":"x"}`, strings.Repeat("ñ", 500))},
+		{"number", `{"peso":12.5,"obligatorio":"x"}`, `{"obligatorio":"x","peso":12.5}`},
+		{"date", `{"cumple":"2026-10-24","obligatorio":"x"}`, `{"cumple":"2026-10-24","obligatorio":"x"}`},
+		{"select", fmt.Sprintf(`{"color":%q,"obligatorio":"x"}`, optA), fmt.Sprintf(`{"color":%q,"obligatorio":"x"}`, optA)},
+		{"multiselect", fmt.Sprintf(`{"gustos":[%q,%q],"obligatorio":"x"}`, optA, optB),
+			fmt.Sprintf(`{"gustos":[%q,%q],"obligatorio":"x"}`, optA, optB)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, errs := create(t, tt.body)
+			if len(errs) != 0 || got != tt.want {
+				t.Errorf("got %s, %+v; want %s and no errors", got, errs, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateRejectedValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  string
+		field string
+		want  string
+	}{
+		{"text of 501 runes", fmt.Sprintf(`{"nota":%q,"obligatorio":"x"}`, strings.Repeat("ñ", 501)), "attrs.nota", fmt.Sprintf(problem.MsgAttrTextInvalid, "Nota")},
+		{"text not a string", `{"nota":5,"obligatorio":"x"}`, "attrs.nota", fmt.Sprintf(problem.MsgAttrTextInvalid, "Nota")},
+		{"number as string", `{"peso":"12","obligatorio":"x"}`, "attrs.peso", fmt.Sprintf(problem.MsgAttrNumberInvalid, "Peso")},
+		{"number out of range", `{"peso":1e999,"obligatorio":"x"}`, "attrs.peso", fmt.Sprintf(problem.MsgAttrNumberInvalid, "Peso")},
+		{"date with time", `{"cumple":"2026-10-24T10:00:00Z","obligatorio":"x"}`, "attrs.cumple", fmt.Sprintf(problem.MsgAttrDateInvalid, "Cumpleaños")},
+		{"date unpadded", `{"cumple":"2026-2-3","obligatorio":"x"}`, "attrs.cumple", fmt.Sprintf(problem.MsgAttrDateInvalid, "Cumpleaños")},
+		{"option of another attribute", fmt.Sprintf(`{"color":%q,"obligatorio":"x"}`, optOth), "attrs.color", fmt.Sprintf(problem.MsgAttrOptionInvalid, "Color")},
+		{"select not a string", `{"color":3,"obligatorio":"x"}`, "attrs.color", fmt.Sprintf(problem.MsgAttrOptionInvalid, "Color")},
+		{"repeated id", fmt.Sprintf(`{"gustos":[%q,%q],"obligatorio":"x"}`, optA, optA), "attrs.gustos", fmt.Sprintf(problem.MsgAttrOptionRepeated, "Gustos")},
+		{"repeated id in another case", fmt.Sprintf(`{"gustos":[%q,%q],"obligatorio":"x"}`, optA, strings.ToUpper(optA.String())), "attrs.gustos", fmt.Sprintf(problem.MsgAttrOptionRepeated, "Gustos")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, errs := create(t, tt.body)
-			if tt.wantMsg == "" {
-				if len(errs) != 0 {
-					t.Fatalf("errors = %+v, want none", errs)
-				}
-				return
-			}
-			wantOneError(t, errs, tt.field, fmt.Sprintf(tt.wantMsg, tt.label))
+			wantOneError(t, errs, tt.field, tt.want)
 		})
 	}
 }
@@ -204,4 +222,37 @@ func TestValidateErrorsInKeyOrder(t *testing.T) {
 	if len(errs) != 2 || errs[0].Field != "attrs.cumple" || errs[1].Field != "attrs.peso" {
 		t.Errorf("errors = %+v, want cumple then peso", errs)
 	}
+}
+
+func TestValidateNullOnArchivedAttributeIsRejected(t *testing.T) {
+	stored := json.RawMessage(`{"viejo":"vale","obligatorio":"x"}`)
+	_, errs := validateValues(defs(), ScopeClient, stored, json.RawMessage(`{"viejo":null}`), false)
+	wantOneError(t, errs, "attrs.viejo", fmt.Sprintf(problem.MsgAttrArchived, "Viejo"))
+}
+
+func TestValidateRequiredIgnoresArchivedAndOtherScope(t *testing.T) {
+	got, errs := create(t, `{"obligatorio":"x"}`)
+	if len(errs) != 0 || got != `{"obligatorio":"x"}` {
+		t.Errorf("got %s, %+v; want no error for an archived or other-scope required attribute", got, errs)
+	}
+}
+
+func TestValidateUppercaseOptionIDsMatchStored(t *testing.T) {
+	stored := json.RawMessage(fmt.Sprintf(`{"color":%q,"gustos":[%q],"obligatorio":"x"}`, optOld, optOld))
+	request := json.RawMessage(fmt.Sprintf(`{"color":%q,"gustos":[%q]}`, strings.ToUpper(optOld.String()), strings.ToUpper(optOld.String())))
+	out, errs := validateValues(defs(), ScopeClient, stored, request, false)
+	if len(errs) != 0 || string(out) != string(stored) {
+		t.Errorf("got %s, %+v; want the stored value kept without errors", out, errs)
+	}
+}
+
+// wantOneValidation checks that err is a validation problem with exactly one field error.
+func wantOneValidation(t *testing.T, err error, field, message string) {
+	t.Helper()
+	var v problem.Validation
+	if !errors.As(err, &v) {
+		t.Errorf("error = %#v, want a validation problem", err)
+		return
+	}
+	wantOneError(t, v.Errors, field, message)
 }

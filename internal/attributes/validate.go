@@ -56,6 +56,7 @@ func validateValues(defs []Attribute, scope Scope, stored, request json.RawMessa
 			failed[key] = msg(problem.MsgAttrOtherScope, def.Label)
 			continue
 		}
+		raw = canonicalOptionIDs(def, raw)
 		isNull := string(raw) == "null"
 		if isCreate && isNull {
 			continue
@@ -294,4 +295,42 @@ func checkMultiselect(def Attribute, raw, stored json.RawMessage) (json.RawMessa
 		return nil, false, msg(problem.MsgAttrOptionInvalid, def.Label)
 	}
 	return out, false, ""
+}
+
+// canonicalOptionIDs rewrites the option IDs of a select or multiselect value to lowercase
+// canonical form, so the comparison with the stored value and the repeat check do not depend on
+// letter case. Anything that is not an ID is left for the type check to reject.
+func canonicalOptionIDs(def Attribute, raw json.RawMessage) json.RawMessage {
+	canon := func(v any) any {
+		if s, ok := v.(string); ok {
+			if u, err := uuid.Parse(s); err == nil {
+				return u.String()
+			}
+		}
+		return v
+	}
+	var v any
+	switch def.Type {
+	case TypeSelect:
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return raw
+		}
+		v = canon(v)
+	case TypeMultiselect:
+		var list []any
+		if err := json.Unmarshal(raw, &list); err != nil {
+			return raw
+		}
+		for i := range list {
+			list[i] = canon(list[i])
+		}
+		v = list
+	case TypeText, TypeNumber, TypeDate:
+		return raw
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		return raw
+	}
+	return out
 }
