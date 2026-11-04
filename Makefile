@@ -25,6 +25,11 @@ GOLANGCI_LINT ?= bin/tools/golangci-lint-$(GOLANGCI_LINT_VERSION)/golangci-lint
 # (serve uses clock.Real.Now, the one P0 entry).
 DEADCODE_BUDGET := 0
 
+# Packages make cover holds to the 90% statement floor (an owner decision; design doc item 2). It
+# grows by phase: auth (P2); attributes, appointments, templates (P3); reminders (P4).
+COVER_PKGS := ./internal/auth
+COVER_FLOOR := 90.0
+
 # make dev's Postgres container (design doc item 2). The password is for this local container only.
 DEV_PG_CONTAINER := open-customer-dev
 DEV_PG_PORT ?= 5433
@@ -34,7 +39,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db dev
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -59,6 +64,19 @@ test: web-stub node-check
 # Tests tagged db use testcontainers Postgres (PG_IMAGE, exported above); Docker must be running.
 test-db: web-stub
 	go test -tags db $(GO_PKGS)
+
+# The db tests count too, so each package's profile includes them. A package under the floor fails
+# the target and is named.
+cover: web-stub
+	@for pkg in $(COVER_PKGS); do \
+		name=$$(basename "$$pkg"); \
+		go test -tags db -coverprofile="coverage-$$name.out" "$$pkg"; \
+		total=$$(go tool cover -func="coverage-$$name.out" | awk '/^total:/ { sub(/%/, "", $$NF); print $$NF }'); \
+		echo "cover: $$pkg $$total% (floor $(COVER_FLOOR)%)"; \
+		if ! awk -v t="$$total" -v f="$(COVER_FLOOR)" 'BEGIN { exit !(t != "" && t + 0 >= f + 0) }'; then \
+			echo "cover: $$pkg is at $$total%, under the $(COVER_FLOOR)% floor" >&2; exit 1; \
+		fi; \
+	done
 
 vuln: web-stub
 	go tool govulncheck $(GO_PKGS)

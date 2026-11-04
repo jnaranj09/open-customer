@@ -7,6 +7,8 @@ const (
 	MsgUsernameInvalid = "Usa de 3 a 32 letras, números, punto, guion o guion bajo"
 	// MsgPasswordTooShort is the minimum password length (item 38).
 	MsgPasswordTooShort = "La contraseña debe tener al menos 8 caracteres"
+	// MsgCurrentPasswordWrong is a wrong current_password on POST /auth/password (item 42).
+	MsgCurrentPasswordWrong = "La contraseña actual no es correcta"
 )
 
 // Field messages for the business settings (design doc item 44).

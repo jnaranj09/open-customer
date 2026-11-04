@@ -43,7 +43,7 @@ func (a *Auth) Login(ctx context.Context, q db.DBTX, in LoginInput, ip netip.Add
 	if err := a.limiter.reserveName(username, a.clock.Now()); err != nil {
 		return Me{}, "", err
 	}
-	user, found, err := loadLoginUser(ctx, q, username)
+	user, found, err := loadUserByName(ctx, q, username)
 	if err != nil {
 		return Me{}, "", err
 	}
@@ -66,14 +66,15 @@ func (a *Auth) Login(ctx context.Context, q db.DBTX, in LoginInput, ip netip.Add
 	return Me{ID: user.ID, Username: user.Username, MustChangePassword: user.MustChangePassword}, token, nil
 }
 
-// loadLoginUser loads the user named username; found is false when there is none.
-func loadLoginUser(ctx context.Context, q db.DBTX, username string) (sqlc.GetUserByUsernameRow, bool, error) {
+// loadUserByName loads the user named username (Login and ResetPassword); found is false when
+// there is none.
+func loadUserByName(ctx context.Context, q db.DBTX, username string) (sqlc.GetUserByUsernameRow, bool, error) {
 	user, err := sqlc.New(q).GetUserByUsername(ctx, username)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return sqlc.GetUserByUsernameRow{}, false, nil
 	}
 	if err != nil {
-		return sqlc.GetUserByUsernameRow{}, false, fmt.Errorf("load the login user: %w", err)
+		return sqlc.GetUserByUsernameRow{}, false, fmt.Errorf("load a user by username: %w", err)
 	}
 	return user, true, nil
 }

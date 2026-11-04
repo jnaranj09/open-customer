@@ -26,13 +26,14 @@ run.
 | `make generate` | oapi-codegen, sqlc (Docker image) and openapi-typescript |
 | `make check-generated` | `generate`, then fails if a generated file differs from the committed one |
 | `make test-db` | Go tests tagged `db` against a testcontainers Postgres (needs Docker) |
+| `make cover` | The `db` tests with coverage for each package in `COVER_PKGS`; fails when one is under 90% |
 | `make vuln` | govulncheck |
 | `make build` | The web build, then `bin/open-customer` |
 | `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
 | `make image` | The app Docker image |
 
-The gate before any change is done: `make check-pins lint test vuln build check-generated test-db`.
-Later phases add targets (`cover`, `e2e`); the design doc's "Build order" says when.
+The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover`.
+A later phase adds `e2e`; the design doc's "Build order" says when.
 
 ## Release checklist
 

@@ -34,14 +34,14 @@ with fnm, `fnm use` in web/).
   svelte-check, eslint, prettier check, knip, jscpd.
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
   (testcontainers).
-- `make cover`: the 90% gate on the packages in `COVER_PKGS` (from P2).
+- `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
   app Docker image.
 - `make e2e`: build, fresh e2e database, Playwright WebKit (from P6).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db` (P1), plus `cover` from P2. CI
+`make check-pins lint test vuln build check-generated test-db cover`. CI
 (`.github/workflows/ci.yml`) also runs gitleaks and `pnpm audit --audit-level high`.
 
 A check that could not run is reported as NOT RUN, never as passing.

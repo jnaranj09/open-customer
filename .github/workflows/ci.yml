@@ -47,5 +47,6 @@ jobs:
       - run: make vuln
       - run: make check-generated
       - run: make test-db
+      - run: make cover
       # Last, so every check above ran with only the web stub (Verification Plan, "Clean checkout").
       - run: make build

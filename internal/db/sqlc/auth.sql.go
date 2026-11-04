@@ -122,6 +122,17 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUs
 	return i, err
 }
 
+const getUserPasswordHash = `-- name: GetUserPasswordHash :one
+SELECT password_hash FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserPasswordHash(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserPasswordHash, id)
+	var password_hash string
+	err := row.Scan(&password_hash)
+	return password_hash, err
+}
+
 const insertSession = `-- name: InsertSession :exec
 INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at)
 VALUES ($1, $2, $3, $4, $3)
@@ -186,6 +197,22 @@ SELECT pg_advisory_xact_lock($1::bigint)
 
 func (q *Queries) LockSetup(ctx context.Context, key int64) error {
 	_, err := q.db.Exec(ctx, lockSetup, key)
+	return err
+}
+
+const setUserPassword = `-- name: SetUserPassword :exec
+UPDATE users SET password_hash = $1, must_change_password = $2
+WHERE id = $3
+`
+
+type SetUserPasswordParams struct {
+	PasswordHash       string
+	MustChangePassword bool
+	ID                 uuid.UUID
+}
+
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, setUserPassword, arg.PasswordHash, arg.MustChangePassword, arg.ID)
 	return err
 }
 
