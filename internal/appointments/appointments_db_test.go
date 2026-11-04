@@ -255,6 +255,19 @@ func TestCreateNoServicesNoEndIs422(t *testing.T) {
 	wantFields(t, err, fe("service_ids", problem.MsgServicesOrEndRequired))
 }
 
+func TestCreateZeroTimesIs422(t *testing.T) {
+	f := newFixture(t)
+	c := f.client(t, "Marta Solano")
+	svc := f.service(t, "Manicura", 60, nil)
+	_, err := f.m.Create(t.Context(), f.pool, AppointmentInput{ClientID: c, ServiceIDs: svcIDs(svc.ID)})
+	wantFields(t, err, fe("starts_at", problem.MsgNullNotAllowed))
+	_, err = f.m.Create(t.Context(), f.pool, AppointmentInput{ClientID: c, StartsAt: at, EndsAt: tm(time.Time{})})
+	wantFields(t, err, fe("ends_at", problem.MsgNullNotAllowed))
+	if n := f.count(t, "appointments"); n != 0 {
+		t.Fatalf("appointments = %d, want 0", n)
+	}
+}
+
 func TestCreateEndBeforeStartIs422(t *testing.T) {
 	f := newFixture(t)
 	c := f.client(t, "Marta Solano")
@@ -700,5 +713,17 @@ func TestAppointmentsDBErrors(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestUpdateZeroTimesIs422(t *testing.T) {
+	f := newFixture(t)
+	made := f.book(t, f.client(t, "Marta Solano"), at, at.Add(time.Hour))
+	_, err := f.m.Update(t.Context(), f.pool, made.ID, AppointmentPatch{StartsAt: tm(time.Time{})})
+	wantFields(t, err, fe("starts_at", problem.MsgNullNotAllowed))
+	_, err = f.m.Update(t.Context(), f.pool, made.ID, AppointmentPatch{EndsAt: tm(time.Time{})})
+	wantFields(t, err, fe("ends_at", problem.MsgNullNotAllowed))
+	if got := f.get(t, made.ID); !got.StartsAt.Equal(at) || !got.EndsAt.Equal(at.Add(time.Hour)) {
+		t.Fatalf("times = %v-%v, want unchanged", got.StartsAt, got.EndsAt)
 	}
 }

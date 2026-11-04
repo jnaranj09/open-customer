@@ -36,7 +36,7 @@ func (s *Server) ListAppointments(w http.ResponseWriter, r *http.Request, params
 		writeError(w, r, fmt.Errorf("load the business time zone: %w", err))
 		return
 	}
-	list, err := s.appointments.ListRange(r.Context(), s.pool, civilDay(params.From, loc), civilDay(params.To, loc), loc)
+	list, err := s.appointments.ListRange(r.Context(), s.pool, params.From.Time, params.To.Time, loc)
 	if err != nil {
 		writeError(w, r, fmt.Errorf("list appointments: %w", err))
 		return
@@ -58,10 +58,6 @@ func (s *Server) ListClientAppointments(w http.ResponseWriter, r *http.Request, 
 func (s *Server) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 	var body gen.AppointmentInput
 	if decodeJSON(w, r, &body) != nil {
-		return
-	}
-	if body.StartsAt.IsZero() {
-		writeError(w, r, problem.Validation{Errors: []problem.FieldError{{Field: "starts_at", Message: problem.MsgNullNotAllowed}}})
 		return
 	}
 	in := appointments.AppointmentInput{
@@ -147,12 +143,6 @@ func (s *Server) SetAppointmentStatus(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	writeJSON(w, http.StatusOK, toGenAppointment(out))
-}
-
-// civilDay is the calendar date of d (a UTC-midnight Date) as midnight in loc.
-func civilDay(d openapi_types.Date, loc *time.Location) time.Time {
-	y, m, day := d.Date()
-	return time.Date(y, m, day, 0, 0, 0, 0, loc)
 }
 
 func toGenAppointments(list []appointments.Appointment) []gen.Appointment {

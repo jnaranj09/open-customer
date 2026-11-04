@@ -108,6 +108,18 @@ func TestCreateAppointmentMissingStartsAtIs422(t *testing.T) {
 	}
 }
 
+func TestPatchAppointmentZeroTimeIs422(t *testing.T) {
+	f := newBookingFixture(t)
+	made := f.book(t, "2026-11-10T10:00:00Z")
+	for _, field := range []string{"starts_at", "ends_at"} {
+		body := fmt.Sprintf(`{%q:"0001-01-01T00:00:00Z"}`, field)
+		errs := fieldErrors(t, f.send(http.MethodPatch, appointmentPath(made.Id), body))
+		if len(errs) != 1 || errs[0].Field != field {
+			t.Fatalf("errors = %+v, want one on %s", errs, field)
+		}
+	}
+}
+
 func TestCreateAppointmentOverlapIs409WithAppointments(t *testing.T) {
 	f := newBookingFixture(t)
 	first := f.book(t, "2026-11-10T10:00:00Z")

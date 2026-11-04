@@ -75,7 +75,7 @@ type AppointmentInput struct {
 	AllowOverlap bool
 }
 
-// AppointmentPatch holds the fields Update changes; a nil or unspecified field is left as it is.
+// AppointmentPatch holds the fields Update changes; a nil or unspecified field is left as it is. A zero StartsAt or EndsAt is a 422.
 // ServiceIDs replaces the whole line list. Attrs is merged by key; nil means absent. Notes and
 // PaidCents distinguish unspecified (kept), null (cleared) and a value (set).
 type AppointmentPatch struct {
@@ -130,6 +130,7 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AppointmentInput) (Ap
 	if err := activeClient(ctx, queries, in.ClientID); err != nil && !problem.CollectFields(&errs, err) {
 		return Appointment{}, err
 	}
+	zero := zeroTimes(&errs, &in.StartsAt, in.EndsAt)
 	found, err := m.services.GetMany(ctx, q, in.ServiceIDs)
 	if err != nil {
 		return Appointment{}, fmt.Errorf("get appointment services: %w", err)
@@ -148,7 +149,7 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AppointmentInput) (Ap
 	default:
 		end = in.StartsAt.Add(durationOf(lines))
 	}
-	if known && !end.After(in.StartsAt) {
+	if known && !zero && !end.After(in.StartsAt) {
 		errs = append(errs, field("ends_at", problem.MsgEndBeforeStart))
 	}
 	attrs, err := m.attrs.Validate(ctx, q, attributes.ScopeAppointment, nil, in.Attrs, true)
@@ -194,6 +195,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Appointm
 		return Appointment{}, err
 	}
 	var errs []problem.FieldError
+	zero := zeroTimes(&errs, p.StartsAt, p.EndsAt)
 	start := cur.StartsAt
 	if p.StartsAt != nil {
 		start = *p.StartsAt
@@ -223,7 +225,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Appointm
 	case p.StartsAt != nil:
 		end = cur.EndsAt.Add(start.Sub(cur.StartsAt))
 	}
-	if known && !end.After(start) {
+	if known && !zero && !end.After(start) {
 		errs = append(errs, field("ends_at", problem.MsgEndBeforeStart))
 	}
 	attrs := cur.Attrs
@@ -344,6 +346,21 @@ func (m *Module) ListForClient(ctx context.Context, q db.DBTX, clientID uuid.UUI
 		list = append(list, sqlc.GetAppointmentRow(r))
 	}
 	return m.withLines(ctx, q, list)
+}
+
+// zeroTimes adds a 422 on starts_at or ends_at for each given time that is the zero time (a
+// missing or blank value decodes to it) and reports whether it found one.
+func zeroTimes(errs *[]problem.FieldError, start, end *time.Time) bool {
+	zero := false
+	if start != nil && start.IsZero() {
+		*errs = append(*errs, field("starts_at", problem.MsgNullNotAllowed))
+		zero = true
+	}
+	if end != nil && end.IsZero() {
+		*errs = append(*errs, field("ends_at", problem.MsgNullNotAllowed))
+		zero = true
+	}
+	return zero
 }
 
 // activeClient returns a 422 on client_id when the client is unknown or archived.
