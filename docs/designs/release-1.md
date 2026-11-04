@@ -2107,7 +2107,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   Strict TypeScript: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noImplicitReturns`.
     *   Vitest (the `test` block of `vite.config.ts`): `include` `src/**/*.test.ts` and `tests/guards/**/*.test.ts`, `allowOnly: false`, `restoreMocks: true`.
     *   `eslint.config.js`: flat config (`defineConfig`) with `typescript-eslint` `strictTypeChecked` (type-aware; `no-explicit-any`, `no-floating-promises`, `consistent-type-imports`, `switch-exhaustiveness-check` as errors) and `eslint-plugin-svelte`; `@vitest/eslint-plugin` on test files (`valid-title`, `expect-expect`, `no-conditional-in-test`, `no-conditional-expect`, `no-focused-tests`, `no-disabled-tests`, `no-restricted-matchers` for snapshots); `eslint-plugin-playwright` on `tests/e2e` (`no-skipped-test`, `no-wait-for-timeout`, `no-focused-test`). `.prettierrc`: `prettier-plugin-svelte`. All plugins are dev dependencies (item 62).
-    *   `knip.json`: lists the dependencies a later phase starts using; each phase removes the ones it uses. `.jscpd.json`: `src`, TypeScript, JavaScript and Svelte, tests excluded, threshold 0.
+    *   `knip.json`: lists the dependencies a later phase starts using; each phase removes the ones it uses. `.jscpd.json`: `src`, `tests`, `eslint.config.js` and `vite.config.ts`, TypeScript, JavaScript and Svelte, tests excluded, threshold 0, `failOnEmpty` (a scan that analyzes no files fails; `src` alone is too small early on to pass it).
 
 ##### 64. `web/src/app.html`, `web/src/app.css` (Create)
 
