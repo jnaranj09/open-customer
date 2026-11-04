@@ -17,6 +17,11 @@ import (
 // setupTokenLifetime is how long a setup link works ("Auth, sessions and handover").
 const setupTokenLifetime = 24 * time.Hour
 
+// setupLockKey names the transaction-scoped advisory lock that NewSetupToken and CompleteSetup take
+// first, so two of them never interleave: two token calls cannot leave two live tokens, and two
+// setups cannot both create a user. The value is arbitrary; it only has to be used by nothing else.
+const setupLockKey int64 = 0x6f635f7365747570 // "oc_setup"
+
 // SetupSettings is the settings part of the setup body. auth defines it so it never names a
 // settings type (design doc item 40). A nil PushHour means "absent"; settings fills in 8.
 type SetupSettings struct {
@@ -48,9 +53,14 @@ func (a *Auth) SetupNeeded(ctx context.Context, q db.DBTX) (bool, error) {
 
 // NewSetupToken deletes every old setup token, stores a new one valid for setupTokenLifetime and
 // returns it for the setup link. Only its hash is stored, so the link cannot be printed again. Once
-// a user exists it is problem.SetupClosed, even though both callers check first (OP17).
+// a user exists it is problem.SetupClosed, even though both callers check first (OP17). q must be
+// a transaction: the setup lock it takes first lasts until that transaction ends, and on the pool
+// it would end with the statement.
 func (a *Auth) NewSetupToken(ctx context.Context, q db.DBTX) (string, error) {
 	queries := sqlc.New(q)
+	if err := lockSetup(ctx, queries); err != nil {
+		return "", err
+	}
 	if err := refuseOnceUserExists(ctx, queries); err != nil {
 		return "", err
 	}
@@ -71,10 +81,14 @@ func (a *Auth) NewSetupToken(ctx context.Context, q db.DBTX) (string, error) {
 
 // CompleteSetup creates the settings row (through the settings creator), the owner user, the
 // starter data (through the seeder) and her first session, and deletes every setup token (design
-// doc item 40). It runs in the caller's transaction: the POST /setup handler opens it, so any
-// error leaves nothing behind. It returns the new user and the session token for the cookie.
+// doc item 40). q must be a transaction: the POST /setup handler opens it, so any error leaves
+// nothing behind, and the setup lock taken first holds until it ends. It returns the new user and
+// the session token for the cookie.
 func (a *Auth) CompleteSetup(ctx context.Context, q db.DBTX, in SetupInput) (Me, string, error) {
 	queries := sqlc.New(q)
+	if err := lockSetup(ctx, queries); err != nil {
+		return Me{}, "", err
+	}
 	if err := refuseOnceUserExists(ctx, queries); err != nil {
 		return Me{}, "", err
 	}
@@ -118,6 +132,15 @@ func (a *Auth) CompleteSetup(ctx context.Context, q db.DBTX, in SetupInput) (Me,
 	return Me{ID: userID, Username: username}, token, nil
 }
 
+// lockSetup waits for the setup lock (setupLockKey). A concurrent setup or token call that held it
+// has committed by the time it returns, so the checks after it see that call's writes.
+func lockSetup(ctx context.Context, queries *sqlc.Queries) error {
+	if err := queries.LockSetup(ctx, setupLockKey); err != nil {
+		return fmt.Errorf("take the setup lock: %w", err)
+	}
+	return nil
+}
+
 // refuseOnceUserExists is problem.SetupClosed once the first user exists.
 func refuseOnceUserExists(ctx context.Context, queries *sqlc.Queries) error {
 	exists, err := queries.UserExists(ctx)
@@ -131,14 +154,13 @@ func refuseOnceUserExists(ctx context.Context, queries *sqlc.Queries) error {
 }
 
 // checkSetupToken is problem.SetupTokenInvalid unless token parses, is stored, unused and not
-// expired. The row stays locked until the caller's transaction ends, so a second setup with the
-// same token waits and then finds it deleted.
+// expired.
 func (a *Auth) checkSetupToken(ctx context.Context, queries *sqlc.Queries, token string) error {
 	hash, err := parseToken(token)
 	if err != nil {
 		return problem.SetupTokenInvalid{}
 	}
-	row, err := queries.LockSetupToken(ctx, hash)
+	row, err := queries.GetSetupToken(ctx, hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return problem.SetupTokenInvalid{}
 	}
@@ -154,11 +176,11 @@ func (a *Auth) checkSetupToken(ctx context.Context, queries *sqlc.Queries, token
 }
 
 // prefixSettingsFields names each field of a settings Validation as it appears in the setup body
-// (settings.timezone); any other error is wrapped and passed on.
+// (settings.timezone); any other error passes through as is (the creator already wraps it).
 func prefixSettingsFields(err error) error {
 	var v problem.Validation
 	if !errors.As(err, &v) {
-		return fmt.Errorf("create the settings: %w", err)
+		return err
 	}
 	fields := make([]problem.FieldError, len(v.Errors))
 	for i, fe := range v.Errors {

@@ -34,5 +34,8 @@ DELETE FROM setup_tokens;
 -- name: InsertSetupToken :exec
 INSERT INTO setup_tokens (token_hash, expires_at) VALUES (@token_hash, @expires_at);
 
--- name: LockSetupToken :one
-SELECT expires_at, used_at FROM setup_tokens WHERE token_hash = @token_hash FOR UPDATE;
+-- name: GetSetupToken :one
+SELECT expires_at, used_at FROM setup_tokens WHERE token_hash = @token_hash;
+
+-- name: LockSetup :exec
+SELECT pg_advisory_xact_lock(@key::bigint);

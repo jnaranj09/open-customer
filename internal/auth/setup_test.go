@@ -26,7 +26,7 @@ var setupStart = time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)
 
 func TestSetupNeeded(t *testing.T) {
 	pool := dbtest.Pool(t)
-	a := auth.NewForTest(t, clock.NewFake(setupStart), auth.Options{})
+	a := auth.NewForTest(t, auth.Options{Clock: clock.NewFake(setupStart)})
 
 	needed, err := a.SetupNeeded(t.Context(), pool)
 	if err != nil || !needed {
@@ -56,7 +56,8 @@ type setupFixture struct {
 func newSetupFixture(t *testing.T) *setupFixture {
 	t.Helper()
 	f := &setupFixture{pool: dbtest.Pool(t), clock: clock.NewFake(setupStart)}
-	f.auth = auth.NewForTest(t, f.clock, auth.Options{
+	f.auth = auth.NewForTest(t, auth.Options{
+		Clock: f.clock,
 		SettingsCreator: func(ctx context.Context, q db.DBTX, s auth.SetupSettings) error {
 			f.created = append(f.created, s)
 			if f.createFn != nil {
@@ -285,5 +286,98 @@ func TestSetupSeederErrorFails(t *testing.T) {
 	}
 	if n := count(t, f.pool, "sessions"); n != 0 {
 		t.Fatalf("sessions rows = %d, want 0", n)
+	}
+}
+
+// begin opens a transaction the test commits itself; cleanup rolls back whatever is left open.
+func begin(t *testing.T, pool *pgxpool.Pool) pgx.Tx {
+	t.Helper()
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := tx.Rollback(context.WithoutCancel(t.Context())); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			t.Errorf("rollback: %v", err)
+		}
+	})
+	return tx
+}
+
+// waitBlockedOrDone returns once done is closed or a backend of this test's database waits on a
+// lock. It polls pg_stat_activity, so the test needs no sleep.
+func waitBlockedOrDone(t *testing.T, pool *pgxpool.Pool, done <-chan struct{}) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		var waiting int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting); err != nil {
+			t.Fatalf("poll pg_stat_activity: %v", err)
+		}
+		if waiting > 0 {
+			return
+		}
+	}
+}
+
+func TestConcurrentSetupWithOneTokenCreatesOneUser(t *testing.T) {
+	// The fake creator writes nothing, so the settings primary key cannot be what stops the second
+	// setup: only the setup lock can.
+	f := newSetupFixture(t)
+	tx1, tx2 := begin(t, f.pool), begin(t, f.pool)
+	if _, _, err := f.auth.CompleteSetup(t.Context(), tx1, validSetupInput(f.token)); err != nil {
+		t.Fatalf("first CompleteSetup: %v", err)
+	}
+	second := validSetupInput(f.token)
+	second.Username = "bea"
+	var secondErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _, secondErr = f.auth.CompleteSetup(t.Context(), tx2, second)
+	}()
+	waitBlockedOrDone(t, f.pool, done)
+	if err := tx1.Commit(t.Context()); err != nil {
+		t.Fatalf("commit the first setup: %v", err)
+	}
+	<-done
+	wantSetupClosed(t, secondErr)
+	if n := count(t, f.pool, "users"); n != 1 {
+		t.Fatalf("users rows = %d, want 1", n)
+	}
+}
+
+func TestConcurrentNewSetupTokenLeavesOneToken(t *testing.T) {
+	f := newSetupFixture(t)
+	tx1, tx2 := begin(t, f.pool), begin(t, f.pool)
+	if _, err := f.auth.NewSetupToken(t.Context(), tx1); err != nil {
+		t.Fatalf("first NewSetupToken: %v", err)
+	}
+	var secondErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, secondErr = f.auth.NewSetupToken(t.Context(), tx2)
+	}()
+	waitBlockedOrDone(t, f.pool, done)
+	if err := tx1.Commit(t.Context()); err != nil {
+		t.Fatalf("commit the first token: %v", err)
+	}
+	<-done
+	if secondErr != nil {
+		t.Fatalf("second NewSetupToken: %v", secondErr)
+	}
+	if err := tx2.Commit(t.Context()); err != nil {
+		t.Fatalf("commit the second token: %v", err)
+	}
+	if n := count(t, f.pool, "setup_tokens"); n != 1 {
+		t.Fatalf("setup_tokens rows = %d, want 1", n)
 	}
 }

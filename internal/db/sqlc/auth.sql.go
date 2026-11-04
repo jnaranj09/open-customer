@@ -83,6 +83,22 @@ func (q *Queries) GetSessionWithUser(ctx context.Context, tokenHash []byte) (Get
 	return i, err
 }
 
+const getSetupToken = `-- name: GetSetupToken :one
+SELECT expires_at, used_at FROM setup_tokens WHERE token_hash = $1
+`
+
+type GetSetupTokenRow struct {
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
+func (q *Queries) GetSetupToken(ctx context.Context, tokenHash []byte) (GetSetupTokenRow, error) {
+	row := q.db.QueryRow(ctx, getSetupToken, tokenHash)
+	var i GetSetupTokenRow
+	err := row.Scan(&i.ExpiresAt, &i.UsedAt)
+	return i, err
+}
+
 const insertSession = `-- name: InsertSession :exec
 INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at)
 VALUES ($1, $2, $3, $4, $3)
@@ -141,20 +157,13 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 	return err
 }
 
-const lockSetupToken = `-- name: LockSetupToken :one
-SELECT expires_at, used_at FROM setup_tokens WHERE token_hash = $1 FOR UPDATE
+const lockSetup = `-- name: LockSetup :exec
+SELECT pg_advisory_xact_lock($1::bigint)
 `
 
-type LockSetupTokenRow struct {
-	ExpiresAt time.Time
-	UsedAt    *time.Time
-}
-
-func (q *Queries) LockSetupToken(ctx context.Context, tokenHash []byte) (LockSetupTokenRow, error) {
-	row := q.db.QueryRow(ctx, lockSetupToken, tokenHash)
-	var i LockSetupTokenRow
-	err := row.Scan(&i.ExpiresAt, &i.UsedAt)
-	return i, err
+func (q *Queries) LockSetup(ctx context.Context, key int64) error {
+	_, err := q.db.Exec(ctx, lockSetup, key)
+	return err
 }
 
 const touchSession = `-- name: TouchSession :execrows
