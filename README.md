@@ -20,8 +20,8 @@ run.
 
 | Command | What it does |
 | --- | --- |
-| `make check-pins` | Image and tool versions agree across the Makefile, `go.mod`, `web/package.json`, the Dockerfile and CI |
-| `make lint` | `go mod tidy -diff`, golangci-lint, deadcode, shellcheck, svelte-check, eslint, prettier |
+| `make check-pins` | Pins agree across the Makefile, `go.mod`, `web/package.json`, Dockerfile and CI |
+| `make lint` | `go mod tidy -diff`, golangci-lint, deadcode, shellcheck, svelte-check, eslint, prettier, knip, jscpd |
 | `make test` | Go unit tests and Vitest |
 | `make generate` | oapi-codegen, sqlc (Docker image) and openapi-typescript |
 | `make check-generated` | `generate`, then fails if a generated file differs from the committed one |

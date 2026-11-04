@@ -58,12 +58,9 @@ func (m *Module) SetIcons(ctx context.Context, q db.DBTX, icon512, icon180 []byt
 	if err := writeFileSynced(filepath.Join(dir, iconFile(iconSmall)), icon180); err != nil {
 		return err
 	}
-	n, err := sqlc.New(q).SetIconUpdatedAt(ctx, m.clock.Now())
-	if err != nil {
+	// The Get above found the row, and nothing deletes it, so the update always hits it.
+	if err := sqlc.New(q).SetIconUpdatedAt(ctx, m.clock.Now()); err != nil {
 		return fmt.Errorf("record icons: %w", err)
-	}
-	if n != 1 {
-		return problem.NotFound{}
 	}
 	return nil
 }

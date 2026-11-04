@@ -246,7 +246,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 			pgErr.Code, pgErr.ConstraintName, pgErr.TableName)
 		path, found := strings.CutSuffix(err.Error(), pgErr.Error())
 		if !found || pgErr.Message != "" && strings.Contains(path, pgErr.Message) {
-			// The Postgres text is not a plain suffix (a joined error): keep none of the text.
+			// The Postgres text is not a plain suffix (a joined error), or the rest quotes its
+			// message: keep none of the text.
 			path = ""
 		}
 		err = errors.New(path + redacted)

@@ -51,7 +51,7 @@ func (a *Auth) Login(ctx context.Context, q db.DBTX, in LoginInput, ip netip.Add
 	if found {
 		stored = user.PasswordHash
 	}
-	ok, err := verifyPassword(stored, in.Password)
+	ok, err := a.verify(stored, in.Password)
 	if err != nil {
 		return Me{}, "", err
 	}

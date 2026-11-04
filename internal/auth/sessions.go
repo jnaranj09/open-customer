@@ -95,14 +95,12 @@ func (a *Auth) Authenticate(ctx context.Context, q db.DBTX, token string) (Me, S
 	return me, sess, true, nil
 }
 
-// Logout deletes the session for token. A malformed or unknown token is not an error: there is
-// nothing left to close.
-func (a *Auth) Logout(ctx context.Context, q db.DBTX, token string) error {
-	hash, parseErr := parseToken(token)
-	if parseErr == nil {
-		if err := sqlc.New(q).DeleteSession(ctx, hash); err != nil {
-			return fmt.Errorf("delete a session: %w", err)
-		}
+// Logout deletes session, the one middleware step 6 loaded from the cookie, so the token is
+// parsed only there. A session already gone (a second logout racing this one) is not an error:
+// there is nothing left to close.
+func (a *Auth) Logout(ctx context.Context, q db.DBTX, session Session) error {
+	if err := sqlc.New(q).DeleteSession(ctx, session.TokenHash); err != nil {
+		return fmt.Errorf("delete a session: %w", err)
 	}
 	return nil
 }
@@ -132,8 +130,8 @@ func SessionCookie(token string, secure bool) *http.Cookie {
 	return sessionCookie(token, int(sessionLifetime/time.Second), secure)
 }
 
-// SessionToken returns the session cookie's value from r, or "" when r has none. Authenticate and
-// Logout parse it; nothing else reads the cookie.
+// SessionToken returns the session cookie's value from r, or "" when r has none. Middleware step 6
+// reads it and Authenticate parses it; nothing else reads the cookie.
 func SessionToken(r *http.Request) string {
 	c, err := r.Cookie(sessionCookieName)
 	if err != nil { // http.ErrNoCookie is the only error

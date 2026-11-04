@@ -189,28 +189,46 @@ func TestAuthenticateBadToken(t *testing.T) {
 	}
 }
 
+// authenticated loads the Session for token, as middleware step 6 does before Logout.
+func (f sessionFixture) authenticated(t *testing.T, token string) Session {
+	t.Helper()
+	_, session, _, err := f.auth.Authenticate(t.Context(), f.pool, token)
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	return session
+}
+
 func TestLogoutRevokes(t *testing.T) {
 	f := newSessionFixture(t)
-	if err := f.auth.Logout(t.Context(), f.pool, f.token); err != nil {
+	if err := f.auth.Logout(t.Context(), f.pool, f.authenticated(t, f.token)); err != nil {
 		t.Fatalf("Logout: %v", err)
 	}
 	_, _, _, err := f.auth.Authenticate(t.Context(), f.pool, f.token)
 	wantUnauthorized(t, err)
 }
 
-func TestLogoutUnknownTokenIsNotAnError(t *testing.T) {
+func TestLogoutKeepsTheUsersOtherSessions(t *testing.T) {
 	f := newSessionFixture(t)
-	unknown, _, err := newToken()
+	other, err := f.auth.createSession(t.Context(), f.pool, f.userID)
 	if err != nil {
-		t.Fatalf("newToken: %v", err)
+		t.Fatalf("createSession: %v", err)
 	}
-	for _, token := range []string{unknown, "abc"} {
-		if err := f.auth.Logout(t.Context(), f.pool, token); err != nil {
-			t.Fatalf("Logout(token with no session) = %v; want nil", err)
-		}
+	if err := f.auth.Logout(t.Context(), f.pool, f.authenticated(t, f.token)); err != nil {
+		t.Fatalf("Logout: %v", err)
 	}
-	if _, _, _, err := f.auth.Authenticate(t.Context(), f.pool, f.token); err != nil {
+	if _, _, _, err := f.auth.Authenticate(t.Context(), f.pool, other); err != nil {
 		t.Fatalf("Authenticate(the other session) = %v; want nil (it must survive)", err)
+	}
+}
+
+func TestLogoutOfAnAlreadyClosedSessionIsNotAnError(t *testing.T) {
+	f := newSessionFixture(t)
+	session := f.authenticated(t, f.token)
+	for range 2 {
+		if err := f.auth.Logout(t.Context(), f.pool, session); err != nil {
+			t.Fatalf("Logout(a closed session) = %v; want nil (nothing left to close)", err)
+		}
 	}
 }
 

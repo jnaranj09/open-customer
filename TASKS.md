@@ -23,14 +23,16 @@ once by breaking what they protect, then restored.
 - **T1 Gate (= P0).** `make check-pins lint test vuln build` exits 0 from a clean `web/build`.
   Versions are in `CLAUDE.md` "Versions". `make image` builds and `docker run … version` prints
   `dev`. Dependabot supports `docker-compose` (written into design doc item 10).
-- **T2 Hooks.** Registered in `.claude/settings.json`. Proven: a TS and a Go type error fail the edit
-  hook; a missing shellcheck fails it naming T1; a failing Go test blocks Stop once, then stands down.
+- **T2 Hooks.** Registered in `.claude/settings.json`. Proven: a TS and a Go type error fail the
+  edit hook; a missing shellcheck fails it naming T1; a failing Go test blocks Stop once, then
+  stands down.
 - **T3 CI.** `.github/workflows/ci.yml` runs the gate plus gitleaks and `pnpm audit --audit-level
   high`. First run green on the first push (run 41729156000): every step passed, which is the P0
   exit check ("CI green").
 - **T4 Strictness.** Strict TS flags, typescript-eslint `strictTypeChecked`, golangci-lint
-  `exhaustive`, `wrapcheck`, `nilerr`, `nolintlint`. `$effect` copies: `svelte/prefer-writable-derived`
-  (named in `.claude/rules/ui.md`). Suppression pins: 0 `//nolint`, 0 bulk, 0 inline (the real totals).
+  `exhaustive`, `wrapcheck`, `nilerr`, `nolintlint`. `$effect` copies:
+  `svelte/prefer-writable-derived` (named in `.claude/rules/ui.md`). Suppression pins: 0 `//nolint`,
+  0 bulk, 0 inline (the real totals).
 - **T5 Test rules.** Vitest `allowOnly: false` + `restoreMocks: true`; the Vitest and Playwright
   lint rules; `thelper`, `tparallel`. Proven: `it.only` fails the run, `it.skip` fails lint, a bare
   `t.Skip` fails guard `forbid-only`, `allowOnly: true` fails the web `forbid-only` guard.
@@ -81,6 +83,6 @@ own change.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.
 - Owner exception recorded: the design doc keeps the 90% `make cover` floor, which the bootstrap
   skill would not use. Kept by owner decision.
-- Public repo: the old review reports in `docs/designs/history/review-release-1/round-1/` and the root
-  goldfish_brainstorm_findings.md name a home folder path (line 3 / lines 6–7). Strip it before the
-  first push.
+- Public repo: the old review reports in `docs/designs/history/review-release-1/round-1/` and the
+  root goldfish_brainstorm_findings.md name a home folder path (line 3 / lines 6–7). Strip it
+  before the first push.

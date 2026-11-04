@@ -26,3 +26,18 @@ func NewForTest(t *testing.T, opts Options) *Auth {
 	}
 	return a
 }
+
+// DummyHash is dummyHash, for the OP17 timing test.
+const DummyHash = dummyHash
+
+// RecordVerifyCalls wraps a's password verifier so each call appends its stored hash to the
+// returned slice; the real verifier still runs.
+func RecordVerifyCalls(a *Auth) *[]string {
+	var stored []string
+	inner := a.verify
+	a.verify = func(s, pw string) (bool, error) {
+		stored = append(stored, s)
+		return inner(s, pw)
+	}
+	return &stored
+}

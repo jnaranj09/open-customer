@@ -33,6 +33,7 @@ func TestHealthcheck(t *testing.T) {
 		wantCode int
 	}{
 		{name: "a 200 answer exits 0", url: answering(http.StatusOK), wantCode: 0},
+		{name: "a 404 answer exits 1 (only 200 is healthy)", url: answering(http.StatusNotFound), wantCode: 1},
 		{name: "a 503 answer exits 1", url: answering(http.StatusServiceUnavailable), wantCode: 1},
 		{name: "no server listening exits 1", url: closedURL, wantCode: 1},
 	}

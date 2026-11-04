@@ -197,6 +197,15 @@ func TestMustChangePasswordGate(t *testing.T) {
 			t.Fatalf("type = %q, want must-change-password", got)
 		}
 	})
+	t.Run("a public route is 403 must-change-password too when the cookie is a must-change session", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/setup/status", nil)
+		req.AddCookie(c)
+		rec := httptest.NewRecorder()
+		app.handler.ServeHTTP(rec, req)
+		if got := problemType(t, rec, http.StatusForbidden); !strings.HasSuffix(got, ":must-change-password") {
+			t.Fatalf("type = %q, want must-change-password", got)
+		}
+	})
 	assertNoContent(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(temp, newOwnerPassword), withCookie(c)))
 	if mustChange(t, getMe(app.handler, c)) {
 		t.Fatal("GET /me must_change_password = true after POST /auth/password, want false")
@@ -309,8 +318,8 @@ func TestChangePasswordWithoutSessionIs401(t *testing.T) {
 	assertUnauthorized(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), nil))
 }
 
-// TestLogoutWithoutSessionIs401: Logout itself would accept a missing token (nothing to close),
-// so this 401 comes from step 7 alone.
+// TestLogoutWithoutSessionIs401: the Logout handler has no 401 of its own (it takes the session
+// step 6 loaded), so this 401 comes from step 7 alone.
 func TestLogoutWithoutSessionIs401(t *testing.T) {
 	app, _, _ := signedInOwner(t)
 	assertUnauthorized(t, post(app.handler, logoutPath, testOrigin, "", nil))

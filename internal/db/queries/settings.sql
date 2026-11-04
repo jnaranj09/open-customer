@@ -16,5 +16,5 @@ UPDATE business_settings SET
     updated_at   = @now
 WHERE id = 1;
 
--- name: SetIconUpdatedAt :execrows
+-- name: SetIconUpdatedAt :exec
 UPDATE business_settings SET icon_updated_at = @now::timestamptz, updated_at = @now WHERE id = 1;

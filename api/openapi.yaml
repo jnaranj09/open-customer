@@ -4,7 +4,11 @@ info:
   version: 1.0.0
   description: >-
     The contract for the open-customer API. It holds only the endpoints of the current build
-    phase (design doc item 15).
+    phase (design doc item 15). Each operation lists the problem statuses its own handler can
+    answer, plus a `default` Problem response for the ones the middleware can answer on any
+    route: 403 forbidden-origin (every method but GET and HEAD), 403 must-change-password (any
+    route not marked x-oc-allowed-while-must-change-password, public ones included, when the
+    cookie is a must-change session) and 500 internal.
 servers:
   - url: /api/v1
 security:
@@ -25,6 +29,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SetupStatus"
+        default:
+          $ref: "#/components/responses/Problem"
   /setup/options:
     get:
       operationId: getSetupOptions
@@ -40,6 +46,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SetupOptions"
+        default:
+          $ref: "#/components/responses/Problem"
   /setup:
     post:
       operationId: completeSetup
@@ -72,6 +80,8 @@ paths:
           $ref: "#/components/responses/Problem"
         "422":
           $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /auth/login:
     post:
       operationId: login
@@ -102,6 +112,8 @@ paths:
           $ref: "#/components/responses/Problem"
         "429":
           $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /auth/logout:
     post:
       operationId: logout
@@ -117,6 +129,8 @@ paths:
             Set-Cookie:
               $ref: "#/components/headers/ExpiredSessionCookie"
         "401":
+          $ref: "#/components/responses/Problem"
+        default:
           $ref: "#/components/responses/Problem"
   /auth/password:
     post:
@@ -144,6 +158,8 @@ paths:
           $ref: "#/components/responses/Problem"
         "429":
           $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me:
     get:
       operationId: getMe
@@ -160,6 +176,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/Me"
         "401":
+          $ref: "#/components/responses/Problem"
+        default:
           $ref: "#/components/responses/Problem"
   /settings:
     patch:
@@ -183,11 +201,11 @@ paths:
                 $ref: "#/components/schemas/Settings"
         "401":
           $ref: "#/components/responses/Problem"
-        "403":
-          $ref: "#/components/responses/Problem"
         "413":
           $ref: "#/components/responses/Problem"
         "422":
+          $ref: "#/components/responses/Problem"
+        default:
           $ref: "#/components/responses/Problem"
   /settings/icon:
     post:
@@ -208,13 +226,13 @@ paths:
           description: The icons are stored; /icons/512.png and /apple-touch-icon.png serve them.
         "401":
           $ref: "#/components/responses/Problem"
-        "403":
-          $ref: "#/components/responses/Problem"
         "413":
           $ref: "#/components/responses/Problem"
         "415":
           $ref: "#/components/responses/Problem"
         "422":
+          $ref: "#/components/responses/Problem"
+        default:
           $ref: "#/components/responses/Problem"
 components:
   headers:

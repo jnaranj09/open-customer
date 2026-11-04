@@ -41,7 +41,7 @@ func (a *Auth) ChangePassword(ctx context.Context, q db.DBTX, session Session, c
 	if err := a.limiter.reserveName(user.Username, a.clock.Now()); err != nil {
 		return err
 	}
-	ok, err := verifyPassword(user.PasswordHash, current)
+	ok, err := a.verify(user.PasswordHash, current)
 	if err != nil {
 		return err
 	}

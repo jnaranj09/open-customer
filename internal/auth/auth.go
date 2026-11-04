@@ -26,6 +26,9 @@ type Auth struct {
 	// limiter is the login rate limit state (item 41), whose per-username delay also covers the
 	// current password check of ChangePassword; it has its own mutex.
 	limiter *loginLimiter
+	// verify is verifyPassword. It is a field so a test can count the calls Login makes: the OP17
+	// timing guard (an unknown username still verifies, against dummyHash) has no other trace.
+	verify func(stored, pw string) (bool, error)
 }
 
 // New returns the auth module. A nil SettingsCreator or Seeder is an error, so setup can never
@@ -39,6 +42,6 @@ func New(opts Options) (*Auth, error) {
 	}
 	return &Auth{
 		clock: opts.Clock, settingsCreator: opts.SettingsCreator, seeder: opts.Seeder,
-		limiter: newLoginLimiter(),
+		limiter: newLoginLimiter(), verify: verifyPassword,
 	}, nil
 }

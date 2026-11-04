@@ -4,8 +4,9 @@ open-customer: a self-hosted app (Go API + SvelteKit PWA) for one small service 
 clients, appointments and hand-sent WhatsApp reminders.
 
 <!-- Budget: this file loads in EVERY session. Keep it under 200 lines (guard `agent-context`).
-     Only what an agent cannot learn from the code: commands, traps, reasons, bans tied to incidents.
-     No overview of folders or architecture. Add a line only after an agent repeats a mistake. -->
+     Only what an agent cannot learn from the code: commands, traps, reasons, bans tied to
+     incidents. No overview of folders or architecture. Add a line only after an agent repeats a
+     mistake. -->
 
 **Designing or choosing without the owner?** Read `technical-taste.md` first. **Setting up?** Work
 through `TASKS.md` in order.

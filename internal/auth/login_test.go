@@ -118,6 +118,19 @@ func TestLoginUnknownUser(t *testing.T) {
 	}
 }
 
+// OP17: an unknown username still runs one password verify, against dummyHash, so the response
+// time does not reveal which usernames exist.
+func TestLoginUnknownUserVerifiesAgainstTheDummyHash(t *testing.T) {
+	f, _ := newLoginFixture(t)
+	calls := auth.RecordVerifyCalls(f.auth)
+
+	_, _, err := f.auth.Login(t.Context(), f.pool, auth.LoginInput{Username: "made-up-stranger", Password: "made-up-password"}, loginIP)
+	wantInvalidCredentials(t, err)
+	if want := []string{auth.DummyHash}; !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("verify calls for an unknown username = %q; want exactly one, with dummyHash", *calls)
+	}
+}
+
 func TestLoginBadUsernameFormat(t *testing.T) {
 	f, _ := newLoginFixture(t)
 	_, _, err := f.auth.Login(t.Context(), f.pool, auth.LoginInput{Username: "a b", Password: "made-up-password"}, loginIP)

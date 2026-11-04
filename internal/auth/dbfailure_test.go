@@ -110,7 +110,8 @@ var dbOperations = []dbOperation{
 	{"Logout", func(t *testing.T) (db.DBTX, func(q db.DBTX) error) {
 		t.Helper()
 		f := newSessionFixture(t)
-		return f.pool, func(q db.DBTX) error { return f.auth.Logout(t.Context(), q, f.token) }
+		session := f.authenticated(t, f.token)
+		return f.pool, func(q db.DBTX) error { return f.auth.Logout(t.Context(), q, session) }
 	}},
 	{"ChangePassword", func(t *testing.T) (db.DBTX, func(q db.DBTX) error) {
 		t.Helper()

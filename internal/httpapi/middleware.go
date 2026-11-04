@@ -236,7 +236,8 @@ func requireSession(public map[string]bool) gen.MiddlewareFunc {
 
 // mustChangePasswordGate is step 8. While the signed-in user must change her password, only the
 // routes in allowed (from allowedWhileMustChangePassword) pass; every other one is 403
-// must-change-password. allowed is keyed by the mux pattern, as r.Pattern holds it.
+// must-change-password, the public ones of step 7 included when the request carries her cookie.
+// allowed is keyed by the mux pattern, as r.Pattern holds it.
 func mustChangePasswordGate(allowed map[string]bool) gen.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

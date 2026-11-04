@@ -90,13 +90,13 @@ func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toMe(mustSignedIn(r.Context()).me))
 }
 
-// Logout deletes the current session and expires the cookie, only after the commit. Step 7 has
-// already refused a request without a session; like GetMe and ChangePassword it does no 401 of
-// its own.
+// Logout deletes the session step 6 loaded and expires the cookie, only after the commit. Step 7
+// has already refused a request without a session; like GetMe and ChangePassword it does no 401
+// of its own.
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
-	token := auth.SessionToken(r)
+	session := mustSignedIn(r.Context()).session
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
-		if err := s.auth.Logout(r.Context(), tx, token); err != nil {
+		if err := s.auth.Logout(r.Context(), tx, session); err != nil {
 			return fmt.Errorf("logout: %w", err)
 		}
 		return nil

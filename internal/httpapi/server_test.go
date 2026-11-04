@@ -176,6 +176,25 @@ func TestProblemTypesMatchSpec(t *testing.T) {
 	}
 }
 
+// The middleware can answer any route with 403 forbidden-origin, 403 must-change-password or
+// 500 internal, so every operation declares a default Problem response and the web types never
+// promise only the listed statuses.
+func TestEveryOperationHasADefaultProblemResponse(t *testing.T) {
+	const problemRef = "#/components/responses/Problem"
+	var missing []string
+	if err := forEachOperation(loadSpec(t), func(pattern string, op *openapi3.Operation) error {
+		if def := op.Responses.Default(); def == nil || def.Ref != problemRef {
+			missing = append(missing, pattern)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("forEachOperation: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("operations without default: $ref %s: %v", problemRef, missing)
+	}
+}
+
 func TestAPIBaseMatchesSpec(t *testing.T) {
 	spec := loadSpec(t)
 	if len(spec.Servers) != 1 || spec.Servers[0].URL != apiBase {
@@ -373,6 +392,22 @@ func TestDBErrorInsideAJoinLogsNoPostgresText(t *testing.T) {
 	logBuf := captureDefaultLog(t)
 	rec := httptest.NewRecorder()
 	err := errors.Join(&pgconn.PgError{Code: "23505", Message: "key made-up-owner exists"}, errors.New("rollback failed"))
+	writeError(rec, httptest.NewRequest(http.MethodPost, "/api/v1/setup", nil), err)
+	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
+		t.Fatalf("type = %q, want internal", got)
+	}
+	if logs := logBuf.String(); !strings.Contains(logs, "23505") || strings.Contains(logs, "made-up-owner") {
+		t.Fatalf("log = %q, want SQLSTATE 23505 and not the Postgres message", logs)
+	}
+}
+
+// An earlier part of a join can quote the Postgres message (a caller that formatted it in). The
+// text before the PgError is then not a safe wrap path, so none of it is logged.
+func TestDBErrorLastInAJoinWhoseEarlierPartQuotesItLogsNoPostgresText(t *testing.T) {
+	logBuf := captureDefaultLog(t)
+	rec := httptest.NewRecorder()
+	pgErr := &pgconn.PgError{Code: "23505", Message: "key made-up-owner exists"}
+	err := errors.Join(errors.New("insert failed: key made-up-owner exists"), pgErr)
 	writeError(rec, httptest.NewRequest(http.MethodPost, "/api/v1/setup", nil), err)
 	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
 		t.Fatalf("type = %q, want internal", got)

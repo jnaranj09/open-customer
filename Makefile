@@ -84,10 +84,14 @@ vuln: web-stub
 $(GOLANGCI_LINT):
 	GOBIN=$(CURDIR)/$(dir $@) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
+# The deadcode list is captured, then echoed to stderr: `tee /dev/stderr` reopens a redirected
+# stderr file and truncates it (make lint > lint.log 2>&1 lost the golangci-lint result).
 lint: web-stub node-check $(GOLANGCI_LINT)
 	go mod tidy -diff
 	$(GOLANGCI_LINT) run $(GO_DIRS)
-	@n=$$(go tool deadcode -test -tags db $(GO_PKGS) | tee /dev/stderr | wc -l); \
+	@out=$$(go tool deadcode -test -tags db $(GO_PKGS)) || exit 1; \
+	if [ -n "$$out" ]; then printf '%s\n' "$$out" >&2; fi; \
+	n=$$(printf '%s' "$$out" | awk 'NF { c++ } END { print c + 0 }'); \
 	if [ "$$n" -ne $(DEADCODE_BUDGET) ]; then \
 		echo "deadcode: $$n unreachable functions, DEADCODE_BUDGET is $(DEADCODE_BUDGET) (remove the new one, or lower the budget)" >&2; exit 1; fi
 	shellcheck $(SHELL_FILES)

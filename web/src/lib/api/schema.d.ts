@@ -309,6 +309,7 @@ export interface operations {
                     "application/json": components["schemas"]["SetupStatus"];
                 };
             };
+            default: components["responses"]["Problem"];
         };
     };
     getSetupOptions: {
@@ -329,6 +330,7 @@ export interface operations {
                     "application/json": components["schemas"]["SetupOptions"];
                 };
             };
+            default: components["responses"]["Problem"];
         };
     };
     completeSetup: {
@@ -358,6 +360,7 @@ export interface operations {
             410: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
         };
     };
     login: {
@@ -386,6 +389,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
         };
     };
     logout: {
@@ -406,6 +410,7 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
         };
     };
     changePassword: {
@@ -432,6 +437,7 @@ export interface operations {
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
         };
     };
     getMe: {
@@ -453,6 +459,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
         };
     };
     updateSettings: {
@@ -478,9 +485,9 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
         };
     };
     uploadIcon: {
@@ -504,10 +511,10 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             415: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
         };
     };
 }
