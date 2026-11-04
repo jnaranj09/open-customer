@@ -69,28 +69,31 @@ func TestRecordSentCreates(t *testing.T) {
 }
 
 func TestRecordTwiceKeepsOneRow(t *testing.T) {
-	tests := map[string]func(s logSetup) LogEntry{
-		"before":    func(s logSetup) LogEntry { return s.beforeEntry(ActionSent) },
-		"come back": func(s logSetup) LogEntry { return s.comeBackEntry() },
+	tests := map[string]struct {
+		entry  func(s logSetup) LogEntry
+		first  Action
+		second Action
+	}{
+		"before":    {func(s logSetup) LogEntry { return s.beforeEntry(ActionSent) }, ActionSent, ActionSkipped},
+		"come back": {func(s logSetup) LogEntry { return s.comeBackEntry() }, ActionSkipped, ActionSent},
 	}
-	for name, entry := range tests {
+	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			s := newLogSetup(t)
-			first, _, err := s.e.m.Record(t.Context(), s.e.pool, entry(s))
+			firstEntry := tc.entry(s)
+			firstEntry.Action = tc.first
+			first, _, err := s.e.m.Record(t.Context(), s.e.pool, firstEntry)
 			if err != nil {
 				t.Fatalf("first Record: %v", err)
 			}
-			again := entry(s)
-			again.Action = ActionSkipped
-			if again.Action == first.Action {
-				again.Action = ActionSent
-			}
+			again := tc.entry(s)
+			again.Action = tc.second
 
 			second, created, err := s.e.m.Record(t.Context(), s.e.pool, again)
 			if err != nil || created {
 				t.Fatalf("second Record = %v, %v; want not created", created, err)
 			}
-			if second.ID != first.ID || second.Action != first.Action {
+			if second.ID != first.ID || second.Action != tc.first {
 				t.Fatalf("second = %+v; want the first row %+v", second, first)
 			}
 			var n int
@@ -220,35 +223,46 @@ func TestLogForDateUsesLocalDay(t *testing.T) {
 }
 
 // TestLogDBErrors fails each query of Record (a create, then the conflict path), LogForClient and
-// LogForDate in turn.
+// LogForDate in turn. A case's prior entries are logged before the sweep.
+func nothing(logSetup) []LogEntry { return nil }
+
+func beforeLogged(s logSetup) []LogEntry { return []LogEntry{s.beforeEntry(ActionSent)} }
+
 func TestLogDBErrors(t *testing.T) {
-	ops := map[string]func(s logSetup, q db.DBTX) error{
-		"Record": func(s logSetup, q db.DBTX) error {
+	tests := map[string]struct {
+		prior func(s logSetup) []LogEntry
+		op    func(t *testing.T, s logSetup, q db.DBTX) error
+	}{
+		"Record": {nothing, func(t *testing.T, s logSetup, q db.DBTX) error {
+			t.Helper()
 			_, _, err := s.e.m.Record(t.Context(), q, s.beforeEntry(ActionSent))
 			return err
-		},
-		"Record conflict": func(s logSetup, q db.DBTX) error {
+		}},
+		"Record conflict": {beforeLogged, func(t *testing.T, s logSetup, q db.DBTX) error {
+			t.Helper()
 			_, _, err := s.e.m.Record(t.Context(), q, s.beforeEntry(ActionSent))
 			return err
-		},
-		"LogForClient": func(s logSetup, q db.DBTX) error {
+		}},
+		"LogForClient": {beforeLogged, func(t *testing.T, s logSetup, q db.DBTX) error {
+			t.Helper()
 			_, err := s.e.m.LogForClient(t.Context(), q, s.ana)
 			return err
-		},
-		"LogForDate": func(s logSetup, q db.DBTX) error {
+		}},
+		"LogForDate": {beforeLogged, func(t *testing.T, s logSetup, q db.DBTX) error {
+			t.Helper()
 			_, err := s.e.m.LogForDate(t.Context(), q, s.e.now(), s.e.tz)
 			return err
-		},
+		}},
 	}
-	for name, op := range ops {
+	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			sweepDBErrors(t, func(t *testing.T) (db.DBTX, func(q db.DBTX) error) {
 				t.Helper()
 				s := newLogSetup(t)
-				if name != "Record" {
-					s.e.record(t, s.beforeEntry(ActionSent))
+				for _, entry := range tc.prior(s) {
+					s.e.record(t, entry)
 				}
-				return s.e.pool, func(q db.DBTX) error { return op(s, q) }
+				return s.e.pool, func(q db.DBTX) error { return tc.op(t, s, q) }
 			})
 		})
 	}
