@@ -272,12 +272,12 @@ func TestPostSetupNoOriginIs403(t *testing.T) {
 	assertSetupStillOpen(t, app, pool)
 }
 
-// TestPostSetupDBErrorLogsNoRawMessage: a unique violation (here from a seeder that inserts the
-// same username) is a 500 internal. The log keeps the wrap path, the SQLSTATE, the constraint and
+// TestPostSetupDBErrorLogsNoRawMessage: a unique violation (here the settings creator hook
+// inserts the same username first, so the owner user insert fails) is a 500 internal. The log keeps the wrap path, the SQLSTATE, the constraint and
 // the table, and names neither the username nor the Postgres message.
 func TestPostSetupDBErrorLogsNoRawMessage(t *testing.T) {
 	pool := dbtest.Pool(t)
-	app := newTestApp(t, testServerConfig{pool: pool, seeder: func(ctx context.Context, q db.DBTX, _ string) error {
+	app := newTestApp(t, testServerConfig{pool: pool, afterSettings: func(ctx context.Context, q db.DBTX) error {
 		return sqlc.New(q).InsertUser(ctx, sqlc.InsertUserParams{
 			ID: [16]byte{1}, Username: "ana", PasswordHash: "x", CreatedAt: testStart,
 		})
@@ -288,7 +288,7 @@ func TestPostSetupDBErrorLogsNoRawMessage(t *testing.T) {
 		t.Fatalf("type = %q, want internal", got)
 	}
 	logs := logBuf.String()
-	for _, want := range []string{"seed the starter data", "23505", "users_username_key", "users"} {
+	for _, want := range []string{"insert the owner user", "23505", "users_username_key", "users"} {
 		if !strings.Contains(logs, want) {
 			t.Fatalf("log = %q, want it to keep %q (the wrap path, SQLSTATE, constraint and table)", logs, want)
 		}

@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. P0–P2 are built; P3 is next (it needs an owner interview first).
+*   **Status:** Accepted. P0–P2 are built; P3 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
 
@@ -39,13 +39,14 @@ The PRD keeps the "what" and "why"; it will be updated to match this document (s
 ### Terms used in this document
 
 *   **Phases** (from the PRD): Phase 1 is this release. Phase 2 adds automation (WhatsApp Cloud API, OCR, dictation); its gate is 4 weeks of daily use without the notebook. Phase 3 opens the project to others (public booking, presets, staff, English UI); its gate is one outside install done from the docs alone.
-*   **Come-back**: the follow-up visit some services need after N days. For nails, that visit is a refill (relleno); this document always calls it "come-back". A `come_back` rule reminds her to message the client.
+*   **Come-back**: the follow-up visit some services need after N days. For nails, that visit is a refill (relleno); this document always calls it "come-back". A `come_back` rule reminds her to message the client. It names a **return service**, the service the client should book next (empty means the rule's own service); the rule on "Acrílico" says "21 días después → Relleno".
+*   **Booking prompt**: a come-back item shown to her instead of a client message, when the client already has a future appointment without the return service: "Ana tiene cita el 12/11 (Pedicure). ¿Agregar Relleno?" (see "Reminder rules").
 *   **The two reminder kinds**: `before_appointment` (in prose: a "before" rule or item) and `come_back` (in prose: a "come-back" rule or item). Code spans use the enum values; prose uses only these two names.
 *   **"Hoy"**: the home screen and the first tab. It shows the count of messages due today, which links to "Para enviar hoy", and the appointments for the chosen day or week.
 *   **"Para enviar hoy"**: the screen with today's reminder messages, opened from the "Enviar" tab or from the count on "Hoy" (the PRD calls it "bandeja").
 *   **"Clientas" and "Ajustes"**: the other two tabs, the client list and the settings.
 *   **Manual asistido**: the app prepares each WhatsApp message and she sends it by hand through `wa.me`.
-*   **SINPE Móvil**: Costa Rica's phone-number bank transfer, a common way clients pay. It is only a starter option of the "Método de pago" attribute.
+*   **SINPE Móvil**: Costa Rica's phone-number bank transfer, a common way clients pay. The app has no built-in payment-method field; she can create a select attribute for it if she wants one.
 *   **Owner**: the business owner, the only user in release 1.
 *   **The author**: the person who installs and runs the system (upgrades, restores, password resets). For the reference install, that is the person who wrote this design.
 *   **"Item N"**: the numbered entry N in the [Detailed Implementation Plan](#detailed-implementation-plan).
@@ -94,7 +95,7 @@ Each goal has a check. Release 1 is done when all checks pass.
     *   A "before" reminder is never shown after the appointment has started.
     *   A come-back reminder is never missing because she forgot to mark an appointment as done.
     *   A client with several services on one appointment gets one "before" message, not one per service.
-    *   A client who already has a future booking does not get a come-back reminder.
+    *   A client who already has a future booking that includes the come-back rule's return service does not get a come-back reminder. With a future booking without it, the owner gets a booking prompt instead of a client message.
 4.  **She uses it every working day.**
     Check: 4 weeks of daily use without going back to the notebook (the PRD's gate to Phase 2). Days with the PC off do not count as misses and do not restart the 4 weeks.
 5.  **Her data is safe and is hers.**
@@ -107,7 +108,7 @@ Each goal has a check. Release 1 is done when all checks pass.
     *   The "Hoy" screen opens in under 1 second on her iPhone over LTE through the tunnel.
     *   With the server off, "Hoy" opens from the phone's cache, shows a "server off" banner with the last sync time, and never shows a change as saved when it was not.
 7.  **Nothing business-specific is hardcoded.**
-    Check: no nail, Costa Rica or Spanish-only value lives in code or migrations as data. Time zone, currency, country code, business name, branding, services, attributes and templates are all set in the app. One fixed product value is accepted: no push is sent after 20:00 business time. The starter content (`internal/starter`: the first template, rule and "Método de pago" attribute) is the one exception: it is editable data she can rename or archive, not a rule in code.
+    Check: no nail, Costa Rica or Spanish-only value lives in code or migrations as data. Time zone, currency, country code, business name, branding, services, attributes and templates are all set in the app. One fixed product value is accepted: no push is sent after 20:00 business time. The app ships with no starter content: every service, attribute, template and rule is data she creates.
 8.  **One person can run it.**
     Check: the install is one Compose file with four always-running services (app, postgres, cloudflared, backup) plus a `restore` service that runs only during a restore, no published ports, pinned image tags, and upgrades that take a backup first.
 
@@ -121,7 +122,7 @@ Each goal has a check. Release 1 is done when all checks pass.
 *   **Caddy and Let's Encrypt.** Neither the reference install nor release 1 ships them. A self-hoster without a tunnel can put any reverse proxy in front of `app:8080`; a tested VPS profile comes with the Phase 3 gate.
 *   **Photos in the export.**
 *   **Hard delete.** Records are archived. A deletion request is handled by the author with SQL.
-*   **Image attribute type, typed values per option (a "group" type), attributes limited to some services**, unless the interview with her shows a need.
+*   **Image attribute type, typed values per option (a "group" type), attributes limited to some services.** Each can be added later, when a real need shows up in her daily use.
 *   **Staff accounts, public booking, English UI, reports, preset packs per business type.**
 *   **"A stranger installs it in 10 minutes"**, VPS sizing targets and contributor readiness. These move to the Phase 3 gate.
 *   **Restore tests in CI.** Release 1 has one manual restore drill.
@@ -129,7 +130,7 @@ Each goal has a check. Release 1 is done when all checks pass.
 
 ## Open Questions
 
-*   **Her real attributes and services**: Which attributes does she track per client and per appointment? Which services does she offer, and after how many days does each client come back? Source: a one-hour interview with her. This decides whether a "group" attribute type (a typed value per picked option) is needed, and which starter templates to ship. Also ask: should any later visit cancel a pending come-back reminder (the current rule), or only a later visit for the same service? For example, a pedicure after an acrylic set currently cancels the acrylic come-back.
+*   **Her real attributes and services** (closed by owner decision): there is no interview. The app ships empty, and she defines every service, attribute, template and rule herself (Goal 1, CUJ 2). The come-back question it held (should any later visit cancel a pending come-back?) is answered in "Reminder rules": only a later booking that includes the rule's return service skips it, and a future booking without it gives her a booking prompt.
 *   **WhatsApp link behavior on her iPhone**: Does `wa.me` opened from the installed PWA go straight to WhatsApp or through Safari? Does `whatsapp://send` behave better? Do accents, emoji and line breaks survive? Which app opens if both WhatsApp and WhatsApp Business are installed? Source: a test page on her iPhone through the tunnel.
 *   **Exact subdomain**: Which subdomain of the author's domain. Must be fixed before she installs the PWA.
 *   **iOS behavior to confirm on her device**: whether iOS updates the Home Screen icon and name after install; whether Safari's photo picker always gives JPEG instead of HEIC; whether a `SameSite=Lax` session cookie is sent when she opens the app from a push notification; whether "Descargar mis datos" (a ZIP download) works from the installed PWA.
@@ -155,13 +156,14 @@ Each goal has a check. Release 1 is done when all checks pass.
 
 ### CUJ 2: She configures the empty app
 
-*   **Given**: Setup is done. The app has the starter content only: one "before" rule with an editable message, a "Método de pago" attribute with SINPE Móvil, Efectivo and Tarjeta, and a built-in sample client used for previews. The sample client lives in code (`internal/templates/sample.go`); it is never stored, and never appears in the client list or the export.
+*   **Given**: Setup is done. The app is empty: no services, attributes, templates or rules. The only built-in data is a sample client used for previews. The sample client lives in code (`internal/templates/sample.go`); it is never stored, and never appears in the client list or the export.
 *   **When**:
-    1.  She creates services (name, duration, price, color).
+    1.  She creates services (name, duration, price, color), for example "Acrílico", "Relleno" and "Pedicure".
     2.  She creates client attributes ("Bebida favorita", text) and appointment attributes ("Forma", select).
-    3.  She edits the reminder message by tapping variable chips ("+ Bebida favorita").
-    4.  She adds a come-back rule to "Acrílico": "21 días después, enviar plantilla 'Relleno'".
+    3.  She writes two messages by tapping variable chips ("+ Bebida favorita"): "Recordatorio de cita" and "Relleno". She adds a "before" rule that sends "Recordatorio de cita" 1 day before each appointment.
+    4.  She adds a come-back rule to "Acrílico": "21 días después, enviar plantilla 'Relleno'", with "Relleno" as the return service.
 *   **Then**:
+    *   Before each first step, the screen that needs it shows an empty state that leads to it: no services yet → Ajustes → Servicios; no templates → Ajustes → Plantillas; no rules → Ajustes → Recordatorios. The texts live in `es.json`.
     *   Each attribute gets a hidden key generated from its label.
     *   The message editor shows a live preview against the sample client.
     *   She never sees `{{ }}` syntax, keys, "scope" or "offset".
@@ -169,7 +171,7 @@ Each goal has a check. Release 1 is done when all checks pass.
 
 ### CUJ 3: Booking an appointment
 
-*   **Given**: The client "Ana" exists. The server is on.
+*   **Given**: The client "Ana" and the services from CUJ 2 exist. The server is on.
 *   **When**:
     1.  She opens "Hoy" and taps "+".
     2.  She searches "ana" (finds "Ána" too).
@@ -198,12 +200,14 @@ Each goal has a check. Release 1 is done when all checks pass.
 
 ### CUJ 5: Come-back reminder lifecycle
 
-*   **Given**: Ana had "Acrílico" on October 1, ending at 4:00 p.m. "Acrílico" has a 21-day come-back rule. Nobody tapped anything after the appointment.
+*   **Given**: Ana had "Acrílico" on October 1, ending at 4:00 p.m. "Acrílico" has a 21-day come-back rule whose return service is "Relleno". Nobody tapped anything after the appointment.
 *   **When**: October 22 arrives.
 *   **Then**:
     *   The come-back message for Ana appears in "Para enviar hoy", because the appointment time passed and it was not cancelled.
-    *   If Ana had booked any later appointment, the message does not appear.
+    *   If Ana had booked a later appointment that includes "Relleno", the message does not appear.
     *   If that later appointment is cancelled, the message appears again.
+    *   If Ana's only later booking is a "Pedicure" on November 12, the owner sees a booking prompt instead of the message: "Ana tiene cita el 12/11 (Pedicure). ¿Agregar Relleno?". "Agregar a la cita" adds "Relleno" to that appointment and the item disappears; "Enviar mensaje" and "Omitir" work as for any item.
+    *   If that "Pedicure" was on October 15, it is in the past on October 22, so the normal message appears.
     *   If Ana did not come on October 1 and the owner marks "No vino", the message never appears.
 
 ### CUJ 6: Server off
@@ -304,7 +308,6 @@ internal/
   db/                     pgx pool, migrations (goose, embedded), sqlc output
   httpapi/                generated server interface, handlers that call domain modules, middleware (incl. the Origin check)
   auth/                   users, sessions, setup tokens, rate limiting
-  starter/                starter content for a new install (template, rule, attribute)
   settings/               business settings, branding, manifest, icons
   attributes/             definitions, options, value validator
   clients/                clients, phone normalization
@@ -331,17 +334,16 @@ Dependency rules:
     *   `appointments` → `services` (`GetMany`, to copy each service's name, price and duration into the appointment);
     *   `templates` → `attributes` (`List`, for the variable list and the save check);
     *   `reminders` → `templates` (`Render` and the sample data), `appointments` (`IsDone`, a plain function on a status and an end time) and `attributes` (`List` and `Format`, to render values);
-    *   the orchestrators `starter`, `scheduler`, `exporter` and `status` → the modules they call. `exporter` calls `attributes.Format` and `appointments.IsDone`; it reads `reminder_log` through `export.sql`, not through `reminders`. `status` calls only read functions: `push.CountSubscriptions`, `scheduler.State` and `db.Version` (the goose version).
-*   `auth` imports no domain module. Setup needs two things from other modules, and `cmd/open-customer` passes both to `auth` as functions when it builds it: the settings creator (a closure over `settings.Create`, which also validates the time zone, currency and country) and the seeder (item 40). `auth` defines the types of both functions and of their input, so it never names a `settings` type.
+    *   the orchestrators `scheduler`, `exporter` and `status` → the modules they call. `exporter` calls `attributes.Format` and `appointments.IsDone`; it reads `reminder_log` through `export.sql`, not through `reminders`. `status` calls only read functions: `push.CountSubscriptions`, `scheduler.State` and `db.Version` (the goose version).
+*   `auth` imports no domain module. Setup needs one thing from another module, and `cmd/open-customer` passes it to `auth` as a function when it builds it: the settings creator (a closure over `settings.Create`, which also validates the time zone, currency and country; item 40). `auth` defines the type of that function and of its input, so it never names a `settings` type. Setup writes nothing else: no starter content.
 *   Modules are concrete Go types; `httpapi` holds them directly. An interface is added only where a test needs a fake (`push` for the scheduler tests). The method list in item 32 is the contract.
 *   **Transactions are passed explicitly.** Every module function takes `(ctx, q db.DBTX, …)`. `db.DBTX` is the interface sqlc generates; both the pool and a `pgx.Tx` satisfy it. Who opens the transaction:
-    *   **Every non-GET handler** runs its module call inside `db.WithTx` (read-write) and passes the `pgx.Tx`. It commits before it writes the response, so a failed commit is never shown to her as saved (Goal 6). A module write with several statements (an appointment and its service lines, a password change and its session revokes) is then all or nothing. Setup is the same: the `POST /setup` handler opens the transaction for `auth.CompleteSetup` and its seeder.
+    *   **Every non-GET handler** runs its module call inside `db.WithTx` (read-write) and passes the `pgx.Tx`. It commits before it writes the response, so a failed commit is never shown to her as saved (Goal 6). A module write with several statements (an appointment and its service lines, a password change and its session revokes) is then all or nothing. Setup is the same: the `POST /setup` handler opens the transaction for `auth.CompleteSetup`.
     *   **The four snapshot readers** use a read-only `REPEATABLE READ` transaction: bootstrap, `GET /reminders/due` and the daily timer (all three call `DueList`), and export.
     *   **Every other GET handler** passes the pool.
 *   **Modules have their own types.** Each module defines plain input and output structs (for example `clients.Client`, `clients.CreateInput`). Handlers convert between them and the generated `gen` types. Modules never import `gen`.
 *   **Each module writes only its own tables.** Its `.sql` file (item 29) holds only its own queries. Read-only exceptions (SELECT only): `appointments.sql` reads `clients` (`id`, `name`, `archived_at`) for `client_name` and the archived-client check; `media.sql` reads `appointments` (`id`, `client_id`) and `clients` (`id`, `archived_at`) for the ownership rule; and two larger ones: `reminders.sql` reads `appointments`, `appointment_services`, `clients`, `services`, `message_templates` and `business_settings` with SELECT only, so `reminders` does not import those modules (attribute definitions and options come through `attributes.List`); `export.sql` reads every table.
-*   Nothing imports `reminders` except `httpapi`, `scheduler`, `starter` and `cmd/open-customer`.
-*   `starter` is setup orchestration: it may call the create functions of `templates`, `reminders` and `attributes`, inside the setup transaction. It never writes their tables directly. `cmd/open-customer` passes `starter.Seed` to `auth` as the setup seeder (item 40); `auth` never imports `starter`.
+*   Nothing imports `reminders` except `httpapi`, `scheduler` and `cmd/open-customer`.
 *   `cmd/open-customer` wires everything and may import every package.
 *   `templates` has no database access in its renderer. It takes a plain data map, so preview, the reminder list and tests share one code path.
 *   Router: the standard library `net/http` mux (method and path patterns), with the oapi-codegen `std-http-server` interface. Handlers get `(w, r, params)`, so they set headers and stream bodies directly (item 32).
@@ -418,10 +420,12 @@ reminder_rules (                         -- (changed)
   kind text NOT NULL CHECK (kind IN ('before_appointment','come_back')),
   service_id uuid NULL,                  -- NULL only for before_appointment (business-wide)
   offset_days int NOT NULL,              -- calendar days: before_appointment >= 0 (0 = the same morning), come_back > 0, e.g. 21
+  return_service_id uuid NULL,           -- (new, P4 migration 00002) come_back only: the service to book next; NULL = service_id
   applies_from timestamptz NULL,         -- (new) NULL = include overdue items; set = only items due on or after its local day
   template_id uuid NOT NULL,
   archived_at, created_at,
-  CHECK ((kind = 'before_appointment') = (service_id IS NULL)))
+  CHECK ((kind = 'before_appointment') = (service_id IS NULL)),
+  CHECK (kind = 'come_back' OR return_service_id IS NULL))
 
 reminder_log (                           -- (new) replaces the reminders queue
   id, rule_id NOT NULL, appointment_id NOT NULL,
@@ -499,33 +503,40 @@ There are two rule kinds:
 | Kind | Belongs to | Due when | Shown until | Skipped when |
 | --- | --- | --- | --- | --- |
 | `before_appointment` | the business (one or more rules, e.g. 1 day, and 0 days for the same morning) | the local day `date(starts_at) - offset_days`, from the start of that day | `starts_at` (then hidden, never sent late) | the appointment is cancelled or no-show |
-| `come_back` | a service | the local day `date(ends_at) + offset_days`, from the start of that day | she sends or skips it, or 60 days after its due day | the appointment is not done, or the client has **any** other appointment (not cancelled or no-show) that starts after this one's `ends_at` |
+| `come_back` | a service | the local day `date(ends_at) + offset_days`, from the start of that day | she sends or skips it, or 60 days after its due day | the appointment is not done, or the client has another appointment (not cancelled or no-show) that starts after this one's `ends_at` and **includes the rule's return service** |
 
 *   **No items before the appointment existed.** An item exists only if its due day is on or after the local day of the appointment's `created_at`. Because of that, a same-day booking gets no "1 day before" item (its due day was yesterday), and a past visit typed in from the notebook does not flood the list with old come-backs. A past visit whose come-back day is still ahead works normally.
-*   **New or changed rules: "Solo de hoy en adelante" or "Incluir atrasadas".** A new rule, or a change to an existing one, can make many past visits due at once. For example, a new 21-day come-back rule finds every visit from the last 60 days that has not rebooked. So the app asks once:
+*   **New or changed rules: "Solo de hoy en adelante" or "Incluir atrasadas".** A new rule, or a change to an existing one, can make many past visits due at once. For example, a new 21-day come-back rule finds every visit from the last 60 days that has not rebooked the return service. So the app asks once:
     *   "Solo de hoy en adelante" (the default): `applies_from` is set to now. An item of this rule exists only if its due day is on or after that local day. Come-back items that fall due later still appear; nothing shows up late. Items of this rule that were waiting as late disappear.
     *   "Incluir atrasadas": `applies_from` is `NULL`. Overdue items from the last 60 days appear, marked late.
-    *   The question is asked when the change can make new items appear: creating a rule, changing `offset_days`, restoring an archived rule, or giving a new template to a rule whose template was archived. Other edits do not ask and keep `applies_from` as it is.
-*   **Archived parts.** A rule cannot be created with, or changed to, an archived template or service (422). A rule whose template or service is archived later produces no items. An archived client produces no items: archiving is how a client is removed (see Non-Goals), so she is never asked to message one. Ajustes → Recordatorios shows a rule with an archived template or service with a warning ("La plantilla está archivada") until she picks another template or archives the rule. Archiving a rule stops new items; handled items stay in the log.
+    *   The question is asked when the change can make new items appear: creating a rule, changing `offset_days`, changing the return service (a later booking that held an item back may not include the new one), restoring an archived rule, or giving a new template or return service to a rule whose template or return service was archived. Other edits do not ask and keep `applies_from` as it is.
+*   **Archived parts.** A rule cannot be created with, or changed to, an archived template, service or return service (422). A rule whose template, service or return service is archived later produces no items (it does not fall back to the rule's own service: that would silently change which bookings hold the item back). An archived client produces no items: archiving is how a client is removed (see Non-Goals), so she is never asked to message one. Ajustes → Recordatorios shows a rule with an archived template, service or return service with a warning ("La plantilla está archivada") until she picks another template or return service, or archives the rule. Archiving a rule stops new items; handled items stay in the log.
 *   **One message per appointment.** A `before_appointment` rule produces one item per appointment, not one per service. `{{appointment.services}}` lists all the services.
-*   **Rebooking.** The `come_back` skip rule covers future bookings and also later visits. If that later appointment is cancelled, the condition is false again, so the reminder returns on the next read. Nothing has to "re-arm" it.
+*   **Return service.** A `come_back` rule has an optional `return_service_id`: the service the client should book next. Empty means the rule's own service. Example: the rule on "Acrílico" says "21 días después → Relleno". One return service per rule.
+*   **Rebooking.** The `come_back` skip rule covers future bookings and also later visits, but only ones that include the return service. A later visit without it does not skip the item: a pedicure after an acrylic set still gets the refill reminder. If that later appointment is cancelled, or the return service is taken off it, the condition is false again, so the reminder returns on the next read. Nothing has to "re-arm" it.
+*   **Booking prompt.** On the due day, if the client has a future appointment (starts after now, not cancelled or no-show) that does not include the return service, the item is shown to her as a prompt instead of a client message, for example "Ana tiene cita el 12/11 (Pedicure). ¿Agregar Relleno?" (the real string lives in `es.json`). The earliest such appointment is used. Actions:
+    *   "Agregar a la cita": `PATCH /appointments/{id}` on that appointment, with its current `service_ids` plus the return service and no `ends_at`, so `ends_at` grows by the return service's duration ("Appointments" → Editing). The overlap check runs as for any edit that changes the times (a 409 shows "Agendar igual"). After that, the skip rule hides the item.
+    *   "Enviar mensaje": the normal client message (`wa.me`) and the normal `sent` log row.
+    *   "Omitir": the normal `skipped` log row.
+
+    The log identity stays `(rule_id, appointment_id)`, so a handled prompt never comes back. A later booking without the return service that starts before the due day is in the past when the item falls due, so the item is a normal client message. If the future appointment is cancelled, the item is a normal message again on the next read. The daily push counts prompts with messages (the same `DueList`).
 *   **Rescheduling.** For "before" items only: a new `starts_at` changes the `anchor_at` identity, so a reminder already sent for the old time does not block one for the new time. This is intended: the client was told the old time. A `come_back` item is identified by `(rule_id, appointment_id)` only, so editing a past visit (adding a service, fixing its times) never brings back a come-back she already sent or skipped. Text is always rendered at read time from current data, so it is never stale.
-*   **Two services with come-back rules** in one appointment give two independent come-back items. If the client rebooks after the first one, the second is skipped by the same rule.
+*   **Two services with come-back rules** in one appointment give two independent come-back items. Each rule checks its own return service: a later booking with "Relleno" skips the "Acrílico" item, but not the item of a rule whose return service is something else.
 
 ### Due-list computation
 
 `reminders.DueList(ctx, q, now)` loads the data in a few queries (steps 1–2), then hands it to a pure function, `compute(data, now)`, for steps 3–6. Unit tests call `compute` with a fake clock; DB tests call `DueList`.
 
-1.  First, load the settings and the active rules.
+1.  First, load the settings and the active rules, each with its return service (`return_service_id`, or `service_id` when it is empty), and that service's name and archived state.
 2.  Then load the candidate appointments, one query after another on the same `q`. The caller passes a read-only `REPEATABLE READ` transaction (bootstrap, `GET /reminders/due` and the timer all do), so every query sees one snapshot:
     *   **Before candidates:** appointments with `starts_at` between `now` and the end of today plus the largest "before" `offset_days`.
     *   **Come-back candidates:** appointments with `ends_at` between today minus (largest come-back `offset_days` + 60 days) and `now`.
-    *   For each candidate client, the earliest appointment (not cancelled or no-show) that starts after the candidate's `ends_at`.
+    *   For each come-back candidate client, the appointments (not cancelled or no-show) that start after that client's earliest candidate `ends_at`, with their `starts_at` and service lines (`service_id`, `name`). The skip rule and the booking prompt both read these.
     *   Log rows for the candidate appointments.
     *   Both candidate loads skip appointments whose client is archived.
-3.  For each (rule, appointment) pair, compute `anchor_at` (`starts_at` for "before", none for `come_back`) and the due day, and apply the table above.
+3.  For each (rule, appointment) pair, compute `anchor_at` (`starts_at` for "before", none for `come_back`) and the due day, and apply the table above. For a remaining `come_back` item, the earliest later appointment that starts after `now` and lacks the return service makes it a booking prompt ("Booking prompt" above).
 4.  Drop pairs that already have a log row: a "before" item matches on `(rule_id, appointment_id, anchor_at)`, a `come_back` item on `(rule_id, appointment_id)`.
-5.  Render each remaining item's text with `templates`, and build its `wa.me` link from `phone_digits`.
+5.  Render each remaining item's text with `templates`, and build its `wa.me` link from `phone_digits`. A booking prompt gets the same text and link (for "Enviar mensaje"), plus the future appointment's ID, start and service names and the return service's ID and name.
 6.  Finally, return the items as "Para enviar hoy" (due today or earlier), sorted by due day (oldest first), then client name. Each item carries a `late` flag when its due day is before today.
 
 The 60-day look-back means a come-back item she never handles drops out of the list 60 days after its due day (it is dropped when the due day is more than 60 days before today). The visit stays in the client's history; the reminder is no longer listed. A log row is only written when she acts on an item.
@@ -637,7 +648,7 @@ Status changes:
 | From | To | Who | Effect on reminders |
 | --- | --- | --- | --- |
 | scheduled | confirmed | She taps "Confirmada" | none |
-| scheduled, confirmed | cancelled | She taps "Cancelar" | before and come-back items disappear; a come-back item that this booking was holding back appears again |
+| scheduled, confirmed | cancelled | She taps "Cancelar" | before and come-back items disappear; a come-back item that this booking was holding back (it had the return service) appears again; a booking prompt that pointed at it becomes a normal message, or a prompt for the next future booking without the return service |
 | scheduled, confirmed | no_show | She taps "No vino" (any time, also after the appointment is done) | come-back items disappear |
 | cancelled, no_show | scheduled | She taps "Reactivar" (the overlap check runs; "Agendar igual" sends `allow_overlap`) | items come back by the same rules |
 
@@ -651,7 +662,7 @@ Status changes:
     *   Changing `starts_at` without `ends_at` moves `ends_at` by the same amount.
     *   The overlap check counts only `scheduled` and `confirmed` appointments, and runs on every create, on any update that changes the times, and on "Reactivar".
     *   An archived client or service cannot be put on an appointment (422). Lines already copied from a service archived later stay as they are.
-*   **Payment method:** a starter appointment attribute "Método de pago" (select with SINPE Móvil, Efectivo, Tarjeta). She can edit or archive it like any attribute. `paid_cents` is a column, because the export and future reports need a number.
+*   **Payment:** `paid_cents` is a column, because the export and future reports need a number. There is no built-in payment-method field; she can create a select attribute for it like any other.
 
 ### API
 
@@ -980,9 +991,10 @@ Grouped by area. Each alternative was rejected or narrowed during the brainstorm
 
 #### Alternative E5: Skip come-back only for a future booking "of that service" (PRD FR-R7)
 
-*   **Pros**: Matches the PRD's wording.
-*   **Cons**: The rule is on "Acrílico", but the next booking is "Relleno", so a client who already rebooked still gets the come-back reminder.
-*   **Reason for Rejection**: Wrong for how nail clients rebook. Any later active appointment counts.
+*   **Pros**: Matches the PRD's wording. An unrelated later visit (a pedicure after an acrylic set) no longer drops the come-back, which the earlier "any later active appointment" rule did wrongly.
+*   **Cons**: Taken literally, the rule is on "Acrílico" but the next booking is "Relleno", so a client who already rebooked would still get the come-back reminder.
+*   **Outcome** (chosen in a modified form): the rule names a return service (empty = its own service), and only a later booking that includes it skips the item. The return service fixes the Acrílico → Relleno problem; the same-service check fixes the pedicure problem. A future booking without the return service turns the item into a booking prompt for her, so she can add the service to that appointment instead of messaging a client who is already coming.
+*   **Rejected with it**: a list of return services per rule. One nullable column covers acrylic → refill; a list can be added later (a join table, filled from the column) without rewriting stored data.
 
 #### Alternative E6: Template text stored inline on each rule (SAD)
 
@@ -1104,7 +1116,7 @@ Grouped by area. Each alternative was rejected or narrowed during the brainstorm
 
 *   **Pros**: Covers many future cases.
 *   **Cons**: Designed before anyone listed her real attributes. The value format and the change rules were undefined. Seven types and service-limited attributes add screens and rules that no listed need asks for yet.
-*   **Outcome** (narrowed, not fully rejected): release 1 keeps the option trees of any depth, because she asked for nested choices (for example shape → length) and a value stores just the picked option ID, so depth does not change the stored shape. It keeps 5 types and a written value table, with no service-limited attributes. The interview with her can widen it.
+*   **Outcome** (narrowed, not fully rejected): release 1 keeps the option trees of any depth, because she asked for nested choices (for example shape → length) and a value stores just the picked option ID, so depth does not change the stored shape. It keeps 5 types and a written value table, with no service-limited attributes. A real need from her daily use can widen it later.
 
 #### Alternative I2: EAV tables or `pg_jsonschema`
 
@@ -1215,8 +1227,8 @@ Each line points to the section that holds the detail.
 *   **Hard delete with a full cascade**, including photo files and the backup retention disclosure.
 *   **Her own domain** before public booking (Phase 3).
 *   **On-device AI** (FR-I1 to FR-I5), each re-justified against what iOS already does.
-*   **"Group" attribute type**: each picked option carries its own typed value (for example "Alergias" with Acrílico = sí and Gel = a date). It is added as a new type, so existing stored values are never rewritten. Decided after the interview.
-*   **Owner tasks** (PRD FR-R2): a rule that reminds her to do something herself, for example "call Ana 30 days after a treatment". Added back only if the interview shows a concrete use. It needs one new `kind` value, a nullable `task_text` column and a `done` log action; no stored data changes.
+*   **"Group" attribute type**: each picked option carries its own typed value (for example "Alergias" with Acrílico = sí and Gel = a date). It is added as a new type, so existing stored values are never rewritten. Added only when a real need shows up.
+*   **Owner tasks** (PRD FR-R2): a rule that reminds her to do something herself, for example "call Ana 30 days after a treatment". Added back only when a real need shows up. It needs one new `kind` value, a nullable `task_text` column and a `done` log action; no stored data changes.
 *   **Presets per business type**: her exported configuration becomes the first "nail studio" preset, stored as data.
 
 --------------------------------------------------------------------------------
@@ -1255,7 +1267,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **The spec grows phase by phase.** `api/openapi.yaml` (item 15) gets only the endpoints of the current phase, so the generated server interface never has methods without a handler. `POST /templates/preview` is added in P4 with `reminders`, not in P3 with `templates`.
 *   **The web toolchain exists from P0.** P0 creates items 62–63, a minimal `web/src/app.html` and a placeholder `web/src/routes/+page.svelte`, so `make lint test vuln build` works from the first commit. `make generate` and `check-generated` start in P1, the first phase with a spec and queries. P5 replaces the placeholders with items 64 and 72.
-*   **Code that needs a later phase is added in that phase.** An item listed in an earlier phase gets only the parts its phase can compile: `serve.go` (item 18) and `status` (item 60) say which part comes when. Setup (item 40) takes a seeder, so P2 does not depend on the P3–P4 modules.
+*   **Code that needs a later phase is added in that phase.** An item listed in an earlier phase gets only the parts its phase can compile: `serve.go` (item 18) and `status` (item 60) say which part comes when. Setup (item 40) takes only the settings creator and seeds nothing, so P2 does not depend on the P3–P4 modules.
 *   **CI steps start in a given phase** (item 8), so CI never runs a check whose inputs do not exist yet.
 *   **The agent harness exists before P0** (item 88). Its `TASKS.md` T1 is P0; the later tasks add lint rules, guards and sensors, and each one updates the item it changes here.
 
@@ -1263,9 +1275,9 @@ The items below are grouped by area, not by order. Build them in these phases. A
 | --- | --- | --- | --- |
 | P0 Repo and tooling | 1–5, 7–10, 17 (`version`), 20–24, 36, 62–63 (plus the placeholder page) | Module, `Makefile`, `web-stub`, the web toolchain, lint config, CI, the platform packages | CI green: `make lint test vuln build check-pins` |
 | P1 Database and HTTP skeleton | 6 (`sqlc.yaml`; it needs the migrations, so it moved here from P0), 15–16 (`GET /setup/status` only), 17 (`serve`), 18 (P1 steps), 25–32, 33 (`handlers_auth.go`: `GET /setup/status` only), 34 (steps 1–5), 35, 37 (middleware steps 1–5, problem JSON, static), 40 (`SetupNeeded` only), 60 (`/healthz`, `/readyz`), 61, 66 (`schema.d.ts` only, generated by `make generate`) | `serve` migrates an empty DB and serves `/healthz`, `/readyz`, `GET /api/v1/setup/status` and the placeholder page | `make check-generated test test-db`; `go run ./cmd/open-customer serve` against Docker Postgres returns 200 on `/readyz` and `{"needs_setup":true}` on `/api/v1/setup/status` |
-| P2 Auth, setup and settings | 17 (`reset-password`, `setup-link`, `healthcheck`), 18 (P2 step), 19, 33 (auth, settings), 34 (steps 6–8), 37 (session and `must_change_password` steps), 38–42, 44 | Setup link, owner creation (no starter content yet), login, sessions, settings, manifest, icons | `make test test-db cover` (gate: `auth`); with `curl -H "Origin: $PUBLIC_URL"`: setup → login → `GET /me` → logout |
+| P2 Auth, setup and settings | 17 (`reset-password`, `setup-link`, `healthcheck`), 18 (P2 step), 19, 33 (auth, settings), 34 (steps 6–8), 37 (session and `must_change_password` steps), 38–42, 44 | Setup link, owner creation (setup creates nothing else), login, sessions, settings, manifest, icons | `make test test-db cover` (gate: `auth`); with `curl -H "Origin: $PUBLIC_URL"`: setup → login → `GET /me` → logout |
 | P3 Catalog | 33 (catalog), 37 (409 overlap responses), 45–54 | Attributes, clients, services, appointments, media, templates | `make test test-db cover` (gates added: `attributes`, `appointments`, `templates`) |
-| P4 Reminders, push and export | 18 (P4 steps), 33 (reminders and `POST /templates/preview`, push, export, status, bootstrap), 43, 55–59, 60 (`Status()`, client errors) | Due list, reminder log, daily push, export, the status screen data, starter content wired into setup | `make test test-db cover` (gate added: `reminders`); a `db`-tagged Go test in `internal/reminders` inserts the CUJ 4 and 5 rows, and `GET /reminders/due` returns those items; a fresh setup creates the starter template, rule and attribute |
+| P4 Reminders, push and export | 18 (P4 steps), 28 (migration `00002`), 33 (reminders and `POST /templates/preview`, push, export, status, bootstrap), 55–59, 60 (`Status()`, client errors) | Due list (messages and booking prompts), reminder log, daily push, export, the status screen data | `make test test-db cover` (gate added: `reminders`); a `db`-tagged Go test in `internal/reminders` inserts the CUJ 4 and 5 rows (CUJ 5 including the booking prompt), and `GET /reminders/due` returns those items |
 | P5 Web app | 62–63 (finished), 64–78 | The PWA on top of the finished API | `make lint test build`; the binary serves the real app; manual pass of CUJ 1–6 in Safari's iPhone view |
 | P6 End-to-end tests | 79–80 | Playwright specs | `make e2e` green in CI |
 | P7 Deploy, backups and docs | 9 (backup-image step), 11–14, 81–87 | Compose stack, backup image and scripts, docs moved, root files deleted | The Verification Plan's manual steps on the PC, including the restore drill |
@@ -1334,7 +1346,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 5. `.golangci.yml` (Create)
 
 *   **Type / Scope**: Lint config.
-*   **Proposed Changes**: Enable `govet`, `staticcheck`, `errcheck`, `gosec`, `revive`, `depguard`, plus `exhaustive` (a `default` does not count as covering the cases), `wrapcheck`, `nilerr`, `nolintlint` (a reason and a linter name are required), `thelper`, `tparallel`, `unused` and `dupl` (threshold 80: a pasted 20-line function trips it), from `TASKS.md` T4, T5 and T7; `gofmt` as formatter. Tests are excluded from `dupl` and `wrapcheck`. `internal/platform/problem/messages.go` is excluded from gosec G101 only: it reads a Spanish message constant named `MsgPasswordTooShort` as a credential. `internal/auth/sessions.go` is excluded from gosec G124 only: the session cookie's `Secure` follows `PUBLIC_URL` and is false only for plain-http localhost (development and e2e), where WebKit drops a `Secure` cookie ("Session and request rules"). `run.build-tags: [db]` makes lint also check the `db`-tagged tests. Lint runs on `$(GO_DIRS)` through `make lint`, also in CI, so `web/node_modules` is never loaded. `depguard` enforces only the coarse module rules: no domain package imports `internal/httpapi` or `internal/httpapi/gen`; `internal/auth` imports no domain package; nothing outside `httpapi`, `scheduler`, `starter` and `cmd/open-customer` imports `internal/reminders`; and only `cmd/open-customer` imports `internal/starter`. The per-module list of allowed domain imports ("Code layout and module rules") is checked in review, not by lint, so the config stays small.
+*   **Proposed Changes**: Enable `govet`, `staticcheck`, `errcheck`, `gosec`, `revive`, `depguard`, plus `exhaustive` (a `default` does not count as covering the cases), `wrapcheck`, `nilerr`, `nolintlint` (a reason and a linter name are required), `thelper`, `tparallel`, `unused` and `dupl` (threshold 80: a pasted 20-line function trips it), from `TASKS.md` T4, T5 and T7; `gofmt` as formatter. Tests are excluded from `dupl` and `wrapcheck`. `internal/platform/problem/messages.go` is excluded from gosec G101 only: it reads a Spanish message constant named `MsgPasswordTooShort` as a credential. `internal/auth/sessions.go` is excluded from gosec G124 only: the session cookie's `Secure` follows `PUBLIC_URL` and is false only for plain-http localhost (development and e2e), where WebKit drops a `Secure` cookie ("Session and request rules"). `run.build-tags: [db]` makes lint also check the `db`-tagged tests. Lint runs on `$(GO_DIRS)` through `make lint`, also in CI, so `web/node_modules` is never loaded. `depguard` enforces only the coarse module rules: no domain package imports `internal/httpapi` or `internal/httpapi/gen`; `internal/auth` imports no domain package; and nothing outside `httpapi`, `scheduler` and `cmd/open-customer` imports `internal/reminders`. The per-module list of allowed domain imports ("Code layout and module rules") is checked in review, not by lint, so the config stays small.
 
 ##### 6. `sqlc.yaml` (Create)
 
@@ -1418,13 +1430,13 @@ The items below are grouped by area, not by order. Build them in these phases. A
         *   FR-A6 (attributes limited to some services): deferred.
         *   FR-R1 (rules per service, before or after an event): two rule kinds, a business-wide `before_appointment` and a per-service `come_back`.
         *   FR-R2 (reminders addressed to the owner, e.g. "call Ana"): deferred.
-        *   FR-R7 (skip the come-back if she already has a future appointment of that service): skip on any later active appointment.
+        *   FR-R7 (skip the come-back if she already has a future appointment of that service): skip only on a later active appointment that includes the rule's return service (empty = the rule's own service); a future booking without it gives her a booking prompt (Alternative E5).
         *   FR-R8 (Web Push when reminders are waiting): one daily summary push.
         *   FR-C4 (archive instead of delete; hard delete only on request): hard delete deferred.
         *   FR-P3 (statuses include a stored `completed`): `scheduled`, `confirmed`, `cancelled`, `no_show`; "done" is computed, never stored.
         *   FR-P5 (rescheduling and cancelling recalculate pending reminders): nothing is stored to recalculate; the due list is computed on every read.
         *   FR-I1 to FR-I5 (on-device AI: notebook OCR, SINPE receipt reading, dictation, photo background removal, photo tags): deferred.
-    *   **New FR-O group** (onboarding and settings): setup link, wizard, branding, CLI reset, starter content.
+    *   **New FR-O group** (onboarding and settings): setup link, wizard, branding, CLI reset, empty states that lead her to the first service, template and rule (no starter content).
     *   **New release-1 table:** every FR and NFR ID marked In or Out.
     *   **NFRs:**
         *   NFR-1 (API read p95 < 50 ms): replaced by the iPhone "Hoy < 1 s" check.
@@ -1434,7 +1446,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
         *   NFR-8 (mandatory HTTPS with automatic TLS): "HTTPS through the chosen ingress".
         *   NFR-3 (client search < 100 ms per keystroke): kept; met by the phone-only search over the cache.
         *   NFR-11 (default time zone `America/Costa_Rica`): no default; the wizard sets the time zone, starting from the browser's zone (Goal 7).
-    *   **Open questions:** close the answered ones (license stays open). Add the interview and the iPhone test.
+    *   **Open questions:** close the answered ones (license stays open). Add the iPhone test. Record the owner decision that replaced the interview: the app ships empty.
     *   **Glossary:** relleno / come-back, SINPE Móvil, bandeja / "Para enviar hoy", manual asistido, owner, template (message) vs template (Meta).
 
 ##### 13. `docs/sad.md` (Create, a short index) and `docs/designs/history/sad-original.md` (Create, moved from `SAD — Sistema de citas para emprendimientos.md`; the root file is deleted)
@@ -1552,8 +1564,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `Template` | `id`, `name`, `body`, `archived` |
     | `Media` | `id`, `client_id`, `appointment_id?`, `width`, `height`, `bytes`, `created_at`, `archived` |
     | `Option` | `id`, `attribute_id`, `parent_id?`, `label`, `position`, `archived` |
-    | `Rule` | `id`, `kind`, `service_id?`, `offset_days`, `template_id`, `applies_from?`, `archived` |
-    | `DueItem` | `id` (stable: `<rule_id>:<appointment_id>:<anchor_at as Unix seconds>` for "before", `<rule_id>:<appointment_id>` for `come_back`), `rule_id`, `appointment_id`, `anchor_at` (nullable; null for `come_back`), `kind`, `client_id`, `client_name`, `due_date`, `late`, `text`, `phone_digits?`, `wa_link?` (null when the client has no phone) |
+    | `Rule` | `id`, `kind`, `service_id?`, `return_service_id?` (`come_back` only; null = the rule's own service), `offset_days`, `template_id`, `applies_from?`, `archived` |
+    | `DueItem` | `id` (stable: `<rule_id>:<appointment_id>:<anchor_at as Unix seconds>` for "before", `<rule_id>:<appointment_id>` for `come_back`), `rule_id`, `appointment_id`, `anchor_at` (nullable; null for `come_back`), `kind`, `client_id`, `client_name`, `due_date`, `late`, `text`, `phone_digits?`, `wa_link?` (null when the client has no phone), `mode` (`message` or `booking_prompt`; always `message` for "before"), `prompt?` (set only for `booking_prompt`: `appointment_id`, `starts_at` and `services[]` names of the future appointment, `return_service_id`, `return_service_name`) |
     | `LogEntry` | `rule_id`, `appointment_id`, `anchor_at` (nullable; null for `come_back`), `action`, `body?`, `phone_digits?`, `acted_at` |
     | `LogItem` | `LogEntry` plus `id`, `kind`, `client_id`, `client_name`. Returned by `GET /reminders/log`, so "Enviados" and the client history show the name even when the appointment is outside the cached window. |
     | `Bootstrap` | `server_time`, `settings`, `attributes[]` (with options), `services[]`, `templates[]`, `rules[]` (these four include archived rows, with `archived: true`, because the phone renders old values by their last label and warns about archived templates and services), `clients[]` (active only), `appointments[]` (in the window), `due[]`, `template_vars[]` (`ns`, `key`, `label`, for the chip row), `backup_red` (the same value as `Status.backup.red`, for the line on "Hoy") |
@@ -1576,7 +1588,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `POST /appointments/{id}/status` | `status`, `allow_overlap` (default `false`; used when the change is to `scheduled`) | 200 `Appointment` |
     | `POST /templates` | `name`, `body` | 201 `Template` |
     | `POST /templates/preview` | `body`, `client_id?` (none: the sample client; set: that client and the client's latest appointment that is not cancelled or no-show, see "Message templates") | 200 `{text, unknown_vars[]}` |
-    | `POST /reminder-rules` | `kind`, `service_id?`, `offset_days`, `template_id`, `include_overdue` (bool, optional, default `false` = "Solo de hoy en adelante"). An archived template or service is 422. | 201 `Rule` |
+    | `POST /reminder-rules` | `kind`, `service_id?`, `return_service_id?` (`come_back` only; absent or null = the rule's own service), `offset_days`, `template_id`, `include_overdue` (bool, optional, default `false` = "Solo de hoy en adelante"). An archived template, service or return service is 422. | 201 `Rule` |
     | `POST /reminders/log` | `LogEntry`. An unknown `rule_id` or `appointment_id` is 422, not a foreign-key 500. | 201, or 200 when the row already existed |
     | `POST /push/subscriptions` | the browser's `PushSubscription` JSON (`endpoint`, `keys.p256dh`, `keys.auth`) | 201 `{id}` for a new endpoint, 200 `{id}` for a known one (keys updated) |
     | `POST /media` | multipart: `full` (JPEG, ≤ 10 MB), `thumb` (JPEG, ≤ 1 MB), `client_id?`, `appointment_id?` (at least one; the request is ≤ 12 MB). The server always stores `client_id`: with `appointment_id`, it is filled from the appointment; a different one is 422 (see "Photos"). | 201 `Media` |
@@ -1595,7 +1607,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `PATCH /appointments/{id}` | `starts_at`, `ends_at`, `service_ids[]` (replaces the list), `attrs` (merged by key), `notes?`, `paid_cents?`, `allow_overlap`. `client_id` cannot change; `status` changes only through `POST /appointments/{id}/status`. | 200 `Appointment` |
     | `PATCH /media/{id}` | `archived` | 200 `Media` |
     | `PATCH /templates/{id}` | `name`, `body`, `archived` | 200 `Template` |
-    | `PATCH /reminder-rules/{id}` | `offset_days`, `template_id`, `archived`, `include_overdue`. `kind` and `service_id` cannot change; she creates a new rule instead. `include_overdue` (default `false`) is used only on a change that asks (see "Reminder rules") and ignored otherwise. An archived `template_id` is 422. | 200 `Rule` |
+    | `PATCH /reminder-rules/{id}` | `offset_days`, `template_id`, `return_service_id?` (`come_back` only; null = back to the rule's own service), `archived`, `include_overdue`. `kind` and `service_id` cannot change; she creates a new rule instead. `include_overdue` (default `false`) is used only on a change that asks (see "Reminder rules") and ignored otherwise. An archived `template_id` or `return_service_id` is 422. | 200 `Rule` |
 
     **`GET` responses and query parameters**
 
@@ -1723,6 +1735,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   **Extra CHECKs:** `ends_at > starts_at`; `duration_min > 0`; `price_cents`, `total_cents` and `paid_cents` `>= 0`; `offset_days >= 0`; `kind <> 'come_back' OR offset_days > 0`.
     *   **Extra indexes** the queries need: `appointments(ends_at) WHERE status NOT IN ('cancelled','no_show')`, `reminder_log(appointment_id)`, `media(client_id)`, `media(appointment_id)`, `sessions(user_id)`, `attribute_options(attribute_id)`.
     *   No regional defaults in the DDL.
+    *   **`00002_reminder_return_service.sql` (P4):** `00001` is already applied, and migrations only move forward, so the return service is a second migration: `ALTER TABLE reminder_rules ADD COLUMN return_service_id uuid NULL REFERENCES services(id)` plus `CHECK (kind = 'come_back' OR return_service_id IS NULL)`. Existing rows keep NULL (= the rule's own service).
 
 ##### 29. `internal/db/queries/` — `settings.sql`, `auth.sql`, `attributes.sql`, `clients.sql`, `services.sql`, `appointments.sql`, `media.sql`, `templates.sql`, `reminders.sql`, `push.sql`, `scheduler.sql`, `export.sql` (Create)
 
@@ -1756,7 +1769,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   Body limits are applied by the code that reads the body, not by path in `server.go`: `decodeJSON` wraps `r.Body` in `http.MaxBytesReader` at 1 MB and also rejects trailing data after the value; each multipart handler wraps it with its own limit, `POST /media` (12 MB) and `POST /settings/icon` (3 MB). A body over the limit answers `payload-too-large`.
     *   The SPA handler (item 35) is mounted on `/` for GET and HEAD only; any other method on a path outside `/api/` gets 405 with `Allow: GET, HEAD`. (`GET /` cannot be registered next to the method-less `/api/` catch-all: the standard mux rejects the pair as conflicting.)
 
-    **Module methods.** Every method also takes `ctx` and `q db.DBTX` first; they are left out below. Types are the module's own structs, named after the API schemas (item 15). `scheduler` and `starter` are not called by `httpapi`.
+    **Module methods.** Every method also takes `ctx` and `q db.DBTX` first; they are left out below. Types are the module's own structs, named after the API schemas (item 15). `scheduler` is not called by `httpapi`.
 
     | Module | Methods |
     | --- | --- |
@@ -1768,7 +1781,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `appointments` | `ListRange(from, to, loc *time.Location) []Appointment` (the handler passes the business time zone); `ListForClient(clientID) []Appointment`; `Get(id) Appointment`; `Create(AppointmentInput) Appointment`; `Update(id, AppointmentPatch) Appointment`; `SetStatus(id, status, allowOverlap) Appointment` (returns `overlap` 409 when the change is to `scheduled` and an overlap exists) |
     | `media` | `Save(MediaInput) Media`; `Open(id, thumb bool) (io.ReadCloser, Media)`; `ListForClient(clientID) []Media`; `SetArchived(id, archived) Media` |
     | `templates` | `List() []Template`; `Vars() []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)` and `SampleData(locale, countryCode)` are plain functions with no `q`. |
-    | `reminders` | `Preview(body, clientID?) Preview` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem`; `Record(LogEntry) (created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(date) []LogItem` |
+    | `reminders` | `Preview(body, clientID?) Preview` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem` (messages and booking prompts, `DueItem.mode`); `Record(LogEntry) (created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(date) []LogItem` |
     | `push` | `PublicKey() string`; `Subscribe(userID, Subscription) (id, created bool)`; `CountSubscriptions() int`; `EnsureKeys()`; `SendAll(Payload) SendResult` (`attempted`, `delivered`) |
     | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction) |
     | `status` | `Health()`; `Ready() bool`; `Status() Status`; `BackupRed() bool` (reads `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(sessionID, ClientError)` |
@@ -1855,8 +1868,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: First-run setup.
 *   **Proposed Changes**:
     *   `NewSetupToken`: deletes old tokens, creates one valid 24 h. Used by `serve` at start and by `setup-link`. Once a user exists it returns 409 `setup-closed`, even though both callers check first (fail closed). Both `NewSetupToken` and `CompleteSetup` take a transaction from the caller and take one advisory lock (`pg_advisory_xact_lock`) as their first statement, so two token calls never leave two live tokens and two setups never both create a user.
-    *   `CompleteSetup` runs in the handler's transaction: it checks first that no user exists (409 `setup-closed`), then the token (unused, not expired, else 410), normalizes and checks the username ("Session and request rules"), calls the settings creator (which validates and inserts the settings row), creates the owner user, calls the seeder, deletes all setup tokens, and creates a session.
-    *   `auth` defines the types: `SetupSettings{Name, Timezone, Locale, Currency, CountryCode, AccentColor string; PushHour *int}` (a pointer, so an absent push hour reaches `settings`, which fills in 8), `SettingsCreator func(ctx, q db.DBTX, s SetupSettings) error` and `Seeder func(ctx, q db.DBTX, locale string) error`. In P2, `serve.go` passes a no-op seeder; in P4, `starter.Seed` (item 43). The settings creator, from P2, is a closure in `cmd` that converts `SetupSettings` to `settings.SettingsInput` and calls `settings.Create`. This keeps `auth` from importing `starter`, `settings` and the other domain modules. `auth.New` returns an error when either function is nil (fail closed).
+    *   `CompleteSetup` runs in the handler's transaction: it checks first that no user exists (409 `setup-closed`), then the token (unused, not expired, else 410), normalizes and checks the username ("Session and request rules"), calls the settings creator (which validates and inserts the settings row), creates the owner user, deletes all setup tokens, and creates a session. It creates nothing else: the app ships empty.
+    *   `auth` defines the types: `SetupSettings{Name, Timezone, Locale, Currency, CountryCode, AccentColor string; PushHour *int}` (a pointer, so an absent push hour reaches `settings`, which fills in 8), `SettingsCreator func(ctx, q db.DBTX, s SetupSettings) error`. The settings creator is a closure in `cmd` that converts `SetupSettings` to `settings.SettingsInput` and calls `settings.Create`. This keeps `auth` from importing `settings` and the other domain modules. `auth.New` returns an error when the function is nil (fail closed).
 
 ##### 41. `internal/auth/ratelimit.go` (Create)
 
@@ -1882,15 +1895,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 #### Domain modules
 
-##### 43. `internal/starter/starter.go` (Create)
+##### 43. (Removed)
 
-*   **Type / Scope**: Starter content.
-*   **Proposed Changes**: `Seed(ctx, tx, locale)` calls the modules' create functions (never their tables) to create:
-    *   the template "Recordatorio de cita" with the body "Hola {{client.first_name}}, te esperamos {{appointment.date}} a las {{appointment.time}} para {{appointment.services}}. {{business.name}}";
-    *   one `before_appointment` rule at 1 day that uses it;
-    *   the appointment attribute "Método de pago" (select: SINPE Móvil, Efectivo, Tarjeta).
-
-    The Spanish text lives in a `locale`-keyed map. Built in P4, once templates, reminders and attributes exist, and passed to `auth` as its seeder (item 40).
+*   **Type / Scope**: None.
+*   **Proposed Changes**: Was the starter content (`internal/starter`). The owner decided the app ships empty: setup creates only the settings row, her user and her first session. The number is kept so the other item numbers stay stable.
 
 ##### 44. `internal/settings/settings.go`, `manifest.go`, `icons.go`, `default-icon-512.png`, `default-icon-180.png` (Create)
 
@@ -2011,7 +2019,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Reminders.
 *   **Proposed Changes**:
-    *   `rules.go`: CRUD for the two kinds. It sets `applies_from` from `include_overdue` (absent or `false`: now; `true`: `NULL`) on create and on the changes listed in "Reminder rules". It rejects an archived template or service (422). The CHECK rules are mirrored in Go: `service_id` is set only for `come_back`; `offset_days` is `>= 0` for `before_appointment` and `> 0` for `come_back`; `kind` and `service_id` cannot change after creation.
+    *   `rules.go`: CRUD for the two kinds. It sets `applies_from` from `include_overdue` (absent or `false`: now; `true`: `NULL`) on create and on the changes listed in "Reminder rules". It rejects an archived template, service or return service (422). The CHECK rules are mirrored in Go: `service_id` and `return_service_id` are set only for `come_back`; `offset_days` is `>= 0` for `before_appointment` and `> 0` for `come_back`; `kind` and `service_id` cannot change after creation; `return_service_id` can.
     *   `due.go`: `DueList(ctx, q, now)` and the pure `compute(data, now)`, exactly as in "Due-list computation".
     *   `log.go`: `Record(LogEntry) (created bool)` with `ON CONFLICT DO NOTHING`. `anchorAt` must be set for a "before" rule and null for a `come_back` rule, or it returns a validation error (422).
     *   `log.go` also has `LogForClient(clientID)` and `LogForDate(day)`. Both join the appointment and client, so each row carries `client_id` and `client_name` (`LogItem`). `LogForDate` filters `acted_at` on the local day in the business time zone.
@@ -2026,7 +2034,15 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   One item for a two-service appointment.
     *   Come-back appears on day N with no "complete" tap.
     *   A no-show removes it.
-    *   A later booking hides it; cancelling that booking brings it back.
+    *   A later booking that includes the return service hides it; cancelling that booking, or taking the return service off it, brings it back.
+    *   A later visit without the return service does not hide it (a pedicure after an acrylic set).
+    *   An empty return service means the rule's own service: a later booking of that service hides it.
+    *   A future booking without the return service turns the item into a booking prompt with that appointment's ID, start and services and the return service's name; with two such bookings, the earliest is used; after the return service is added to it, the item is gone.
+    *   A later booking without the return service that started before the due day gives a normal message, not a prompt.
+    *   A sent or skipped booking prompt stays hidden (the same `(rule_id, appointment_id)` log row).
+    *   Two come-back rules on one appointment each check their own return service.
+    *   A rule whose return service is archived produces no items; creating or changing a rule to an archived return service is 422.
+    *   A booking prompt counts in the push count.
     *   A reschedule gives a "before" item a new identity and re-rendered text: a "before" item that was sent shows again after `starts_at` changes.
     *   A rule whose template or service is archived produces no items.
     *   `applies_from`: a new come-back rule with "Solo de hoy en adelante" gives no late items for old visits, but does give an item for a visit whose due day is ahead; with "Incluir atrasadas" it gives the late items from the 60-day look-back. Lowering `offset_days` with "Solo de hoy en adelante" removes items that were already late.
@@ -2206,7 +2222,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 72. `web/src/routes/+page.svelte` (Create)
 
 *   **Type / Scope**: "Hoy".
-*   **Proposed Changes**: The count of due items at the top, linking to `/enviar`. Below it, a date switcher (previous day, next day, a date picker, and a toggle between `DayView` and `WeekView`), then the appointments for the chosen day or week. Days inside the bootstrap window come from the cache; other days call `GET /appointments?from=&to=` (online only). A "+" button opens the new-appointment flow with the chosen day filled in. When `backup_red` from `/bootstrap` is true, a red line at the top says "Respaldo con problema" and links to `ajustes/estado`. When `push.ts` reports "needs activation", an "Activar notificaciones" button shows below the count.
+*   **Proposed Changes**: The count of due items at the top, linking to `/enviar`. Below it, a date switcher (previous day, next day, a date picker, and a toggle between `DayView` and `WeekView`), then the appointments for the chosen day or week. Days inside the bootstrap window come from the cache; other days call `GET /appointments?from=&to=` (online only). A "+" button opens the new-appointment flow with the chosen day filled in. With no rules yet, the count area is an empty state that leads to Ajustes → Recordatorios. When `backup_red` from `/bootstrap` is true, a red line at the top says "Respaldo con problema" and links to `ajustes/estado`. When `push.ts` reports "needs activation", an "Activar notificaciones" button shows below the count.
 
 ##### 73. `web/src/routes/setup/+page.svelte`, `web/src/routes/login/+page.svelte`, `web/src/routes/cambiar-clave/+page.svelte` (Create)
 
@@ -2222,7 +2238,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: "Para enviar hoy".
 *   **Proposed Changes**:
     *   Items grouped by late and today.
-    *   Each item has Enviar / Omitir. "Omitir" has no confirmation sheet: a 5-second "Deshacer" toast shows before the `POST` is sent.
+    *   Each item has Enviar / Omitir. A booking prompt (`mode: booking_prompt`) shows the prompt text ("Ana tiene cita el 12/11 (Pedicure). ¿Agregar Relleno?") with "Agregar a la cita" (`PATCH /appointments/{id}` with the appointment's `service_ids` plus the return service; the overlap sheet on a 409; then a refresh), "Enviar mensaje" (the normal send flow) and "Omitir". "Omitir" has no confirmation sheet: a 5-second "Deshacer" toast shows before the `POST` is sent.
     *   An "Enviados" section below: today's reminder-log rows (`GET /reminders/log?date=<today>`), each with the client, the time and the exact text that was sent. Online only: the log is not cached, so offline the section shows "Necesitas conexión para ver los enviados".
     *   The send flow uses `ConfirmSentSheet` and then moves to the next item. After each successful log `POST` it updates the app badge.
     *   While offline, it shows the cached list read-only, with the actions disabled, and hides "before" items whose `anchor_at` (the appointment's start) is in the past.
@@ -2231,7 +2247,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Appointments.
 *   **Proposed Changes**:
-    *   New appointment: client picker (with quick add), services, date and time, the end time (computed from the services, and editable), appointment attributes, notes; the overlap warning sheet. After saving, it goes back to the screen she came from.
+    *   New appointment: client picker (with quick add), services, date and time, the end time (computed from the services, and editable), appointment attributes, notes; the overlap warning sheet. With no services yet, the services step shows an empty state that leads to Ajustes → Servicios (an appointment can still be saved with an end time and no service). After saving, it goes back to the screen she came from.
     *   Detail: edit, status buttons (Confirmada, Cancelar, No vino, Reactivar; "Reactivar" shows the overlap sheet on a 409), amount paid, and the appointment's photos with "Agregar foto" (CUJ 3 step 5). The photo input is `<input type="file" accept="image/*">`, which on iOS offers the camera and the photo library. A long-press on a photo offers "Archivar foto" (`PATCH /media/{id}`).
 
 ##### 76. `web/src/routes/clientas/+page.svelte`, `clientas/nueva/+page.svelte`, `clientas/[id]/+page.svelte` (Create)
@@ -2251,7 +2267,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `servicios`: CRUD.
     *   `atributos`: create with label + a plain question for scope ("¿Es igual siempre para la clienta, o cambia en cada cita?") + type; options in one list per level, with "+ Agregar opción" at each level, drag to reorder, and "Archivar" in the row menu; archive with the template warning, built from the cached templates (a template uses the attribute if its body has the variable `client.<key>` or `appointment.<key>`, with or without a fallback; the check uses the same tokenizer as `ChipEditor`).
     *   `plantillas`: list + `ChipEditor`.
-    *   `recordatorios`: rules built as sentences. Come-back: "Enviar [plantilla] [21] días después de [servicio]". Before: "Enviar [plantilla] [2] días antes de cada cita" (1 shows as "1 día antes", 0 as "el mismo día"). When she saves a new rule or a change that can add items, a `BottomSheet` first asks "¿Incluir recordatorios atrasados?" with "Solo de hoy en adelante" and "Incluir atrasadas", sent as `include_overdue`. Archived templates or services show the warning from "Reminder rules".
+    *   `recordatorios`: rules built as sentences. Come-back: "Enviar [plantilla] [21] días después de [servicio], para agendar [servicio de regreso]" (the return service; it starts as the same service). Before: "Enviar [plantilla] [2] días antes de cada cita" (1 shows as "1 día antes", 0 as "el mismo día"). When she saves a new rule or a change that can add items, a `BottomSheet` first asks "¿Incluir recordatorios atrasados?" with "Solo de hoy en adelante" and "Incluir atrasadas", sent as `include_overdue`. Changing the return service asks the same question. Archived templates, services or return services show the warning from "Reminder rules". With no templates yet, the screen shows an empty state that leads to `plantillas`.
     *   `estado`: the status screen, with the "Activar notificaciones" button when `push.ts` reports "needs activation".
     *   `exportar`: the download button, an `<a href="/api/v1/export" download>` link (see CUJ 8). The service worker lets this navigation go to the network.
 
@@ -2279,7 +2295,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   **Login:** a `setup` project runs first. It gets the setup token by running `open-customer setup-link` against the same database and reading the printed link. It completes CUJ 1 and saves the logged-in state (`storageState`). Every other spec depends on `setup` and reuses that state, so no spec needs a password hash outside Go.
     *   `setup.spec.ts`: CUJ 1 and 2 (without the real install and push). It is the `setup` project.
     *   `booking.spec.ts`: CUJ 3, including overlap and the photo step (a fixture JPEG through `setInputFiles`).
-    *   `reminders.spec.ts`: CUJ 4 (the `wa.me` navigation is intercepted) and CUJ 5. For CUJ 5 it seeds Ana's visit ending 21 days ago, with `created_at` also in the past, so the item is due today and not late. The spec first creates the 21-day `come_back` rule through `POST /reminder-rules` without `include_overdue`.
+    *   `reminders.spec.ts`: CUJ 4 (the `wa.me` navigation is intercepted) and CUJ 5. For CUJ 5 it seeds Ana's visit ending 21 days ago, with `created_at` also in the past, so the item is due today and not late. The spec first creates the 21-day `come_back` rule, with "Relleno" as its return service, through `POST /reminder-rules` without `include_overdue`; then it adds a future "Pedicure" booking and checks the booking prompt and "Agregar a la cita". CUJ 4 uses the "before" rule and template that `setup.spec.ts` creates in CUJ 2: setup creates none.
     *   `offline.spec.ts`: CUJ 6, run with `serviceWorkers: 'block'` so Playwright routing sees every request, using a route that returns a 530 HTML page. Whether Playwright's WebKit routing works while a service worker is active is not checked, so the cold-open-with-server-off case stays the manual check in the Verification Plan.
     *   `export.spec.ts`: CUJ 8.
 
@@ -2401,7 +2417,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     7.  Goal 2: time CUJ 3 steps 1–4 with a stopwatch on her iPhone, three times with an existing client. Pass: 3 of 3 under 30 s.
     8.  CUJ 3 step 5 on her iPhone: attach a photo from the camera and one from the library. Both upload, show on the appointment and in the client's gallery, and the stored file has no EXIF GPS data.
     9.  "¿Lo enviaste?" after iOS closes the app: tap "Enviar", close the PWA from the app switcher while in WhatsApp, reopen it. The sheet shows for that client.
-    10. Goal 7: `grep -rnE 'Costa|\bCRC\b|America/Costa_Rica|\+506|[Uu]ña|\b[Nn]ails?\b' --include='*.go' --include='*.sql' internal` (this covers the migrations in `internal/db/migrations`) returns nothing outside `internal/locale/es.go`, `internal/starter/` (editable starter content) and `_test.go` files. Currencies come from `golang.org/x/text/currency` and phone rules from `nyaruka/phonenumbers`, both outside `internal`, so no country list is written by hand. SQL comments in migrations use no country examples.
+    10. Goal 7: `grep -rnE 'Costa|\bCRC\b|America/Costa_Rica|\+506|[Uu]ña|\b[Nn]ails?\b' --include='*.go' --include='*.sql' internal` (this covers the migrations in `internal/db/migrations`) returns nothing outside `internal/locale/es.go` and `_test.go` files. Currencies come from `golang.org/x/text/currency` and phone rules from `nyaruka/phonenumbers`, both outside `internal`, so no country list is written by hand. SQL comments in migrations use no country examples.
 *   **Goal checks after handover**:
     *   Goal 1: she does the setup herself while the author watches and times it.
     *   Goal 3: the "missed reminder" bug log during the 4-week gate (see Goal 3).

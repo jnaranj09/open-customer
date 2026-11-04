@@ -40,16 +40,14 @@ func TestSetupNeeded(t *testing.T) {
 	}
 }
 
-// setupFixture is a fresh database, an Auth on a fake clock whose settings creator and seeder
-// record their input, and one setup token.
+// setupFixture is a fresh database, an Auth on a fake clock whose settings creator records its
+// input, and one setup token.
 type setupFixture struct {
 	pool     *pgxpool.Pool
 	clock    *clock.Fake
 	auth     *auth.Auth
 	token    string
 	created  []auth.SetupSettings
-	seeded   []string
-	seedErr  error
 	createFn func(ctx context.Context, q db.DBTX, s auth.SetupSettings) error
 }
 
@@ -64,10 +62,6 @@ func newSetupFixture(t *testing.T) *setupFixture {
 				return f.createFn(ctx, q, s)
 			}
 			return nil
-		},
-		Seeder: func(_ context.Context, _ db.DBTX, locale string) error {
-			f.seeded = append(f.seeded, locale)
-			return f.seedErr
 		},
 	})
 	token, err := f.auth.NewSetupToken(t.Context(), f.pool)
@@ -170,9 +164,6 @@ func TestCompleteSetupHappyPath(t *testing.T) {
 	if n := count(t, f.pool, "setup_tokens"); n != 0 {
 		t.Fatalf("setup_tokens rows = %d, want 0", n)
 	}
-	if !reflect.DeepEqual(f.seeded, []string{"es"}) {
-		t.Fatalf("seeder got %q; want one call with \"es\"", f.seeded)
-	}
 	var mustChange bool
 	if err := f.pool.QueryRow(t.Context(), `SELECT must_change_password FROM users WHERE username = 'ana'`).
 		Scan(&mustChange); err != nil || mustChange {
@@ -271,21 +262,6 @@ func TestSetupBadSettingsRollsBackInTx(t *testing.T) {
 	}
 	if n := count(t, f.pool, "users"); n != 0 {
 		t.Fatalf("users rows after the rollback = %d, want 0", n)
-	}
-	if len(f.seeded) != 0 {
-		t.Fatalf("seeder calls = %d, want 0", len(f.seeded))
-	}
-}
-
-func TestSetupSeederErrorFails(t *testing.T) {
-	f := newSetupFixture(t)
-	f.seedErr = errors.New("made-up seed failure")
-	me, token, err := f.auth.CompleteSetup(t.Context(), f.pool, validSetupInput(f.token))
-	if !errors.Is(err, f.seedErr) || token != "" || me != (auth.Me{}) {
-		t.Fatalf("CompleteSetup = %+v, %q, %v; want no Me, no token and the seeder error", me, token, err)
-	}
-	if n := count(t, f.pool, "sessions"); n != 0 {
-		t.Fatalf("sessions rows = %d, want 0", n)
 	}
 }
 

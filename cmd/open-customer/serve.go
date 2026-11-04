@@ -153,8 +153,6 @@ func newModules(cfg config.Config) (*settings.Module, *auth.Auth, error) {
 	authModule, err := auth.New(auth.Options{
 		Clock:           clock.Real{},
 		SettingsCreator: settingsCreator(settingsModule),
-		// starter.Seed in P4.
-		Seeder: func(context.Context, db.DBTX, string) error { return nil },
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("build the modules: %w", err)

@@ -7,8 +7,8 @@ import (
 	"github.com/jnaranj09/open-customer/internal/db"
 )
 
-// NewForTest is the one test constructor for both test packages here. A nil SettingsCreator or
-// Seeder in opts becomes a no-op; opts.Clock is required. A New error fails the test.
+// NewForTest is the one test constructor for both test packages here. A nil SettingsCreator in
+// opts becomes a no-op; opts.Clock is required. A New error fails the test.
 func NewForTest(t *testing.T, opts Options) *Auth {
 	t.Helper()
 	if opts.Clock == nil {
@@ -16,9 +16,6 @@ func NewForTest(t *testing.T, opts Options) *Auth {
 	}
 	if opts.SettingsCreator == nil {
 		opts.SettingsCreator = func(context.Context, db.DBTX, SetupSettings) error { return nil }
-	}
-	if opts.Seeder == nil {
-		opts.Seeder = func(context.Context, db.DBTX, string) error { return nil }
 	}
 	a, err := New(opts)
 	if err != nil {

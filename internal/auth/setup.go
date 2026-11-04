@@ -33,9 +33,6 @@ type SetupSettings struct {
 // closure over settings.Create.
 type SettingsCreator func(ctx context.Context, q db.DBTX, s SetupSettings) error
 
-// Seeder writes the starter data for locale in q (starter.Seed from P4).
-type Seeder func(ctx context.Context, q db.DBTX, locale string) error
-
 // SetupInput is the POST /setup body.
 type SetupInput struct {
 	Token, Username, Password string
@@ -79,9 +76,9 @@ func (a *Auth) NewSetupToken(ctx context.Context, q db.DBTX) (string, error) {
 	return token, nil
 }
 
-// CompleteSetup creates the settings row (through the settings creator), the owner user, the
-// starter data (through the seeder) and her first session, and deletes every setup token (design
-// doc item 40). q must be a transaction: the POST /setup handler opens it, so any error leaves
+// CompleteSetup creates the settings row (through the settings creator), the owner user and her
+// first session, and deletes every setup token (design doc item 40). Nothing else is created: the
+// app starts empty. q must be a transaction: the POST /setup handler opens it, so any error leaves
 // nothing behind, and the setup lock taken first holds until it ends. It returns the new user and
 // the session token for the cookie.
 func (a *Auth) CompleteSetup(ctx context.Context, q db.DBTX, in SetupInput) (Me, string, error) {
@@ -118,9 +115,6 @@ func (a *Auth) CompleteSetup(ctx context.Context, q db.DBTX, in SetupInput) (Me,
 		ID: userID, Username: username, PasswordHash: hash, CreatedAt: a.clock.Now(),
 	}); err != nil {
 		return Me{}, "", fmt.Errorf("insert the owner user: %w", err)
-	}
-	if err := a.seeder(ctx, q, in.Settings.Locale); err != nil {
-		return Me{}, "", fmt.Errorf("seed the starter data: %w", err)
 	}
 	if err := queries.DeleteSetupTokens(ctx); err != nil {
 		return Me{}, "", fmt.Errorf("delete the setup tokens: %w", err)

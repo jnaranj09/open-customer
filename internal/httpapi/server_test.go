@@ -39,9 +39,11 @@ type testServerConfig struct {
 	pool      *pgxpool.Pool // nil when no route the test calls touches the database
 	publicURL string        // PUBLIC_URL; empty means testOrigin
 	trusted   []netip.Prefix
-	seeder    auth.Seeder // nil means one that writes nothing (starter.Seed comes in P4)
 	beginner  db.Beginner // nil means the pool
 	mediaDir  string      // MEDIA_DIR; empty means a fresh t.TempDir()
+	// afterSettings, when set, runs inside the settings creator after settings.Create, in the
+	// setup transaction; it lets a test make a later setup statement fail for real.
+	afterSettings func(ctx context.Context, q db.DBTX) error
 }
 
 // testApp is the full handler, the auth module behind it and their fake clock.
@@ -61,9 +63,6 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 	if err != nil {
 		t.Fatalf("parse PUBLIC_URL: %v", err)
 	}
-	if cfg.seeder == nil {
-		cfg.seeder = func(context.Context, db.DBTX, string) error { return nil }
-	}
 	if cfg.mediaDir == "" {
 		cfg.mediaDir = t.TempDir()
 	}
@@ -79,9 +78,11 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 			}); err != nil {
 				return fmt.Errorf("create settings: %w", err)
 			}
+			if cfg.afterSettings != nil {
+				return cfg.afterSettings(ctx, q)
+			}
 			return nil
 		},
-		Seeder: cfg.seeder,
 	})
 	if err != nil {
 		t.Fatalf("auth.New: %v", err)
@@ -427,7 +428,6 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 	a, err := auth.New(auth.Options{
 		Clock:           clock.NewFake(testStart),
 		SettingsCreator: func(context.Context, db.DBTX, auth.SetupSettings) error { return nil },
-		Seeder:          func(context.Context, db.DBTX, string) error { return nil },
 	})
 	if err != nil {
 		t.Fatalf("auth.New: %v", err)
