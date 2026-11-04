@@ -866,6 +866,75 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /reminder-rules:
+    post:
+      operationId: createReminderRule
+      summary: Add a reminder rule
+      description: >-
+        A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule
+        takes a service_id, an optional return_service_id (the service to book again; the rule's own
+        service when left out) and an offset_days of 1 to 365. The template and the services must
+        exist and be active. include_overdue true counts items already past their moment; false or
+        left out counts only items from now on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleInput"
+      responses:
+        "201":
+          description: The new rule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /reminder-rules/{id}:
+    patch:
+      operationId: updateReminderRule
+      summary: Change a reminder rule
+      description: >-
+        Changes only the fields sent. Only return_service_id may be null (the rule's own service
+        again). A rule never changes kind or service. include_overdue is read only when the change
+        can make new items appear.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulePatch"
+      responses:
+        "200":
+          description: The rule after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /media:
     post:
       operationId: uploadMedia
@@ -1315,6 +1384,77 @@ components:
         body:
           type: string
         archived:
+          type: boolean
+    RuleKind:
+      type: string
+      enum: [before_appointment, come_back]
+    Rule:
+      type: object
+      required: [id, kind, service_id, return_service_id, offset_days, template_id, applies_from, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/RuleKind"
+        service_id:
+          type: string
+          format: uuid
+          nullable: true
+        return_service_id:
+          type: string
+          format: uuid
+          nullable: true
+        offset_days:
+          type: integer
+        template_id:
+          type: string
+          format: uuid
+        applies_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: Items before this moment are not counted; null means overdue items are included.
+        archived:
+          type: boolean
+    RuleInput:
+      type: object
+      required: [kind, offset_days, template_id]
+      properties:
+        kind:
+          $ref: "#/components/schemas/RuleKind"
+        service_id:
+          type: string
+          format: uuid
+          nullable: true
+        return_service_id:
+          type: string
+          format: uuid
+          nullable: true
+        offset_days:
+          type: integer
+        template_id:
+          type: string
+          format: uuid
+        include_overdue:
+          type: boolean
+    RulePatch:
+      type: object
+      description: >-
+        Every field is optional; a field left out is not changed. Only return_service_id may be null.
+      properties:
+        offset_days:
+          type: integer
+        template_id:
+          type: string
+          format: uuid
+        return_service_id:
+          type: string
+          format: uuid
+          nullable: true
+        archived:
+          type: boolean
+        include_overdue:
           type: boolean
     Client:
       type: object

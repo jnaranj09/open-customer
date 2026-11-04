@@ -23,6 +23,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/config"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
+	"github.com/jnaranj09/open-customer/internal/reminders"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
@@ -143,6 +144,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Clients:        mods.clients,
 		Media:          mods.media,
 		Templates:      mods.templates,
+		Reminders:      mods.reminders,
 		Appointments:   mods.appointments,
 		Status:         status.New(version),
 		Log:            log,
@@ -168,6 +170,7 @@ type modules struct {
 	appointments *appointments.Module
 	media        *media.Module
 	templates    *templates.Module
+	reminders    *reminders.Module
 	auth         *auth.Auth
 }
 
@@ -191,6 +194,7 @@ func newModules(cfg config.Config) (modules, error) {
 		appointments: appointments.New(appointments.Options{Clock: clock.Real{}, Services: servicesModule, Attributes: attributesModule}),
 		media:        media.New(media.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir}),
 		templates:    templates.New(templates.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		reminders:    reminders.New(reminders.Options{Clock: clock.Real{}, Attributes: attributesModule}),
 		auth:         authModule,
 	}, nil
 }

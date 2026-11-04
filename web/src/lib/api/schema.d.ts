@@ -497,6 +497,46 @@ export interface paths {
         patch: operations["updateTemplate"];
         trace?: never;
     };
+    "/reminder-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a reminder rule
+         * @description A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule takes a service_id, an optional return_service_id (the service to book again; the rule's own service when left out) and an offset_days of 1 to 365. The template and the services must exist and be active. include_overdue true counts items already past their moment; false or left out counts only items from now on.
+         */
+        post: operations["createReminderRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reminder-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a reminder rule
+         * @description Changes only the fields sent. Only return_service_id may be null (the rule's own service again). A rule never changes kind or service. include_overdue is read only when the change can make new items appear.
+         */
+        patch: operations["updateReminderRule"];
+        trace?: never;
+    };
     "/media": {
         parameters: {
             query?: never;
@@ -734,6 +774,47 @@ export interface components {
             name?: string;
             body?: string;
             archived?: boolean;
+        };
+        /** @enum {string} */
+        RuleKind: "before_appointment" | "come_back";
+        Rule: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            service_id: string | null;
+            /** Format: uuid */
+            return_service_id: string | null;
+            offset_days: number;
+            /** Format: uuid */
+            template_id: string;
+            /**
+             * Format: date-time
+             * @description Items before this moment are not counted; null means overdue items are included.
+             */
+            applies_from: string | null;
+            archived: boolean;
+        };
+        RuleInput: {
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            service_id?: string | null;
+            /** Format: uuid */
+            return_service_id?: string | null;
+            offset_days: number;
+            /** Format: uuid */
+            template_id: string;
+            include_overdue?: boolean;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only return_service_id may be null. */
+        RulePatch: {
+            offset_days?: number;
+            /** Format: uuid */
+            template_id?: string;
+            /** Format: uuid */
+            return_service_id?: string | null;
+            archived?: boolean;
+            include_overdue?: boolean;
         };
         Client: {
             /** Format: uuid */
@@ -1700,6 +1781,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Template"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createReminderRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleInput"];
+            };
+        };
+        responses: {
+            /** @description The new rule. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateReminderRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePatch"];
+            };
+        };
+        responses: {
+            /** @description The rule after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
                 };
             };
             401: components["responses"]["Problem"];
