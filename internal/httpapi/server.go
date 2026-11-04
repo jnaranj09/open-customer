@@ -30,6 +30,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
+	"github.com/jnaranj09/open-customer/internal/push"
 	"github.com/jnaranj09/open-customer/internal/reminders"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
@@ -61,6 +62,7 @@ type Options struct {
 	Media          *media.Module
 	Templates      *templates.Module
 	Reminders      *reminders.Module
+	Push           *push.Module
 	Status         *status.Status
 	Clock          clock.Clock
 	Log            *slog.Logger
@@ -82,6 +84,7 @@ type Server struct {
 	media        *media.Module
 	templates    *templates.Module
 	reminders    *reminders.Module
+	push         *push.Module
 	status       *status.Status
 	clock        clock.Clock
 	// secureCookies is PUBLIC_URL's scheme == https: the session cookie drops Secure only for a
@@ -94,12 +97,12 @@ var _ gen.ServerInterface = (*Server)(nil)
 // New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
 // /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
 // middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes,
-// Services, Clients, Appointments, Media, Templates, Reminders, Status, Clock) is missing, or when the embedded spec
+// Services, Clients, Appointments, Media, Templates, Reminders, Push, Status, Clock) is missing, or when the embedded spec
 // cannot be read or its security or x-oc-allowed-while-must-change-password values are not ones
 // steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
-	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Reminders == nil || opts.Status == nil || opts.Clock == nil {
-		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates, Reminders, Status and Clock are required")
+	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Reminders == nil || opts.Push == nil || opts.Status == nil || opts.Clock == nil {
+		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates, Reminders, Push, Status and Clock are required")
 	}
 	spec, err := gen.GetSpec()
 	if err != nil {
@@ -115,7 +118,7 @@ func New(opts Options) (http.Handler, error) {
 	}
 	s := &Server{
 		pool: opts.Pool, beginner: opts.beginner,
-		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, templates: opts.Templates, reminders: opts.Reminders, status: opts.Status, clock: opts.Clock,
+		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, templates: opts.Templates, reminders: opts.Reminders, push: opts.Push, status: opts.Status, clock: opts.Clock,
 		secureCookies: opts.PublicURL.Scheme == "https",
 	}
 	if s.beginner == nil {

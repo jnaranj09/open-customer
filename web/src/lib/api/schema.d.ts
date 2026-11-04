@@ -601,6 +601,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/push/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The VAPID public key
+         * @description No session on purpose: the key is public, and the service worker may ask for it before the owner has signed in.
+         */
+        get: operations["getPushKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Store this device's push subscription
+         * @description The browser's PushSubscription JSON, stored for the signed-in user. A known endpoint keeps its row and ID and takes the new keys (200); a new one is 201. An endpoint that is not an https URL, or keys that are not base64url of the right length, are 422 on that field. expirationTime is accepted and ignored.
+         */
+        post: operations["subscribePush"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media": {
         parameters: {
             query?: never;
@@ -948,6 +988,23 @@ export interface components {
             phone_digits?: string | null;
             /** Format: date-time */
             acted_at: string;
+        };
+        PushKey: {
+            /** @description The VAPID public key, base64url without padding. */
+            public_key: string;
+        };
+        PushSubscriptionInput: {
+            endpoint: string;
+            /** @description Sent by every browser; accepted and ignored. */
+            expirationTime?: number | null;
+            keys: {
+                p256dh: string;
+                auth: string;
+            };
+        };
+        PushSubscriptionId: {
+            /** Format: uuid */
+            id: string;
         };
         LogItem: components["schemas"]["LogEntry"] & {
             /** Format: uuid */
@@ -2099,6 +2156,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogItem"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPushKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The VAPID public key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushKey"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    subscribePush: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionInput"];
+            };
+        };
+        responses: {
+            /** @description The endpoint was already stored; its keys are updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionId"];
+                };
+            };
+            /** @description The new subscription. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionId"];
                 };
             };
             401: components["responses"]["Problem"];

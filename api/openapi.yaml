@@ -1056,6 +1056,59 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /push/key:
+    get:
+      operationId: getPushKey
+      summary: The VAPID public key
+      description: >-
+        No session on purpose: the key is public, and the service worker may ask for it before the
+        owner has signed in.
+      security: []
+      responses:
+        "200":
+          description: The VAPID public key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushKey"
+        default:
+          $ref: "#/components/responses/Problem"
+  /push/subscriptions:
+    post:
+      operationId: subscribePush
+      summary: Store this device's push subscription
+      description: >-
+        The browser's PushSubscription JSON, stored for the signed-in user. A known endpoint keeps
+        its row and ID and takes the new keys (200); a new one is 201. An endpoint that is not an
+        https URL, or keys that are not base64url of the right length, are 422 on that field.
+        expirationTime is accepted and ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushSubscriptionInput"
+      responses:
+        "201":
+          description: The new subscription.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushSubscriptionId"
+        "200":
+          description: The endpoint was already stored; its keys are updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushSubscriptionId"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /media:
     post:
       operationId: uploadMedia
@@ -1701,6 +1754,38 @@ components:
         acted_at:
           type: string
           format: date-time
+    PushKey:
+      type: object
+      required: [public_key]
+      properties:
+        public_key:
+          type: string
+          description: The VAPID public key, base64url without padding.
+    PushSubscriptionInput:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint:
+          type: string
+        expirationTime:
+          type: number
+          nullable: true
+          description: Sent by every browser; accepted and ignored.
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+    PushSubscriptionId:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
     LogItem:
       allOf:
         - $ref: "#/components/schemas/LogEntry"

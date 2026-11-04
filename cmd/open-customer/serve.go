@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jnaranj09/open-customer/internal/appointments"
@@ -23,6 +24,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/config"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
+	"github.com/jnaranj09/open-customer/internal/push"
 	"github.com/jnaranj09/open-customer/internal/reminders"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
@@ -40,8 +42,16 @@ const (
 	readHeaderTimeout = 10 * time.Second
 )
 
-// serve runs the server (design doc item 18; P1 and P2 have steps 1, 2, 4, 5, 7 and 8) until ctx is
-// done.
+// serve runs the server until ctx is done. The steps (design doc item 18):
+//  1. load the config and open the pool;
+//  2. run db.Migrate behind the backup guard;
+//  3. ensure the VAPID keys exist;
+//  4. print the setup link while no user exists;
+//  5. build the modules and the HTTP server;
+//  6. start the daily timer (not built yet: a later P4 task);
+//  7. serve on :8080;
+//  8. shut down gracefully on SIGTERM.
+//
 // It returns 0 after a graceful shutdown and 1 on a config, database, migration or listen error,
 // which it prints to stderr.
 func serve(ctx context.Context, getenv func(string) string, stdout, stderr io.Writer) int {
@@ -100,8 +110,8 @@ func serveOn(ctx context.Context, cfg config.Config, ln net.Listener, stdout, st
 	return 0
 }
 
-// startup opens the pool, runs the migrations behind the backup guard, prints the setup link while
-// no user exists and builds the HTTP server. On an error the pool is already closed.
+// startup opens the pool, runs the migrations behind the backup guard, ensures the VAPID keys,
+// prints the setup link while no user exists and builds the HTTP server. On an error the pool is already closed.
 func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io.Writer) (*http.Server, *pgxpool.Pool, error) {
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -121,6 +131,15 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	if err != nil {
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
+	}
+	// EnsureKeys writes the two keys as two inserts, so it runs in its own write transaction: a
+	// half key pair never persists.
+	err = db.WithTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return mods.push.EnsureKeys(ctx, tx)
+	})
+	if err != nil {
+		pool.Close()
+		return nil, nil, fmt.Errorf("serve: vapid keys: %w", err)
 	}
 	if err := printSetupLink(ctx, cfg, pool, mods.auth, stdout); err != nil {
 		pool.Close()
@@ -145,6 +164,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Media:          mods.media,
 		Templates:      mods.templates,
 		Reminders:      mods.reminders,
+		Push:           mods.push,
 		Appointments:   mods.appointments,
 		Status:         status.New(version),
 		Clock:          clock.Real{},
@@ -172,6 +192,7 @@ type modules struct {
 	media        *media.Module
 	templates    *templates.Module
 	reminders    *reminders.Module
+	push         *push.Module
 	auth         *auth.Auth
 }
 
@@ -196,6 +217,7 @@ func newModules(cfg config.Config) (modules, error) {
 		media:        media.New(media.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir}),
 		templates:    templates.New(templates.Options{Clock: clock.Real{}, Attributes: attributesModule}),
 		reminders:    reminders.New(reminders.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		push:         push.New(push.Options{Clock: clock.Real{}, Subject: cfg.VAPIDSubject}),
 		auth:         authModule,
 	}, nil
 }
