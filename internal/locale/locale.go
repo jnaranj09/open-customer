@@ -71,7 +71,7 @@ func (l Locale) JoinList(items []string) string {
 	}
 }
 
-// VarLabel returns the label of a fixed template variable such as "client", "first_name", or ""
+// VarLabel returns the label of a fixed template variable such as ("client", "first_name"), or ""
 // when the pair is not a fixed variable.
 func (l Locale) VarLabel(ns, key string) string { return l.varLabels[ns+"."+key] }
 

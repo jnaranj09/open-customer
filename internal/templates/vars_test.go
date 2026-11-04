@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
+	"github.com/jnaranj09/open-customer/internal/locale"
 )
 
 func TestKnownAcceptsFixedVariables(t *testing.T) {
@@ -57,5 +58,17 @@ func TestKnownAcceptsAttributesOfTheMatchingScopeArchivedIncluded(t *testing.T) 
 				t.Errorf("known(%q, %q) = false, want true", c.ns, c.key)
 			}
 		})
+	}
+}
+
+func TestEveryFixedVariableHasALabel(t *testing.T) {
+	es, err := locale.For("es")
+	if err != nil {
+		t.Fatalf("locale: %v", err)
+	}
+	for _, f := range fixedVars {
+		if es.VarLabel(f.NS, f.Key) == "" {
+			t.Errorf("fixed variable %s.%s has no label in the locale", f.NS, f.Key)
+		}
 	}
 }

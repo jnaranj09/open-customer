@@ -20,7 +20,10 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/text"
 )
 
-const maxNameLen = 80
+const (
+	maxNameLen = 80
+	maxBodyLen = 2000
+)
 
 // Template is one saved message template.
 type Template struct {
@@ -144,7 +147,7 @@ func nameError() problem.FieldError {
 // as sent. The returned problem.Validation lists, in order: the length error, or else the Parse
 // errors followed by every unknown variable in body order. Any other error is a database failure.
 func (m *Module) checkBody(ctx context.Context, q db.DBTX, body string) error {
-	if strings.TrimSpace(body) == "" || utf8.RuneCountInString(body) > text.MaxNotes {
+	if strings.TrimSpace(body) == "" || utf8.RuneCountInString(body) > maxBodyLen {
 		return problem.Validation{Errors: []problem.FieldError{{Field: "body", Message: problem.MsgTemplateBodyInvalid}}}
 	}
 	parsed, parseErr := Parse(body)
