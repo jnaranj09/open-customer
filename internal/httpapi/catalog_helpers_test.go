@@ -13,6 +13,11 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
+// sendAs sends body with method to target as the owner c, with the public Origin.
+func sendAs(app testApp, c *http.Cookie, method, target, body string) *httptest.ResponseRecorder {
+	return send(app.handler, method, target, testOrigin, body, withCookie(c))
+}
+
 // decodeInto asserts rec has status and decodes its JSON body into a T.
 func decodeInto[T any](t *testing.T, rec *httptest.ResponseRecorder, status int) T {
 	t.Helper()

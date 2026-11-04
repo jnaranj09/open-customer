@@ -23,16 +23,16 @@ import (
 
 // Defines values for AttributeScope.
 const (
-	Appointment AttributeScope = "appointment"
-	Client      AttributeScope = "client"
+	AttributeScopeAppointment AttributeScope = "appointment"
+	AttributeScopeClient      AttributeScope = "client"
 )
 
 // Valid indicates whether the value is a known member of the AttributeScope enum.
 func (e AttributeScope) Valid() bool {
 	switch e {
-	case Appointment:
+	case AttributeScopeAppointment:
 		return true
-	case Client:
+	case AttributeScopeClient:
 		return true
 	default:
 		return false
@@ -41,25 +41,25 @@ func (e AttributeScope) Valid() bool {
 
 // Defines values for AttributeType.
 const (
-	Date        AttributeType = "date"
-	Multiselect AttributeType = "multiselect"
-	Number      AttributeType = "number"
-	Select      AttributeType = "select"
-	Text        AttributeType = "text"
+	AttributeTypeDate        AttributeType = "date"
+	AttributeTypeMultiselect AttributeType = "multiselect"
+	AttributeTypeNumber      AttributeType = "number"
+	AttributeTypeSelect      AttributeType = "select"
+	AttributeTypeText        AttributeType = "text"
 )
 
 // Valid indicates whether the value is a known member of the AttributeType enum.
 func (e AttributeType) Valid() bool {
 	switch e {
-	case Date:
+	case AttributeTypeDate:
 		return true
-	case Multiselect:
+	case AttributeTypeMultiselect:
 		return true
-	case Number:
+	case AttributeTypeNumber:
 		return true
-	case Select:
+	case AttributeTypeSelect:
 		return true
-	case Text:
+	case AttributeTypeText:
 		return true
 	default:
 		return false
@@ -68,55 +68,55 @@ func (e AttributeType) Valid() bool {
 
 // Defines values for ProblemType.
 const (
-	UrnOpenCustomerProblemDuplicatePhone       ProblemType = "urn:open-customer:problem:duplicate-phone"
-	UrnOpenCustomerProblemForbiddenOrigin      ProblemType = "urn:open-customer:problem:forbidden-origin"
-	UrnOpenCustomerProblemInternal             ProblemType = "urn:open-customer:problem:internal"
-	UrnOpenCustomerProblemInvalidCredentials   ProblemType = "urn:open-customer:problem:invalid-credentials"
-	UrnOpenCustomerProblemInvalidTransition    ProblemType = "urn:open-customer:problem:invalid-transition"
-	UrnOpenCustomerProblemMustChangePassword   ProblemType = "urn:open-customer:problem:must-change-password"
-	UrnOpenCustomerProblemNotFound             ProblemType = "urn:open-customer:problem:not-found"
-	UrnOpenCustomerProblemOverlap              ProblemType = "urn:open-customer:problem:overlap"
-	UrnOpenCustomerProblemPayloadTooLarge      ProblemType = "urn:open-customer:problem:payload-too-large"
-	UrnOpenCustomerProblemRateLimited          ProblemType = "urn:open-customer:problem:rate-limited"
-	UrnOpenCustomerProblemSetupClosed          ProblemType = "urn:open-customer:problem:setup-closed"
-	UrnOpenCustomerProblemSetupTokenInvalid    ProblemType = "urn:open-customer:problem:setup-token-invalid"
-	UrnOpenCustomerProblemUnauthorized         ProblemType = "urn:open-customer:problem:unauthorized"
-	UrnOpenCustomerProblemUnsupportedMediaType ProblemType = "urn:open-customer:problem:unsupported-media-type"
-	UrnOpenCustomerProblemValidation           ProblemType = "urn:open-customer:problem:validation"
+	ProblemTypeUrnOpenCustomerProblemDuplicatePhone       ProblemType = "urn:open-customer:problem:duplicate-phone"
+	ProblemTypeUrnOpenCustomerProblemForbiddenOrigin      ProblemType = "urn:open-customer:problem:forbidden-origin"
+	ProblemTypeUrnOpenCustomerProblemInternal             ProblemType = "urn:open-customer:problem:internal"
+	ProblemTypeUrnOpenCustomerProblemInvalidCredentials   ProblemType = "urn:open-customer:problem:invalid-credentials"
+	ProblemTypeUrnOpenCustomerProblemInvalidTransition    ProblemType = "urn:open-customer:problem:invalid-transition"
+	ProblemTypeUrnOpenCustomerProblemMustChangePassword   ProblemType = "urn:open-customer:problem:must-change-password"
+	ProblemTypeUrnOpenCustomerProblemNotFound             ProblemType = "urn:open-customer:problem:not-found"
+	ProblemTypeUrnOpenCustomerProblemOverlap              ProblemType = "urn:open-customer:problem:overlap"
+	ProblemTypeUrnOpenCustomerProblemPayloadTooLarge      ProblemType = "urn:open-customer:problem:payload-too-large"
+	ProblemTypeUrnOpenCustomerProblemRateLimited          ProblemType = "urn:open-customer:problem:rate-limited"
+	ProblemTypeUrnOpenCustomerProblemSetupClosed          ProblemType = "urn:open-customer:problem:setup-closed"
+	ProblemTypeUrnOpenCustomerProblemSetupTokenInvalid    ProblemType = "urn:open-customer:problem:setup-token-invalid"
+	ProblemTypeUrnOpenCustomerProblemUnauthorized         ProblemType = "urn:open-customer:problem:unauthorized"
+	ProblemTypeUrnOpenCustomerProblemUnsupportedMediaType ProblemType = "urn:open-customer:problem:unsupported-media-type"
+	ProblemTypeUrnOpenCustomerProblemValidation           ProblemType = "urn:open-customer:problem:validation"
 )
 
 // Valid indicates whether the value is a known member of the ProblemType enum.
 func (e ProblemType) Valid() bool {
 	switch e {
-	case UrnOpenCustomerProblemDuplicatePhone:
+	case ProblemTypeUrnOpenCustomerProblemDuplicatePhone:
 		return true
-	case UrnOpenCustomerProblemForbiddenOrigin:
+	case ProblemTypeUrnOpenCustomerProblemForbiddenOrigin:
 		return true
-	case UrnOpenCustomerProblemInternal:
+	case ProblemTypeUrnOpenCustomerProblemInternal:
 		return true
-	case UrnOpenCustomerProblemInvalidCredentials:
+	case ProblemTypeUrnOpenCustomerProblemInvalidCredentials:
 		return true
-	case UrnOpenCustomerProblemInvalidTransition:
+	case ProblemTypeUrnOpenCustomerProblemInvalidTransition:
 		return true
-	case UrnOpenCustomerProblemMustChangePassword:
+	case ProblemTypeUrnOpenCustomerProblemMustChangePassword:
 		return true
-	case UrnOpenCustomerProblemNotFound:
+	case ProblemTypeUrnOpenCustomerProblemNotFound:
 		return true
-	case UrnOpenCustomerProblemOverlap:
+	case ProblemTypeUrnOpenCustomerProblemOverlap:
 		return true
-	case UrnOpenCustomerProblemPayloadTooLarge:
+	case ProblemTypeUrnOpenCustomerProblemPayloadTooLarge:
 		return true
-	case UrnOpenCustomerProblemRateLimited:
+	case ProblemTypeUrnOpenCustomerProblemRateLimited:
 		return true
-	case UrnOpenCustomerProblemSetupClosed:
+	case ProblemTypeUrnOpenCustomerProblemSetupClosed:
 		return true
-	case UrnOpenCustomerProblemSetupTokenInvalid:
+	case ProblemTypeUrnOpenCustomerProblemSetupTokenInvalid:
 		return true
-	case UrnOpenCustomerProblemUnauthorized:
+	case ProblemTypeUrnOpenCustomerProblemUnauthorized:
 		return true
-	case UrnOpenCustomerProblemUnsupportedMediaType:
+	case ProblemTypeUrnOpenCustomerProblemUnsupportedMediaType:
 		return true
-	case UrnOpenCustomerProblemValidation:
+	case ProblemTypeUrnOpenCustomerProblemValidation:
 		return true
 	default:
 		return false

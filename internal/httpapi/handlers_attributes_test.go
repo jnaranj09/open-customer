@@ -4,7 +4,6 @@ package httpapi
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -14,11 +13,6 @@ import (
 )
 
 const attributesPath = "/api/v1/attributes"
-
-// sendAs sends body with method to target as the owner c, with the public Origin.
-func sendAs(app testApp, c *http.Cookie, method, target, body string) *httptest.ResponseRecorder {
-	return send(app.handler, method, target, testOrigin, body, withCookie(c))
-}
 
 // createSelectAttribute creates a select attribute and returns it.
 func createSelectAttribute(t *testing.T, app testApp, c *http.Cookie) gen.Attribute {
@@ -51,6 +45,15 @@ func TestCreateAttributeBadTypeIs422(t *testing.T) {
 	errs := fieldErrors(t, rec)
 	if len(errs) != 1 || errs[0].Field != "type" {
 		t.Fatalf("errors = %+v, want one on type", errs)
+	}
+}
+
+func TestCreateAttributeBadScopeIs422(t *testing.T) {
+	app, _, c := signedInOwner(t)
+	rec := sendAs(app, c, http.MethodPost, attributesPath, `{"label":"Foto","scope":"invoice","type":"text"}`)
+	errs := fieldErrors(t, rec)
+	if len(errs) != 1 || errs[0].Field != "scope" {
+		t.Fatalf("errors = %+v, want one on scope", errs)
 	}
 }
 

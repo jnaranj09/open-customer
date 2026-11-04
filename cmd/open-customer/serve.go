@@ -111,12 +111,12 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
-	settingsModule, attributesModule, authModule, err := newModules(cfg)
+	mods, err := newModules(cfg)
 	if err != nil {
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
-	if err := printSetupLink(ctx, cfg, pool, authModule, stdout); err != nil {
+	if err := printSetupLink(ctx, cfg, pool, mods.auth, stdout); err != nil {
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
@@ -131,9 +131,9 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		PublicURL:      cfg.PublicURL,
 		TrustedProxies: cfg.TrustedProxyCIDRs,
 		Static:         static,
-		Auth:           authModule,
-		Settings:       settingsModule,
-		Attributes:     attributesModule,
+		Auth:           mods.auth,
+		Settings:       mods.settings,
+		Attributes:     mods.attributes,
 		Status:         status.New(version),
 		Log:            log,
 	})
@@ -149,18 +149,28 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	}, pool, nil
 }
 
-// newModules builds the settings, attributes and auth modules, for serve and the admin subcommands.
-func newModules(cfg config.Config) (*settings.Module, *attributes.Module, *auth.Auth, error) {
+// modules are the domain modules serve and the admin subcommands build.
+type modules struct {
+	settings   *settings.Module
+	attributes *attributes.Module
+	auth       *auth.Auth
+}
+
+// newModules builds the modules, for serve and the admin subcommands.
+func newModules(cfg config.Config) (modules, error) {
 	settingsModule := settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})
-	attributesModule := attributes.New(attributes.Options{Clock: clock.Real{}})
 	authModule, err := auth.New(auth.Options{
 		Clock:           clock.Real{},
 		SettingsCreator: settingsCreator(settingsModule),
 	})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("build the modules: %w", err)
+		return modules{}, fmt.Errorf("build the modules: %w", err)
 	}
-	return settingsModule, attributesModule, authModule, nil
+	return modules{
+		settings:   settingsModule,
+		attributes: attributes.New(attributes.Options{Clock: clock.Real{}}),
+		auth:       authModule,
+	}, nil
 }
 
 // printSetupLink is serve step 4 (design doc item 18): while no user exists it makes a new setup

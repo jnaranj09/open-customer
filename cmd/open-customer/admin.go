@@ -117,13 +117,13 @@ func openAdmin(ctx context.Context, getenv func(string) string, name string, std
 		printf(stderr, "%s: migrations pending; start serve first\n", name)
 		return config.Config{}, nil, nil, false
 	}
-	_, _, authModule, err := newModules(cfg)
+	mods, err := newModules(cfg)
 	if err != nil {
 		pool.Close()
 		printf(stderr, "%s: %v\n", name, err)
 		return config.Config{}, nil, nil, false
 	}
-	return cfg, pool, authModule, true
+	return cfg, pool, mods.auth, true
 }
 
 // newSetupLink makes a new setup token and returns the link <PUBLIC_URL>/setup#<token> ("Auth,
