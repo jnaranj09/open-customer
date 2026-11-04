@@ -19,7 +19,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/oapi-codegen/nullable"
 
+	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
@@ -46,6 +48,7 @@ type Options struct {
 	Static         fs.FS          // the built SPA (fs.Sub of web.Build)
 	Auth           *auth.Auth
 	Settings       *settings.Module
+	Attributes     *attributes.Module
 	Status         *status.Status
 	Log            *slog.Logger
 	// beginner opens the write transactions; nil means Pool. Only tests set it (a Commit that
@@ -55,11 +58,12 @@ type Options struct {
 
 // Server implements gen.ServerInterface over the module values (design doc item 32).
 type Server struct {
-	pool     *pgxpool.Pool
-	beginner db.Beginner // begins every write transaction (db.WithTx)
-	auth     *auth.Auth
-	settings *settings.Module
-	status   *status.Status
+	pool       *pgxpool.Pool
+	beginner   db.Beginner // begins every write transaction (db.WithTx)
+	auth       *auth.Auth
+	settings   *settings.Module
+	attributes *attributes.Module
+	status     *status.Status
 	// secureCookies is PUBLIC_URL's scheme == https: the session cookie drops Secure only for a
 	// plain-http PUBLIC_URL (localhost in development and e2e).
 	secureCookies bool
@@ -69,12 +73,12 @@ var _ gen.ServerInterface = (*Server)(nil)
 
 // New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
 // /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
-// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Status) is
+// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes, Status) is
 // missing, or when the embedded spec cannot be read or its security or
 // x-oc-allowed-while-must-change-password values are not ones steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
-	if opts.Auth == nil || opts.Settings == nil || opts.Status == nil {
-		return nil, errors.New("httpapi: Options.Auth, Settings and Status are required")
+	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Status == nil {
+		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes and Status are required")
 	}
 	spec, err := gen.GetSpec()
 	if err != nil {
@@ -90,7 +94,7 @@ func New(opts Options) (http.Handler, error) {
 	}
 	s := &Server{
 		pool: opts.Pool, beginner: opts.beginner,
-		auth: opts.Auth, settings: opts.Settings, status: opts.Status,
+		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, status: opts.Status,
 		secureCookies: opts.PublicURL.Scheme == "https",
 	}
 	if s.beginner == nil {
@@ -275,4 +279,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Warn("response not written", "code", "response_write_failed")
 	}
+}
+
+// nullableOf is a nullable response field: a nil p is an explicit null, so the JSON always has
+// the key.
+func nullableOf[T any](p *T) nullable.Nullable[T] {
+	if p == nil {
+		return nullable.NewNullNullable[T]()
+	}
+	return nullable.NewNullableWithValue(*p)
 }

@@ -234,6 +234,151 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /attributes:
+    post:
+      operationId: createAttribute
+      summary: Add an attribute
+      description: >-
+        The key is made from the label and never changes. The attribute goes last in its scope.
+        An unknown scope or type is 422 on that field.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttributeInput"
+      responses:
+        "201":
+          description: The new attribute, with no options.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attribute"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /attributes/{id}:
+    patch:
+      operationId: updateAttribute
+      summary: Change an attribute
+      description: >-
+        Changes only the fields sent. The key, scope and type cannot change, so sending one is an
+        unknown field and a 422. archived true archives the attribute and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttributePatch"
+      responses:
+        "200":
+          description: The attribute after the change, with its options.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attribute"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /attributes/{id}/options:
+    post:
+      operationId: createOption
+      summary: Add an option to a select attribute
+      description: >-
+        Only select and multiselect attributes take options. The option goes last among its siblings.
+        A parent_id must be an active option of the same attribute.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OptionInput"
+      responses:
+        "201":
+          description: The new option.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Option"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /attributes/{id}/options/{optionId}:
+    patch:
+      operationId: updateOption
+      summary: Change an option
+      description: >-
+        Changes only the fields sent. The parent cannot change, so sending parent_id is an unknown
+        field and a 422.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: optionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OptionPatch"
+      responses:
+        "200":
+          description: The option after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Option"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   headers:
     SessionCookie:
@@ -303,6 +448,103 @@ components:
           type: string
           format: binary
           description: The 180 px PNG (apple-touch-icon).
+    AttributeScope:
+      type: string
+      enum: [client, appointment]
+    AttributeType:
+      type: string
+      enum: [text, number, date, select, multiselect]
+    Option:
+      type: object
+      required: [id, attribute_id, parent_id, label, position, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        attribute_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The option this one sits under; null for a top-level option.
+        label:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+    Attribute:
+      type: object
+      required: [id, key, label, scope, type, required, position, archived, options]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+        scope:
+          $ref: "#/components/schemas/AttributeScope"
+        type:
+          $ref: "#/components/schemas/AttributeType"
+        required:
+          type: boolean
+        position:
+          type: integer
+        archived:
+          type: boolean
+        options:
+          type: array
+          description: Every option, archived ones included; empty for a type without options.
+          items:
+            $ref: "#/components/schemas/Option"
+    AttributeInput:
+      type: object
+      required: [label, scope, type]
+      properties:
+        label:
+          type: string
+        scope:
+          $ref: "#/components/schemas/AttributeScope"
+        type:
+          $ref: "#/components/schemas/AttributeType"
+        required:
+          type: boolean
+          default: false
+    AttributePatch:
+      type: object
+      description: Every field is optional and none may be null; a field left out is not changed.
+      properties:
+        label:
+          type: string
+        required:
+          type: boolean
+        position:
+          type: integer
+        archived:
+          type: boolean
+    OptionInput:
+      type: object
+      required: [label]
+      properties:
+        label:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+    OptionPatch:
+      type: object
+      description: Every field is optional and none may be null; a field left out is not changed.
+      properties:
+        label:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
     Me:
       type: object
       required: [id, username, must_change_password]

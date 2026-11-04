@@ -184,6 +184,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an attribute
+         * @description The key is made from the label and never changes. The attribute goes last in its scope. An unknown scope or type is 422 on that field.
+         */
+        post: operations["createAttribute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attributes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an attribute
+         * @description Changes only the fields sent. The key, scope and type cannot change, so sending one is an unknown field and a 422. archived true archives the attribute and false restores it.
+         */
+        patch: operations["updateAttribute"];
+        trace?: never;
+    };
+    "/attributes/{id}/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an option to a select attribute
+         * @description Only select and multiselect attributes take options. The option goes last among its siblings. A parent_id must be an active option of the same attribute.
+         */
+        post: operations["createOption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attributes/{id}/options/{optionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an option
+         * @description Changes only the fields sent. The parent cannot change, so sending parent_id is an unknown field and a 422.
+         */
+        patch: operations["updateOption"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -216,6 +296,62 @@ export interface components {
              * @description The 180 px PNG (apple-touch-icon).
              */
             icon180: string;
+        };
+        /** @enum {string} */
+        AttributeScope: "client" | "appointment";
+        /** @enum {string} */
+        AttributeType: "text" | "number" | "date" | "select" | "multiselect";
+        Option: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            attribute_id: string;
+            /**
+             * Format: uuid
+             * @description The option this one sits under; null for a top-level option.
+             */
+            parent_id: string | null;
+            label: string;
+            position: number;
+            archived: boolean;
+        };
+        Attribute: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            label: string;
+            scope: components["schemas"]["AttributeScope"];
+            type: components["schemas"]["AttributeType"];
+            required: boolean;
+            position: number;
+            archived: boolean;
+            /** @description Every option, archived ones included; empty for a type without options. */
+            options: components["schemas"]["Option"][];
+        };
+        AttributeInput: {
+            label: string;
+            scope: components["schemas"]["AttributeScope"];
+            type: components["schemas"]["AttributeType"];
+            /** @default false */
+            required: boolean;
+        };
+        /** @description Every field is optional and none may be null; a field left out is not changed. */
+        AttributePatch: {
+            label?: string;
+            required?: boolean;
+            position?: number;
+            archived?: boolean;
+        };
+        OptionInput: {
+            label: string;
+            /** Format: uuid */
+            parent_id?: string;
+        };
+        /** @description Every field is optional and none may be null; a field left out is not changed. */
+        OptionPatch: {
+            label?: string;
+            position?: number;
+            archived?: boolean;
         };
         Me: {
             /** Format: uuid */
@@ -513,6 +649,128 @@ export interface operations {
             401: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             415: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAttribute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributeInput"];
+            };
+        };
+        responses: {
+            /** @description The new attribute, with no options. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attribute"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateAttribute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributePatch"];
+            };
+        };
+        responses: {
+            /** @description The attribute after the change, with its options. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attribute"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createOption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptionInput"];
+            };
+        };
+        responses: {
+            /** @description The new option. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Option"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateOption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                optionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptionPatch"];
+            };
+        };
+        responses: {
+            /** @description The option after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Option"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };

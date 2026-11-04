@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi"
@@ -110,7 +111,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
-	settingsModule, authModule, err := newModules(cfg)
+	settingsModule, attributesModule, authModule, err := newModules(cfg)
 	if err != nil {
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
@@ -132,6 +133,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Static:         static,
 		Auth:           authModule,
 		Settings:       settingsModule,
+		Attributes:     attributesModule,
 		Status:         status.New(version),
 		Log:            log,
 	})
@@ -147,17 +149,18 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	}, pool, nil
 }
 
-// newModules builds the settings and auth modules, for serve and the admin subcommands.
-func newModules(cfg config.Config) (*settings.Module, *auth.Auth, error) {
+// newModules builds the settings, attributes and auth modules, for serve and the admin subcommands.
+func newModules(cfg config.Config) (*settings.Module, *attributes.Module, *auth.Auth, error) {
 	settingsModule := settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})
+	attributesModule := attributes.New(attributes.Options{Clock: clock.Real{}})
 	authModule, err := auth.New(auth.Options{
 		Clock:           clock.Real{},
 		SettingsCreator: settingsCreator(settingsModule),
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("build the modules: %w", err)
+		return nil, nil, nil, fmt.Errorf("build the modules: %w", err)
 	}
-	return settingsModule, authModule, nil
+	return settingsModule, attributesModule, authModule, nil
 }
 
 // printSetupLink is serve step 4 (design doc item 18): while no user exists it makes a new setup

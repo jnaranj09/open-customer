@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
@@ -95,6 +96,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Static:         testBuild(),
 		Auth:           a,
 		Settings:       settingsModule,
+		Attributes:     attributes.New(attributes.Options{Clock: fake}),
 		Status:         status.New(testVersion),
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -434,8 +436,9 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 	}
 	full := Options{
 		PublicURL: public, Static: testBuild(), Auth: a,
-		Settings: settings.New(settings.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
-		Status:   status.New(testVersion),
+		Settings:   settings.New(settings.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
+		Attributes: attributes.New(attributes.Options{Clock: clock.NewFake(testStart)}),
+		Status:     status.New(testVersion),
 	}
 	for _, tc := range []struct {
 		name   string
@@ -443,6 +446,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 	}{
 		{"a nil Auth is refused", func(o *Options) { o.Auth = nil }},
 		{"a nil Settings is refused", func(o *Options) { o.Settings = nil }},
+		{"a nil Attributes is refused", func(o *Options) { o.Attributes = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

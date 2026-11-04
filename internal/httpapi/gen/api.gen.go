@@ -16,8 +16,55 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/oapi-codegen/nullable"
+	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for AttributeScope.
+const (
+	Appointment AttributeScope = "appointment"
+	Client      AttributeScope = "client"
+)
+
+// Valid indicates whether the value is a known member of the AttributeScope enum.
+func (e AttributeScope) Valid() bool {
+	switch e {
+	case Appointment:
+		return true
+	case Client:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttributeType.
+const (
+	Date        AttributeType = "date"
+	Multiselect AttributeType = "multiselect"
+	Number      AttributeType = "number"
+	Select      AttributeType = "select"
+	Text        AttributeType = "text"
+)
+
+// Valid indicates whether the value is a known member of the AttributeType enum.
+func (e AttributeType) Valid() bool {
+	switch e {
+	case Date:
+		return true
+	case Multiselect:
+		return true
+	case Number:
+		return true
+	case Select:
+		return true
+	case Text:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for ProblemType.
 const (
@@ -76,6 +123,43 @@ func (e ProblemType) Valid() bool {
 	}
 }
 
+// Attribute defines model for Attribute.
+type Attribute struct {
+	Archived bool               `json:"archived"`
+	Id       openapi_types.UUID `json:"id"`
+	Key      string             `json:"key"`
+	Label    string             `json:"label"`
+
+	// Options Every option, archived ones included; empty for a type without options.
+	Options  []Option       `json:"options"`
+	Position int            `json:"position"`
+	Required bool           `json:"required"`
+	Scope    AttributeScope `json:"scope"`
+	Type     AttributeType  `json:"type"`
+}
+
+// AttributeInput defines model for AttributeInput.
+type AttributeInput struct {
+	Label    string         `json:"label"`
+	Required *bool          `json:"required,omitempty"`
+	Scope    AttributeScope `json:"scope"`
+	Type     AttributeType  `json:"type"`
+}
+
+// AttributePatch Every field is optional and none may be null; a field left out is not changed.
+type AttributePatch struct {
+	Archived *bool   `json:"archived,omitempty"`
+	Label    *string `json:"label,omitempty"`
+	Position *int    `json:"position,omitempty"`
+	Required *bool   `json:"required,omitempty"`
+}
+
+// AttributeScope defines model for AttributeScope.
+type AttributeScope string
+
+// AttributeType defines model for AttributeType.
+type AttributeType string
+
 // FieldError defines model for FieldError.
 type FieldError struct {
 	Field   string `json:"field"`
@@ -102,6 +186,31 @@ type Me struct {
 	Id                 openapi_types.UUID `json:"id"`
 	MustChangePassword bool               `json:"must_change_password"`
 	Username           string             `json:"username"`
+}
+
+// Option defines model for Option.
+type Option struct {
+	Archived    bool               `json:"archived"`
+	AttributeId openapi_types.UUID `json:"attribute_id"`
+	Id          openapi_types.UUID `json:"id"`
+	Label       string             `json:"label"`
+
+	// ParentId The option this one sits under; null for a top-level option.
+	ParentId nullable.Nullable[openapi_types.UUID] `json:"parent_id"`
+	Position int                                   `json:"position"`
+}
+
+// OptionInput defines model for OptionInput.
+type OptionInput struct {
+	Label    string              `json:"label"`
+	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
+}
+
+// OptionPatch Every field is optional and none may be null; a field left out is not changed.
+type OptionPatch struct {
+	Archived *bool   `json:"archived,omitempty"`
+	Label    *string `json:"label,omitempty"`
+	Position *int    `json:"position,omitempty"`
 }
 
 // PasswordChange defines model for PasswordChange.
@@ -174,6 +283,18 @@ type SetupStatus struct {
 	NeedsSetup bool `json:"needs_setup"`
 }
 
+// CreateAttributeJSONRequestBody defines body for CreateAttribute for application/json ContentType.
+type CreateAttributeJSONRequestBody = AttributeInput
+
+// UpdateAttributeJSONRequestBody defines body for UpdateAttribute for application/json ContentType.
+type UpdateAttributeJSONRequestBody = AttributePatch
+
+// CreateOptionJSONRequestBody defines body for CreateOption for application/json ContentType.
+type CreateOptionJSONRequestBody = OptionInput
+
+// UpdateOptionJSONRequestBody defines body for UpdateOption for application/json ContentType.
+type UpdateOptionJSONRequestBody = OptionPatch
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginInput
 
@@ -191,6 +312,18 @@ type CompleteSetupJSONRequestBody = SetupInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// CreateAttribute Add an attribute
+	// (POST /attributes)
+	CreateAttribute(w http.ResponseWriter, r *http.Request)
+	// UpdateAttribute Change an attribute
+	// (PATCH /attributes/{id})
+	UpdateAttribute(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// CreateOption Add an option to a select attribute
+	// (POST /attributes/{id}/options)
+	CreateOption(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateOption Change an option
+	// (PATCH /attributes/{id}/options/{optionId})
+	UpdateOption(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, optionId openapi_types.UUID)
 	// Login Sign in with username and password
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -228,6 +361,107 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// CreateAttribute operation middleware
+func (siw *ServerInterfaceWrapper) CreateAttribute(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAttribute(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAttribute operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAttribute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAttribute(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOption operation middleware
+func (siw *ServerInterfaceWrapper) CreateOption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOption(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateOption operation middleware
+func (siw *ServerInterfaceWrapper) UpdateOption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "optionId" -------------
+	var optionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "optionId", r.PathValue("optionId"), &optionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "optionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateOption(w, r, id, optionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -484,6 +718,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/settings", wrapper.UpdateSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/settings/icon", wrapper.UploadIcon)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/attributes", wrapper.CreateAttribute)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/attributes/{id}", wrapper.UpdateAttribute)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/attributes/{id}/options", wrapper.CreateOption)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/attributes/{id}/options/{optionId}", wrapper.UpdateOption)
 
 	return m
 }
@@ -493,48 +731,60 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

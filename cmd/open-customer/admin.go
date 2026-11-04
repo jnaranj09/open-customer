@@ -117,7 +117,7 @@ func openAdmin(ctx context.Context, getenv func(string) string, name string, std
 		printf(stderr, "%s: migrations pending; start serve first\n", name)
 		return config.Config{}, nil, nil, false
 	}
-	_, authModule, err := newModules(cfg)
+	_, _, authModule, err := newModules(cfg)
 	if err != nil {
 		pool.Close()
 		printf(stderr, "%s: %v\n", name, err)

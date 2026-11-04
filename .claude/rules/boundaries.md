@@ -50,8 +50,8 @@ return { kind: 'ok', value: parsed.data };
 
 | Boundary | Parse site | On bad input | Bad-input test |
 | --- | --- | --- | --- |
-| JSON request body | `decodeJSON` in the httpapi server (typed struct, `DisallowUnknownFields`, `Validate()`); `decodePatch` for PATCH bodies (also refuses `null` in a field that cannot be cleared) | 422 `validation` or 413 `payload-too-large` problem JSON | httpapi tests: unknown field, malformed JSON, over-limit body (`TestDecodeJSON` in P1; P2 per route, item 37: `TestPostSetupUnknownFieldIs422`, `TestPostSetupMalformedIs422`, `TestPostSetupOversizeIs413`, `TestLoginBadInputIs422`, `TestLoginOversizeIs413`, `TestChangePasswordBadInput`, `TestPatchSettingsCurrencyIs422`, `TestPatchSettingsBadInput`) |
-| Path and query params | oapi-codegen binding, `ErrorHandlerFunc` | 422 `validation` problem JSON | `ErrorHandlerFunc` unit test (P1); per-route bad UUID and bad date (P3, item 37) |
+| JSON request body | `decodeJSON` in the httpapi server (typed struct, `DisallowUnknownFields`; the module validates each field); `decodePatch` for PATCH bodies (also refuses `null` in a field that cannot be cleared) | 422 `validation` or 413 `payload-too-large` problem JSON | httpapi tests: unknown field, malformed JSON, over-limit body (`TestDecodeJSON` in P1; P2 per route, item 37: `TestPostSetupUnknownFieldIs422`, `TestPostSetupMalformedIs422`, `TestPostSetupOversizeIs413`, `TestLoginBadInputIs422`, `TestLoginOversizeIs413`, `TestChangePasswordBadInput`, `TestPatchSettingsCurrencyIs422`, `TestPatchSettingsBadInput`) |
+| Path and query params | oapi-codegen binding, `ErrorHandlerFunc` | 422 `validation` problem JSON | `ErrorHandlerFunc` unit test (P1); per-route bad UUID and bad date (P3, item 37; first: `TestPatchAttributeBadUUIDIs422`) |
 | `Origin` header, session cookie | httpapi middleware | 403 / 401 problem JSON | middleware tests: wrong Origin (P1), bad cookie `TestMeWithGarbageCookieIs401` (P2) (item 37) |
 | Photo and icon uploads (multipart) | media and settings handlers, `MaxBytesReader` | 413, 415 or 422 problem JSON; nothing stored | media tests: oversize, wrong type (P3, item 52); icon tests (P2, item 44): `TestUploadIconNotPNGIs415`, `TestUploadIconPartOver1MBIs413`, `TestUploadIconRequestOver3MBIs413`, `TestUploadIconMissingPartIs422`, `TestUploadIconNotMultipartIs415`, `TestUploadIconOtherMultipartIs415`, `TestUploadIconMalformedMultipartIs422` |
 | `.env` variables | platform config | `serve` exits non-zero with one message listing every bad variable | `TestLoadRejectsBadValues`, `TestLoadListsEveryMissingVariable` in the config package (P0) |
@@ -67,8 +67,8 @@ return { kind: 'ok', value: parsed.data };
 
 - **Parse once, at the edge.** Outside input = request body, query, headers, env, config files,
   stored data, messages, CLI args, another process's output, an API response. Parse it where it
-  enters, into a precise type. Sensor: Go typed structs + `DisallowUnknownFields` + a hand-written
-  `Validate() error`; web zod; both checked by the compiler / svelte-check.
+  enters, into a precise type. Sensor: Go typed structs + `DisallowUnknownFields` + the owning module
+  validating each field; web zod; both checked by the compiler / svelte-check.
 - **Fail closed.** Bad input is rejected (4xx, non-zero exit, a cache reset), never half accepted.
   Other work continues: one bad request or record never takes down the rest. Prose only; each
   boundary has a test with a bad input.
