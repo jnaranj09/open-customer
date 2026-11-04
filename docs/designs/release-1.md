@@ -1304,7 +1304,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
         *   `github.com/nyaruka/phonenumbers`
         *   `golang.org/x/crypto` (argon2), `golang.org/x/time` (rate), `golang.org/x/text` (currency), `golang.org/x/sys` (`unix.Statfs`)
         *   `github.com/oapi-codegen/nullable` (the `nullable.Nullable[T]` type from `nullable-type`)
-        *   `github.com/SherClockHolmes/webpush-go`
+        *   `github.com/SherClockHolmes/webpush-go` v1.4.0 (it pulls in `github.com/golang-jwt/jwt/v5`)
         *   `github.com/testcontainers/testcontainers-go` and its `modules/postgres` (test only)
     *   `tool` lines for `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen`, `golang.org/x/vuln/cmd/govulncheck` and `golang.org/x/tools/cmd/deadcode` (the dead-code check in `make lint`, `TASKS.md` T7). There is no goose `tool` line: the goose CLI pulls in every database driver, and the app runs migrations itself. A new migration is a hand-made file named `0000N_<name>.sql` with the markers from item 28.
     *   `sqlc` is **not** a `tool` line: its PostgreSQL parser needs cgo, which breaks the `CGO_ENABLED=0` setup. `make generate` runs it from the pinned `sqlc/sqlc` Docker image instead.
@@ -1750,6 +1750,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**: One file per module, holding only the queries that module runs:
     *   `appointments.sql`: the overlap check and the window load.
     *   `reminders.sql`: the candidate loads for `DueList`, the log insert with `ON CONFLICT DO NOTHING`, the log reads (`GetLogItem`, `ListLogForClient`, `ListLogInRange`) and the existence checks `Record` needs.
+    *   `push.sql`: the `server_keys` read and insert-if-missing, the subscription upsert (`ON CONFLICT (endpoint)`, returning whether the row is new), list, delete and count.
     *   `export.sql`: one keyset-paged query per table (`WHERE id > $1 ORDER BY id LIMIT 500`), as in "Export". sqlc `:many` loads all rows of a query into a slice, so paging is what keeps memory bounded.
 
 ##### 30. `internal/db/sqlc/` (Create, generated)
@@ -2071,15 +2072,17 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   A rule created without `include_overdue` behaves as "Solo de hoy en adelante".
     *   Items are sorted by due day, then client name, then item ID.
 
-##### 57. `internal/push/push.go`, `push_test.go` (Create)
+##### 57. `internal/push/push.go`, `push_db_test.go`, `send_db_test.go` (Create)
 
 *   **Type / Scope**: Web Push.
 *   **Proposed Changes**:
-    *   `EnsureKeys`: generates the pair and stores it in `server_keys` if it is missing.
-    *   `Subscribe`: insert, or update the keys of a known endpoint.
-    *   `SendAll(payload)` to every subscription, with `TTL: 28800` and `Urgency: normal`. A 404 or 410 deletes the subscription. Returns how many were tried and how many the push service accepted. `VAPID_SUBJECT` is passed so the JWT `sub` has exactly one `mailto:` (some webpush-go versions add the prefix; a unit test decodes the JWT and checks `sub`).
+    *   `EnsureKeys`: generates the pair with `webpush.GenerateVAPIDKeys` and stores it in `server_keys` (`vapid_public`, `vapid_private`, base64url) if the public key is missing. It runs in a transaction, so both keys are stored together. The private key is never logged or written anywhere else.
+    *   `Subscribe`: checks the subscription (the endpoint is an absolute `https` URL; `keys.p256dh` decodes from base64url to 65 bytes and `keys.auth` to 16; each bad field is a 422 on `endpoint`, `keys.p256dh` or `keys.auth` with `MsgPushEndpointInvalid`), then inserts it, or gives a known endpoint the new keys (its row and ID stay; `created` is false).
+    *   `SendAll(payload)` to every subscription, one after another, with `TTL: 28800` and `Urgency: normal`. A 2xx answer counts as delivered. A 404 or 410 deletes the subscription. Any other answer or a network error counts as not delivered and logs `code=push_send_failed` with the status only (never the endpoint or the error, which quotes it). Answer bodies are closed. Returns how many were tried and how many the push service accepted. A database error (loading the list or the keys, deleting a gone subscription) is returned.
+    *   `Options.HTTPClient` sends the requests; nil means a client with a 15 s timeout.
+    *   `VAPID_SUBJECT` starts with `mailto:`. webpush-go v1.4.0 adds `mailto:` to every subscriber that does not start with `https:` (checked in its `vapid.go`), so `push.New` strips the prefix before passing it on, and the JWT `sub` has exactly one `mailto:` (`TestVAPIDSubjectHasOneMailto` decodes the JWT and checks `sub`). v1.4.0 also signs the JWT expiry with its own clock and ignores `VapidExpiration`; the module still sets it from the injected clock.
 
-    Tests use an `httptest` push endpoint.
+    Tests (`db`-tagged) use a fake push service from `httptest.NewTLSServer`, with its `Client()` as `Options.HTTPClient`, and generate every key at test time.
 
 ##### 58. `internal/scheduler/scheduler.go`, `scheduler_test.go` (Create)
 

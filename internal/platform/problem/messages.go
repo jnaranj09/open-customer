@@ -116,3 +116,9 @@ const (
 	MsgPhoneDigitsInvalid = "Número no válido"
 	MsgLogFilterInvalid   = "Elige una clienta o una fecha"
 )
+
+// Field messages for push subscriptions (design doc item 57). The same text goes on `endpoint`,
+// `keys.p256dh` and `keys.auth`: she cannot fix any of them, the browser made them.
+const (
+	MsgPushEndpointInvalid = "La suscripción no es válida"
+)
