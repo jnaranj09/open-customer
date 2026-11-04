@@ -769,6 +769,160 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /clients/{id}/media:
+    get:
+      operationId: listClientMedia
+      summary: List one client's photos
+      description: >-
+        The active photos, newest first, unpaged. Archived photos are left out. An archived client
+        still lists; an unknown client is 404.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The photos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /media:
+    post:
+      operationId: uploadMedia
+      summary: Upload a photo
+      description: >-
+        Both parts are JPEG files: full of at most 10 MB and thumb of at most 1 MB, and the request
+        is at most 12 MB. client_id and appointment_id are optional but at least one is needed; with
+        appointment_id the photo belongs to that appointment's client, and a different client_id is
+        422. A part that is not a JPEG, or a body that is not multipart/form-data, is 415. A part or
+        request over its limit is 413. A missing, repeated or unknown part, or an owner that is
+        missing, unknown, archived or mismatched, is 422.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/MediaUpload"
+      responses:
+        "201":
+          description: The stored photo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /media/{id}:
+    get:
+      operationId: getMedia
+      summary: Get the full image of a photo
+      description: An archived photo is served too. The image never changes, so it is cached for a year.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The JPEG.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateMedia
+      summary: Archive or restore a photo
+      description: archived true hides the photo from the client's list and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaPatch"
+      responses:
+        "200":
+          description: The photo after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /media/{id}/thumb:
+    get:
+      operationId: getMediaThumb
+      summary: Get the thumbnail of a photo
+      description: An archived photo is served too. The image never changes, so it is cached for a year.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The JPEG thumbnail.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+
 components:
   headers:
     SessionCookie:
@@ -1282,6 +1436,65 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Appointment"
+    Media:
+      type: object
+      required: [id, client_id, appointment_id, width, height, bytes, created_at, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        client_id:
+          type: string
+          format: uuid
+        appointment_id:
+          type: string
+          format: uuid
+          nullable: true
+        width:
+          type: integer
+          description: The width of the full image in pixels.
+        height:
+          type: integer
+          description: The height of the full image in pixels.
+        bytes:
+          type: integer
+          description: The size of the full image.
+        created_at:
+          type: string
+          format: date-time
+        archived:
+          type: boolean
+    MediaUpload:
+      type: object
+      required: [full, thumb]
+      properties:
+        full:
+          type: string
+          format: binary
+          description: The full JPEG, at most 10 MB.
+        thumb:
+          type: string
+          format: binary
+          description: The thumbnail JPEG, at most 1 MB.
+        client_id:
+          type: string
+          format: uuid
+        appointment_id:
+          type: string
+          format: uuid
+    MediaPatch:
+      type: object
+      properties:
+        archived:
+          type: boolean
+    MediaList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
     Problem:
       type: object
       description: An RFC 9457 problem, sent as application/problem+json.

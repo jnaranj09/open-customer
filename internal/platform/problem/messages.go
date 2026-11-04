@@ -83,4 +83,6 @@ const (
 	MsgMediaOwnerRequired = "Falta la clienta o la cita"
 	MsgMediaOwnerMismatch = "La foto no es de esa clienta"
 	MsgAppointmentUnknown = "Esa cita no existe"
+	MsgIDInvalid          = "Identificador no válido"
+	MsgFieldRequired      = "Este dato es obligatorio"
 )

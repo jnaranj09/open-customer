@@ -437,6 +437,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/clients/{id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one client's photos
+         * @description The active photos, newest first, unpaged. Archived photos are left out. An archived client still lists; an unknown client is 404.
+         */
+        get: operations["listClientMedia"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a photo
+         * @description Both parts are JPEG files: full of at most 10 MB and thumb of at most 1 MB, and the request is at most 12 MB. client_id and appointment_id are optional but at least one is needed; with appointment_id the photo belongs to that appointment's client, and a different client_id is 422. A part that is not a JPEG, or a body that is not multipart/form-data, is 415. A part or request over its limit is 413. A missing, repeated or unknown part, or an owner that is missing, unknown, archived or mismatched, is 422.
+         */
+        post: operations["uploadMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the full image of a photo
+         * @description An archived photo is served too. The image never changes, so it is cached for a year.
+         */
+        get: operations["getMedia"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive or restore a photo
+         * @description archived true hides the photo from the client's list and false restores it.
+         */
+        patch: operations["updateMedia"];
+        trace?: never;
+    };
+    "/media/{id}/thumb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the thumbnail of a photo
+         * @description An archived photo is served too. The image never changes, so it is cached for a year.
+         */
+        get: operations["getMediaThumb"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -712,6 +796,45 @@ export interface components {
         };
         AppointmentList: {
             items: components["schemas"]["Appointment"][];
+        };
+        Media: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            client_id: string;
+            /** Format: uuid */
+            appointment_id: string | null;
+            /** @description The width of the full image in pixels. */
+            width: number;
+            /** @description The height of the full image in pixels. */
+            height: number;
+            /** @description The size of the full image. */
+            bytes: number;
+            /** Format: date-time */
+            created_at: string;
+            archived: boolean;
+        };
+        MediaUpload: {
+            /**
+             * Format: binary
+             * @description The full JPEG, at most 10 MB.
+             */
+            full: string;
+            /**
+             * Format: binary
+             * @description The thumbnail JPEG, at most 1 MB.
+             */
+            thumb: string;
+            /** Format: uuid */
+            client_id?: string;
+            /** Format: uuid */
+            appointment_id?: string;
+        };
+        MediaPatch: {
+            archived?: boolean;
+        };
+        MediaList: {
+            items: components["schemas"]["Media"][];
         };
         /** @description An RFC 9457 problem, sent as application/problem+json. */
         Problem: {
@@ -1440,6 +1563,144 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClientMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The photos. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    uploadMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["MediaUpload"];
+            };
+        };
+        responses: {
+            /** @description The stored photo. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Media"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            415: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The JPEG. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaPatch"];
+            };
+        };
+        responses: {
+            /** @description The photo after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Media"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMediaThumb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The JPEG thumbnail. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
