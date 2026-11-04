@@ -67,8 +67,10 @@ once by breaking what they protect, then restored.
   phone), duplicate phone 409, appointments (end time and total, 409 overlap, `allow_overlap`,
   back to back), status 422 / 200 / 409 `invalid-transition`, day list (3 items in order), bad UUID
   422, media upload (client taken from the appointment) and GET headers, templates (201 and 422 on
-  an unknown variable), 401 without a cookie. All matched. CI: NOT RUN (pending push). NOT RUN: the
-  plain-host :8080 variant.
+  an unknown variable), 401 without a cookie. All matched. After that, an owner change (a
+  `service_ids` edit keeps the saved price of services already on a visit) landed at 946683e; the
+  gate passed on it locally, and the clone run and `curl` checks were not re-run. CI green on PR #2
+  at 946683e, including `make cover` (run 41913102949). NOT RUN: the plain-host :8080 variant.
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
