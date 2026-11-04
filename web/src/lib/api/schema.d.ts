@@ -672,7 +672,7 @@ export interface paths {
         put?: never;
         /**
          * Log an error from the app
-         * @description The PWA reports an error it caught. The server logs it at warn with code=client_error. message (1 to 2000 characters), app_version (1 to 50) and route (1 to 200) outside their limits are 422 on that field; a stack over 8000 characters is cut. Each session may send 10 per minute, then 429 with Retry-After.
+         * @description The PWA reports an error it caught. The server logs it at warn with code=client_error. message (1 to 2000 characters), app_version (1 to 64) and route (1 to 200) outside their limits are 422 on that field; a stack over 8000 characters is cut. Each session may send 10 per minute, then 429 with Retry-After.
          */
         post: operations["logClientError"];
         delete?: never;

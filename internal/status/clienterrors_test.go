@@ -54,6 +54,7 @@ func TestLogClientErrorRejectsBadFields(t *testing.T) {
 		{"empty message", func(e *status.ClientError) { e.Message = "" }, "message"},
 		{"2001-rune message", func(e *status.ClientError) { e.Message = strings.Repeat("é", 2001) }, "message"},
 		{"empty app_version", func(e *status.ClientError) { e.AppVersion = "" }, "app_version"},
+		{"65-rune app_version", func(e *status.ClientError) { e.AppVersion = strings.Repeat("v", 65) }, "app_version"},
 		{"201-rune route", func(e *status.ClientError) { e.Route = strings.Repeat("é", 201) }, "route"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -74,6 +75,7 @@ func TestLogClientErrorLimitsAreInclusive(t *testing.T) {
 	s, _ := clientErrorModule()
 	e := validClientError()
 	e.Message = strings.Repeat("é", 2000)
+	e.AppVersion = strings.Repeat("v", 64)
 	e.Route = strings.Repeat("r", 200)
 	if err := s.LogClientError(t.Context(), "a", e); err != nil {
 		t.Fatalf("fields at their limits: %v", err)

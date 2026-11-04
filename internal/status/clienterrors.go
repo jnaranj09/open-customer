@@ -16,7 +16,7 @@ import (
 const (
 	maxMessageRunes    = 2000
 	maxStackRunes      = 8000
-	maxAppVersionRunes = 50
+	maxAppVersionRunes = 64
 	maxRouteRunes      = 200
 )
 
