@@ -603,3 +603,22 @@ func TestListOrder(t *testing.T) {
 		t.Errorf("attribute without options has %+v", list[0].Options)
 	}
 }
+
+func TestUpdateUnknownWithBadFieldIsNotFound(t *testing.T) {
+	f := newFixture(t)
+	label := " "
+	_, err := f.m.Update(t.Context(), f.pool, uuid.New(), AttributePatch{Label: &label})
+	if !errors.As(err, &problem.NotFound{}) {
+		t.Errorf("err = %v, want NotFound", err)
+	}
+}
+
+func TestUpdateOptionUnknownWithBadFieldIsNotFound(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, "Zona", ScopeClient, TypeSelect)
+	label := " "
+	_, err := f.m.UpdateOption(t.Context(), f.pool, a.ID, uuid.New(), OptionPatch{Label: &label})
+	if !errors.As(err, &problem.NotFound{}) {
+		t.Errorf("err = %v, want NotFound", err)
+	}
+}

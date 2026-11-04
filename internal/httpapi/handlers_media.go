@@ -130,22 +130,16 @@ func (s *Server) serveMedia(w http.ResponseWriter, r *http.Request, id uuid.UUID
 	http.ServeContent(w, r, "", md.CreatedAt, f)
 }
 
-// UpdateMedia archives or restores a photo. archived is required.
+// UpdateMedia archives or restores a photo; an absent archived leaves it unchanged.
 func (s *Server) UpdateMedia(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var body gen.MediaPatch
 	if decodePatch(w, r, &body) != nil {
 		return
 	}
-	if body.Archived == nil {
-		problem.Write(w, r, problem.Validation{Errors: []problem.FieldError{
-			{Field: "archived", Message: problem.MsgFieldRequired},
-		}})
-		return
-	}
 	var out media.Media
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
 		var err error
-		if out, err = s.media.SetArchived(r.Context(), tx, id, *body.Archived); err != nil {
+		if out, err = s.media.SetArchived(r.Context(), tx, id, body.Archived); err != nil {
 			return fmt.Errorf("archive media: %w", err)
 		}
 		return nil

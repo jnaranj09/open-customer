@@ -375,6 +375,19 @@ func TestPatchMediaArchiveHidesFromList(t *testing.T) {
 	}
 }
 
+func TestPatchMediaEmptyBodyIsUnchanged(t *testing.T) {
+	f := newMediaFixture(t, nil)
+	got := f.uploadOK(t)
+	target := mediaPath + "/" + got.Id.String()
+	if m := decodeInto[gen.Media](t, f.send(http.MethodPatch, target, `{}`), http.StatusOK); m.Archived {
+		t.Fatalf("media = %+v, want it still active", m)
+	}
+	decodeInto[gen.Media](t, f.send(http.MethodPatch, target, `{"archived":true}`), http.StatusOK)
+	if m := decodeInto[gen.Media](t, f.send(http.MethodPatch, target, `{}`), http.StatusOK); !m.Archived {
+		t.Fatalf("media = %+v, want it still archived", m)
+	}
+}
+
 func TestPatchMediaBadInput(t *testing.T) {
 	f := newMediaFixture(t, nil)
 	got := f.uploadOK(t)
@@ -382,7 +395,6 @@ func TestPatchMediaBadInput(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
 	}{
-		{"a missing archived is 422 on archived", `{}`},
 		{"a null archived is 422 on archived", `{"archived":null}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -373,3 +373,11 @@ func TestCreateServiceDBErrorWritesNothing(t *testing.T) {
 		t.Fatalf("services rows = %d, %v, want 0", n, err)
 	}
 }
+
+func TestUpdateServiceUnknownWithBadFieldIsNotFound(t *testing.T) {
+	f := newFixture(t)
+	_, err := f.m.Update(t.Context(), f.pool, uuid.New(), ServicePatch{Name: ptr(" ")})
+	if !errors.As(err, &problem.NotFound{}) {
+		t.Fatalf("err = %v, want problem.NotFound", err)
+	}
+}

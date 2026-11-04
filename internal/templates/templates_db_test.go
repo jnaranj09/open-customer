@@ -359,3 +359,32 @@ func TestVarsListsActiveOnlyInOrder(t *testing.T) {
 }
 
 var yes, no = true, false
+
+func TestWritesStampTimesFromTheInjectedClock(t *testing.T) {
+	f := newFixture(t)
+	tpl := f.create(t, "Uno", "hola")
+	times := func() (created, updated time.Time) {
+		if err := f.pool.QueryRow(t.Context(), `SELECT created_at, updated_at FROM message_templates WHERE id = $1`, tpl.ID).Scan(&created, &updated); err != nil {
+			t.Fatal(err)
+		}
+		return created, updated
+	}
+	if created, updated := times(); !created.Equal(start) || !updated.Equal(start) {
+		t.Fatalf("after create created_at = %v, updated_at = %v; want both %v", created, updated, start)
+	}
+	f.clock.Advance(time.Hour)
+	if _, err := f.m.Update(t.Context(), f.pool, tpl.ID, TemplatePatch{Name: ptr("Dos")}); err != nil {
+		t.Fatal(err)
+	}
+	if created, updated := times(); !created.Equal(start) || !updated.Equal(start.Add(time.Hour)) {
+		t.Fatalf("after update created_at = %v, updated_at = %v; want %v and %v", created, updated, start, start.Add(time.Hour))
+	}
+}
+
+func TestUpdateUnknownWithBadFieldIsNotFound(t *testing.T) {
+	f := newFixture(t)
+	_, err := f.m.Update(t.Context(), f.pool, uuid.New(), TemplatePatch{Name: ptr(" ")})
+	if !errors.Is(err, problem.NotFound{}) {
+		t.Errorf("err = %v, want problem.NotFound", err)
+	}
+}

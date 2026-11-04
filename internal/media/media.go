@@ -22,6 +22,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/sqlc"
+	"github.com/jnaranj09/open-customer/internal/platform/archive"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/files"
 	"github.com/jnaranj09/open-customer/internal/platform/ids"
@@ -36,7 +37,8 @@ const (
 
 const contentType = "image/jpeg"
 
-// jpegSignature is how every JPEG file starts.
+// jpegSignature is how every JPEG file starts. Save checks it on the full photo before the size
+// check; the thumbnail is checked by jpeg.DecodeConfig.
 var jpegSignature = []byte{0xFF, 0xD8, 0xFF}
 
 // Options is what serve passes to New. MediaDir is the root of the stored files.
@@ -74,7 +76,7 @@ type MediaInput struct {
 // Save checks the upload, writes both files and then inserts the row. When the insert fails the
 // files are removed. When the caller's commit fails after Save, the caller calls Discard.
 func (m *Module) Save(ctx context.Context, q db.DBTX, in MediaInput) (Media, error) {
-	if !bytes.HasPrefix(in.Full, jpegSignature) || !bytes.HasPrefix(in.Thumb, jpegSignature) {
+	if !bytes.HasPrefix(in.Full, jpegSignature) {
 		return Media{}, problem.UnsupportedMediaType{}
 	}
 	if len(in.Full) > MaxFullBytes || len(in.Thumb) > MaxThumbBytes {
@@ -257,21 +259,27 @@ func (m *Module) ListForClient(ctx context.Context, q db.DBTX, clientID uuid.UUI
 	return out, nil
 }
 
-// SetArchived hides or restores one photo. An unknown id is problem.NotFound.
-func (m *Module) SetArchived(ctx context.Context, q db.DBTX, id uuid.UUID, archived bool) (Media, error) {
-	var at *time.Time
-	if archived {
-		now := m.clock.Now()
-		at = &now
-	}
-	row, err := sqlc.New(q).SetMediaArchived(ctx, sqlc.SetMediaArchivedParams{ID: id, ArchivedAt: at})
+// SetArchived hides or restores one photo. An absent archived (nil) leaves it as it is, and
+// archiving twice keeps the first archive time. An unknown id is problem.NotFound.
+func (m *Module) SetArchived(ctx context.Context, q db.DBTX, id uuid.UUID, archived *bool) (Media, error) {
+	queries := sqlc.New(q)
+	row, err := queries.GetMedia(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Media{}, problem.NotFound{}
 	}
 	if err != nil {
+		return Media{}, fmt.Errorf("get media: %w", err)
+	}
+	if archived == nil {
+		return mediaFrom(row), nil
+	}
+	updated, err := queries.SetMediaArchived(ctx, sqlc.SetMediaArchivedParams{
+		ID: id, ArchivedAt: archive.At(archived, row.ArchivedAt, m.clock.Now()),
+	})
+	if err != nil {
 		return Media{}, fmt.Errorf("set media archived: %w", err)
 	}
-	return mediaFrom(row), nil
+	return mediaFrom(updated), nil
 }
 
 func mediaFrom(r sqlc.Medium) Media {

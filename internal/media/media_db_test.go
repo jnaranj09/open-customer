@@ -329,7 +329,7 @@ func TestListForClientNewestFirstHidesArchived(t *testing.T) {
 		}
 		saved = append(saved, md)
 	}
-	if _, err := f.m.SetArchived(t.Context(), f.pool, saved[1].ID, true); err != nil {
+	if _, err := f.m.SetArchived(t.Context(), f.pool, saved[1].ID, ptr(true)); err != nil {
 		t.Fatal(err)
 	}
 	got, err := f.m.ListForClient(t.Context(), f.pool, c)
@@ -378,7 +378,7 @@ func TestSetArchivedStillOpens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := f.m.SetArchived(t.Context(), f.pool, md.ID, true)
+	got, err := f.m.SetArchived(t.Context(), f.pool, md.ID, ptr(true))
 	if err != nil || !got.Archived {
 		t.Fatalf("SetArchived = %+v, %v; want archived", got, err)
 	}
@@ -390,7 +390,7 @@ func TestSetArchivedStillOpens(t *testing.T) {
 	if !opened.Archived {
 		t.Error("opened media is not marked archived")
 	}
-	back, err := f.m.SetArchived(t.Context(), f.pool, md.ID, false)
+	back, err := f.m.SetArchived(t.Context(), f.pool, md.ID, ptr(false))
 	if err != nil || back.Archived {
 		t.Errorf("restore = %+v, %v; want active", back, err)
 	}
@@ -398,7 +398,7 @@ func TestSetArchivedStillOpens(t *testing.T) {
 
 func TestSetArchivedUnknownIsNotFound(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.m.SetArchived(t.Context(), f.pool, uuid.New(), true)
+	_, err := f.m.SetArchived(t.Context(), f.pool, uuid.New(), ptr(true))
 	if !errors.As(err, new(problem.NotFound)) {
 		t.Fatalf("err = %v; want NotFound", err)
 	}
@@ -423,5 +423,53 @@ func TestSaveMediaDirIsFileLeaksNoPath(t *testing.T) {
 		if strings.Contains(text, "locked-dir") || strings.Contains(text, ".jpg") {
 			t.Errorf("%s names a path: %q", name, text)
 		}
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func TestSetArchivedKeepsTheFirstArchiveTime(t *testing.T) {
+	f := newFixture(t)
+	md, err := f.m.Save(t.Context(), f.pool, f.input(t, owner(f.client(t, "Lucía Rojas", false)), uuid.NullUUID{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	archivedAt := func() time.Time {
+		var at time.Time
+		if err := f.pool.QueryRow(t.Context(), `SELECT archived_at FROM media WHERE id = $1`, md.ID).Scan(&at); err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	f.clock.Advance(time.Minute)
+	first := f.clock.Now()
+	if _, err := f.m.SetArchived(t.Context(), f.pool, md.ID, ptr(true)); err != nil {
+		t.Fatal(err)
+	}
+	f.clock.Advance(time.Hour)
+	if _, err := f.m.SetArchived(t.Context(), f.pool, md.ID, ptr(true)); err != nil {
+		t.Fatal(err)
+	}
+	if got := archivedAt(); !got.Equal(first) {
+		t.Fatalf("archived_at = %v, want the first archive time %v", got, first)
+	}
+}
+
+func TestSetArchivedAbsentLeavesTheMediaUnchanged(t *testing.T) {
+	f := newFixture(t)
+	md, err := f.m.Save(t.Context(), f.pool, f.input(t, owner(f.client(t, "Lucía Rojas", false)), uuid.NullUUID{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.m.SetArchived(t.Context(), f.pool, md.ID, nil)
+	if err != nil || got.Archived {
+		t.Fatalf("absent on an active photo = %+v, %v; want active", got, err)
+	}
+	if _, err := f.m.SetArchived(t.Context(), f.pool, md.ID, ptr(true)); err != nil {
+		t.Fatal(err)
+	}
+	got, err = f.m.SetArchived(t.Context(), f.pool, md.ID, nil)
+	if err != nil || !got.Archived {
+		t.Fatalf("absent on an archived photo = %+v, %v; want archived", got, err)
 	}
 }

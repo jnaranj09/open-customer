@@ -217,6 +217,14 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AttributeInput) (Attr
 // Update changes the given fields of one attribute and returns it with its options. An unknown id
 // is problem.NotFound. Archiving keeps the time of the first archive.
 func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p AttributePatch) (Attribute, error) {
+	queries := sqlc.New(q)
+	row, err := queries.GetAttribute(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Attribute{}, problem.NotFound{}
+	}
+	if err != nil {
+		return Attribute{}, fmt.Errorf("get attribute: %w", err)
+	}
 	var errs []problem.FieldError
 	label := ""
 	if p.Label != nil {
@@ -234,14 +242,6 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Attribut
 	}
 	if len(errs) > 0 {
 		return Attribute{}, problem.Validation{Errors: errs}
-	}
-	queries := sqlc.New(q)
-	row, err := queries.GetAttribute(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Attribute{}, problem.NotFound{}
-	}
-	if err != nil {
-		return Attribute{}, fmt.Errorf("get attribute: %w", err)
 	}
 	params := sqlc.UpdateAttributeParams{
 		ID: id, Label: row.Label, Required: row.Required, Position: row.Position, ArchivedAt: row.ArchivedAt,
@@ -333,6 +333,14 @@ func (m *Module) AddOption(ctx context.Context, q db.DBTX, attrID uuid.UUID, in 
 // UpdateOption changes the given fields of one option. An option that is not one of attrID is
 // problem.NotFound.
 func (m *Module) UpdateOption(ctx context.Context, q db.DBTX, attrID, optionID uuid.UUID, p OptionPatch) (Option, error) {
+	queries := sqlc.New(q)
+	row, err := queries.GetAttributeOption(ctx, optionID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && row.AttributeID != attrID) {
+		return Option{}, problem.NotFound{}
+	}
+	if err != nil {
+		return Option{}, fmt.Errorf("get attribute option: %w", err)
+	}
 	var errs []problem.FieldError
 	label := ""
 	if p.Label != nil {
@@ -350,14 +358,6 @@ func (m *Module) UpdateOption(ctx context.Context, q db.DBTX, attrID, optionID u
 	}
 	if len(errs) > 0 {
 		return Option{}, problem.Validation{Errors: errs}
-	}
-	queries := sqlc.New(q)
-	row, err := queries.GetAttributeOption(ctx, optionID)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && row.AttributeID != attrID) {
-		return Option{}, problem.NotFound{}
-	}
-	if err != nil {
-		return Option{}, fmt.Errorf("get attribute option: %w", err)
 	}
 	o := optionFrom(row)
 	storedPos := row.Position

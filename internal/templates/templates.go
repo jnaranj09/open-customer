@@ -89,7 +89,7 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in TemplateInput) (Templ
 	if err != nil {
 		return Template{}, fmt.Errorf("new template id: %w", err)
 	}
-	if err := sqlc.New(q).InsertTemplate(ctx, sqlc.InsertTemplateParams{ID: id, Name: name, Body: in.Body}); err != nil {
+	if err := sqlc.New(q).InsertTemplate(ctx, sqlc.InsertTemplateParams{ID: id, Name: name, Body: in.Body, Now: m.clock.Now()}); err != nil {
 		return Template{}, fmt.Errorf("insert template: %w", err)
 	}
 	return Template{ID: id, Name: name, Body: in.Body}, nil
@@ -99,6 +99,14 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in TemplateInput) (Templ
 // saved through the full save check when sent. An unknown id is problem.NotFound. Archiving keeps
 // the time of the first archive.
 func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p TemplatePatch) (Template, error) {
+	queries := sqlc.New(q)
+	row, err := queries.GetTemplate(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Template{}, problem.NotFound{}
+	}
+	if err != nil {
+		return Template{}, fmt.Errorf("get template: %w", err)
+	}
 	var errs []problem.FieldError
 	name := ""
 	if p.Name != nil {
@@ -117,22 +125,15 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Template
 	if len(errs) > 0 {
 		return Template{}, problem.Validation{Errors: errs}
 	}
-	queries := sqlc.New(q)
-	row, err := queries.GetTemplate(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Template{}, problem.NotFound{}
-	}
-	if err != nil {
-		return Template{}, fmt.Errorf("get template: %w", err)
-	}
-	params := sqlc.UpdateTemplateParams{ID: id, Name: row.Name, Body: row.Body}
+	now := m.clock.Now()
+	params := sqlc.UpdateTemplateParams{ID: id, Name: row.Name, Body: row.Body, Now: now}
 	if p.Name != nil {
 		params.Name = name
 	}
 	if p.Body != nil {
 		params.Body = *p.Body
 	}
-	params.ArchivedAt = archive.At(p.Archived, row.ArchivedAt, m.clock.Now())
+	params.ArchivedAt = archive.At(p.Archived, row.ArchivedAt, now)
 	if err := queries.UpdateTemplate(ctx, params); err != nil {
 		return Template{}, fmt.Errorf("update template: %w", err)
 	}

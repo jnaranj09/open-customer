@@ -38,18 +38,24 @@ func (q *Queries) GetTemplate(ctx context.Context, id uuid.UUID) (GetTemplateRow
 }
 
 const insertTemplate = `-- name: InsertTemplate :exec
-INSERT INTO message_templates (id, name, body)
-VALUES ($1, $2, $3)
+INSERT INTO message_templates (id, name, body, created_at, updated_at)
+VALUES ($1, $2, $3, $4::timestamptz, $4::timestamptz)
 `
 
 type InsertTemplateParams struct {
 	ID   uuid.UUID
 	Name string
 	Body string
+	Now  time.Time
 }
 
 func (q *Queries) InsertTemplate(ctx context.Context, arg InsertTemplateParams) error {
-	_, err := q.db.Exec(ctx, insertTemplate, arg.ID, arg.Name, arg.Body)
+	_, err := q.db.Exec(ctx, insertTemplate,
+		arg.ID,
+		arg.Name,
+		arg.Body,
+		arg.Now,
+	)
 	return err
 }
 
@@ -96,14 +102,15 @@ UPDATE message_templates SET
     name        = $1,
     body        = $2,
     archived_at = $3::timestamptz,
-    updated_at  = now()
-WHERE id = $4
+    updated_at  = $4::timestamptz
+WHERE id = $5
 `
 
 type UpdateTemplateParams struct {
 	Name       string
 	Body       string
 	ArchivedAt *time.Time
+	Now        time.Time
 	ID         uuid.UUID
 }
 
@@ -112,6 +119,7 @@ func (q *Queries) UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) 
 		arg.Name,
 		arg.Body,
 		arg.ArchivedAt,
+		arg.Now,
 		arg.ID,
 	)
 	return err

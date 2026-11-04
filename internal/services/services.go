@@ -141,6 +141,14 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in ServiceInput) (Servic
 // Update changes the given fields of one service (every bad field is reported). An unknown id is
 // problem.NotFound. Archiving keeps the time of the first archive.
 func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ServicePatch) (Service, error) {
+	queries := sqlc.New(q)
+	row, err := queries.GetService(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Service{}, problem.NotFound{}
+	}
+	if err != nil {
+		return Service{}, fmt.Errorf("get service: %w", err)
+	}
 	var errs []problem.FieldError
 	name := ""
 	if p.Name != nil {
@@ -175,14 +183,6 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ServiceP
 	}
 	if len(errs) > 0 {
 		return Service{}, problem.Validation{Errors: errs}
-	}
-	queries := sqlc.New(q)
-	row, err := queries.GetService(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Service{}, problem.NotFound{}
-	}
-	if err != nil {
-		return Service{}, fmt.Errorf("get service: %w", err)
 	}
 	params := sqlc.UpdateServiceParams{
 		ID: id, Name: row.Name, DurationMin: row.DurationMin, PriceCents: row.PriceCents,
