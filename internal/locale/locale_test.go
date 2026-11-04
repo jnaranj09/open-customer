@@ -1,6 +1,8 @@
 package locale_test
 
 import (
+	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -181,5 +183,65 @@ func TestPushBody(t *testing.T) {
 				t.Errorf("PushBody(%d) = %q, want %q", tt.n, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMoney(t *testing.T) {
+	l := spanish(t)
+	tests := []struct {
+		name  string
+		minor int64
+		scale int
+		want  string
+	}{
+		{"cents keep both decimals", 1250000, 2, "12500,00"},
+		{"less than one unit pads with zeros", 5, 2, "0,05"},
+		{"zero has the decimals", 0, 2, "0,00"},
+		{"a zero-decimal currency has no mark", 12500, 0, "12500"},
+		{"a negative amount keeps its sign", -5, 2, "-0,05"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := l.Money(tt.minor, tt.scale); got != tt.want {
+				t.Errorf("Money(%d, %d) = %q, want %q", tt.minor, tt.scale, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExportText(t *testing.T) {
+	got := spanish(t).ExportText()
+	if got.ClientsFile != "clientas.csv" || got.AppointmentsFile != "citas.csv" || got.ServicesFile != "servicios.csv" {
+		t.Errorf("file names = %q, %q, %q", got.ClientsFile, got.AppointmentsFile, got.ServicesFile)
+	}
+	if want := []string{"nombre", "telefono", "notas", "creada", "archivada"}; !slices.Equal(got.ClientCols, want) {
+		t.Errorf("ClientCols = %q, want %q", got.ClientCols, want)
+	}
+	if want := []string{"fecha", "hora", "clienta", "servicios", "total", "pagado", "estado", "notas"}; !slices.Equal(got.AppointmentCols, want) {
+		t.Errorf("AppointmentCols = %q, want %q", got.AppointmentCols, want)
+	}
+	if want := []string{"nombre", "duracion_min", "precio", "archivado"}; !slices.Equal(got.ServiceCols, want) {
+		t.Errorf("ServiceCols = %q, want %q", got.ServiceCols, want)
+	}
+	wantStatus := map[string]string{
+		"scheduled": "agendada", "confirmed": "confirmada", "cancelled": "cancelada",
+		"no_show": "no vino", "done": "realizada",
+	}
+	if !maps.Equal(got.Status, wantStatus) {
+		t.Errorf("Status = %q, want %q", got.Status, wantStatus)
+	}
+	if got.Yes != "sí" {
+		t.Errorf("Yes = %q, want sí", got.Yes)
+	}
+}
+
+func TestExportTextIsACopy(t *testing.T) {
+	l := spanish(t)
+	first := l.ExportText()
+	first.ClientCols[0] = "changed"
+	first.Status["done"] = "changed"
+	again := l.ExportText()
+	if again.ClientCols[0] != "nombre" || again.Status["done"] != "realizada" {
+		t.Errorf("ExportText after a caller's change = %q, %q; want the original texts", again.ClientCols[0], again.Status["done"])
 	}
 }

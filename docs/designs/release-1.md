@@ -729,7 +729,11 @@ Rules for the CSV files:
 *   Money and numbers use the value table's locale format, with the currency's decimals and no symbol ("12500,00").
 *   Fixed values are Spanish words: `estado` is "agendada", "confirmada", "cancelada", "no vino" or "realizada"; `archivada` and `archivado` are "sí" or empty.
 *   Dates are `YYYY-MM-DD` and times `HH:MM`, in the business time zone. `telefono` is E.164. The ZIP file name uses the business-local date.
-*   The exporter reads in pages of 500 by `id` (`WHERE id > $1 ORDER BY id LIMIT 500`), all inside one read-only `REPEATABLE READ` transaction, so the ZIP is one consistent snapshot.
+*   The exporter reads in pages of 500 by `id` (`WHERE id > $1 ORDER BY id LIMIT 500`; a table ends at its first empty page), all inside one read-only `REPEATABLE READ` transaction, so the ZIP is one consistent snapshot.
+*   The entries are written in this order: `clientas.csv`, `citas.csv`, `servicios.csv`, `datos.json`. Each table is paged twice in the one snapshot, once for its CSV and once for the JSON, so no more than one page is held at a time (attribute definitions are the exception: `attributes.List` loads them all).
+*   The CSV file names, column headers, `estado` words and "sí" are in `locale` (`ExportText`), because Spanish in Go lives only in `locale` and `problem`. Money uses `locale.Money` with the currency's decimals from `currency.Standard.Rounding` (`golang.org/x/text/currency`). `datos.json` is not Spanish and is a constant in the exporter.
+*   `datos.json` uses the exporter's own types (`Settings`, `Attribute`, `Option`, `Service`, `Template`, `Rule`, `Client`, `Appointment`, `AppointmentService`, `LogItem`), because the exporter may not import `gen`; their JSON keys equal the API schemas of the same name. `exported_at` is the clock's time in UTC; `appointments[].done` comes from `IsDone`.
+*   The exporter returns errors wrapped and logs nothing; the handler logs.
 
 ### Status screen
 
@@ -1754,7 +1758,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `reminders.sql`: the candidate loads for `DueList`, the log insert with `ON CONFLICT DO NOTHING`, the log reads (`GetLogItem`, `ListLogForClient`, `ListLogInRange`) and the existence checks `Record` needs.
     *   `push.sql`: the `server_keys` read and insert-if-missing, the subscription upsert (`ON CONFLICT (endpoint)`, returning whether the row is new), list, delete and count.
     *   `scheduler.sql`: `UpsertState` (name, value, `updated_at` from the clock) and `ListState`, on `scheduler_state`.
-    *   `export.sql`: one keyset-paged query per table (`WHERE id > $1 ORDER BY id LIMIT 500`), as in "Export". sqlc `:many` loads all rows of a query into a slice, so paging is what keeps memory bounded.
+    *   `export.sql`: one keyset-paged query per table (`WHERE id > @after ORDER BY id LIMIT 500`), as in "Export": `ExportClients`, `ExportAppointments` (with the client name), `ExportServices`, `ExportTemplates`, `ExportRules` and `ExportLog` (with the rule kind, client id and client name), plus `ExportAppointmentLines` (`appointment_id = ANY(@ids)`, the lines of one page of appointments). sqlc `:many` loads all rows of a query into a slice, so paging is what keeps memory bounded.
 
 ##### 30. `internal/db/sqlc/` (Create, generated)
 
@@ -1794,7 +1798,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `templates` | `List() []Template`; `Vars(loc) []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)`, `Sample(loc, attrs, now, tz)` and `UnknownVars(parsed, attrs)` are plain functions with no `q`. |
     | `reminders` | `Preview(body, clientID?) Preview{Text, UnknownVars}` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem` (messages and booking prompts, `DueItem.mode`); `Record(LogEntry) (LogItem, created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(day, loc) []LogItem` |
     | `push` | `PublicKey() string`; `Subscribe(userID, Subscription) (id, created bool)`; `CountSubscriptions() int`; `EnsureKeys()`; `SendAll(Payload) SendResult` (`attempted`, `delivered`) |
-    | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction) |
+    | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction). `FileName(day) string` (`open-customer-YYYY-MM-DD.zip`, from the business-local day) is a plain function with no `q`. |
     | `status` | `Health()`; `Ready() bool`; `Status(ctx, pool) (Report, error)`; `Backup() Backup` and `BackupRed() bool` (read `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(ctx, sessionKey, ClientError) error` (`sessionKey` is the hex of the session's token hash) |
 
     Every method returns `error` last. Errors are `problem` types (item 24).
@@ -2110,10 +2114,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   A count failure records nothing; a send that fails with no attempt records nothing; a partial send still records the day.
     *   A corrupt `last_push` or heartbeat row logs its code; `Run` ticks at start and per tick until cancelled.
 
-##### 59. `internal/exporter/export.go`, `export_test.go` (Create)
+##### 59. `internal/exporter/export.go`, `json.go`, `export_test.go`, `export_db_test.go`, `export_json_db_test.go` (Create)
 
 *   **Type / Scope**: Export.
-*   **Proposed Changes**: Streams a ZIP with the four files and the CSV rules from "Export". Test: reads the ZIP back and checks headers, an accented name, a multiselect cell, two attributes with the same label, a note with a comma, an archived client, and JSON round trip of IDs.
+*   **Proposed Changes**: `New(Options{Clock, Settings, Attributes})`; `Write(ctx, q, w)` streams a ZIP with the four files and the rules from "Export" (`export.go`: the ZIP and the CSV files; `json.go`: the `datos.json` types and writer); `FileName(day)`. Tests (db, settings `USD` and `Europe/Madrid`; they read the ZIP back with `archive/zip` and `encoding/csv`): `TestExportHasFourFilesInOrder`; `TestExportCSVHeadersAndBOM` (`EF BB BF`, then `nombre,telefono,notas,creada,archivada,<labels>`); `TestExportAccentedNameAndCommaNote` ("Lucía Rojas", "Uñas, cortas"); `TestExportMultiselectCell` ("A; B; C"); `TestExportSameLabelGetsKey` (`Color (color)`, `Color (color_2)`); `TestExportArchivedClientMarked`; `TestExportArchivedAttributeOnlyInJSON`; `TestExportAppointmentRow` (2026-10-24T13:00Z gives `2026-10-24`, `15:00`, "Acrílico; Pedicure", "12500,00", an empty `pagado`, "realizada" once past `ends_at`); `TestExportNoShowAppointment` ("no vino"); `TestExportZeroDecimalCurrency` (`JPY`, "12500"); `TestExportPagesPast500` (501 clients in the CSV and the JSON); `TestExportJSONRoundTripsIDs` (client, appointment, rule and log IDs, `version` 1, `reminder_log[0].client_name`); `TestExportDBErrorIsReturned` (`FailingDB` at the second call). Unit: `TestFileNameUsesTheDay`.
 
 ##### 60. `internal/status/status.go`, `status_test.go` (Create)
 
@@ -2129,7 +2133,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 61. `internal/locale/locale.go`, `es.go`, `locale_test.go` (Create)
 
 *   **Type / Scope**: Formatting.
-*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller. `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). `Locale.VarLabel(ns, key)` gives the label of a fixed template variable (`""` for an unknown pair), and `SampleClientName()` ("Ana Pérez") and `SampleServiceNames()` (["Servicio de ejemplo"]) give the sample texts that template previews use, because Spanish text in Go lives only in `locale` and `problem`. Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
+*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller: `Money(minor, scale)` (P4, the export) formats an amount in minor units with the decimal mark and no symbol (`1250000, 2` → "12500,00"; `12500, 0` → "12500"). `ExportText()` (P4) gives the export's CSV file names, column headers, `estado` words and "sí". `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). `Locale.VarLabel(ns, key)` gives the label of a fixed template variable (`""` for an unknown pair), and `SampleClientName()` ("Ana Pérez") and `SampleServiceNames()` (["Servicio de ejemplo"]) give the sample texts that template previews use, because Spanish text in Go lives only in `locale` and `problem`. Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m."), a DST zone (`Europe/Madrid`) for day offsets, `TestMoney`, `TestExportText` and `TestExportTextIsACopy`.
 
 #### Web app (`web/`)
 
