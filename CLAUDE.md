@@ -35,7 +35,7 @@ with fnm, `fnm use` in web/).
   svelte-check, eslint, prettier check, knip, jscpd (fails on an empty scan).
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
   (testcontainers).
-- `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`).
+- `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`, `internal/attributes`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
   app Docker image.
 - `make e2e`: build, fresh e2e database, Playwright WebKit (from P6).

@@ -41,3 +41,12 @@ const (
 	MsgAttrOptionArchived = "%s: esa opción está archivada"
 	MsgAttrOptionRepeated = "%s: una opción está repetida"
 )
+
+// Field messages for attribute definitions and their options (design doc item 45).
+const (
+	MsgOptionsNotAllowed = "Este tipo de dato no tiene opciones"
+	MsgParentInvalid     = "La opción superior no es de este dato"
+	MsgParentArchived    = "La opción superior está archivada"
+	MsgAttributeArchived = "Este dato está archivado"
+	MsgPositionInvalid   = "La posición no puede ser negativa"
+)
