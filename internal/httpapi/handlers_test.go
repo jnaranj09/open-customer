@@ -6,8 +6,12 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/jnaranj09/open-customer/internal/db/dbtest"
+	"github.com/jnaranj09/open-customer/internal/db/sqlc"
 )
 
 func TestGetSetupStatusEmptyDB(t *testing.T) {
@@ -25,8 +29,12 @@ func TestGetSetupStatusEmptyDB(t *testing.T) {
 
 func TestGetSetupStatusWithUser(t *testing.T) {
 	pool := dbtest.Pool(t)
-	if _, err := pool.Exec(t.Context(),
-		`INSERT INTO users (id, username, password_hash) VALUES (gen_random_uuid(), 'made-up-owner', 'x')`); err != nil {
+	if err := sqlc.New(pool).InsertUser(t.Context(), sqlc.InsertUserParams{
+		ID:           uuid.New(),
+		Username:     "made-up-owner",
+		PasswordHash: "x",
+		CreatedAt:    time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC),
+	}); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	rec := serve(newTestServer(t, pool), http.MethodGet, "/api/v1/setup/status")

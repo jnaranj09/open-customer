@@ -7,7 +7,132 @@ package sqlc
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
+
+const deleteOtherSessions = `-- name: DeleteOtherSessions :exec
+DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2
+`
+
+type DeleteOtherSessionsParams struct {
+	UserID        uuid.UUID
+	KeepTokenHash []byte
+}
+
+func (q *Queries) DeleteOtherSessions(ctx context.Context, arg DeleteOtherSessionsParams) error {
+	_, err := q.db.Exec(ctx, deleteOtherSessions, arg.UserID, arg.KeepTokenHash)
+	return err
+}
+
+const deleteSession = `-- name: DeleteSession :exec
+DELETE FROM sessions WHERE token_hash = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) error {
+	_, err := q.db.Exec(ctx, deleteSession, tokenHash)
+	return err
+}
+
+const deleteUserSessions = `-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserSessions, userID)
+	return err
+}
+
+const getSessionWithUser = `-- name: GetSessionWithUser :one
+SELECT s.token_hash, s.user_id, s.expires_at, s.last_seen_at, u.username, u.must_change_password
+FROM sessions s
+JOIN users u ON u.id = s.user_id
+WHERE s.token_hash = $1
+`
+
+type GetSessionWithUserRow struct {
+	TokenHash          []byte
+	UserID             uuid.UUID
+	ExpiresAt          time.Time
+	LastSeenAt         *time.Time
+	Username           string
+	MustChangePassword bool
+}
+
+func (q *Queries) GetSessionWithUser(ctx context.Context, tokenHash []byte) (GetSessionWithUserRow, error) {
+	row := q.db.QueryRow(ctx, getSessionWithUser, tokenHash)
+	var i GetSessionWithUserRow
+	err := row.Scan(
+		&i.TokenHash,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.LastSeenAt,
+		&i.Username,
+		&i.MustChangePassword,
+	)
+	return i, err
+}
+
+const insertSession = `-- name: InsertSession :exec
+INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at)
+VALUES ($1, $2, $3, $4, $3)
+`
+
+type InsertSessionParams struct {
+	TokenHash []byte
+	UserID    uuid.UUID
+	Now       time.Time
+	ExpiresAt time.Time
+}
+
+func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) error {
+	_, err := q.db.Exec(ctx, insertSession,
+		arg.TokenHash,
+		arg.UserID,
+		arg.Now,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const insertUser = `-- name: InsertUser :exec
+INSERT INTO users (id, username, password_hash, created_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type InsertUserParams struct {
+	ID           uuid.UUID
+	Username     string
+	PasswordHash string
+	CreatedAt    time.Time
+}
+
+func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
+	_, err := q.db.Exec(ctx, insertUser,
+		arg.ID,
+		arg.Username,
+		arg.PasswordHash,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const touchSession = `-- name: TouchSession :exec
+UPDATE sessions SET last_seen_at = $1::timestamptz, expires_at = $2
+WHERE token_hash = $3
+`
+
+type TouchSessionParams struct {
+	Now       time.Time
+	ExpiresAt time.Time
+	TokenHash []byte
+}
+
+func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
+	_, err := q.db.Exec(ctx, touchSession, arg.Now, arg.ExpiresAt, arg.TokenHash)
+	return err
+}
 
 const userExists = `-- name: UserExists :one
 SELECT EXISTS (SELECT 1 FROM users)
