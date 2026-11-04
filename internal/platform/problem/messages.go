@@ -23,3 +23,21 @@ const (
 	MsgCurrencyInvalid = "Moneda no válida"
 	MsgCountryInvalid  = "País no válido"
 )
+
+// Field messages for attributes and their values (design doc "Attribute values"). The %s of the
+// value messages is the attribute label, or the key for an unknown key.
+const (
+	MsgScopeInvalid       = "Elige dónde se usa este dato"
+	MsgAttrTypeInvalid    = "Elige un tipo de dato"
+	MsgAttrsInvalid       = "Los datos adicionales no son válidos"
+	MsgAttrUnknown        = "El dato '%s' no existe"
+	MsgAttrOtherScope     = "%s no se usa aquí"
+	MsgAttrArchived       = "%s está archivado"
+	MsgAttrRequired       = "%s es obligatorio"
+	MsgAttrTextInvalid    = "%s: escribe un texto de hasta 500 caracteres"
+	MsgAttrNumberInvalid  = "%s: escribe un número"
+	MsgAttrDateInvalid    = "%s: elige una fecha"
+	MsgAttrOptionInvalid  = "%s: elige una opción de la lista"
+	MsgAttrOptionArchived = "%s: esa opción está archivada"
+	MsgAttrOptionRepeated = "%s: una opción está repetida"
+)
