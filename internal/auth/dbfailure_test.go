@@ -3,62 +3,17 @@
 package auth
 
 import (
-	"context"
 	"errors"
 	"net/netip"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/dbtest"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 )
-
-// errInjected is the failure failingDB returns from its chosen call.
-var errInjected = errors.New("made-up database failure")
-
-// failingDB is the real database, except that call number failAt (1-based; 0 never fails) returns
-// errInjected instead of running. calls counts every call, so a clean run tells how many steps an
-// operation has.
-type failingDB struct {
-	db.DBTX
-	failAt int
-	calls  *int
-}
-
-func (f failingDB) fail() bool {
-	*f.calls++
-	return *f.calls == f.failAt
-}
-
-func (f failingDB) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-	if f.fail() {
-		return pgconn.CommandTag{}, errInjected
-	}
-	return f.DBTX.Exec(ctx, sql, args...)
-}
-
-func (f failingDB) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	if f.fail() {
-		return nil, errInjected
-	}
-	return f.DBTX.Query(ctx, sql, args...)
-}
-
-func (f failingDB) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	if f.fail() {
-		return failedRow{}
-	}
-	return f.DBTX.QueryRow(ctx, sql, args...)
-}
-
-type failedRow struct{}
-
-func (failedRow) Scan(...any) error { return errInjected }
 
 // dbOperation builds a fresh fixture on the real database and returns its pool and the one call
 // under test.
@@ -135,7 +90,7 @@ func TestEveryDatabaseFailureReachesTheCaller(t *testing.T) {
 		t.Run(op.name, func(t *testing.T) {
 			steps := 0
 			pool, run := op.build(t)
-			if err := run(failingDB{DBTX: pool, calls: &steps}); err != nil {
+			if err := run(dbtest.FailingDB{DBTX: pool, Calls: &steps}); err != nil {
 				t.Fatalf("clean run: %v", err)
 			}
 			if steps == 0 {
@@ -144,8 +99,8 @@ func TestEveryDatabaseFailureReachesTheCaller(t *testing.T) {
 			for step := 1; step <= steps; step++ {
 				calls := 0
 				pool, run := op.build(t)
-				err := run(failingDB{DBTX: pool, failAt: step, calls: &calls})
-				if !errors.Is(err, errInjected) {
+				err := run(dbtest.FailingDB{DBTX: pool, FailAt: step, Calls: &calls})
+				if !errors.Is(err, dbtest.ErrInjected) {
 					t.Fatalf("failure at step %d of %d: err = %v; want the database error wrapped", step, steps, err)
 				}
 			}

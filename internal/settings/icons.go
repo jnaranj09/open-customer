@@ -15,6 +15,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/sqlc"
+	"github.com/jnaranj09/open-customer/internal/platform/files"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
@@ -52,11 +53,11 @@ func (m *Module) SetIcons(ctx context.Context, q db.DBTX, icon512, icon180 []byt
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create branding dir: %w", err)
 	}
-	if err := writeFileSynced(filepath.Join(dir, iconFile(iconLarge)), icon512); err != nil {
-		return err
+	if err := files.WriteSynced(filepath.Join(dir, iconFile(iconLarge)), icon512); err != nil {
+		return fmt.Errorf("write large icon: %w", err)
 	}
-	if err := writeFileSynced(filepath.Join(dir, iconFile(iconSmall)), icon180); err != nil {
-		return err
+	if err := files.WriteSynced(filepath.Join(dir, iconFile(iconSmall)), icon180); err != nil {
+		return fmt.Errorf("write small icon: %w", err)
 	}
 	// The Get above found the row, and nothing deletes it, so the update always hits it.
 	if err := sqlc.New(q).SetIconUpdatedAt(ctx, m.clock.Now()); err != nil {
@@ -100,30 +101,3 @@ func (m *Module) Icon(ctx context.Context, q db.DBTX, size int) ([]byte, time.Ti
 }
 
 func iconFile(size int) string { return fmt.Sprintf("icon-%d.png", size) }
-
-// writeFileSynced writes data to path through a temp file in the same directory: write, fsync,
-// rename. A failure leaves no temp file behind.
-func writeFileSynced(path string, data []byte) (err error) {
-	f, err := os.CreateTemp(filepath.Dir(path), ".icon-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp icon: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, f.Close(), os.Remove(f.Name()))
-		}
-	}()
-	if _, err = f.Write(data); err != nil {
-		return fmt.Errorf("write icon: %w", err)
-	}
-	if err = f.Sync(); err != nil {
-		return fmt.Errorf("sync icon: %w", err)
-	}
-	if err = f.Close(); err != nil {
-		return fmt.Errorf("close icon: %w", err)
-	}
-	if err = os.Rename(f.Name(), path); err != nil {
-		return fmt.Errorf("rename icon: %w", err)
-	}
-	return nil
-}

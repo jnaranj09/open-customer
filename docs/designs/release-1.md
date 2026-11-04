@@ -304,7 +304,7 @@ Monorepo. The Go module is the repo root. The web app lives in `web/`.
 cmd/open-customer/        main + subcommands
 api/openapi.yaml          the API contract (OpenAPI 3.0.3), source of truth
 internal/
-  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json)
+  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json), color, files, text
   db/                     pgx pool, migrations (goose, embedded), sqlc output
   httpapi/                generated server interface, handlers that call domain modules, middleware (incl. the Origin check)
   auth/                   users, sessions, setup tokens, rate limiting
@@ -1904,7 +1904,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Settings and branding.
 *   **Proposed Changes**:
-    *   Get and update settings. Validate `name` (trimmed, 1–80 characters), `locale` (`es` only), `accent_color` (lowercased, `^#[0-9a-f]{6}$`), `push_hour` (0–19, default 8 when absent), the time zone with `time.LoadLocation`, the currency with `currency.ParseISO` from `golang.org/x/text/currency` (no hand-written list), and the country code against `phonenumbers.GetSupportedRegions()`.
+    *   Get and update settings. Validate `name` (trimmed, 1–80 characters), `locale` (`es` only), `accent_color` (`color.Normalize`: lowercased, `^#[0-9a-f]{6}$`), `push_hour` (0–19, default 8 when absent), the time zone with `time.LoadLocation`, the currency with `currency.ParseISO` from `golang.org/x/text/currency` (no hand-written list), and the country code against `phonenumbers.GetSupportedRegions()`.
     *   Build the manifest JSON from settings.
     *   Serve the uploaded icons, or the embedded default PNGs (plain neutral 512 and 180 px files, no brand art).
     *   `SetIcons` checks the PNG signature (415) and the 1 MB limit (413) of each part, writes `media/branding/icon-512.png` and `icon-180.png` (temp file, fsync, rename) and only then sets `icon_updated_at`. `Icon` serves the file when `icon_updated_at` is set; a missing file logs `code=icon_file_missing` and serves the default. Any size other than 512 or 180 is `not-found`.
