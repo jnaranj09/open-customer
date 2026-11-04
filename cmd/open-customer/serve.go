@@ -114,9 +114,10 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
 	}
+	settingsModule := settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})
 	authModule, err := auth.New(auth.Options{
 		Clock:           clock.Real{},
-		SettingsCreator: settingsCreator(settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})),
+		SettingsCreator: settingsCreator(settingsModule),
 		// starter.Seed in P4.
 		Seeder: func(context.Context, db.DBTX, string) error { return nil },
 	})
@@ -131,6 +132,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		TrustedProxies: cfg.TrustedProxyCIDRs,
 		Static:         static,
 		Auth:           authModule,
+		Settings:       settingsModule,
 		Status:         status.New(version),
 		Log:            log,
 	})

@@ -41,6 +41,7 @@ type testServerConfig struct {
 	trusted   []netip.Prefix
 	seeder    auth.Seeder // nil means one that writes nothing (starter.Seed comes in P4)
 	beginner  db.Beginner // nil means the pool
+	mediaDir  string      // MEDIA_DIR; empty means a fresh t.TempDir()
 }
 
 // testApp is the full handler, the auth module behind it and their fake clock.
@@ -63,8 +64,11 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 	if cfg.seeder == nil {
 		cfg.seeder = func(context.Context, db.DBTX, string) error { return nil }
 	}
+	if cfg.mediaDir == "" {
+		cfg.mediaDir = t.TempDir()
+	}
 	fake := clock.NewFake(testStart)
-	settingsModule := settings.New(settings.Options{Clock: fake, MediaDir: t.TempDir()})
+	settingsModule := settings.New(settings.Options{Clock: fake, MediaDir: cfg.mediaDir})
 	a, err := auth.New(auth.Options{
 		Clock: fake,
 		// The same conversion serve's settingsCreator makes.
@@ -89,6 +93,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		TrustedProxies: cfg.trusted,
 		Static:         testBuild(),
 		Auth:           a,
+		Settings:       settingsModule,
 		Status:         status.New(testVersion),
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -374,5 +379,46 @@ func TestDBErrorInsideAJoinLogsNoPostgresText(t *testing.T) {
 	}
 	if logs := logBuf.String(); !strings.Contains(logs, "23505") || strings.Contains(logs, "made-up-owner") {
 		t.Fatalf("log = %q, want SQLSTATE 23505 and not the Postgres message", logs)
+	}
+}
+
+// TestNewRefusesAMissingModule: a module serve forgot to pass fails at startup, not on the first
+// request that reaches it.
+func TestNewRefusesAMissingModule(t *testing.T) {
+	public, err := url.Parse(testOrigin)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	a, err := auth.New(auth.Options{
+		Clock:           clock.NewFake(testStart),
+		SettingsCreator: func(context.Context, db.DBTX, auth.SetupSettings) error { return nil },
+		Seeder:          func(context.Context, db.DBTX, string) error { return nil },
+	})
+	if err != nil {
+		t.Fatalf("auth.New: %v", err)
+	}
+	full := Options{
+		PublicURL: public, Static: testBuild(), Auth: a,
+		Settings: settings.New(settings.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
+		Status:   status.New(testVersion),
+	}
+	for _, tc := range []struct {
+		name   string
+		remove func(*Options)
+	}{
+		{"a nil Auth is refused", func(o *Options) { o.Auth = nil }},
+		{"a nil Settings is refused", func(o *Options) { o.Settings = nil }},
+		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := full
+			tc.remove(&opts)
+			if _, err := New(opts); err == nil {
+				t.Fatal("New accepted it, want an error")
+			}
+		})
+	}
+	if _, err := New(full); err != nil {
+		t.Fatalf("New with every module = %v, want nil", err)
 	}
 }

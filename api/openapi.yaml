@@ -161,6 +161,61 @@ paths:
                 $ref: "#/components/schemas/Me"
         "401":
           $ref: "#/components/responses/Problem"
+  /settings:
+    patch:
+      operationId: updateSettings
+      summary: Change the business settings
+      description: >-
+        Changes only the fields sent. currency, country_code and locale are fixed at setup, so
+        sending one is an unknown field and a 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsPatch"
+      responses:
+        "200":
+          description: The settings after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /settings/icon:
+    post:
+      operationId: uploadIcon
+      summary: Replace the app icon
+      description: >-
+        Both parts are PNG files of at most 1 MB each, and the request is at most 3 MB. A part
+        without the PNG signature, or a body that is not multipart/form-data, is 415. A missing,
+        repeated or unknown part is 422.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/IconUpload"
+      responses:
+        "204":
+          description: The icons are stored; /icons/512.png and /apple-touch-icon.png serve them.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
 components:
   headers:
     SessionCookie:
@@ -186,6 +241,50 @@ components:
       in: cookie
       name: oc_session
   schemas:
+    Settings:
+      type: object
+      required: [name, timezone, locale, currency, country_code, accent_color, push_hour, has_custom_icon]
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        locale:
+          type: string
+        currency:
+          type: string
+        country_code:
+          type: string
+        accent_color:
+          type: string
+        push_hour:
+          type: integer
+        has_custom_icon:
+          type: boolean
+    SettingsPatch:
+      type: object
+      description: Every field is optional; a field left out is not changed.
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        accent_color:
+          type: string
+        push_hour:
+          type: integer
+    IconUpload:
+      type: object
+      required: [icon512, icon180]
+      properties:
+        icon512:
+          type: string
+          format: binary
+          description: The 512 px PNG.
+        icon180:
+          type: string
+          format: binary
+          description: The 180 px PNG (apple-touch-icon).
     Me:
       type: object
       required: [id, username, must_change_password]

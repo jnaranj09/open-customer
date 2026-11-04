@@ -118,6 +118,11 @@ func TestServeMigratesEmptyDBAndAnswers(t *testing.T) {
 		strings.TrimSpace(body) != `{"needs_setup":true}` {
 		t.Fatalf("GET /api/v1/setup/status = %d %q, want 200 {\"needs_setup\":true}", resp.StatusCode, body)
 	}
+	// The manifest and icon routes sit outside /api/v1, before the SPA fallback.
+	if resp, body := get(t, client, base+"/manifest.webmanifest"); resp.StatusCode != http.StatusOK ||
+		resp.Header.Get("Content-Type") != "application/manifest+json" {
+		t.Fatalf("GET /manifest.webmanifest = %d %q, want 200 application/manifest+json", resp.StatusCode, body)
+	}
 	resp, body := get(t, client, base+"/")
 	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
 		t.Fatalf("GET / = %d %q (Content-Type %q), want 200 HTML", resp.StatusCode, body, resp.Header.Get("Content-Type"))

@@ -3,7 +3,6 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -193,18 +192,7 @@ func TestMustChangePasswordGate(t *testing.T) {
 		t.Fatal("GET /me must_change_password = false after reset-password, want true")
 	}
 	t.Run("a route outside the allowed set is 403 must-change-password", func(t *testing.T) {
-		// PATCH /settings joins the spec in Task 22; until then the gate gets a request the router
-		// would have matched to it.
-		allowed, err := allowedWhileMustChangePassword(embeddedSpec(t))
-		if err != nil {
-			t.Fatalf("allowedWhileMustChangePassword: %v", err)
-		}
-		req := httptest.NewRequest(http.MethodPatch, "/api/v1/settings", nil)
-		req.Pattern = "PATCH /api/v1/settings"
-		req = req.WithContext(context.WithValue(req.Context(), signedInKey{},
-			signedIn{me: auth.Me{Username: "ana", MustChangePassword: true}}))
-		rec := httptest.NewRecorder()
-		mustChangePasswordGate(allowed)(http.NotFoundHandler()).ServeHTTP(rec, req)
+		rec := patchSettings(app.handler, `{"name":"Estudio Nuevo"}`, c)
 		if got := problemType(t, rec, http.StatusForbidden); !strings.HasSuffix(got, ":must-change-password") {
 			t.Fatalf("type = %q, want must-change-password", got)
 		}
@@ -212,6 +200,9 @@ func TestMustChangePasswordGate(t *testing.T) {
 	assertNoContent(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(temp, newOwnerPassword), withCookie(c)))
 	if mustChange(t, getMe(app.handler, c)) {
 		t.Fatal("GET /me must_change_password = true after POST /auth/password, want false")
+	}
+	if rec := patchSettings(app.handler, `{"name":"Estudio Nuevo"}`, c); rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /settings after the password change = %d %q, want 200", rec.Code, rec.Body.String())
 	}
 	assertNoContent(t, post(app.handler, logoutPath, testOrigin, "", withCookie(c)))
 }

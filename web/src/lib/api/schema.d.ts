@@ -144,10 +144,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the business settings
+         * @description Changes only the fields sent. currency, country_code and locale are fixed at setup, so sending one is an unknown field and a 422.
+         */
+        patch: operations["updateSettings"];
+        trace?: never;
+    };
+    "/settings/icon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the app icon
+         * @description Both parts are PNG files of at most 1 MB each, and the request is at most 3 MB. A part without the PNG signature, or a body that is not multipart/form-data, is 415. A missing, repeated or unknown part is 422.
+         */
+        post: operations["uploadIcon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Settings: {
+            name: string;
+            timezone: string;
+            locale: string;
+            currency: string;
+            country_code: string;
+            accent_color: string;
+            push_hour: number;
+            has_custom_icon: boolean;
+        };
+        /** @description Every field is optional; a field left out is not changed. */
+        SettingsPatch: {
+            name?: string;
+            timezone?: string;
+            accent_color?: string;
+            push_hour?: number;
+        };
+        IconUpload: {
+            /**
+             * Format: binary
+             * @description The 512 px PNG.
+             */
+            icon512: string;
+            /**
+             * Format: binary
+             * @description The 180 px PNG (apple-touch-icon).
+             */
+            icon180: string;
+        };
         Me: {
             /** Format: uuid */
             id: string;
@@ -384,6 +453,61 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsPatch"];
+            };
+        };
+        responses: {
+            /** @description The settings after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    uploadIcon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["IconUpload"];
+            };
+        };
+        responses: {
+            /** @description The icons are stored; /icons/512.png and /apple-touch-icon.png serve them. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            415: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

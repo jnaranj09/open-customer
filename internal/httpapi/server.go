@@ -22,6 +22,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
+	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
 )
 
@@ -41,6 +42,7 @@ type Options struct {
 	TrustedProxies []netip.Prefix // TRUSTED_PROXY_CIDRS
 	Static         fs.FS          // the built SPA (fs.Sub of web.Build)
 	Auth           *auth.Auth
+	Settings       *settings.Module
 	Status         *status.Status
 	Log            *slog.Logger
 	// beginner opens the write transactions; nil means Pool. Only tests set it (a Commit that
@@ -53,6 +55,7 @@ type Server struct {
 	pool     *pgxpool.Pool
 	beginner db.Beginner // begins every write transaction (db.WithTx)
 	auth     *auth.Auth
+	settings *settings.Module
 	status   *status.Status
 	// secureCookies is PUBLIC_URL's scheme == https: the session cookie drops Secure only for a
 	// plain-http PUBLIC_URL (localhost in development and e2e).
@@ -61,11 +64,15 @@ type Server struct {
 
 var _ gen.ServerInterface = (*Server)(nil)
 
-// New returns the app's whole HTTP handler: the probes, the generated /api/v1 routes (behind the
-// session steps 6–8), the /api/ catch-all and the SPA, inside the middleware steps 1–5 of design
-// doc item 34. It fails when the embedded spec cannot be read or its security or
-// x-oc-allowed-while-must-change-password values are not ones steps 7–8 can enforce.
+// New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
+// /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
+// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Status) is missing, or when the embedded
+// spec cannot be read or its security or x-oc-allowed-while-must-change-password values are not
+// ones steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
+	if opts.Auth == nil || opts.Settings == nil || opts.Status == nil {
+		return nil, errors.New("httpapi: Options.Auth, Settings and Status are required")
+	}
 	spec, err := gen.GetSpec()
 	if err != nil {
 		return nil, fmt.Errorf("httpapi: load the embedded spec: %w", err)
@@ -79,7 +86,8 @@ func New(opts Options) (http.Handler, error) {
 		return nil, err
 	}
 	s := &Server{
-		pool: opts.Pool, beginner: opts.beginner, auth: opts.Auth, status: opts.Status,
+		pool: opts.Pool, beginner: opts.beginner,
+		auth: opts.Auth, settings: opts.Settings, status: opts.Status,
 		secureCookies: opts.PublicURL.Scheme == "https",
 	}
 	if s.beginner == nil {
@@ -89,6 +97,12 @@ func New(opts Options) (http.Handler, error) {
 	// The probes are outside /api/v1 and the spec, so they are registered by literal path.
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /readyz", s.readyz)
+	// The manifest and the icons are outside /api/v1 and the spec (the browser asks for them at
+	// fixed paths), so they are registered by literal path, before /, and with no session: the
+	// browser and iOS fetch them without cookies, also before setup.
+	mux.HandleFunc("GET /manifest.webmanifest", s.manifest)
+	mux.HandleFunc("GET /icons/512.png", s.icon512)
+	mux.HandleFunc("GET /apple-touch-icon.png", s.appleTouchIcon)
 	gen.HandlerWithOptions(s, gen.StdHTTPServerOptions{
 		BaseURL:          apiBase,
 		BaseRouter:       mux,
