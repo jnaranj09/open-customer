@@ -87,6 +87,12 @@ func (m *Module) Save(ctx context.Context, q db.DBTX, in MediaInput) (Media, err
 	if _, err := jpeg.DecodeConfig(bytes.NewReader(in.Thumb)); err != nil {
 		return Media{}, problem.UnsupportedMediaType{}
 	}
+	size, okSize := int32Of(len(in.Full))
+	width, okWidth := int32Of(cfg.Width)
+	height, okHeight := int32Of(cfg.Height)
+	if !okSize || !okWidth || !okHeight {
+		return Media{}, errors.New("image size does not fit the column type")
+	}
 	queries := sqlc.New(q)
 	clientID, err := resolveOwner(ctx, queries, in)
 	if err != nil {
@@ -103,32 +109,32 @@ func (m *Module) Save(ctx context.Context, q db.DBTX, in MediaInput) (Media, err
 	}
 	key, thumbKey := keys(md)
 	if err := m.writeFiles(key, thumbKey, in); err != nil {
-		m.Discard(md)
+		m.Discard(ctx, md)
 		return Media{}, err
 	}
 	if err := queries.InsertMedia(ctx, sqlc.InsertMediaParams{
 		ID: id, ClientID: clientID, AppointmentID: in.AppointmentID, StorageKey: key, ThumbKey: thumbKey,
-		ContentType: contentType, Bytes: int32Of(md.Bytes), Width: int32Of(md.Width), Height: int32Of(md.Height),
+		ContentType: contentType, Bytes: size, Width: width, Height: height,
 		CreatedAt: now,
 	}); err != nil {
-		m.Discard(md)
+		m.Discard(ctx, md)
 		return Media{}, fmt.Errorf("insert media: %w", err)
 	}
 	return md, nil
 }
 
-// int32Of narrows a size or a dimension to the column type. The upload limits and the JPEG header
-// keep both inside the int32 range, so the check never changes a value.
-func int32Of(n int) int32 {
+// int32Of narrows a size or a dimension to the column type, and reports false when it does not
+// fit. The upload limits and the JPEG header keep both inside the range, so false is a bug.
+func int32Of(n int) (int32, bool) {
 	if n < 0 || n > math.MaxInt32 {
-		return 0
+		return 0, false
 	}
-	return int32(n)
+	return int32(n), true
 }
 
 // writeFiles creates the folder and writes both files, synced.
 func (m *Module) writeFiles(key, thumbKey string, in MediaInput) error {
-	if err := os.MkdirAll(filepath.Join(m.mediaDir, filepath.FromSlash(path.Dir(key))), 0o750); err != nil {
+	if err := files.MkdirAll(filepath.Join(m.mediaDir, filepath.FromSlash(path.Dir(key))), 0o750); err != nil {
 		return fmt.Errorf("create media folder: %w", err)
 	}
 	if err := files.WriteSynced(filepath.Join(m.mediaDir, filepath.FromSlash(key)), in.Full); err != nil {
@@ -183,17 +189,17 @@ func keys(md Media) (full, thumb string) {
 
 // Discard removes both files of a saved photo. The handler calls it when the commit that should
 // have stored the row fails. A failure is logged with a code and never the path.
-func (m *Module) Discard(md Media) {
+func (m *Module) Discard(ctx context.Context, md Media) {
 	root, err := os.OpenRoot(m.mediaDir)
 	if err != nil {
-		slog.Error("could not remove the files of a discarded photo", "code", "media_discard_failed")
+		slog.ErrorContext(ctx, "could not remove the files of a discarded photo", "code", "media_discard_failed")
 		return
 	}
 	defer root.Close()
 	key, thumbKey := keys(md)
 	for _, k := range []string{key, thumbKey} {
 		if err := root.Remove(k); err != nil && !errors.Is(err, os.ErrNotExist) {
-			slog.Error("could not remove a file of a discarded photo", "code", "media_discard_failed")
+			slog.ErrorContext(ctx, "could not remove a file of a discarded photo", "code", "media_discard_failed")
 		}
 	}
 }

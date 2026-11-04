@@ -41,6 +41,7 @@ func TestSaveRejectsNonJPEG(t *testing.T) {
 		{"png full", pngBuf.Bytes(), good},
 		{"png thumb", good, pngBuf.Bytes()},
 		{"empty full", nil, good},
+		{"oversize png full", append(append([]byte{}, pngBuf.Bytes()[:8]...), make([]byte, MaxFullBytes)...), good},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

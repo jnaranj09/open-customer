@@ -5,6 +5,7 @@ package media
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -179,7 +180,7 @@ func TestDiscardRemovesFiles(t *testing.T) {
 	if got := listFiles(t, f.dir); len(got) != 2 {
 		t.Fatalf("files after Save = %d; want 2", len(got))
 	}
-	f.m.Discard(md)
+	f.m.Discard(t.Context(), md)
 	if got := listFiles(t, f.dir); len(got) != 0 {
 		t.Errorf("files after Discard = %v; want none", got)
 	}
@@ -193,7 +194,7 @@ func TestDiscardLogsNoPath(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	// The media folder is gone, so removing the files fails.
 	gone := filepath.Join(f.dir, "gone")
-	New(Options{Clock: f.clock, MediaDir: gone}).Discard(Media{ID: uuid.New(), CreatedAt: start})
+	New(Options{Clock: f.clock, MediaDir: gone}).Discard(t.Context(), Media{ID: uuid.New(), CreatedAt: start})
 	out := logs.String()
 	if !strings.Contains(out, "media_discard_failed") {
 		t.Errorf("log = %q; want code media_discard_failed", out)
@@ -298,7 +299,7 @@ func TestOpenMissingFileLogsNoPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.m.Discard(md)
+	f.m.Discard(t.Context(), md)
 	var logs strings.Builder
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
@@ -400,5 +401,27 @@ func TestSetArchivedUnknownIsNotFound(t *testing.T) {
 	_, err := f.m.SetArchived(t.Context(), f.pool, uuid.New(), true)
 	if !errors.As(err, new(problem.NotFound)) {
 		t.Fatalf("err = %v; want NotFound", err)
+	}
+}
+
+func TestSaveUnwritableMediaDirLeaksNoPath(t *testing.T) {
+	f := newFixture(t)
+	locked := filepath.Join(f.dir, "locked-dir")
+	if err := os.Mkdir(locked, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	var logs strings.Builder
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	m := New(Options{Clock: f.clock, MediaDir: locked})
+	_, err := m.Save(t.Context(), f.pool, f.input(t, owner(f.client(t, "Lucía Rojas", false)), uuid.NullUUID{}))
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("err = %v; want fs.ErrPermission", err)
+	}
+	for name, text := range map[string]string{"error": err.Error(), "log": logs.String()} {
+		if strings.Contains(text, "locked-dir") || strings.Contains(text, ".jpg") {
+			t.Errorf("%s names a path: %q", name, text)
+		}
 	}
 }
