@@ -103,6 +103,12 @@ linters:
         linters:
           - revive
         text: type name will be used as db\.DBTX
+      # G101 reads any string constant whose name says "Password" as a credential. messages.go holds
+      # only the Spanish field messages the API returns (design doc item 24, OP14).
+      - path: internal/platform/problem/messages\.go
+        linters:
+          - gosec
+        text: "G101:"
       # Tests may repeat setup; duplication is measured on shipped code (TASKS.md T7).
       - path: _test\.go
         linters:
