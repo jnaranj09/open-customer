@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
@@ -62,6 +63,8 @@ func TestParseRejects(t *testing.T) {
 		{"no namespace", "{{ hola }}"},
 		{"empty key", "{{client.}}"},
 		{"curly quotes", "{{client.name | “x” }}"},
+		{"curly open straight close", "{{client.name | “x\" }}"},
+		{"straight open curly close", "{{client.name | \"x” }}"},
 		{"unclosed quote", "{{client.name | \"x }}"},
 		{"tab is not a space", "{{\tclient.name}}"},
 		{"uppercase", "{{Client.name}}"},
@@ -128,5 +131,19 @@ func TestParsePlainTextIsFine(t *testing.T) {
 	}
 	if len(got.Vars) != 0 {
 		t.Errorf("Vars = %+v, want none", got.Vars)
+	}
+}
+
+func TestParseManyBadBracesIsLinearAndOrdered(t *testing.T) {
+	const n = 1000
+	_, err := Parse(strings.Repeat("{{", n))
+	got := bodyErrors(t, err)
+	if len(got) != n {
+		t.Fatalf("got %d errors, want %d", len(got), n)
+	}
+	for i, e := range got {
+		if want := unclosed(2*i + 1); e != want {
+			t.Fatalf("error %d = %+v, want %+v", i, e, want)
+		}
 	}
 }
