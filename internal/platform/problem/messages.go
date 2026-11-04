@@ -56,3 +56,10 @@ const (
 	MsgDurationInvalid = "Escribe una duración de 1 a 1440 minutos"
 	MsgPriceInvalid    = "El precio no puede ser negativo"
 )
+
+// Field messages for clients (design doc item 48).
+const (
+	MsgClientNameInvalid = "Escribe un nombre de 1 a 120 caracteres"
+	MsgPhoneInvalid      = "Número de teléfono no válido"
+	MsgNotesTooLong      = "Escribe hasta 2000 caracteres"
+)
