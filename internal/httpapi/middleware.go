@@ -144,7 +144,8 @@ func checkOrigin(cfg middlewareConfig, next http.Handler) http.Handler {
 
 // Steps 6–8 (design doc item 34) run as the generated router's middlewares (OP5), so they run
 // after routing and only on the /api/v1 routes of the spec. The public routes and the routes
-// allowed while must_change_password is set come from the spec, never from a route list here.
+// allowed while must_change_password is set are read from the embedded spec at New, never from a
+// route list here.
 
 // signedIn is what step 6 stores for a valid session cookie.
 type signedIn struct {
@@ -160,10 +161,26 @@ func currentSession(ctx context.Context) (signedIn, bool) {
 	return cur, ok
 }
 
+// errNoSessionPastStep7 means a handler of a secured route ran without a session: a wiring bug,
+// not bad input.
+var errNoSessionPastStep7 = errors.New("httpapi: a secured handler ran without a session")
+
+// mustSignedIn returns the session of a secured route's request. Step 7 is the one place that
+// answers 401: a second check in the handlers would hide a step-7 regression from the tests. If
+// the session is missing anyway, it panics, and step 3 answers 500 internal and logs the stack:
+// it fails closed and loud, never as a 200 for nobody.
+func mustSignedIn(ctx context.Context) signedIn {
+	cur, ok := currentSession(ctx)
+	if !ok {
+		panic(errNoSessionPastStep7)
+	}
+	return cur
+}
+
 // sessionMiddlewares are steps 6–8 as gen.StdHTTPServerOptions.Middlewares. The generated wrapper
 // wraps the handler in list order, so the last entry runs first: 6, then 7, then 8.
-func (s *Server) sessionMiddlewares(allowedWhileMustChange map[string]bool) []gen.MiddlewareFunc {
-	return []gen.MiddlewareFunc{mustChangePasswordGate(allowedWhileMustChange), requireSession, s.loadSession}
+func (s *Server) sessionMiddlewares(public, allowedWhileMustChange map[string]bool) []gen.MiddlewareFunc {
+	return []gen.MiddlewareFunc{mustChangePasswordGate(allowedWhileMustChange), requireSession(public), s.loadSession}
 }
 
 // loadSession is step 6. With an oc_session cookie it runs auth.Authenticate in a short write
@@ -202,19 +219,19 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 	})
 }
 
-// requireSession is step 7. The generated wrapper puts gen.SessionCookieScopes on the context of
-// every operation under the spec's global security; the public ones say `security: []` and get
-// none. A secured route without a session is 401 unauthorized.
-func requireSession(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Context().Value(gen.SessionCookieScopes) != nil {
-			if _, ok := currentSession(r.Context()); !ok {
+// requireSession is step 7. Every route needs a session unless r.Pattern is in public (from
+// publicOperations: the spec's `security: []` operations), so an empty or unknown pattern needs
+// one too. A request that needs a session and has none is 401 unauthorized.
+func requireSession(public map[string]bool) gen.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := currentSession(r.Context()); !ok && !public[r.Pattern] {
 				problem.Write(w, r, problem.Unauthorized{})
 				return
 			}
-		}
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // mustChangePasswordGate is step 8. While the signed-in user must change her password, only the
@@ -236,25 +253,83 @@ func mustChangePasswordGate(allowed map[string]bool) gen.MiddlewareFunc {
 // must_change_password is set.
 const mustChangeExtension = "x-oc-allowed-while-must-change-password"
 
-// allowedWhileMustChangePassword reads the operations spec marks with mustChangeExtension: true,
-// as the mux patterns "METHOD /api/v1<path>" the generated router registers. A value other than a
-// boolean is an error, so a typo in the spec stops serve instead of opening or closing a route.
-func allowedWhileMustChangePassword(spec *openapi3.T) (map[string]bool, error) {
-	allowed := map[string]bool{}
+// sessionScheme is the one security scheme of api/openapi.yaml (the oc_session cookie).
+const sessionScheme = "sessionCookie"
+
+// forEachOperation calls fn with every operation of spec and its mux pattern
+// "METHOD /api/v1<path>", as the generated router registers it. It stops at fn's first error.
+func forEachOperation(spec *openapi3.T, fn func(pattern string, op *openapi3.Operation) error) error {
 	for path, item := range spec.Paths.Map() {
 		for method, op := range item.Operations() {
-			raw, found := op.Extensions[mustChangeExtension]
-			if !found {
-				continue
-			}
-			marked, isBool := raw.(bool)
-			if !isBool {
-				return nil, fmt.Errorf("httpapi: %s on %s %s is not a boolean", mustChangeExtension, method, path)
-			}
-			if marked {
-				allowed[method+" "+apiBase+path] = true
+			if err := fn(method+" "+apiBase+path, op); err != nil {
+				return err
 			}
 		}
+	}
+	return nil
+}
+
+// checkSecurity is an error unless every requirement in reqs names exactly sessionScheme. An
+// empty requirement ({}, "anonymous allowed") is an error too: public is written `security: []`.
+func checkSecurity(where string, reqs openapi3.SecurityRequirements) error {
+	for _, req := range reqs {
+		if len(req) != 1 {
+			return fmt.Errorf("httpapi: security on %s must name only %s", where, sessionScheme)
+		}
+		if _, ok := req[sessionScheme]; !ok {
+			return fmt.Errorf("httpapi: security on %s names a scheme other than %s", where, sessionScheme)
+		}
+	}
+	return nil
+}
+
+// publicOperations is the set of patterns step 7 lets through without a session: the operations
+// whose own security is present and empty (`security: []`). Every other operation, including one
+// that falls under the global security, needs a session. A security requirement naming any scheme
+// but sessionScheme, here or globally, is an error, so the spec cannot promise a check step 7
+// does not make.
+func publicOperations(spec *openapi3.T) (map[string]bool, error) {
+	if err := checkSecurity("the spec", spec.Security); err != nil {
+		return nil, err
+	}
+	public := map[string]bool{}
+	err := forEachOperation(spec, func(pattern string, op *openapi3.Operation) error {
+		if op.Security == nil {
+			return nil
+		}
+		if len(*op.Security) == 0 {
+			public[pattern] = true
+			return nil
+		}
+		return checkSecurity(pattern, *op.Security)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return public, nil
+}
+
+// allowedWhileMustChangePassword reads the operations spec marks with mustChangeExtension: true,
+// as mux patterns. A value other than a boolean is an error, so a typo in the spec stops serve
+// instead of opening or closing a route.
+func allowedWhileMustChangePassword(spec *openapi3.T) (map[string]bool, error) {
+	allowed := map[string]bool{}
+	err := forEachOperation(spec, func(pattern string, op *openapi3.Operation) error {
+		raw, found := op.Extensions[mustChangeExtension]
+		if !found {
+			return nil
+		}
+		marked, isBool := raw.(bool)
+		if !isBool {
+			return fmt.Errorf("httpapi: %s on %s is not a boolean", mustChangeExtension, pattern)
+		}
+		if marked {
+			allowed[pattern] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return allowed, nil
 }

@@ -9,11 +9,13 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jnaranj09/open-customer/internal/auth"
@@ -97,6 +99,16 @@ func mustChange(t *testing.T, rec *httptest.ResponseRecorder) bool {
 		t.Fatalf("GET /me = %d %q, want 200 Me", rec.Code, rec.Body.String())
 	}
 	return me.MustChangePassword
+}
+
+// embeddedSpec is the spec compiled into gen, freshly loaded (a test may change it).
+func embeddedSpec(t *testing.T) *openapi3.T {
+	t.Helper()
+	spec, err := gen.GetSpec()
+	if err != nil {
+		t.Fatalf("GetSpec: %v", err)
+	}
+	return spec
 }
 
 func TestMeWithoutCookieIs401(t *testing.T) {
@@ -183,11 +195,7 @@ func TestMustChangePasswordGate(t *testing.T) {
 	t.Run("a route outside the allowed set is 403 must-change-password", func(t *testing.T) {
 		// PATCH /settings joins the spec in Task 22; until then the gate gets a request the router
 		// would have matched to it.
-		spec, err := gen.GetSpec()
-		if err != nil {
-			t.Fatalf("GetSpec: %v", err)
-		}
-		allowed, err := allowedWhileMustChangePassword(spec)
+		allowed, err := allowedWhileMustChangePassword(embeddedSpec(t))
 		if err != nil {
 			t.Fatalf("allowedWhileMustChangePassword: %v", err)
 		}
@@ -209,11 +217,7 @@ func TestMustChangePasswordGate(t *testing.T) {
 }
 
 func TestAllowedWhileMustChangeSetMatchesSpec(t *testing.T) {
-	spec, err := gen.GetSpec()
-	if err != nil {
-		t.Fatalf("GetSpec: %v", err)
-	}
-	allowed, err := allowedWhileMustChangePassword(spec)
+	allowed, err := allowedWhileMustChangePassword(embeddedSpec(t))
 	if err != nil {
 		t.Fatalf("allowedWhileMustChangePassword: %v", err)
 	}
@@ -225,10 +229,7 @@ func TestAllowedWhileMustChangeSetMatchesSpec(t *testing.T) {
 }
 
 func TestAllowedWhileMustChangeRejectsANonBoolean(t *testing.T) {
-	spec, err := gen.GetSpec()
-	if err != nil {
-		t.Fatalf("GetSpec: %v", err)
-	}
+	spec := embeddedSpec(t)
 	spec.Paths.Find("/me").Get.Extensions[mustChangeExtension] = "yes"
 	if _, err := allowedWhileMustChangePassword(spec); err == nil {
 		t.Fatal("a non-boolean extension value was accepted, want an error")
@@ -322,4 +323,108 @@ func TestChangePasswordWithoutSessionIs401(t *testing.T) {
 func TestLogoutWithoutSessionIs401(t *testing.T) {
 	app, _, _ := signedInOwner(t)
 	assertUnauthorized(t, post(app.handler, logoutPath, testOrigin, "", nil))
+}
+
+// pathParam matches a path parameter; the spec-driven test fills each with a made-up UUID.
+var pathParam = regexp.MustCompile(`\{[^}]+\}`)
+
+func TestEveryOperationNeedsASessionUnlessPublic(t *testing.T) {
+	app := newTestApp(t, testServerConfig{pool: dbtest.Pool(t)})
+	spec := embeddedSpec(t)
+	for path, item := range spec.Paths.Map() {
+		for method, op := range item.Operations() {
+			public := op.Security != nil && len(*op.Security) == 0
+			t.Run(fmt.Sprintf("%s %s without a cookie is 401 unless security is empty (public=%v)", method, path, public), func(t *testing.T) {
+				target := apiBase + pathParam.ReplaceAllString(path, "00000000-0000-4000-8000-000000000001")
+				req := httptest.NewRequest(method, target, strings.NewReader("{"))
+				req.Header.Set("Origin", testOrigin)
+				rec := httptest.NewRecorder()
+				app.handler.ServeHTTP(rec, req)
+				if got := rec.Code == http.StatusUnauthorized; got == public {
+					t.Fatalf("status = %d %q; want 401 exactly when the operation is not public", rec.Code, rec.Body.String())
+				}
+			})
+		}
+	}
+}
+
+func TestPublicOperationsAreExactlyTheSetupAndLoginOnes(t *testing.T) {
+	spec := embeddedSpec(t)
+	public, err := publicOperations(spec)
+	if err != nil {
+		t.Fatalf("publicOperations: %v", err)
+	}
+	var ids []string
+	if err := forEachOperation(spec, func(pattern string, op *openapi3.Operation) error {
+		if public[pattern] {
+			ids = append(ids, op.OperationID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("forEachOperation: %v", err)
+	}
+	slices.Sort(ids)
+	// The embedded spec carries the operationIds as oapi-codegen spells them (upper-case first).
+	if want := []string{"CompleteSetup", "GetSetupOptions", "GetSetupStatus", "Login"}; !slices.Equal(ids, want) || len(public) != len(want) {
+		t.Fatalf("public operations = %v (%d patterns), want exactly %v", ids, len(public), want)
+	}
+}
+
+func TestPublicOperationsRejectsSecurityStep7CannotCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*openapi3.T)
+	}{
+		{"an operation naming another scheme is refused", func(spec *openapi3.T) {
+			spec.Paths.Find("/me").Get.Security = &openapi3.SecurityRequirements{{"bearer": {}}}
+		}},
+		{"an operation allowing anonymous access with {} is refused", func(spec *openapi3.T) {
+			spec.Paths.Find("/me").Get.Security = &openapi3.SecurityRequirements{{}}
+		}},
+		{"a global requirement naming another scheme is refused", func(spec *openapi3.T) {
+			spec.Security = openapi3.SecurityRequirements{{"bearer": {}}}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := embeddedSpec(t)
+			tc.mutate(spec)
+			if _, err := publicOperations(spec); err == nil {
+				t.Fatal("publicOperations accepted it, want an error")
+			}
+		})
+	}
+}
+
+func TestRequireSessionOnAPatternOutsideThePublicSetIs401(t *testing.T) {
+	public, err := publicOperations(embeddedSpec(t))
+	if err != nil {
+		t.Fatalf("publicOperations: %v", err)
+	}
+	for _, tc := range []struct{ name, pattern string }{
+		{"an empty pattern needs a session", ""},
+		{"a pattern the spec does not have needs a session", "DELETE /api/v1/not-in-the-spec"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
+			req.Pattern = tc.pattern
+			rec := httptest.NewRecorder()
+			requireSession(public)(http.NotFoundHandler()).ServeHTTP(rec, req)
+			assertUnauthorized(t, rec)
+		})
+	}
+}
+
+// TestSlideCommitFailureIsAnErrorWithNoCookie: the step-6 transaction (the sliding write) whose
+// commit fails is a 500, and the cookie is not re-sent.
+func TestSlideCommitFailureIsAnErrorWithNoCookie(t *testing.T) {
+	_, pool, c := signedInOwner(t)
+	app := newTestApp(t, testServerConfig{pool: pool, beginner: failingCommit{pool}})
+	app.clock.Advance(61 * time.Minute)
+	rec := getMe(app.handler, c)
+	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
+		t.Fatalf("type = %q, want internal", got)
+	}
+	if resent := sessionCookie(rec); resent != nil {
+		t.Fatalf("Set-Cookie oc_session = %+v after a failed commit, want none", resent)
+	}
 }

@@ -63,11 +63,16 @@ var _ gen.ServerInterface = (*Server)(nil)
 
 // New returns the app's whole HTTP handler: the probes, the generated /api/v1 routes (behind the
 // session steps 6–8), the /api/ catch-all and the SPA, inside the middleware steps 1–5 of design
-// doc item 34. It fails only when the embedded spec cannot be read.
+// doc item 34. It fails when the embedded spec cannot be read or its security or
+// x-oc-allowed-while-must-change-password values are not ones steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
 	spec, err := gen.GetSpec()
 	if err != nil {
 		return nil, fmt.Errorf("httpapi: load the embedded spec: %w", err)
+	}
+	public, err := publicOperations(spec)
+	if err != nil {
+		return nil, err
 	}
 	allowed, err := allowedWhileMustChangePassword(spec)
 	if err != nil {
@@ -88,7 +93,7 @@ func New(opts Options) (http.Handler, error) {
 		BaseURL:          apiBase,
 		BaseRouter:       mux,
 		ErrorHandlerFunc: bindErrorHandler,
-		Middlewares:      s.sessionMiddlewares(allowed),
+		Middlewares:      s.sessionMiddlewares(public, allowed),
 	})
 	// Every other path and method under /api/ is a 404 problem. Without this, the / pattern
 	// below would answer it with index.html and a 200.

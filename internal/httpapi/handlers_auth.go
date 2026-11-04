@@ -8,7 +8,6 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
-	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/settings"
 )
 
@@ -88,15 +87,12 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 // GetMe answers the signed-in user from the session step 6 loaded. It is allowed while
 // must_change_password is set (the spec's x-oc-allowed-while-must-change-password).
 func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
-	cur, ok := currentSession(r.Context())
-	if !ok { // step 7 already refused a request without a session; fail closed anyway
-		problem.Write(w, r, problem.Unauthorized{})
-		return
-	}
-	writeJSON(w, http.StatusOK, toMe(cur.me))
+	writeJSON(w, http.StatusOK, toMe(mustSignedIn(r.Context()).me))
 }
 
-// Logout deletes the current session and expires the cookie, only after the commit.
+// Logout deletes the current session and expires the cookie, only after the commit. Step 7 has
+// already refused a request without a session; like GetMe and ChangePassword it does no 401 of
+// its own.
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	token := auth.SessionToken(r)
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
@@ -119,13 +115,9 @@ func (s *Server) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	if decodeJSON(w, r, &body) != nil {
 		return
 	}
-	cur, ok := currentSession(r.Context())
-	if !ok { // step 7 already refused a request without a session; fail closed anyway
-		problem.Write(w, r, problem.Unauthorized{})
-		return
-	}
+	session := mustSignedIn(r.Context()).session
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
-		if err := s.auth.ChangePassword(r.Context(), tx, cur.session, body.CurrentPassword, body.NewPassword); err != nil {
+		if err := s.auth.ChangePassword(r.Context(), tx, session, body.CurrentPassword, body.NewPassword); err != nil {
 			return fmt.Errorf("change the password: %w", err)
 		}
 		return nil
