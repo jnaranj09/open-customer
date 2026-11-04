@@ -340,7 +340,7 @@ Dependency rules:
 *   `auth` imports no domain module. Setup needs one thing from another module, and `cmd/open-customer` passes it to `auth` as a function when it builds it: the settings creator (a closure over `settings.Create`, which also validates the time zone, currency and country; item 40). `auth` defines the type of that function and of its input, so it never names a `settings` type. Setup writes nothing else: no starter content.
 *   Modules are concrete Go types; `httpapi` holds them directly. An interface is added only where a test needs a fake (`push` for the scheduler tests). The method list in item 32 is the contract.
 *   **Transactions are passed explicitly.** Every module function takes `(ctx, q db.DBTX, …)`. `db.DBTX` is the interface sqlc generates; both the pool and a `pgx.Tx` satisfy it. Who opens the transaction:
-    *   **Every non-GET handler** runs its module call inside `db.WithTx` (read-write) and passes the `pgx.Tx`. It commits before it writes the response, so a failed commit is never shown to her as saved (Goal 6). A module write with several statements (an appointment and its service lines, a password change and its session revokes) is then all or nothing. Setup is the same: the `POST /setup` handler opens the transaction for `auth.CompleteSetup`.
+    *   **Every non-GET handler that reads or writes the database** runs its module call inside `db.WithTx` (read-write) and passes the `pgx.Tx`. It commits before it writes the response, so a failed commit is never shown to her as saved (Goal 6). A module write with several statements (an appointment and its service lines, a password change and its session revokes) is then all or nothing. Setup is the same: the `POST /setup` handler opens the transaction for `auth.CompleteSetup`.
     *   **The four snapshot readers** use a read-only `REPEATABLE READ` transaction: bootstrap, `GET /reminders/due` and the daily timer (all three call `DueList`), and export.
     *   **Every other GET handler** passes the pool.
 *   **Modules have their own types.** Each module defines plain input and output structs (for example `clients.Client`, `clients.CreateInput`). Handlers convert between them and the generated `gen` types. Modules never import `gen`.
@@ -850,7 +850,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 ### Observability
 
 *   Logs are JSON from `log/slog` to stdout. Each request log line has a request ID, `CF-Ray`, the route, the status and the duration.
-*   `POST /client-errors` takes errors from the PWA (message, stack, app version, route) and logs them at `warn`. It is rate limited per session.
+*   `POST /client-errors` takes errors from the PWA (message, stack, app version, route) and logs them at `warn` with `code=client_error`, the route, the app version, the message and the stack. It opens no transaction and touches no table. Limits, in characters: `message` 1 to 2000, `app_version` 1 to 50, `route` 1 to 200 (outside them: 422 on that field); a `stack` over 8000 is cut to 8000, so the logged `message` and `stack` never exceed their limits. It is rate limited to 10 per minute per session, keyed by the session's token hash (429 with `Retry-After`). The message and stack are the one raw outside text the app logs: they come from our own PWA and are the only way to debug it (see the exception in `.claude/rules/maintainability.md`).
 *   The status screen is the main health signal for her and for the author. There is no Prometheus endpoint.
 
 ### Time and locale
@@ -1578,7 +1578,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `LogEntry` | `rule_id`, `appointment_id`, `anchor_at` (nullable; null for `come_back`), `action`, `body?`, `phone_digits?`, `acted_at` |
     | `LogItem` | `LogEntry` plus `id`, `kind`, `client_id`, `client_name`. Returned by `GET /reminders/log`, so "Enviados" and the client history show the name even when the appointment is outside the cached window. |
     | `Bootstrap` | `server_time`, `settings`, `attributes[]` (with options), `services[]`, `templates[]`, `rules[]` (these four include archived rows, with `archived: true`, because the phone renders old values by their last label and warns about archived templates and services), `clients[]` (active only), `appointments[]` (in the window), `due[]`, `template_vars[]` (`ns`, `key`, `label`, for the chip row), `backup_red` (the same value as `Status.backup.red`, for the line on "Hoy") |
-    | `Status` | `version`, `migration_version`, `heartbeat_age_s`, `backup` (`checked_at?`, `last_dump_at?`, `last_copy_at?`, `last_error?`, `red`; a missing or unreadable file gives all times null and `red: true`, which the UI shows as "desconocido"), `media_free_bytes`, `push` (`subscriptions`, `last_push?` (`date`, `attempted`, `delivered`), `red`) |
+    | `Status` | `version`, `migration_version`, `heartbeat_age_s?` (null until the timer's first tick), `backup` (`checked_at?`, `last_dump_at?`, `last_copy_at?`, `last_error?`, `red`; a missing or unreadable file gives all times null and `red: true`, which the UI shows as "desconocido"), `media_free_bytes?` (null when the volume cannot be read), `push` (`subscriptions`, `last_push?` (`date`, `attempted`, `delivered`), `red`) |
 
     **Request bodies**
 
@@ -1602,7 +1602,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `POST /push/subscriptions` | the browser's `PushSubscription` JSON (`endpoint`, `expirationTime?` (number or null; accepted and ignored: the browser always sends it and unknown fields are rejected), `keys.p256dh`, `keys.auth`) | 201 `{id}` for a new endpoint, 200 `{id}` for a known one (keys updated) |
     | `POST /media` | multipart: `full` (JPEG, ≤ 10 MB), `thumb` (JPEG, ≤ 1 MB), `client_id?`, `appointment_id?` (at least one; the request is ≤ 12 MB). The server always stores `client_id`: with `appointment_id`, it is filled from the appointment; a different one is 422 (see "Photos"). | 201 `Media` |
     | `POST /settings/icon` | multipart: `icon512`, `icon180` (PNG, each ≤ 1 MB; the request is ≤ 3 MB; the PNG signature is checked, otherwise 415) | 204 |
-    | `POST /client-errors` | `message`, `stack?`, `app_version`, `route` | 204 |
+    | `POST /client-errors` | `message`, `stack?`, `app_version`, `route` (limits in "Observability": 422 on a field outside them; no transaction) | 204, or 429 past 10 per minute per session |
 
     **`PATCH` bodies** (every field optional; `?` = may be `null` to clear)
 
@@ -1712,7 +1712,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 25. `internal/db/db.go` (Create)
 
 *   **Type / Scope**: Connection.
-*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`. `pool` is a `db.Beginner`: the `*pgxpool.Pool`, or in a test a fake whose `Commit` fails (item 37). `WithTx` begins the transaction with `opts` (read-write for every non-GET handler; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
+*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`. `pool` is a `db.Beginner`: the `*pgxpool.Pool`, or in a test a fake whose `Commit` fails (item 37). `WithTx` begins the transaction with `opts` (read-write for every non-GET handler that reads or writes the database; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
 
 ##### 26. `internal/db/migrate.go` (Create)
 
@@ -1795,7 +1795,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `reminders` | `Preview(body, clientID?) Preview{Text, UnknownVars}` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem` (messages and booking prompts, `DueItem.mode`); `Record(LogEntry) (LogItem, created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(day, loc) []LogItem` |
     | `push` | `PublicKey() string`; `Subscribe(userID, Subscription) (id, created bool)`; `CountSubscriptions() int`; `EnsureKeys()`; `SendAll(Payload) SendResult` (`attempted`, `delivered`) |
     | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction) |
-    | `status` | `Health()`; `Ready() bool`; `Status() Status`; `BackupRed() bool` (reads `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(sessionID, ClientError)` |
+    | `status` | `Health()`; `Ready() bool`; `Status(ctx, pool) (Report, error)`; `Backup() Backup` and `BackupRed() bool` (read `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(ctx, sessionKey, ClientError) error` (`sessionKey` is the hex of the session's token hash) |
 
     Every method returns `error` last. Errors are `problem` types (item 24).
 
@@ -1807,7 +1807,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   Multipart: `handlers_media.go` (`POST /media`) and `handlers_settings.go` (`POST /settings/icon`) read it with `r.MultipartReader()`. Binary bodies: `handlers_media.go` (`GET /media/{id}`, `/thumb`) and `handlers_export.go` write to `w`, with the headers from item 15.
     *   `handlers_auth.go` also serves `GET /setup/options` (no session).
     *   `handlers_settings.go` also holds the handlers, outside `/api/v1` and with no session, of `GET /manifest.webmanifest` (`settings.Manifest`), `GET /icons/512.png` and `GET /apple-touch-icon.png` (`settings.Icon`), with `Cache-Control: no-cache`; `handlers_status.go` holds those of `/healthz` and `/readyz`. `server.go` registers all five by literal path, before `/`. An icon file error's text can name a path, so the icon handlers answer it as `internal` with a fixed text and never log it.
-    *   Every non-GET handler wraps its module call in `db.WithTx` ("Code layout and module rules").
+    *   Every non-GET handler that reads or writes the database wraps its module call in `db.WithTx` ("Code layout and module rules").
 
 ##### 34. `internal/httpapi/middleware.go` (Create)
 
@@ -2121,10 +2121,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   `/healthz` (P1): `200` with the plain-text body `ok`.
     *   `/readyz` (DB ping + no pending migrations, through `db.HasPending`) (P1): `200 ok`, or `503` with the plain-text body `not ready`.
-    *   `Status()` (P4). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content (`backupstatus.Read`), and media volume free space via `golang.org/x/sys/unix.Statfs`.
-    *   The client-error log endpoint, rate limited to 10 per minute per session (P4).
+    *   `New(Options{Version, Clock, MediaDir, BackupStatusFile, Push, Scheduler})` builds the module. `Status(ctx, pool)` (P4) returns a `Report` (`Version`, `MigrationVersion`, `HeartbeatAgeS *int64`, `Backup`, `MediaFreeBytes *int64`, `Push`). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content (`backupstatus.Read`), and media volume free space via `golang.org/x/sys/unix.Statfs` (`Bavail * Bsize`; nil with `code=status_statfs_failed` when it fails). `heartbeat_age_s` is whole seconds since the heartbeat, nil when there is none. The backup line is red when the file is missing or unreadable (all times nil), `last_copy_at` is nil or older than 48 h, `last_error` is set, or `checked_at` is nil or older than 2 h (`Backup()`; `BackupRed()` is its `Red`). The push line is red with 0 subscriptions, or when `last_push` has `attempted > 0` and `delivered == 0`.
+    *   `LogClientError` (P4) is the client-error log endpoint: limits and logged fields in "Observability", rate limited to 10 per minute per session (`golang.org/x/time/rate` on the injected clock).
 
-    Tests: missing or corrupt `status.json` gives `backup.red: true` with null times, not a crash; each red rule from "Backups" (old `last_copy_at`, `last_error` set, old `checked_at`); a file written in the exact `backup.sh` time form parses.
+    Tests: missing or corrupt `status.json` gives `backup.red: true` with null times, not a crash; each red rule from "Backups" (old `last_copy_at`, `last_error` set, old or missing `checked_at`); a file written in the exact `backup.sh` time form parses.
 
 ##### 61. `internal/locale/locale.go`, `es.go`, `locale_test.go` (Create)
 

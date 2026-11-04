@@ -641,6 +641,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The status screen data
+         * @description Version, migration version, the timer's heartbeat age, the backup line, free space on the media volume and the push line. heartbeat_age_s is null until the timer has ticked once; media_free_bytes is null when the volume cannot be read. A missing or unreadable backup status file gives all backup times null and backup.red true. The push line is red with no subscription, or when the last daily push reached nobody.
+         */
+        get: operations["getStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/client-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log an error from the app
+         * @description The PWA reports an error it caught. The server logs it at warn with code=client_error. message (1 to 2000 characters), app_version (1 to 50) and route (1 to 200) outside their limits are 422 on that field; a stack over 8000 characters is cut. Each session may send 10 per minute, then 429 with Retry-After.
+         */
+        post: operations["logClientError"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media": {
         parameters: {
             query?: never;
@@ -988,6 +1028,49 @@ export interface components {
             phone_digits?: string | null;
             /** Format: date-time */
             acted_at: string;
+        };
+        Status: {
+            version: string;
+            /** Format: int64 */
+            migration_version: number;
+            /**
+             * Format: int64
+             * @description Whole seconds since the timer's last heartbeat; null before its first tick.
+             */
+            heartbeat_age_s: number | null;
+            backup: components["schemas"]["BackupStatus"];
+            /**
+             * Format: int64
+             * @description Bytes available to the app on the media volume; null when it cannot be read.
+             */
+            media_free_bytes: number | null;
+            push: components["schemas"]["PushStatus"];
+        };
+        BackupStatus: {
+            /** Format: date-time */
+            checked_at: string | null;
+            /** Format: date-time */
+            last_dump_at: string | null;
+            /** Format: date-time */
+            last_copy_at: string | null;
+            last_error: string | null;
+            red: boolean;
+        };
+        PushStatus: {
+            subscriptions: number;
+            last_push: {
+                /** Format: date */
+                date: string;
+                attempted: number;
+                delivered: number;
+            } | null;
+            red: boolean;
+        };
+        ClientErrorInput: {
+            message: string;
+            stack?: string;
+            app_version: string;
+            route: string;
         };
         PushKey: {
             /** @description The VAPID public key, base64url without padding. */
@@ -2219,6 +2302,55 @@ export interface operations {
             401: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    logClientError: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientErrorInput"];
+            };
+        };
+        responses: {
+            /** @description Logged. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

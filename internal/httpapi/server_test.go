@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/push"
 	"github.com/jnaranj09/open-customer/internal/reminders"
+	"github.com/jnaranj09/open-customer/internal/scheduler"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
@@ -113,7 +115,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Templates:      templates.New(templates.Options{Clock: fake, Attributes: attrsModule}),
 		Reminders:      reminders.New(reminders.Options{Clock: fake, Attributes: attrsModule}),
 		Push:           push.New(push.Options{Clock: fake, Subject: "mailto:dev@example.com"}),
-		Status:         status.New(testVersion),
+		Status:         testStatus(t, fake, cfg.mediaDir),
 		Clock:          fake,
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -122,6 +124,18 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		t.Fatalf("New: %v", err)
 	}
 	return testApp{handler: handler, auth: a, clock: fake}
+}
+
+// testStatus is the status module on clk. Its backup status file does not exist, so the backup line
+// is red.
+func testStatus(t *testing.T, clk clock.Clock, mediaDir string) *status.Status {
+	t.Helper()
+	return status.New(status.Options{
+		Version: testVersion, Clock: clk, MediaDir: mediaDir,
+		BackupStatusFile: filepath.Join(t.TempDir(), "status.json"),
+		Push:             push.New(push.Options{Clock: clk, Subject: "mailto:dev@example.com"}),
+		Scheduler:        scheduler.New(scheduler.Options{Clock: clk}),
+	})
 }
 
 // newTestServer is newTestApp's handler with the default config, on pool.
@@ -466,7 +480,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		Templates: templates.New(templates.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Reminders: reminders.New(reminders.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Push:      push.New(push.Options{Clock: clock.NewFake(testStart), Subject: "mailto:dev@example.com"}),
-		Status:    status.New(testVersion),
+		Status:    testStatus(t, clock.NewFake(testStart), t.TempDir()),
 		Clock:     clock.NewFake(testStart),
 	}
 	for _, tc := range []struct {

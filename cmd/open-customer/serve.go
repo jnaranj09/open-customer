@@ -171,6 +171,9 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		pool.Close()
 		return nil, nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
 	}
+	timer := scheduler.New(scheduler.Options{
+		Clock: clock.Real{}, Pool: pool, Settings: mods.settings, Reminders: mods.reminders, Push: mods.push,
+	})
 	handler, err := httpapi.New(httpapi.Options{
 		Pool:           pool,
 		Version:        version,
@@ -187,17 +190,17 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Reminders:      mods.reminders,
 		Push:           mods.push,
 		Appointments:   mods.appointments,
-		Status:         status.New(version),
-		Clock:          clock.Real{},
-		Log:            log,
+		Status: status.New(status.Options{
+			Version: version, Clock: clock.Real{}, MediaDir: cfg.MediaDir, BackupStatusFile: cfg.BackupStatusFile,
+			Push: mods.push, Scheduler: timer,
+		}),
+		Clock: clock.Real{},
+		Log:   log,
 	})
 	if err != nil {
 		pool.Close()
 		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
-	timer := scheduler.New(scheduler.Options{
-		Clock: clock.Real{}, Pool: pool, Settings: mods.settings, Reminders: mods.reminders, Push: mods.push,
-	})
 	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,

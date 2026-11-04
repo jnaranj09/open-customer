@@ -67,7 +67,8 @@ A check that could not run is reported as NOT RUN, never as passing.
    layout and module rules". depguard checks the coarse ones; the rest is a review check. Each
    module writes only its own tables.
 9. **Transactions are explicit.** Every module function takes `ctx` and a `db.DBTX`. Every non-GET
-   handler runs in `db.WithTx` and commits before writing the response. The snapshot readers
+   handler that reads or writes the database runs in `db.WithTx` and commits before writing the
+   response. The snapshot readers
    (bootstrap, due list, daily timer, export) use a read-only REPEATABLE READ transaction.
 10. **Time is injected.** Modules take the clock from the platform clock package and the business
     time zone from settings; no direct `time.Now()` in a module.

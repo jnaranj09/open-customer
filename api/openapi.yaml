@@ -1109,6 +1109,55 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /status:
+    get:
+      operationId: getStatus
+      summary: The status screen data
+      description: >-
+        Version, migration version, the timer's heartbeat age, the backup line, free space on the
+        media volume and the push line. heartbeat_age_s is null until the timer has ticked once;
+        media_free_bytes is null when the volume cannot be read. A missing or unreadable backup status
+        file gives all backup times null and backup.red true. The push line is red with no
+        subscription, or when the last daily push reached nobody.
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /client-errors:
+    post:
+      operationId: logClientError
+      summary: Log an error from the app
+      description: >-
+        The PWA reports an error it caught. The server logs it at warn with code=client_error.
+        message (1 to 2000 characters), app_version (1 to 50) and route (1 to 200) outside their limits
+        are 422 on that field; a stack over 8000 characters is cut. Each session may send 10 per
+        minute, then 429 with Retry-After.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientErrorInput"
+      responses:
+        "204":
+          description: Logged.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /media:
     post:
       operationId: uploadMedia
@@ -1754,6 +1803,82 @@ components:
         acted_at:
           type: string
           format: date-time
+    Status:
+      type: object
+      required: [version, migration_version, heartbeat_age_s, backup, media_free_bytes, push]
+      properties:
+        version:
+          type: string
+        migration_version:
+          type: integer
+          format: int64
+        heartbeat_age_s:
+          type: integer
+          format: int64
+          nullable: true
+          description: Whole seconds since the timer's last heartbeat; null before its first tick.
+        backup:
+          $ref: "#/components/schemas/BackupStatus"
+        media_free_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: Bytes available to the app on the media volume; null when it cannot be read.
+        push:
+          $ref: "#/components/schemas/PushStatus"
+    BackupStatus:
+      type: object
+      required: [checked_at, last_dump_at, last_copy_at, last_error, red]
+      properties:
+        checked_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_dump_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_copy_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        red:
+          type: boolean
+    PushStatus:
+      type: object
+      required: [subscriptions, last_push, red]
+      properties:
+        subscriptions:
+          type: integer
+        last_push:
+          type: object
+          nullable: true
+          required: [date, attempted, delivered]
+          properties:
+            date:
+              type: string
+              format: date
+            attempted:
+              type: integer
+            delivered:
+              type: integer
+        red:
+          type: boolean
+    ClientErrorInput:
+      type: object
+      required: [message, app_version, route]
+      properties:
+        message:
+          type: string
+        stack:
+          type: string
+        app_version:
+          type: string
+        route:
+          type: string
     PushKey:
       type: object
       required: [public_key]

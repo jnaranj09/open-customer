@@ -15,6 +15,8 @@ const (
 	MsgIDInvalid = "Identificador no válido"
 	// MsgFieldRequired is a required field that is missing.
 	MsgFieldRequired = "Este dato es obligatorio"
+	// MsgClientErrorFieldInvalid is a client error field that is empty or over its limit.
+	MsgClientErrorFieldInvalid = "Dato no válido"
 )
 
 // Field messages for the business settings (design doc item 44).
