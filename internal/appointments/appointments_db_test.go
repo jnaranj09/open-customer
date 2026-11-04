@@ -424,17 +424,19 @@ func TestUpdateServiceIDsRecopiesAndKeepsPaid(t *testing.T) {
 	wantLines(t, f.get(t, booked.ID).Services, lineOf(b))
 }
 
-// D10 and ruling F12: an active service is copied again at today's price.
-func TestUpdateServiceIDsRecopiesActiveAtCurrentPrice(t *testing.T) {
+// D10: a service already on the appointment keeps its saved price after a price change; an
+// added copy of it is taken at today's price.
+func TestUpdateServiceIDsKeepsSavedPriceOfKeptService(t *testing.T) {
 	f := newFixture(t)
 	a := f.service(t, "Corte", 60, ptr(2500))
 	booked := f.create(t, AppointmentInput{ClientID: f.client(t, "Marta Solano"), StartsAt: at, ServiceIDs: svcIDs(a.ID)})
 	f.editService(t, a.ID, services.ServicePatch{PriceCents: nullable.NewNullableWithValue[int64](3000)})
-	got := f.update(t, booked.ID, AppointmentPatch{ServiceIDs: &[]uuid.UUID{a.ID}})
+	got := f.update(t, booked.ID, AppointmentPatch{ServiceIDs: &[]uuid.UUID{a.ID, a.ID}})
+	old := lineOf(a)
 	a.PriceCents = ptr(3000)
-	wantLines(t, got.Services, lineOf(a))
-	if got.TotalCents != 3000 {
-		t.Fatalf("total = %d, want 3000", got.TotalCents)
+	wantLines(t, got.Services, old, lineOf(a))
+	if got.TotalCents != 5500 {
+		t.Fatalf("total = %d, want 2500 kept + 3000 new", got.TotalCents)
 	}
 }
 

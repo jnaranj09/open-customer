@@ -13,10 +13,10 @@ import (
 const maxServices = 20
 
 // planLines turns the requested service IDs into lines, in order. keep is the appointment's
-// current lines (nil on create). An active service is copied again at its current name, price and
-// duration. An archived service is allowed only while a kept line still has it, and that line is
-// reused as it is (D10). An unknown ID, or an archived one with no unused kept line, is a 422 on
-// service_ids. The result is never nil.
+// current lines (nil on create). An ID that still has an unused kept line reuses that line as it
+// is, so a saved name, price and duration never change on an edit (D10). Any other active service
+// is copied at its current name, price and duration. An unknown ID, or an archived one with no
+// unused kept line, is a 422 on service_ids. The result is never nil.
 func planLines(ids []uuid.UUID, found map[uuid.UUID]services.Service, keep []Line) ([]Line, error) {
 	if len(ids) > maxServices {
 		return nil, problem.Field("service_ids", problem.MsgTooManyServices)
@@ -28,13 +28,13 @@ func planLines(ids []uuid.UUID, found map[uuid.UUID]services.Service, keep []Lin
 		if !ok {
 			return nil, problem.Field("service_ids", problem.MsgServiceUnavailable)
 		}
-		if !s.Archived {
-			out = append(out, Line{ServiceID: s.ID, Name: s.Name, PriceCents: s.PriceCents, DurationMin: s.DurationMin})
-			continue
-		}
 		i := firstUnused(keep, used, id)
 		if i < 0 {
-			return nil, problem.Field("service_ids", problem.MsgServiceUnavailable)
+			if s.Archived {
+				return nil, problem.Field("service_ids", problem.MsgServiceUnavailable)
+			}
+			out = append(out, Line{ServiceID: s.ID, Name: s.Name, PriceCents: s.PriceCents, DurationMin: s.DurationMin})
+			continue
 		}
 		used[i] = true
 		out = append(out, keep[i])

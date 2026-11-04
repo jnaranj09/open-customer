@@ -412,7 +412,7 @@ export interface paths {
         head?: never;
         /**
          * Change an appointment
-         * @description Changes only the fields sent. notes and paid_cents may be null, which clears them. attrs merges by key and null removes a key. service_ids replaces the whole list. The overlap check (409 overlap) runs when the times of a scheduled or confirmed appointment change, unless allow_overlap is true. client_id and status cannot be changed here.
+         * @description Changes only the fields sent. notes and paid_cents may be null, which clears them. attrs merges by key and null removes a key. service_ids replaces the whole list: a service already on the appointment keeps its saved line and price; only added services are copied at today's price. The overlap check (409 overlap) runs when the times of a scheduled or confirmed appointment change, unless allow_overlap is true. client_id and status cannot be changed here.
          */
         patch: operations["updateAppointment"];
         trace?: never;

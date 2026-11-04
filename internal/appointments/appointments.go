@@ -186,8 +186,8 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AppointmentInput) (Ap
 }
 
 // Update changes the given fields of one appointment (every bad field is reported), also on past
-// and done appointments. ServiceIDs copies the lines again (D10) and recomputes total_cents but
-// never paid_cents. Without EndsAt, a new service list sets ends_at to start plus its durations,
+// and done appointments. ServiceIDs keeps the saved line of a service already on it and copies
+// only added ones at today's price (D10); it recomputes total_cents but never paid_cents. Without EndsAt, a new service list sets ends_at to start plus its durations,
 // and a moved start moves ends_at by the same amount. The overlap check runs only when the times
 // change and the appointment is scheduled or confirmed. An unknown id is problem.NotFound.
 func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p AppointmentPatch) (Appointment, error) {

@@ -662,11 +662,11 @@ Status changes:
 *   **Concurrent edits:** last write wins. There is one user and no offline edits, so the only possible conflict is her Safari tab against the installed app. Version checks (`If-Match` / 412) come with staff accounts; a `version` column can be added then without changing existing data.
 *   **Services:** the price and duration of each service are copied at save time. Changing the service later does not change past appointments.
 *   **Editing:** every field can be edited at any time, also on past and done appointments, so she can fix mistakes.
-    *   `PATCH` with `service_ids` replaces the whole service list: each line of an active service is copied again from the current service, at today's name, price and duration, also when that service was already on the appointment, so a past visit's lines and `total_cents` move when a price changed. `total_cents` is recomputed. `paid_cents` is never changed by this.
+    *   `PATCH` with `service_ids` replaces the whole service list. A service already on the appointment keeps its saved line (name, price, duration), matched by service ID as many times as the appointment has it, so a past visit's lines and `total_cents` never move when a price changes later. Only a service added by the edit (or an extra copy of one already there) is copied from the current service at today's name, price and duration. To take today's price for a kept line, she removes the service and adds it again in a second edit. `total_cents` is recomputed. `paid_cents` is never changed by this.
     *   If the same `PATCH` has no `ends_at`, `ends_at` is recomputed as `starts_at` + the new durations. If it has `ends_at`, that value is kept. No "set by hand" flag is stored.
     *   Changing `starts_at` without `ends_at` moves `ends_at` by the same amount.
     *   The overlap check counts only `scheduled` and `confirmed` appointments, and always leaves out the appointment being saved. It runs on every create, on an update that changes the times of a `scheduled` or `confirmed` appointment (a notes-only edit, or an edit of a cancelled one, skips it), and on "Reactivar". It takes no lock, so two saves at the same moment can both pass it (see "Accepted risks").
-    *   An archived client or service cannot be put on an appointment (422 on `client_id` or `service_ids`). Lines already copied from a service archived later stay as they are: a `service_ids` that still lists that service keeps its old line, matched by service ID as many times as the appointment has it. Only a newly added archived or unknown service is a 422.
+    *   An archived client or service cannot be put on an appointment (422 on `client_id` or `service_ids`). Lines already copied from a service archived later stay as they are, by the same keep rule. Only a newly added archived or unknown service is a 422.
 *   **Payment:** `paid_cents` is a column, because the export and future reports need a number. There is no built-in payment-method field; she can create a select attribute for it like any other.
 
 ### API
@@ -1973,10 +1973,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   Price snapshot unchanged after a service edit.
     *   Overlap detection and `allow_overlap`, also on "Reactivar" through `SetStatus`.
     *   A create whose service-line insert fails leaves no `appointments` row (the handler's transaction rolls back). The test installs a `BEFORE INSERT` trigger on `appointment_services` that raises, and runs `Create` inside `db.WithTx`.
-    *   An archived client or service in a create or `service_ids` is rejected; a line of a service archived later is kept on a `service_ids` edit, and an active service is copied again at today's price.
+    *   An archived client or service in a create or `service_ids` is rejected; a line of a service archived later is kept on a `service_ids` edit; a kept active service keeps its saved price, and only an added one is copied at today's price.
     *   `ListRange` uses the business's local days, also across a DST change (`Europe/Madrid`).
     *   The same service twice in one appointment.
-    *   The editing rules: `service_ids` re-copies lines and recomputes `total_cents` but not `paid_cents`; `ends_at` recomputed without `ends_at` in the request and kept with it; moving `starts_at` moves `ends_at`; a past done appointment can be edited.
+    *   The editing rules: `service_ids` keeps saved lines, copies added ones, and recomputes `total_cents` but not `paid_cents`; `ends_at` recomputed without `ends_at` in the request and kept with it; moving `starts_at` moves `ends_at`; a past done appointment can be edited.
 
 ##### 52. `internal/media/media.go`, `media_test.go` (Create)
 

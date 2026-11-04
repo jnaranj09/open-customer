@@ -115,17 +115,25 @@ func TestPlanLinesKeptTwiceArchivedGivesTwoLines(t *testing.T) {
 	}
 }
 
-// Ruling F12: an active service already on the appointment is copied again at the current price.
-func TestPlanLinesRecopiesActiveServiceAlreadyKept(t *testing.T) {
+// A service already on the appointment keeps its saved line, even when it is active and its
+// price changed; only an extra copy is taken at the current price.
+func TestPlanLinesKeepsActiveServiceAlreadyKept(t *testing.T) {
 	active := svc("Corte", 40, ptr(3000), false)
 	keep := []Line{{ServiceID: active.ID, Name: "Corte viejo", PriceCents: ptr(1000), DurationMin: 20}}
-	got, err := planLines([]uuid.UUID{active.ID}, byID(active), keep)
+	got, err := planLines([]uuid.UUID{active.ID, active.ID}, byID(active), keep)
 	if err != nil {
 		t.Fatalf("planLines: %v", err)
 	}
-	if len(got) != 1 || got[0].Name != "Corte" || got[0].DurationMin != 40 ||
-		got[0].PriceCents == nil || *got[0].PriceCents != 3000 {
-		t.Fatalf("got %+v, want a fresh copy at the current price", got)
+	if len(got) != 2 {
+		t.Fatalf("got %d lines, want 2", len(got))
+	}
+	if got[0].Name != "Corte viejo" || got[0].DurationMin != 20 ||
+		got[0].PriceCents == nil || *got[0].PriceCents != 1000 {
+		t.Errorf("line 0 = %+v, want the kept line unchanged", got[0])
+	}
+	if got[1].Name != "Corte" || got[1].DurationMin != 40 ||
+		got[1].PriceCents == nil || *got[1].PriceCents != 3000 {
+		t.Errorf("line 1 = %+v, want a fresh copy at the current price", got[1])
 	}
 }
 
