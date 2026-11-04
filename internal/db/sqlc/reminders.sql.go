@@ -7,10 +7,31 @@ package sqlc
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+const getDueSettings = `-- name: GetDueSettings :one
+
+SELECT name, timezone, locale FROM business_settings WHERE id = 1
+`
+
+type GetDueSettingsRow struct {
+	Name     string
+	Timezone string
+	Locale   string
+}
+
+// The due-list loads (design doc "Due-list computation", steps 1-2). DueList runs them one after
+// another on one read-only REPEATABLE READ snapshot.
+func (q *Queries) GetDueSettings(ctx context.Context) (GetDueSettingsRow, error) {
+	row := q.db.QueryRow(ctx, getDueSettings)
+	var i GetDueSettingsRow
+	err := row.Scan(&i.Name, &i.Timezone, &i.Locale)
+	return i, err
+}
 
 const getRule = `-- name: GetRule :one
 SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id
@@ -86,6 +107,287 @@ func (q *Queries) InsertRule(ctx context.Context, arg InsertRuleParams) error {
 		arg.Now,
 	)
 	return err
+}
+
+const listActiveRulesForDue = `-- name: ListActiveRulesForDue :many
+SELECT r.id, r.kind, r.service_id, r.offset_days, r.applies_from,
+       t.body AS template_body, t.archived_at AS template_archived_at,
+       s.archived_at AS service_archived_at,
+       rs.id AS return_service_id, rs.name AS return_service_name, rs.archived_at AS return_archived_at
+FROM reminder_rules r
+JOIN message_templates t ON t.id = r.template_id
+LEFT JOIN services s ON s.id = r.service_id
+LEFT JOIN services rs ON rs.id = COALESCE(r.return_service_id, r.service_id)
+WHERE r.archived_at IS NULL
+ORDER BY r.created_at, r.id
+`
+
+type ListActiveRulesForDueRow struct {
+	ID                 uuid.UUID
+	Kind               string
+	ServiceID          uuid.NullUUID
+	OffsetDays         int32
+	AppliesFrom        *time.Time
+	TemplateBody       string
+	TemplateArchivedAt *time.Time
+	ServiceArchivedAt  *time.Time
+	ReturnServiceID    uuid.NullUUID
+	ReturnServiceName  *string
+	ReturnArchivedAt   *time.Time
+}
+
+// The return service is the effective one: return_service_id, or service_id when it is empty. A
+// "before" rule has neither, so its return columns are NULL.
+func (q *Queries) ListActiveRulesForDue(ctx context.Context) ([]ListActiveRulesForDueRow, error) {
+	rows, err := q.db.Query(ctx, listActiveRulesForDue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveRulesForDueRow
+	for rows.Next() {
+		var i ListActiveRulesForDueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.ServiceID,
+			&i.OffsetDays,
+			&i.AppliesFrom,
+			&i.TemplateBody,
+			&i.TemplateArchivedAt,
+			&i.ServiceArchivedAt,
+			&i.ReturnServiceID,
+			&i.ReturnServiceName,
+			&i.ReturnArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBeforeCandidates = `-- name: ListBeforeCandidates :many
+SELECT a.id, a.client_id, c.name AS client_name, c.phone_digits, c.attrs AS client_attrs,
+       a.starts_at, a.ends_at, a.created_at, a.status, a.attrs
+FROM appointments a JOIN clients c ON c.id = a.client_id
+WHERE a.starts_at > $1::timestamptz AND a.starts_at < $2::timestamptz
+  AND a.status IN ('scheduled', 'confirmed') AND c.archived_at IS NULL
+ORDER BY a.starts_at, a.id
+`
+
+type ListBeforeCandidatesParams struct {
+	Now   time.Time
+	Until time.Time
+}
+
+type ListBeforeCandidatesRow struct {
+	ID          uuid.UUID
+	ClientID    uuid.UUID
+	ClientName  string
+	PhoneDigits *string
+	ClientAttrs json.RawMessage
+	StartsAt    time.Time
+	EndsAt      time.Time
+	CreatedAt   time.Time
+	Status      string
+	Attrs       json.RawMessage
+}
+
+func (q *Queries) ListBeforeCandidates(ctx context.Context, arg ListBeforeCandidatesParams) ([]ListBeforeCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listBeforeCandidates, arg.Now, arg.Until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBeforeCandidatesRow
+	for rows.Next() {
+		var i ListBeforeCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientID,
+			&i.ClientName,
+			&i.PhoneDigits,
+			&i.ClientAttrs,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.CreatedAt,
+			&i.Status,
+			&i.Attrs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCandidateLines = `-- name: ListCandidateLines :many
+SELECT appointment_id, service_id, name
+FROM appointment_services
+WHERE appointment_id = ANY($1::uuid[])
+ORDER BY appointment_id, position
+`
+
+type ListCandidateLinesRow struct {
+	AppointmentID uuid.UUID
+	ServiceID     uuid.UUID
+	Name          string
+}
+
+func (q *Queries) ListCandidateLines(ctx context.Context, ids []uuid.UUID) ([]ListCandidateLinesRow, error) {
+	rows, err := q.db.Query(ctx, listCandidateLines, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCandidateLinesRow
+	for rows.Next() {
+		var i ListCandidateLinesRow
+		if err := rows.Scan(&i.AppointmentID, &i.ServiceID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listComeBackCandidates = `-- name: ListComeBackCandidates :many
+SELECT a.id, a.client_id, c.name AS client_name, c.phone_digits, c.attrs AS client_attrs,
+       a.starts_at, a.ends_at, a.created_at, a.status, a.attrs
+FROM appointments a JOIN clients c ON c.id = a.client_id
+WHERE a.ends_at >= $1::timestamptz AND a.ends_at <= $2::timestamptz
+  AND a.status IN ('scheduled', 'confirmed') AND c.archived_at IS NULL
+ORDER BY a.ends_at, a.id
+`
+
+type ListComeBackCandidatesParams struct {
+	Since time.Time
+	Now   time.Time
+}
+
+type ListComeBackCandidatesRow struct {
+	ID          uuid.UUID
+	ClientID    uuid.UUID
+	ClientName  string
+	PhoneDigits *string
+	ClientAttrs json.RawMessage
+	StartsAt    time.Time
+	EndsAt      time.Time
+	CreatedAt   time.Time
+	Status      string
+	Attrs       json.RawMessage
+}
+
+func (q *Queries) ListComeBackCandidates(ctx context.Context, arg ListComeBackCandidatesParams) ([]ListComeBackCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listComeBackCandidates, arg.Since, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListComeBackCandidatesRow
+	for rows.Next() {
+		var i ListComeBackCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientID,
+			&i.ClientName,
+			&i.PhoneDigits,
+			&i.ClientAttrs,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.CreatedAt,
+			&i.Status,
+			&i.Attrs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLaterAppointments = `-- name: ListLaterAppointments :many
+SELECT id, client_id, starts_at
+FROM appointments
+WHERE client_id = ANY($1::uuid[]) AND starts_at > $2::timestamptz
+  AND status NOT IN ('cancelled', 'no_show')
+ORDER BY starts_at, id
+`
+
+type ListLaterAppointmentsParams struct {
+	ClientIds []uuid.UUID
+	After     time.Time
+}
+
+type ListLaterAppointmentsRow struct {
+	ID       uuid.UUID
+	ClientID uuid.UUID
+	StartsAt time.Time
+}
+
+func (q *Queries) ListLaterAppointments(ctx context.Context, arg ListLaterAppointmentsParams) ([]ListLaterAppointmentsRow, error) {
+	rows, err := q.db.Query(ctx, listLaterAppointments, arg.ClientIds, arg.After)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLaterAppointmentsRow
+	for rows.Next() {
+		var i ListLaterAppointmentsRow
+		if err := rows.Scan(&i.ID, &i.ClientID, &i.StartsAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLogKeys = `-- name: ListLogKeys :many
+SELECT rule_id, appointment_id, anchor_at
+FROM reminder_log
+WHERE appointment_id = ANY($1::uuid[])
+`
+
+type ListLogKeysRow struct {
+	RuleID        uuid.UUID
+	AppointmentID uuid.UUID
+	AnchorAt      *time.Time
+}
+
+func (q *Queries) ListLogKeys(ctx context.Context, ids []uuid.UUID) ([]ListLogKeysRow, error) {
+	rows, err := q.db.Query(ctx, listLogKeys, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLogKeysRow
+	for rows.Next() {
+		var i ListLogKeysRow
+		if err := rows.Scan(&i.RuleID, &i.AppointmentID, &i.AnchorAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRules = `-- name: ListRules :many

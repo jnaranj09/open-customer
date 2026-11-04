@@ -36,7 +36,7 @@ with fnm, `fnm use` in web/).
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
   (testcontainers).
 - `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`,
-  `internal/attributes`, `internal/appointments`, `internal/templates`).
+  `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
   app Docker image.
 - `make e2e`: build, fresh e2e database, Playwright WebKit (from P6).

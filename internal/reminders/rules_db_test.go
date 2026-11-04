@@ -518,23 +518,29 @@ var dbOperations = []dbOperation{
 // database error back wrapped: never a success, and never a problem that would hide an outage.
 func TestRulesDBErrors(t *testing.T) {
 	for _, op := range dbOperations {
-		t.Run(op.name, func(t *testing.T) {
-			steps := 0
-			pool, run := op.build(t)
-			if err := run(dbtest.FailingDB{DBTX: pool, Calls: &steps}); err != nil {
-				t.Fatalf("clean run: %v", err)
-			}
-			if steps == 0 {
-				t.Fatal("clean run made no database call")
-			}
-			for step := 1; step <= steps; step++ {
-				calls := 0
-				pool, run := op.build(t)
-				err := run(dbtest.FailingDB{DBTX: pool, FailAt: step, Calls: &calls})
-				if !errors.Is(err, dbtest.ErrInjected) {
-					t.Fatalf("failure at step %d of %d: err = %v; want the database error wrapped", step, steps, err)
-				}
-			}
-		})
+		t.Run(op.name, func(t *testing.T) { sweepDBErrors(t, op.build) })
+	}
+}
+
+// sweepDBErrors runs the operation build returns once cleanly to count its database calls, then
+// once per call with that call failing (each on fresh rows from build). Every failure must reach
+// the caller as the injected error, wrapped.
+func sweepDBErrors(t *testing.T, build func(t *testing.T) (db.DBTX, func(q db.DBTX) error)) {
+	t.Helper()
+	steps := 0
+	pool, run := build(t)
+	if err := run(dbtest.FailingDB{DBTX: pool, Calls: &steps}); err != nil {
+		t.Fatalf("clean run: %v", err)
+	}
+	if steps == 0 {
+		t.Fatal("clean run made no database call")
+	}
+	for step := 1; step <= steps; step++ {
+		calls := 0
+		pool, run := build(t)
+		err := run(dbtest.FailingDB{DBTX: pool, FailAt: step, Calls: &calls})
+		if !errors.Is(err, dbtest.ErrInjected) {
+			t.Fatalf("failure at step %d of %d: err = %v; want the database error wrapped", step, steps, err)
+		}
 	}
 }

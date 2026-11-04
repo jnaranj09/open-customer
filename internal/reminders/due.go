@@ -2,16 +2,23 @@ package reminders
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/jnaranj09/open-customer/internal/appointments"
 	"github.com/jnaranj09/open-customer/internal/attributes"
+	"github.com/jnaranj09/open-customer/internal/db"
+	"github.com/jnaranj09/open-customer/internal/db/sqlc"
 	"github.com/jnaranj09/open-customer/internal/locale"
+	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/templates"
 )
 
@@ -120,6 +127,194 @@ type dueData struct {
 	ComeBack []apptRow
 	Later    []laterAppt
 	Logged   map[logKey]bool
+}
+
+// DueList returns the items due today or earlier ("Para enviar hoy"). It loads the rows in a few
+// queries on q, then hands them to compute. The caller passes a read-only REPEATABLE READ
+// transaction, so every query sees one snapshot. Before setup (no settings row) it is
+// problem.NotFound.
+func (m *Module) DueList(ctx context.Context, q db.DBTX, now time.Time) ([]DueItem, error) {
+	d, err := m.loadDue(ctx, q, now)
+	if err != nil {
+		return nil, err
+	}
+	return compute(d, now), nil
+}
+
+// loadDue reads the settings, the attributes and the active rules, then the candidate
+// appointments those rules can pair with, the later bookings of the come-back clients and the log
+// rows of the candidates (design doc "Due-list computation", steps 1-2). It only narrows the rows;
+// compute checks every rule.
+func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData, error) {
+	queries := sqlc.New(q)
+	s, err := queries.GetDueSettings(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dueData{}, problem.NotFound{}
+	}
+	if err != nil {
+		return dueData{}, fmt.Errorf("get due settings: %w", err)
+	}
+	tz, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return dueData{}, fmt.Errorf("load business time zone: %w", err)
+	}
+	loc, err := locale.For(s.Locale)
+	if err != nil {
+		return dueData{}, fmt.Errorf("business locale: %w", err)
+	}
+	d := dueData{TZ: tz, Locale: loc, Business: s.Name, Logged: map[logKey]bool{}}
+	if d.Attrs, err = m.attributes.List(ctx, q); err != nil {
+		return dueData{}, fmt.Errorf("due attributes: %w", err)
+	}
+	rules, err := queries.ListActiveRulesForDue(ctx)
+	if err != nil {
+		return dueData{}, fmt.Errorf("list due rules: %w", err)
+	}
+	maxBefore, maxComeBack := 0, 0
+	for _, r := range rules {
+		row := ruleRowFrom(r)
+		d.Rules = append(d.Rules, row)
+		switch row.Kind {
+		case KindBefore:
+			maxBefore = max(maxBefore, row.OffsetDays)
+		case KindComeBack:
+			maxComeBack = max(maxComeBack, row.OffsetDays)
+		}
+	}
+	today := locale.LocalDay(now, tz)
+	before, err := queries.ListBeforeCandidates(ctx, sqlc.ListBeforeCandidatesParams{
+		Now: now, Until: locale.AddDays(today, maxBefore+1, tz),
+	})
+	if err != nil {
+		return dueData{}, fmt.Errorf("list before candidates: %w", err)
+	}
+	comeBack, err := queries.ListComeBackCandidates(ctx, sqlc.ListComeBackCandidatesParams{
+		Since: locale.AddDays(today, -(maxComeBack + lookBackDays), tz), Now: now,
+	})
+	if err != nil {
+		return dueData{}, fmt.Errorf("list come-back candidates: %w", err)
+	}
+	for _, r := range before {
+		d.Before = append(d.Before, apptRowFrom(r))
+	}
+	for _, r := range comeBack {
+		d.ComeBack = append(d.ComeBack, apptRowFrom(sqlc.ListBeforeCandidatesRow(r)))
+	}
+	candidateIDs := make([]uuid.UUID, 0, len(d.Before)+len(d.ComeBack))
+	for _, a := range slices.Concat(d.Before, d.ComeBack) {
+		candidateIDs = append(candidateIDs, a.ID)
+	}
+	lines, err := linesByAppointment(ctx, queries, candidateIDs)
+	if err != nil {
+		return dueData{}, err
+	}
+	for _, list := range [][]apptRow{d.Before, d.ComeBack} {
+		for i := range list {
+			list[i].ServiceIDs, list[i].ServiceNames = lines[list[i].ID].ids, lines[list[i].ID].names
+		}
+	}
+	if d.Later, err = laterAppointments(ctx, queries, d.ComeBack); err != nil {
+		return dueData{}, err
+	}
+	keys, err := queries.ListLogKeys(ctx, candidateIDs)
+	if err != nil {
+		return dueData{}, fmt.Errorf("list log keys: %w", err)
+	}
+	for _, k := range keys {
+		key := logKey{RuleID: k.RuleID, AppointmentID: k.AppointmentID}
+		if k.AnchorAt != nil {
+			// compute looks "before" rows up by StartsAt.UTC(); a time.Time map key compares the zone.
+			key.AnchorAt = k.AnchorAt.UTC()
+		}
+		d.Logged[key] = true
+	}
+	return d, nil
+}
+
+// serviceLines are the service ids and names of one appointment, in line order.
+type serviceLines struct {
+	ids   []uuid.UUID
+	names []string
+}
+
+// linesByAppointment reads the service lines of the appointments ids.
+func linesByAppointment(ctx context.Context, queries *sqlc.Queries, ids []uuid.UUID) (map[uuid.UUID]serviceLines, error) {
+	rows, err := queries.ListCandidateLines(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list candidate lines: %w", err)
+	}
+	out := make(map[uuid.UUID]serviceLines, len(ids))
+	for _, r := range rows {
+		l := out[r.AppointmentID]
+		l.ids, l.names = append(l.ids, r.ServiceID), append(l.names, r.Name)
+		out[r.AppointmentID] = l
+	}
+	return out, nil
+}
+
+// laterAppointments reads, for the clients of the come-back candidates, the appointments (not
+// cancelled or no-show) that start after the earliest candidate ends_at, with their lines. compute
+// keeps only the ones after each visit's own ends_at.
+func laterAppointments(ctx context.Context, queries *sqlc.Queries, candidates []apptRow) ([]laterAppt, error) {
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+	after := candidates[0].EndsAt
+	clientIDs := make([]uuid.UUID, 0, len(candidates))
+	for _, a := range candidates {
+		after = minTime(after, a.EndsAt)
+		if !slices.Contains(clientIDs, a.ClientID) {
+			clientIDs = append(clientIDs, a.ClientID)
+		}
+	}
+	rows, err := queries.ListLaterAppointments(ctx, sqlc.ListLaterAppointmentsParams{ClientIds: clientIDs, After: after})
+	if err != nil {
+		return nil, fmt.Errorf("list later appointments: %w", err)
+	}
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ID)
+	}
+	lines, err := linesByAppointment(ctx, queries, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]laterAppt, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, laterAppt{
+			ID: r.ID, ClientID: r.ClientID, StartsAt: r.StartsAt,
+			ServiceIDs: lines[r.ID].ids, ServiceNames: lines[r.ID].names,
+		})
+	}
+	return out, nil
+}
+
+func minTime(a, b time.Time) time.Time {
+	if b.Before(a) {
+		return b
+	}
+	return a
+}
+
+func ruleRowFrom(r sqlc.ListActiveRulesForDueRow) ruleRow {
+	row := ruleRow{
+		ID: r.ID, Kind: Kind(r.Kind), ServiceID: r.ServiceID, ReturnServiceID: r.ReturnServiceID.UUID,
+		OffsetDays: int(r.OffsetDays), AppliesFrom: r.AppliesFrom, TemplateBody: r.TemplateBody,
+		TemplateArchived: r.TemplateArchivedAt != nil, ServiceArchived: r.ServiceArchivedAt != nil,
+		ReturnArchived: r.ReturnArchivedAt != nil,
+	}
+	if r.ReturnServiceName != nil {
+		row.ReturnServiceName = *r.ReturnServiceName
+	}
+	return row
+}
+
+func apptRowFrom(r sqlc.ListBeforeCandidatesRow) apptRow {
+	return apptRow{
+		ID: r.ID, ClientID: r.ClientID, ClientName: r.ClientName, PhoneDigits: r.PhoneDigits,
+		ClientAttrs: r.ClientAttrs, StartsAt: r.StartsAt, EndsAt: r.EndsAt, CreatedAt: r.CreatedAt,
+		Status: appointments.Status(r.Status), Attrs: r.Attrs,
+	}
 }
 
 // compute applies the rules table ("Reminder rules and the 'done' rule") to the loaded rows and
