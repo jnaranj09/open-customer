@@ -5,11 +5,11 @@ package media
 import (
 	"errors"
 	"io"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -404,10 +404,10 @@ func TestSetArchivedUnknownIsNotFound(t *testing.T) {
 	}
 }
 
-func TestSaveUnwritableMediaDirLeaksNoPath(t *testing.T) {
+func TestSaveMediaDirIsFileLeaksNoPath(t *testing.T) {
 	f := newFixture(t)
 	locked := filepath.Join(f.dir, "locked-dir")
-	if err := os.Mkdir(locked, 0o500); err != nil {
+	if err := os.WriteFile(locked, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var logs strings.Builder
@@ -416,8 +416,8 @@ func TestSaveUnwritableMediaDirLeaksNoPath(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	m := New(Options{Clock: f.clock, MediaDir: locked})
 	_, err := m.Save(t.Context(), f.pool, f.input(t, owner(f.client(t, "Lucía Rojas", false)), uuid.NullUUID{}))
-	if !errors.Is(err, fs.ErrPermission) {
-		t.Fatalf("err = %v; want fs.ErrPermission", err)
+	if !errors.Is(err, syscall.ENOTDIR) {
+		t.Fatalf("err = %v; want ENOTDIR", err)
 	}
 	for name, text := range map[string]string{"error": err.Error(), "log": logs.String()} {
 		if strings.Contains(text, "locked-dir") || strings.Contains(text, ".jpg") {

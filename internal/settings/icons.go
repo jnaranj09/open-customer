@@ -50,7 +50,7 @@ func (m *Module) SetIcons(ctx context.Context, q db.DBTX, icon512, icon180 []byt
 		return err
 	}
 	dir := filepath.Join(m.mediaDir, brandingDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	if err := files.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create branding dir: %w", err)
 	}
 	if err := files.WriteSynced(filepath.Join(dir, iconFile(iconLarge)), icon512); err != nil {

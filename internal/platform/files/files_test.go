@@ -3,10 +3,10 @@ package files
 import (
 	"bytes"
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -54,31 +54,33 @@ func TestWriteSyncedMissingDirFails(t *testing.T) {
 	}
 }
 
-func TestWriteSyncedUnwritableDirErrorHasNoPath(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "locked-dir")
-	if err := os.Mkdir(dir, 0o500); err != nil {
+// fileAsDir makes a regular file where a parent directory should be, so any write below it fails
+// with ENOTDIR (also as root, unlike a permission bit).
+func fileAsDir(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "locked-dir")
+	if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	return p
+}
+
+func TestWriteSyncedParentIsFileErrorHasNoPath(t *testing.T) {
+	dir := fileAsDir(t)
 	err := WriteSynced(filepath.Join(dir, "secret-name.bin"), []byte("x"))
-	if err == nil {
-		t.Fatal("WriteSynced into an unwritable directory returned nil")
-	}
-	if !errors.Is(err, fs.ErrPermission) {
-		t.Errorf("err = %v; want fs.ErrPermission reachable", err)
+	if !errors.Is(err, syscall.ENOTDIR) {
+		t.Fatalf("err = %v; want ENOTDIR reachable", err)
 	}
 	if strings.Contains(err.Error(), "locked-dir") || strings.Contains(err.Error(), "secret-name") {
 		t.Errorf("error names a path: %v", err)
 	}
 }
 
-func TestMkdirAllUnwritableErrorHasNoPath(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "locked-dir")
-	if err := os.Mkdir(dir, 0o500); err != nil {
-		t.Fatal(err)
-	}
+func TestMkdirAllParentIsFileErrorHasNoPath(t *testing.T) {
+	dir := fileAsDir(t)
 	err := MkdirAll(filepath.Join(dir, "child-name"), 0o750)
-	if !errors.Is(err, fs.ErrPermission) {
-		t.Fatalf("err = %v; want fs.ErrPermission", err)
+	if !errors.Is(err, syscall.ENOTDIR) {
+		t.Fatalf("err = %v; want ENOTDIR", err)
 	}
 	if strings.Contains(err.Error(), "locked-dir") || strings.Contains(err.Error(), "child-name") {
 		t.Errorf("error names a path: %v", err)
