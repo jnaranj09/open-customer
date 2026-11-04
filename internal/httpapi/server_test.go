@@ -23,6 +23,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
+	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
@@ -70,6 +71,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 	}
 	fake := clock.NewFake(testStart)
 	settingsModule := settings.New(settings.Options{Clock: fake, MediaDir: cfg.mediaDir})
+	attrsModule := attributes.New(attributes.Options{Clock: fake})
 	a, err := auth.New(auth.Options{
 		Clock: fake,
 		// The same conversion serve's settingsCreator makes.
@@ -97,8 +99,9 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Static:         testBuild(),
 		Auth:           a,
 		Settings:       settingsModule,
-		Attributes:     attributes.New(attributes.Options{Clock: fake}),
+		Attributes:     attrsModule,
 		Services:       services.New(services.Options{Clock: fake}),
+		Clients:        clients.New(clients.Options{Clock: fake, Attributes: attrsModule}),
 		Status:         status.New(testVersion),
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -436,11 +439,13 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth.New: %v", err)
 	}
+	attrs := attributes.New(attributes.Options{Clock: clock.NewFake(testStart)})
 	full := Options{
 		PublicURL: public, Static: testBuild(), Auth: a,
 		Settings:   settings.New(settings.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
-		Attributes: attributes.New(attributes.Options{Clock: clock.NewFake(testStart)}),
+		Attributes: attrs,
 		Services:   services.New(services.Options{Clock: clock.NewFake(testStart)}),
+		Clients:    clients.New(clients.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Status:     status.New(testVersion),
 	}
 	for _, tc := range []struct {
@@ -451,6 +456,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		{"a nil Settings is refused", func(o *Options) { o.Settings = nil }},
 		{"a nil Attributes is refused", func(o *Options) { o.Attributes = nil }},
 		{"a nil Services is refused", func(o *Options) { o.Services = nil }},
+		{"a nil Clients is refused", func(o *Options) { o.Clients = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

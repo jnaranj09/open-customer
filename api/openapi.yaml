@@ -445,6 +445,131 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /clients:
+    get:
+      operationId: listClients
+      summary: List the clients
+      description: >-
+        The active clients ordered by name, or the archived ones with archived=true. Unpaged.
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: The clients.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createClient
+      summary: Add a client
+      description: >-
+        name is 1 to 120 characters and notes up to 2000. phone is read with the business country as
+        the default region, and an empty phone means no phone. When another active client has the
+        same phone the answer is 409 duplicate-phone with those clients, unless
+        allow_duplicate_phone is true. attrs holds client-scope attribute values by key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientInput"
+      responses:
+        "201":
+          description: The new client.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /clients/{id}:
+    get:
+      operationId: getClient
+      summary: Get one client
+      description: An archived client is returned too.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The client.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateClient
+      summary: Change a client
+      description: >-
+        Changes only the fields sent. phone and notes may be null, which clears them; an empty phone
+        string also means no phone. attrs merges by key and null removes a key. archived true
+        archives the client and false restores it. The duplicate-phone check (409) runs when the
+        phone changes and when an archived client is restored, unless allow_duplicate_phone is
+        true.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientPatch"
+      responses:
+        "200":
+          description: The client after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   headers:
     SessionCookie:
@@ -739,6 +864,86 @@ components:
           type: integer
         archived:
           type: boolean
+    Client:
+      type: object
+      required: [id, name, phone_e164, phone_digits, notes, attrs, archived, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone_e164:
+          type: string
+          nullable: true
+          description: The phone in E.164 form, for example +34612345678; null when there is none.
+        phone_digits:
+          type: string
+          nullable: true
+          description: The same digits without the +; null when there is no phone.
+        notes:
+          type: string
+          nullable: true
+        attrs:
+          type: object
+          additionalProperties: true
+          # No x-go-type-import: oapi-codegen already imports encoding/json for the embedded spec,
+          # and a second import line makes the generated file not compile.
+          x-go-type: json.RawMessage
+          description: The client-scope attribute values by attribute key.
+        archived:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ClientInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        notes:
+          type: string
+        attrs:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        allow_duplicate_phone:
+          type: boolean
+    ClientPatch:
+      type: object
+      description: >-
+        Every field is optional; a field left out is not changed. Only phone and notes may be null.
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        attrs:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        archived:
+          type: boolean
+        allow_duplicate_phone:
+          type: boolean
+    ClientList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
     Problem:
       type: object
       description: An RFC 9457 problem, sent as application/problem+json.
@@ -772,6 +977,11 @@ components:
             $ref: "#/components/schemas/FieldError"
         retry_after_s:
           type: integer
+        clients:
+          type: array
+          description: The other active clients with the phone, on a duplicate-phone 409.
+          items:
+            $ref: "#/components/schemas/Client"
     FieldError:
       type: object
       required: [field, message]

@@ -304,6 +304,54 @@ export interface paths {
         patch: operations["updateService"];
         trace?: never;
     };
+    "/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the clients
+         * @description The active clients ordered by name, or the archived ones with archived=true. Unpaged.
+         */
+        get: operations["listClients"];
+        put?: never;
+        /**
+         * Add a client
+         * @description name is 1 to 120 characters and notes up to 2000. phone is read with the business country as the default region, and an empty phone means no phone. When another active client has the same phone the answer is 409 duplicate-phone with those clients, unless allow_duplicate_phone is true. attrs holds client-scope attribute values by key.
+         */
+        post: operations["createClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one client
+         * @description An archived client is returned too.
+         */
+        get: operations["getClient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a client
+         * @description Changes only the fields sent. phone and notes may be null, which clears them; an empty phone string also means no phone. attrs merges by key and null removes a key. archived true archives the client and false restores it. The duplicate-phone check (409) runs when the phone changes and when an archived client is restored, unless allow_duplicate_phone is true.
+         */
+        patch: operations["updateClient"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -461,6 +509,48 @@ export interface components {
             position?: number;
             archived?: boolean;
         };
+        Client: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description The phone in E.164 form, for example +34612345678; null when there is none. */
+            phone_e164: string | null;
+            /** @description The same digits without the +; null when there is no phone. */
+            phone_digits: string | null;
+            notes: string | null;
+            /** @description The client-scope attribute values by attribute key. */
+            attrs: {
+                [key: string]: unknown;
+            };
+            archived: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ClientInput: {
+            name: string;
+            phone?: string;
+            notes?: string;
+            attrs?: {
+                [key: string]: unknown;
+            };
+            allow_duplicate_phone?: boolean;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only phone and notes may be null. */
+        ClientPatch: {
+            name?: string;
+            phone?: string | null;
+            notes?: string | null;
+            attrs?: {
+                [key: string]: unknown;
+            };
+            archived?: boolean;
+            allow_duplicate_phone?: boolean;
+        };
+        ClientList: {
+            items: components["schemas"]["Client"][];
+        };
         /** @description An RFC 9457 problem, sent as application/problem+json. */
         Problem: {
             /** @enum {string} */
@@ -469,6 +559,8 @@ export interface components {
             status: number;
             errors?: components["schemas"]["FieldError"][];
             retry_after_s?: number;
+            /** @description The other active clients with the phone, on a duplicate-phone 409. */
+            clients?: components["schemas"]["Client"][];
         };
         FieldError: {
             field: string;
@@ -900,6 +992,118 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClients: {
+        parameters: {
+            query?: {
+                archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The clients. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientInput"];
+            };
+        };
+        responses: {
+            /** @description The new client. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The client. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientPatch"];
+            };
+        };
+        responses: {
+            /** @description The client after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

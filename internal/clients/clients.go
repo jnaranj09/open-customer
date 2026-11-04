@@ -148,7 +148,8 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in ClientInput, region s
 }
 
 // Update changes the given fields of one client (every bad field is reported). An unknown id is
-// problem.NotFound. The duplicate-phone check runs only when the phone changes.
+// problem.NotFound. The duplicate-phone check runs when the phone changes and when an archived
+// client is restored.
 func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ClientPatch, region string) (Client, error) {
 	queries := sqlc.New(q)
 	row, err := queries.GetClient(ctx, id)
@@ -158,9 +159,10 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ClientPa
 	if err != nil {
 		return Client{}, fmt.Errorf("get client: %w", err)
 	}
+	now := m.clock.Now()
 	params := sqlc.UpdateClientParams{
 		ID: id, Name: row.Name, PhoneE164: row.PhoneE164, PhoneDigits: row.PhoneDigits, Notes: row.Notes,
-		Attrs: row.Attrs, Now: m.clock.Now(), ArchivedAt: archive.At(p.Archived, row.ArchivedAt, m.clock.Now()),
+		Attrs: row.Attrs, Now: now, ArchivedAt: archive.At(p.Archived, row.ArchivedAt, now),
 	}
 	var errs []problem.FieldError
 	if p.Name != nil {
@@ -189,7 +191,8 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ClientPa
 	if len(errs) > 0 {
 		return Client{}, problem.Validation{Errors: errs}
 	}
-	if phoneChanged(row.PhoneE164, params.PhoneE164) && params.PhoneE164 != nil && !p.AllowDuplicatePhone {
+	restoring := row.ArchivedAt != nil && params.ArchivedAt == nil
+	if (phoneChanged(row.PhoneE164, params.PhoneE164) || restoring) && params.PhoneE164 != nil && !p.AllowDuplicatePhone {
 		if err := checkDuplicate(ctx, queries, *params.PhoneE164, id); err != nil {
 			return Client{}, err
 		}

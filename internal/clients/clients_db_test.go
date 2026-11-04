@@ -362,3 +362,88 @@ func TestCreateClientDBErrorWritesNothing(t *testing.T) {
 		t.Fatalf("clients rows = %d, %v, want 0", n, err)
 	}
 }
+
+// tickingClock moves one minute on every Now call, so two reads in one Update differ.
+type tickingClock struct{ t time.Time }
+
+func (c *tickingClock) Now() time.Time {
+	c.t = c.t.Add(time.Minute)
+	return c.t
+}
+
+func TestUpdateReadsTheClockOnce(t *testing.T) {
+	ticking := &tickingClock{t: start}
+	attrs := attributes.New(attributes.Options{Clock: ticking})
+	m := New(Options{Clock: ticking, Attributes: attrs})
+	pool := dbtest.Pool(t)
+	c, err := m.Create(t.Context(), pool, ClientInput{Name: "Lucía"}, region)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Update(t.Context(), pool, c.ID, ClientPatch{Archived: ptr(true)}, region); err != nil {
+		t.Fatal(err)
+	}
+	var archivedAt, updatedAt time.Time
+	row := pool.QueryRow(t.Context(), `SELECT archived_at, updated_at FROM clients WHERE id = $1`, c.ID)
+	if err := row.Scan(&archivedAt, &updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if !archivedAt.Equal(updatedAt) {
+		t.Fatalf("archived_at %v, updated_at %v, want the same clock reading", archivedAt, updatedAt)
+	}
+}
+
+// archivedPair returns an archived client and an active one that share a phone.
+func (f fixture) archivedPair(t *testing.T) (archived Client) {
+	t.Helper()
+	archived = f.create(t, ClientInput{Name: "Lucía", Phone: ptr("8888-7777")})
+	if _, err := f.m.Update(t.Context(), f.pool, archived.ID, ClientPatch{Archived: ptr(true)}, region); err != nil {
+		t.Fatal(err)
+	}
+	f.create(t, ClientInput{Name: "Otra", Phone: ptr("8888-7777")})
+	return archived
+}
+
+func TestRestoreWithTakenPhoneWarns(t *testing.T) {
+	f := newFixture(t)
+	archived := f.archivedPair(t)
+	_, err := f.m.Update(t.Context(), f.pool, archived.ID, ClientPatch{Archived: ptr(false)}, region)
+	if !errors.As(err, new(DuplicatePhoneError)) {
+		t.Fatalf("err = %v, want DuplicatePhoneError on restore", err)
+	}
+	got, err := f.m.Get(t.Context(), f.pool, archived.ID)
+	if err != nil || !got.Archived {
+		t.Fatalf("after the refused restore: %+v, %v, want still archived", got, err)
+	}
+}
+
+func TestRestoreWithTakenPhoneAllowed(t *testing.T) {
+	f := newFixture(t)
+	archived := f.archivedPair(t)
+	patch := ClientPatch{Archived: ptr(false), AllowDuplicatePhone: true}
+	got, err := f.m.Update(t.Context(), f.pool, archived.ID, patch, region)
+	if err != nil || got.Archived {
+		t.Fatalf("restore with allow = %+v, %v, want active", got, err)
+	}
+}
+
+func TestRestoreWithoutCollisionSucceeds(t *testing.T) {
+	f := newFixture(t)
+	c := f.create(t, ClientInput{Name: "Lucía", Phone: ptr("8888-7777")})
+	if _, err := f.m.Update(t.Context(), f.pool, c.ID, ClientPatch{Archived: ptr(true)}, region); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.m.Update(t.Context(), f.pool, c.ID, ClientPatch{Archived: ptr(false)}, region)
+	if err != nil || got.Archived {
+		t.Fatalf("restore = %+v, %v, want active", got, err)
+	}
+}
+
+func TestPatchArchivedFalseOnActiveClientSkipsDuplicateCheck(t *testing.T) {
+	f := newFixture(t)
+	f.create(t, ClientInput{Name: "Lucía", Phone: ptr("8888-7777")})
+	b := f.create(t, ClientInput{Name: "Otra", Phone: ptr("8888-7777"), AllowDuplicatePhone: true})
+	if _, err := f.m.Update(t.Context(), f.pool, b.ID, ClientPatch{Archived: ptr(false)}, region); err != nil {
+		t.Fatalf("archived:false on an active client: %v", err)
+	}
+}

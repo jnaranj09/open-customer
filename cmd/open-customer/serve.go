@@ -15,6 +15,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
+	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
@@ -136,6 +137,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Settings:       mods.settings,
 		Attributes:     mods.attributes,
 		Services:       mods.services,
+		Clients:        mods.clients,
 		Status:         status.New(version),
 		Log:            log,
 	})
@@ -156,6 +158,7 @@ type modules struct {
 	settings   *settings.Module
 	attributes *attributes.Module
 	services   *services.Module
+	clients    *clients.Module
 	auth       *auth.Auth
 }
 
@@ -169,10 +172,12 @@ func newModules(cfg config.Config) (modules, error) {
 	if err != nil {
 		return modules{}, fmt.Errorf("build the modules: %w", err)
 	}
+	attributesModule := attributes.New(attributes.Options{Clock: clock.Real{}})
 	return modules{
 		settings:   settingsModule,
-		attributes: attributes.New(attributes.Options{Clock: clock.Real{}}),
+		attributes: attributesModule,
 		services:   services.New(services.Options{Clock: clock.Real{}}),
+		clients:    clients.New(clients.Options{Clock: clock.Real{}, Attributes: attributesModule}),
 		auth:       authModule,
 	}, nil
 }
