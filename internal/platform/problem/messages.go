@@ -8,3 +8,14 @@ const (
 	// MsgPasswordTooShort is the minimum password length (item 38).
 	MsgPasswordTooShort = "La contraseña debe tener al menos 8 caracteres"
 )
+
+// Field messages for the business settings (design doc item 44).
+const (
+	MsgNameInvalid        = "Escribe un nombre de 1 a 80 caracteres"
+	MsgLocaleInvalid      = "Idioma no disponible"
+	MsgAccentColorInvalid = "Usa un color con el formato #rrggbb"
+	MsgPushHourInvalid    = "Elige una hora entre 0 y 19"
+	MsgTimezoneInvalid    = "Zona horaria no válida"
+	MsgCurrencyInvalid    = "Moneda no válida"
+	MsgCountryInvalid     = "País no válido"
+)
