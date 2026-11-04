@@ -2031,7 +2031,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `due.go`: `DueList(ctx, q, now)` and the pure `compute(data, now)`, exactly as in "Due-list computation".
     *   `log.go`: `Record(LogEntry) (created bool)` with `ON CONFLICT DO NOTHING`. `anchorAt` must be set for a "before" rule and null for a `come_back` rule, or it returns a validation error (422).
     *   `log.go` also has `LogForClient(clientID)` and `LogForDate(day)`. Both join the appointment and client, so each row carries `client_id` and `client_name` (`LogItem`). `LogForDate` filters `acted_at` on the local day in the business time zone.
-    *   `links.go`: `WhatsAppLink(digits, text)`. This is the only place that builds the link: `https://wa.me/<digits>?text=<encoded>`. It switches to `whatsapp://send?phone=<digits>&text=<encoded>` only if the Open Questions test on her iPhone fails with `wa.me`. The text is percent-encoded with spaces as `%20`: Go's `url.QueryEscape` writes `+`, which WhatsApp may show as a literal plus (not checked), so the encoder replaces it.
+    *   `links.go`: `WhatsAppLink(digits, text)`. This is the only place that builds the link: `https://wa.me/<digits>?text=<encoded>`. It switches to `whatsapp://send?phone=<digits>&text=<encoded>` only if the Open Questions test on her iPhone fails with `wa.me`. The text is percent-encoded with spaces as `%20`: Go's `url.QueryEscape` writes `+`, which WhatsApp may show as a literal plus (not checked), so the encoder replaces it. The replace runs after `QueryEscape`, so a literal plus in the text stays `%2B`.
 
 ##### 56. `internal/reminders/due_test.go` (Create)
 
