@@ -32,10 +32,10 @@ const (
 	ownerPassword = "correct horse battery"
 )
 
-// post sends body to target with origin as the Origin header (none when empty), after edit has
-// changed the request (nil for none).
-func post(h http.Handler, target, origin, body string, edit func(*http.Request)) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+// send sends body to target with method and origin as the Origin header (none when empty), after
+// edit has changed the request (nil for none; the cookie goes in through it).
+func send(h http.Handler, method, target, origin, body string, edit func(*http.Request)) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if origin != "" {
 		req.Header.Set("Origin", origin)
@@ -74,7 +74,7 @@ func setupBody(token, timezone string) string {
 // completeSetup runs a successful POST /setup on app and returns the response.
 func completeSetup(t *testing.T, app testApp, pool *pgxpool.Pool, origin string) *httptest.ResponseRecorder {
 	t.Helper()
-	rec := post(app.handler, setupPath, origin, setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
+	rec := send(app.handler, http.MethodPost, setupPath, origin, setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST /setup = %d %q, want 201", rec.Code, rec.Body.String())
 	}
@@ -195,10 +195,10 @@ func TestPostSetupTwiceIsSetupClosed(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
 	token := newSetupToken(t, app, pool)
-	if rec := post(app.handler, setupPath, testOrigin, setupBody(token, "Europe/Madrid"), nil); rec.Code != http.StatusCreated {
+	if rec := send(app.handler, http.MethodPost, setupPath, testOrigin, setupBody(token, "Europe/Madrid"), nil); rec.Code != http.StatusCreated {
 		t.Fatalf("first POST /setup = %d %q, want 201", rec.Code, rec.Body.String())
 	}
-	rec := post(app.handler, setupPath, testOrigin, setupBody(token, "Europe/Madrid"), nil)
+	rec := send(app.handler, http.MethodPost, setupPath, testOrigin, setupBody(token, "Europe/Madrid"), nil)
 	if got := problemType(t, rec, http.StatusConflict); !strings.HasSuffix(got, ":setup-closed") {
 		t.Fatalf("type = %q, want setup-closed", got)
 	}
@@ -211,7 +211,7 @@ func TestPostSetupBadTokenIs410(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
 	newSetupToken(t, app, pool)
-	rec := post(app.handler, setupPath, testOrigin, setupBody("not-the-token", "Europe/Madrid"), nil)
+	rec := send(app.handler, http.MethodPost, setupPath, testOrigin, setupBody("not-the-token", "Europe/Madrid"), nil)
 	if got := problemType(t, rec, http.StatusGone); !strings.HasSuffix(got, ":setup-token-invalid") {
 		t.Fatalf("type = %q, want setup-token-invalid", got)
 	}
@@ -222,7 +222,7 @@ func TestPostSetupUnknownFieldIs422(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
 	body := strings.Replace(setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), "{", `{"role":"admin",`, 1)
-	rec := post(app.handler, setupPath, testOrigin, body, nil)
+	rec := send(app.handler, http.MethodPost, setupPath, testOrigin, body, nil)
 	if got := problemType(t, rec, http.StatusUnprocessableEntity); !strings.HasSuffix(got, ":validation") {
 		t.Fatalf("type = %q, want validation", got)
 	}
@@ -232,7 +232,7 @@ func TestPostSetupUnknownFieldIs422(t *testing.T) {
 func TestPostSetupMalformedIs422(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
-	rec := post(app.handler, setupPath, testOrigin, `{"token":`, nil)
+	rec := send(app.handler, http.MethodPost, setupPath, testOrigin, `{"token":`, nil)
 	if got := problemType(t, rec, http.StatusUnprocessableEntity); !strings.HasSuffix(got, ":validation") {
 		t.Fatalf("type = %q, want validation", got)
 	}
@@ -243,7 +243,7 @@ func TestPostSetupOversizeIs413(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
 	body := `{"token":"` + strings.Repeat("a", maxJSONBody) + `"}`
-	rec := post(app.handler, setupPath, testOrigin, body, nil)
+	rec := send(app.handler, http.MethodPost, setupPath, testOrigin, body, nil)
 	if got := problemType(t, rec, http.StatusRequestEntityTooLarge); !strings.HasSuffix(got, ":payload-too-large") {
 		t.Fatalf("type = %q, want payload-too-large", got)
 	}
@@ -252,7 +252,7 @@ func TestPostSetupOversizeIs413(t *testing.T) {
 func TestPostSetupBadSettingsIs422WithFields(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
-	rec := post(app.handler, setupPath, testOrigin, setupBody(newSetupToken(t, app, pool), "Mars/Olympus"), nil)
+	rec := send(app.handler, http.MethodPost, setupPath, testOrigin, setupBody(newSetupToken(t, app, pool), "Mars/Olympus"), nil)
 	if got := problemType(t, rec, http.StatusUnprocessableEntity); !strings.HasSuffix(got, ":validation") {
 		t.Fatalf("type = %q, want validation", got)
 	}
@@ -265,7 +265,7 @@ func TestPostSetupBadSettingsIs422WithFields(t *testing.T) {
 func TestPostSetupNoOriginIs403(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
-	rec := post(app.handler, setupPath, "", setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
+	rec := send(app.handler, http.MethodPost, setupPath, "", setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
 	if got := problemType(t, rec, http.StatusForbidden); !strings.HasSuffix(got, ":forbidden-origin") {
 		t.Fatalf("type = %q, want forbidden-origin", got)
 	}
@@ -283,7 +283,7 @@ func TestPostSetupDBErrorLogsNoRawMessage(t *testing.T) {
 		})
 	}})
 	logBuf := captureDefaultLog(t)
-	rec := post(app.handler, setupPath, testOrigin, setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
+	rec := send(app.handler, http.MethodPost, setupPath, testOrigin, setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
 	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
 		t.Fatalf("type = %q, want internal", got)
 	}
@@ -307,7 +307,7 @@ func TestLoginOK(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
 	completeSetup(t, app, pool, testOrigin)
-	rec := post(app.handler, loginPath, testOrigin, loginBody(" ANA ", ownerPassword), nil)
+	rec := send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody(" ANA ", ownerPassword), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d %q, want 200", rec.Code, rec.Body.String())
 	}
@@ -321,7 +321,7 @@ func TestLoginWrongPasswordIs401InvalidCredentials(t *testing.T) {
 	pool := dbtest.Pool(t)
 	app := newTestApp(t, testServerConfig{pool: pool})
 	completeSetup(t, app, pool, testOrigin)
-	rec := post(app.handler, loginPath, testOrigin, loginBody("ana", "wrong password"), nil)
+	rec := send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("ana", "wrong password"), nil)
 	if got := problemType(t, rec, http.StatusUnauthorized); !strings.HasSuffix(got, ":invalid-credentials") {
 		t.Fatalf("type = %q, want invalid-credentials", got)
 	}
@@ -338,7 +338,7 @@ func TestLoginBadInputIs422(t *testing.T) {
 		{"a username with a space inside is refused", loginBody("a na", ownerPassword)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			rec := post(app.handler, loginPath, testOrigin, tc.body, nil)
+			rec := send(app.handler, http.MethodPost, loginPath, testOrigin, tc.body, nil)
 			if got := problemType(t, rec, http.StatusUnprocessableEntity); !strings.HasSuffix(got, ":validation") {
 				t.Fatalf("type = %q, want validation", got)
 			}
@@ -351,7 +351,7 @@ func TestLoginBadInputIs422(t *testing.T) {
 func failedLogins(t *testing.T, h http.Handler, n int, edit func(i int) func(*http.Request)) {
 	t.Helper()
 	for i := range n {
-		rec := post(h, loginPath, testOrigin, loginBody("nobody"+strconv.Itoa(i), "wrong password"), edit(i))
+		rec := send(h, http.MethodPost, loginPath, testOrigin, loginBody("nobody"+strconv.Itoa(i), "wrong password"), edit(i))
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d = %d %q, want 401", i+1, rec.Code, rec.Body.String())
 		}
@@ -387,7 +387,7 @@ func assertRateLimited(t *testing.T, rec *httptest.ResponseRecorder) {
 func TestLoginOversizeIs413(t *testing.T) {
 	app := newTestApp(t, testServerConfig{pool: dbtest.Pool(t)})
 	body := `{"username":"` + strings.Repeat("a", maxJSONBody) + `"}`
-	rec := post(app.handler, loginPath, testOrigin, body, nil)
+	rec := send(app.handler, http.MethodPost, loginPath, testOrigin, body, nil)
 	if got := problemType(t, rec, http.StatusRequestEntityTooLarge); !strings.HasSuffix(got, ":payload-too-large") {
 		t.Fatalf("type = %q, want payload-too-large", got)
 	}
@@ -397,7 +397,7 @@ func TestLoginSixthAttemptIs429(t *testing.T) {
 	app := newTestApp(t, testServerConfig{pool: dbtest.Pool(t)})
 	same := func(int) func(*http.Request) { return from("192.0.2.1:4000", "") }
 	failedLogins(t, app.handler, 5, same)
-	assertRateLimited(t, post(app.handler, loginPath, testOrigin, loginBody("nobody-else", "x"), same(0)))
+	assertRateLimited(t, send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("nobody-else", "x"), same(0)))
 }
 
 func TestLoginRateLimitTrustedVsUntrustedPeer(t *testing.T) {
@@ -406,9 +406,9 @@ func TestLoginRateLimitTrustedVsUntrustedPeer(t *testing.T) {
 	t.Run("behind a trusted proxy each CF-Connecting-IP has its own bucket", func(t *testing.T) {
 		app := newTestApp(t, testServerConfig{pool: dbtest.Pool(t), trusted: trusted})
 		failedLogins(t, app.handler, 5, func(int) func(*http.Request) { return from("172.18.0.5:4000", "203.0.113.7") })
-		assertRateLimited(t, post(app.handler, loginPath, testOrigin, loginBody("nobody-a", "x"),
+		assertRateLimited(t, send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("nobody-a", "x"),
 			from("172.18.0.5:4000", "203.0.113.7")))
-		rec := post(app.handler, loginPath, testOrigin, loginBody("nobody-b", "x"), from("172.18.0.5:4000", "203.0.113.8"))
+		rec := send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("nobody-b", "x"), from("172.18.0.5:4000", "203.0.113.8"))
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("another client behind the proxy = %d %q, want 401 (not rate limited)", rec.Code, rec.Body.String())
 		}
@@ -419,7 +419,7 @@ func TestLoginRateLimitTrustedVsUntrustedPeer(t *testing.T) {
 		failedLogins(t, app.handler, 5, func(i int) func(*http.Request) {
 			return from("198.51.100.9:4000", "203.0.113."+strconv.Itoa(i+1))
 		})
-		assertRateLimited(t, post(app.handler, loginPath, testOrigin, loginBody("nobody-c", "x"),
+		assertRateLimited(t, send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("nobody-c", "x"),
 			from("198.51.100.9:4000", "203.0.113.99")))
 	})
 }
@@ -451,7 +451,7 @@ func TestCommitFailureIsNotShownAsSaved(t *testing.T) {
 	t.Run("a setup whose commit fails is an error with no cookie", func(t *testing.T) {
 		pool := dbtest.Pool(t)
 		app := newTestApp(t, testServerConfig{pool: pool, beginner: failingCommit{pool}})
-		rec := post(app.handler, setupPath, testOrigin, setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
+		rec := send(app.handler, http.MethodPost, setupPath, testOrigin, setupBody(newSetupToken(t, app, pool), "Europe/Madrid"), nil)
 		if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
 			t.Fatalf("type = %q, want internal", got)
 		}
@@ -465,7 +465,7 @@ func TestCommitFailureIsNotShownAsSaved(t *testing.T) {
 		pool := dbtest.Pool(t)
 		completeSetup(t, newTestApp(t, testServerConfig{pool: pool}), pool, testOrigin)
 		app := newTestApp(t, testServerConfig{pool: pool, beginner: failingCommit{pool}})
-		rec := post(app.handler, loginPath, testOrigin, loginBody("ana", ownerPassword), nil)
+		rec := send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("ana", ownerPassword), nil)
 		if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
 			t.Fatalf("type = %q, want internal", got)
 		}

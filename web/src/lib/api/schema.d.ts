@@ -184,6 +184,383 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an attribute
+         * @description The key is made from the label and never changes. The attribute goes last in its scope. An unknown scope or type is 422 on that field.
+         */
+        post: operations["createAttribute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attributes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an attribute
+         * @description Changes only the fields sent. The key, scope and type cannot change, so sending one is an unknown field and a 422. archived true archives the attribute and false restores it.
+         */
+        patch: operations["updateAttribute"];
+        trace?: never;
+    };
+    "/attributes/{id}/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an option to a select attribute
+         * @description Only select and multiselect attributes take options. The option goes last among its siblings. A parent_id must be an active option of the same attribute.
+         */
+        post: operations["createOption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attributes/{id}/options/{optionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an option
+         * @description Changes only the fields sent. The parent cannot change, so sending parent_id is an unknown field and a 422.
+         */
+        patch: operations["updateOption"];
+        trace?: never;
+    };
+    "/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a service
+         * @description The service goes last. duration_min is 1 to 1440, price_cents is 0 or more (left out or null means no price) and color is #rrggbb (stored in lowercase).
+         */
+        post: operations["createService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a service
+         * @description Changes only the fields sent. Only price_cents may be null, which clears the price. archived true archives the service and false restores it. Past appointments keep the values they copied.
+         */
+        patch: operations["updateService"];
+        trace?: never;
+    };
+    "/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the clients
+         * @description The active clients ordered by name, or the archived ones with archived=true. Unpaged.
+         */
+        get: operations["listClients"];
+        put?: never;
+        /**
+         * Add a client
+         * @description name is 1 to 120 characters and notes up to 2000. phone is read with the business country as the default region, and an empty phone means no phone. When another active client has the same phone the answer is 409 duplicate-phone with those clients, unless allow_duplicate_phone is true. attrs holds client-scope attribute values by key.
+         */
+        post: operations["createClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one client
+         * @description An archived client is returned too.
+         */
+        get: operations["getClient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a client
+         * @description Changes only the fields sent. phone and notes may be null, which clears them; an empty phone string also means no phone. attrs merges by key and null removes a key. archived true archives the client and false restores it. The duplicate-phone check (409) runs when the phone changes and when an archived client is restored, unless allow_duplicate_phone is true.
+         */
+        patch: operations["updateClient"];
+        trace?: never;
+    };
+    "/clients/{id}/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one client's appointments
+         * @description Every status, newest first, unpaged. An archived client still lists; an unknown client is 404.
+         */
+        get: operations["listClientAppointments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the appointments of a range of days
+         * @description Every status, ordered by starts_at. from and to are local days in the business time zone, both inclusive. to must not be before from and at most 31 days after it; otherwise the answer is 422 on to.
+         */
+        get: operations["listAppointments"];
+        put?: never;
+        /**
+         * Book an appointment
+         * @description The appointment starts as scheduled. ends_at defaults to starts_at plus the durations of the services; at least one service or an explicit ends_at is required. An unknown or archived client or service is 422. When it overlaps a scheduled or confirmed appointment the answer is 409 overlap with those appointments, unless allow_overlap is true.
+         */
+        post: operations["createAppointment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/appointments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one appointment */
+        get: operations["getAppointment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an appointment
+         * @description Changes only the fields sent. notes and paid_cents may be null, which clears them. attrs merges by key and null removes a key. service_ids replaces the whole list: a service already on the appointment keeps its saved line and price; only added services are copied at today's price. The overlap check (409 overlap) runs when the times of a scheduled or confirmed appointment change, unless allow_overlap is true. client_id and status cannot be changed here.
+         */
+        patch: operations["updateAppointment"];
+        trace?: never;
+    };
+    "/appointments/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the status of an appointment
+         * @description An allowed change gives 200; any other is 409 invalid-transition. A change to scheduled ("Reactivar") runs the overlap check (409 overlap) unless allow_overlap is true.
+         */
+        post: operations["setAppointmentStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one client's photos
+         * @description The active photos, newest first, unpaged. Archived photos are left out. An archived client still lists; an unknown client is 404.
+         */
+        get: operations["listClientMedia"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a message template
+         * @description The name is 1 to 80 characters. The body is stored exactly as sent and is 1 to 2000 characters. A body with a malformed or unknown variable is 422 on body, one error per problem: syntax errors first, then unknown variables, each in body order.
+         */
+        post: operations["createTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a message template
+         * @description Changes only the fields sent; none may be null. A body that is sent goes through the same check as on create. archived true archives the template and false restores it.
+         */
+        patch: operations["updateTemplate"];
+        trace?: never;
+    };
+    "/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a photo
+         * @description Both parts are JPEG files: full of at most 10 MB and thumb of at most 1 MB, and the request is at most 12 MB. client_id and appointment_id are optional but at least one is needed; with appointment_id the photo belongs to that appointment's client, and a different client_id is 422. A part that is not a JPEG, or a body that is not multipart/form-data, is 415. A part or request over its limit is 413. A missing, repeated or unknown part, or an owner that is missing, unknown, archived or mismatched, is 422.
+         */
+        post: operations["uploadMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the full image of a photo
+         * @description An archived photo is served too. The image never changes, so it is cached for a year.
+         */
+        get: operations["getMedia"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive or restore a photo
+         * @description archived true hides the photo from the client's list and false restores it.
+         */
+        patch: operations["updateMedia"];
+        trace?: never;
+    };
+    "/media/{id}/thumb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the thumbnail of a photo
+         * @description An archived photo is served too. The image never changes, so it is cached for a year.
+         */
+        get: operations["getMediaThumb"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -216,6 +593,62 @@ export interface components {
              * @description The 180 px PNG (apple-touch-icon).
              */
             icon180: string;
+        };
+        /** @enum {string} */
+        AttributeScope: "client" | "appointment";
+        /** @enum {string} */
+        AttributeType: "text" | "number" | "date" | "select" | "multiselect";
+        Option: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            attribute_id: string;
+            /**
+             * Format: uuid
+             * @description The option this one sits under; null for a top-level option.
+             */
+            parent_id: string | null;
+            label: string;
+            position: number;
+            archived: boolean;
+        };
+        Attribute: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            label: string;
+            scope: components["schemas"]["AttributeScope"];
+            type: components["schemas"]["AttributeType"];
+            required: boolean;
+            position: number;
+            archived: boolean;
+            /** @description Every option, archived ones included; empty for a type without options. */
+            options: components["schemas"]["Option"][];
+        };
+        AttributeInput: {
+            label: string;
+            scope: components["schemas"]["AttributeScope"];
+            type: components["schemas"]["AttributeType"];
+            /** @default false */
+            required: boolean;
+        };
+        /** @description Every field is optional and none may be null; a field left out is not changed. */
+        AttributePatch: {
+            label?: string;
+            required?: boolean;
+            position?: number;
+            archived?: boolean;
+        };
+        OptionInput: {
+            label: string;
+            /** Format: uuid */
+            parent_id?: string;
+        };
+        /** @description Every field is optional and none may be null; a field left out is not changed. */
+        OptionPatch: {
+            label?: string;
+            position?: number;
+            archived?: boolean;
         };
         Me: {
             /** Format: uuid */
@@ -254,6 +687,212 @@ export interface components {
         SetupStatus: {
             needs_setup: boolean;
         };
+        Service: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            duration_min: number;
+            /**
+             * Format: int64
+             * @description The price in cents; null when the service has no price.
+             */
+            price_cents: number | null;
+            color: string;
+            position: number;
+            archived: boolean;
+        };
+        ServiceInput: {
+            name: string;
+            duration_min: number;
+            /** Format: int64 */
+            price_cents?: number | null;
+            color: string;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only price_cents may be null. */
+        ServicePatch: {
+            name?: string;
+            duration_min?: number;
+            /** Format: int64 */
+            price_cents?: number | null;
+            color?: string;
+            position?: number;
+            archived?: boolean;
+        };
+        Template: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            body: string;
+            archived: boolean;
+        };
+        TemplateInput: {
+            name: string;
+            body: string;
+        };
+        /** @description Every field is optional; a field left out is not changed. None may be null. */
+        TemplatePatch: {
+            name?: string;
+            body?: string;
+            archived?: boolean;
+        };
+        Client: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description The phone in E.164 form, for example +34612345678; null when there is none. */
+            phone_e164: string | null;
+            /** @description The same digits without the +; null when there is no phone. */
+            phone_digits: string | null;
+            notes: string | null;
+            /** @description The client-scope attribute values by attribute key. */
+            attrs: {
+                [key: string]: unknown;
+            };
+            archived: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ClientInput: {
+            name: string;
+            phone?: string;
+            notes?: string;
+            attrs?: {
+                [key: string]: unknown;
+            };
+            allow_duplicate_phone?: boolean;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only phone and notes may be null. */
+        ClientPatch: {
+            name?: string;
+            phone?: string | null;
+            notes?: string | null;
+            attrs?: {
+                [key: string]: unknown;
+            };
+            archived?: boolean;
+            allow_duplicate_phone?: boolean;
+        };
+        ClientList: {
+            items: components["schemas"]["Client"][];
+        };
+        /** @enum {string} */
+        AppointmentStatus: "scheduled" | "confirmed" | "cancelled" | "no_show";
+        AppointmentService: {
+            /** Format: uuid */
+            service_id: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description The price copied when the line was saved; null when the service had none.
+             */
+            price_cents: number | null;
+            duration_min: number;
+        };
+        Appointment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            client_id: string;
+            client_name: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            status: components["schemas"]["AppointmentStatus"];
+            /** @description Computed on read, never stored. A scheduled or confirmed appointment that has ended. */
+            done: boolean;
+            /** Format: int64 */
+            total_cents: number;
+            /** Format: int64 */
+            paid_cents: number | null;
+            /** @description The appointment-scope attribute values by attribute key. */
+            attrs: {
+                [key: string]: unknown;
+            };
+            notes: string | null;
+            services: components["schemas"]["AppointmentService"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AppointmentInput: {
+            /** Format: uuid */
+            client_id: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at?: string;
+            service_ids?: string[];
+            attrs?: {
+                [key: string]: unknown;
+            };
+            notes?: string;
+            allow_overlap?: boolean;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only notes and paid_cents may be null. */
+        AppointmentPatch: {
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string;
+            service_ids?: string[];
+            attrs?: {
+                [key: string]: unknown;
+            };
+            notes?: string | null;
+            /** Format: int64 */
+            paid_cents?: number | null;
+            allow_overlap?: boolean;
+        };
+        AppointmentStatusChange: {
+            status: components["schemas"]["AppointmentStatus"];
+            allow_overlap?: boolean;
+        };
+        AppointmentList: {
+            items: components["schemas"]["Appointment"][];
+        };
+        Media: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            client_id: string;
+            /** Format: uuid */
+            appointment_id: string | null;
+            /** @description The width of the full image in pixels. */
+            width: number;
+            /** @description The height of the full image in pixels. */
+            height: number;
+            /** @description The size of the full image. */
+            bytes: number;
+            /** Format: date-time */
+            created_at: string;
+            archived: boolean;
+        };
+        MediaUpload: {
+            /**
+             * Format: binary
+             * @description The full JPEG, at most 10 MB.
+             */
+            full: string;
+            /**
+             * Format: binary
+             * @description The thumbnail JPEG, at most 1 MB.
+             */
+            thumb: string;
+            /** Format: uuid */
+            client_id?: string;
+            /** Format: uuid */
+            appointment_id?: string;
+        };
+        MediaPatch: {
+            archived?: boolean;
+        };
+        MediaList: {
+            items: components["schemas"]["Media"][];
+        };
         /** @description An RFC 9457 problem, sent as application/problem+json. */
         Problem: {
             /** @enum {string} */
@@ -262,6 +901,10 @@ export interface components {
             status: number;
             errors?: components["schemas"]["FieldError"][];
             retry_after_s?: number;
+            /** @description The other active clients with the phone, on a duplicate-phone 409. */
+            clients?: components["schemas"]["Client"][];
+            /** @description The scheduled or confirmed appointments in the way, on an overlap 409. */
+            appointments?: components["schemas"]["Appointment"][];
         };
         FieldError: {
             field: string;
@@ -513,6 +1156,667 @@ export interface operations {
             401: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             415: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAttribute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributeInput"];
+            };
+        };
+        responses: {
+            /** @description The new attribute, with no options. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attribute"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateAttribute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributePatch"];
+            };
+        };
+        responses: {
+            /** @description The attribute after the change, with its options. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attribute"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createOption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptionInput"];
+            };
+        };
+        responses: {
+            /** @description The new option. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Option"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateOption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                optionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptionPatch"];
+            };
+        };
+        responses: {
+            /** @description The option after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Option"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceInput"];
+            };
+        };
+        responses: {
+            /** @description The new service. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Service"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicePatch"];
+            };
+        };
+        responses: {
+            /** @description The service after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Service"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClients: {
+        parameters: {
+            query?: {
+                archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The clients. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientInput"];
+            };
+        };
+        responses: {
+            /** @description The new client. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The client. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientPatch"];
+            };
+        };
+        responses: {
+            /** @description The client after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClientAppointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The appointments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAppointments: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The appointments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentInput"];
+            };
+        };
+        responses: {
+            /** @description The new appointment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The appointment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentPatch"];
+            };
+        };
+        responses: {
+            /** @description The appointment after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAppointmentStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentStatusChange"];
+            };
+        };
+        responses: {
+            /** @description The appointment after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClientMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The photos. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateInput"];
+            };
+        };
+        responses: {
+            /** @description The new template. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePatch"];
+            };
+        };
+        responses: {
+            /** @description The template after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    uploadMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["MediaUpload"];
+            };
+        };
+        responses: {
+            /** @description The stored photo. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Media"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            415: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The JPEG. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaPatch"];
+            };
+        };
+        responses: {
+            /** @description The photo after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Media"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMediaThumb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The JPEG thumbnail. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };

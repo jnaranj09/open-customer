@@ -21,14 +21,20 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jnaranj09/open-customer/internal/appointments"
+	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
+	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/media"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
+	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
+	"github.com/jnaranj09/open-customer/internal/templates"
 )
 
 // testStart is the fake clock's time in every test server.
@@ -67,7 +73,9 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		cfg.mediaDir = t.TempDir()
 	}
 	fake := clock.NewFake(testStart)
+	servicesModule := services.New(services.Options{Clock: fake})
 	settingsModule := settings.New(settings.Options{Clock: fake, MediaDir: cfg.mediaDir})
+	attrsModule := attributes.New(attributes.Options{Clock: fake})
 	a, err := auth.New(auth.Options{
 		Clock: fake,
 		// The same conversion serve's settingsCreator makes.
@@ -95,6 +103,12 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Static:         testBuild(),
 		Auth:           a,
 		Settings:       settingsModule,
+		Attributes:     attrsModule,
+		Services:       servicesModule,
+		Clients:        clients.New(clients.Options{Clock: fake, Attributes: attrsModule}),
+		Appointments:   appointments.New(appointments.Options{Clock: fake, Services: servicesModule, Attributes: attrsModule}),
+		Media:          media.New(media.Options{Clock: fake, MediaDir: cfg.mediaDir}),
+		Templates:      templates.New(templates.Options{Clock: fake, Attributes: attrsModule}),
 		Status:         status.New(testVersion),
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -432,10 +446,20 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth.New: %v", err)
 	}
+	attrs := attributes.New(attributes.Options{Clock: clock.NewFake(testStart)})
+	servicesModule := services.New(services.Options{Clock: clock.NewFake(testStart)})
 	full := Options{
 		PublicURL: public, Static: testBuild(), Auth: a,
-		Settings: settings.New(settings.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
-		Status:   status.New(testVersion),
+		Settings:   settings.New(settings.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
+		Attributes: attrs,
+		Services:   servicesModule,
+		Clients:    clients.New(clients.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
+		Appointments: appointments.New(appointments.Options{
+			Clock: clock.NewFake(testStart), Services: servicesModule, Attributes: attrs,
+		}),
+		Media:     media.New(media.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
+		Templates: templates.New(templates.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
+		Status:    status.New(testVersion),
 	}
 	for _, tc := range []struct {
 		name   string
@@ -443,6 +467,12 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 	}{
 		{"a nil Auth is refused", func(o *Options) { o.Auth = nil }},
 		{"a nil Settings is refused", func(o *Options) { o.Settings = nil }},
+		{"a nil Attributes is refused", func(o *Options) { o.Attributes = nil }},
+		{"a nil Services is refused", func(o *Options) { o.Services = nil }},
+		{"a nil Clients is refused", func(o *Options) { o.Clients = nil }},
+		{"a nil Appointments is refused", func(o *Options) { o.Appointments = nil }},
+		{"a nil Media is refused", func(o *Options) { o.Media = nil }},
+		{"a nil Templates is refused", func(o *Options) { o.Templates = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -13,14 +13,20 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jnaranj09/open-customer/internal/appointments"
+	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
+	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi"
+	"github.com/jnaranj09/open-customer/internal/media"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/config"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
+	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
+	"github.com/jnaranj09/open-customer/internal/templates"
 	"github.com/jnaranj09/open-customer/web"
 )
 
@@ -110,12 +116,12 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
-	settingsModule, authModule, err := newModules(cfg)
+	mods, err := newModules(cfg)
 	if err != nil {
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
-	if err := printSetupLink(ctx, cfg, pool, authModule, stdout); err != nil {
+	if err := printSetupLink(ctx, cfg, pool, mods.auth, stdout); err != nil {
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
@@ -130,8 +136,14 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		PublicURL:      cfg.PublicURL,
 		TrustedProxies: cfg.TrustedProxyCIDRs,
 		Static:         static,
-		Auth:           authModule,
-		Settings:       settingsModule,
+		Auth:           mods.auth,
+		Settings:       mods.settings,
+		Attributes:     mods.attributes,
+		Services:       mods.services,
+		Clients:        mods.clients,
+		Media:          mods.media,
+		Templates:      mods.templates,
+		Appointments:   mods.appointments,
 		Status:         status.New(version),
 		Log:            log,
 	})
@@ -147,17 +159,40 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	}, pool, nil
 }
 
-// newModules builds the settings and auth modules, for serve and the admin subcommands.
-func newModules(cfg config.Config) (*settings.Module, *auth.Auth, error) {
+// modules are the domain modules serve and the admin subcommands build.
+type modules struct {
+	settings     *settings.Module
+	attributes   *attributes.Module
+	services     *services.Module
+	clients      *clients.Module
+	appointments *appointments.Module
+	media        *media.Module
+	templates    *templates.Module
+	auth         *auth.Auth
+}
+
+// newModules builds the modules, for serve and the admin subcommands.
+func newModules(cfg config.Config) (modules, error) {
 	settingsModule := settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})
 	authModule, err := auth.New(auth.Options{
 		Clock:           clock.Real{},
 		SettingsCreator: settingsCreator(settingsModule),
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("build the modules: %w", err)
+		return modules{}, fmt.Errorf("build the modules: %w", err)
 	}
-	return settingsModule, authModule, nil
+	attributesModule := attributes.New(attributes.Options{Clock: clock.Real{}})
+	servicesModule := services.New(services.Options{Clock: clock.Real{}})
+	return modules{
+		settings:     settingsModule,
+		attributes:   attributesModule,
+		services:     servicesModule,
+		clients:      clients.New(clients.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		appointments: appointments.New(appointments.Options{Clock: clock.Real{}, Services: servicesModule, Attributes: attributesModule}),
+		media:        media.New(media.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir}),
+		templates:    templates.New(templates.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		auth:         authModule,
+	}, nil
 }
 
 // printSetupLink is serve step 4 (design doc item 18): while no user exists it makes a new setup

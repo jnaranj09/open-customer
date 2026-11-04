@@ -2,15 +2,11 @@ package httpapi
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"mime"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
@@ -84,59 +80,14 @@ func (s *Server) UploadIcon(w http.ResponseWriter, r *http.Request) {
 // readIconParts reads exactly the parts icon512 and icon180. Its errors are problems only (never
 // a reader error, whose text can quote the body).
 func readIconParts(r *http.Request) (map[string][]byte, error) {
-	// MultipartReader also takes multipart/mixed and other multipart types; only form-data is ours.
-	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mt != "multipart/form-data" {
-		return nil, problem.UnsupportedMediaType{}
-	}
-	mr, err := r.MultipartReader()
+	icons, err := readParts(r, map[string]int64{icon512Part: maxIconPart, icon180Part: maxIconPart})
 	if err != nil {
-		return nil, problem.Validation{}
-	}
-	icons := make(map[string][]byte, 2)
-	for {
-		part, err := mr.NextPart()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, bodyProblem(err)
-		}
-		name := part.FormName()
-		if _, seen := icons[name]; seen || name != icon512Part && name != icon180Part {
-			return nil, problem.Validation{}
-		}
-		data, err := io.ReadAll(io.LimitReader(part, maxIconPart))
-		if err != nil {
-			return nil, bodyProblem(err)
-		}
-		icons[name] = data
+		return nil, err
 	}
 	if len(icons) != 2 {
 		return nil, problem.Validation{}
 	}
 	return icons, nil
-}
-
-// bodyProblem is payload-too-large for a body over the request limit and validation for any other
-// multipart read error.
-func bodyProblem(err error) error {
-	if tooBig := new(http.MaxBytesError); errors.As(err, &tooBig) {
-		return problem.PayloadTooLarge{}
-	}
-	return problem.Validation{}
-}
-
-// uploadRejectCode is the code= of a refused upload.
-func uploadRejectCode(err error) string {
-	switch {
-	case errors.As(err, &problem.PayloadTooLarge{}):
-		return "payload_too_large"
-	case errors.As(err, &problem.UnsupportedMediaType{}):
-		return "not_multipart"
-	default:
-		return "body_invalid"
-	}
 }
 
 // manifest serves the web app manifest. It has no session on purpose: the browser fetches it
@@ -172,17 +123,4 @@ func (s *Server) icon(w http.ResponseWriter, r *http.Request, size int) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(w, r, "", updatedAt, bytes.NewReader(b))
-}
-
-// withoutFileText returns err only when its text is known to be safe to log: the problems
-// SetIcons and Icon return, and a Postgres error (writeError redacts it). Any other error (a file
-// error, or another error whose text is not known to be safe) is replaced by op and a fixed text,
-// because problem.Write logs an internal error's text and a path must never reach the log.
-func withoutFileText(op string, err error) error {
-	var pgErr *pgconn.PgError
-	if err == nil || errors.As(err, &problem.UnsupportedMediaType{}) || errors.As(err, &problem.PayloadTooLarge{}) ||
-		errors.As(err, &problem.NotFound{}) || errors.As(err, &pgErr) {
-		return err
-	}
-	return fmt.Errorf("%s: error text withheld (it can name a path)", op)
 }

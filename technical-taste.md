@@ -41,7 +41,7 @@ red when the rule is broken; "prose only" = nothing yet. Prefer turning prose-on
 3. **Never cheat a red test.** No skip, focus, loosen or re-record to get green. Consensus. Sensor:
    guard `forbid-only`, the Vitest/Playwright settings and lint rules; deleting is prose only.
 4. **Parse untrusted input once, at one boundary**, failing closed; log path + code, never the
-   value. Consensus. Sensor: Go typed decode + `DisallowUnknownFields` + `Validate()`; web zod.
+   value. Consensus. Sensor: Go typed decode + `DisallowUnknownFields` + the module that owns the field validating it; web zod.
 5. **Strict types, never loosened**; major upgrades one at a time. Evidence / Taste for flags.
    Sensor: Go compiler + golangci-lint; TS strict flags via svelte-check + typescript-eslint.
 6. **Small steps; tidy apart from behaviour.** Evidence / Consensus. Sensor: prose only.
@@ -100,7 +100,7 @@ Which tool is the sensor for each row in this repo (filled at setup; update when
 | `forbid-only-skip` | guard `forbid-only` (`t.Skip`) | Vitest `allowOnly: false`, guard `forbid-only` (also Playwright `forbidOnly: true` once its config lands in P6) |
 | `dead-code` | `deadcode -test` (exact budget in the Makefile), `unused` | knip (reads `.svelte`) |
 | `duplication` | `dupl` (threshold 80) | jscpd (`**/*.test.ts` and `**/schema.d.ts` ignored; fails on a fully empty scan; `.svelte` coverage not yet shown) |
-| `boundary-schema` | typed structs + `DisallowUnknownFields` + `Validate()` | zod |
+| `boundary-schema` | typed structs + `DisallowUnknownFields` + module-side field validation | zod |
 | `mutation` | gremlins (`README.md` release checklist, never in the gate) | StrykerJS (same) |
 | `security` | govulncheck, gosec, gitleaks in CI | `pnpm audit --audit-level high` and gitleaks in CI |
 | `suppression-budget` | `//nolint` count, guard `suppression-budget` | `eslint-suppressions.json` total and inline `eslint-disable` / `@ts-*` count, guard `suppression-budget` |

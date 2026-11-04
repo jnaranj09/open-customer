@@ -9,71 +9,292 @@ import (
 	"bytes"
 	"compress/flate"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/oapi-codegen/nullable"
+	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AppointmentStatus.
+const (
+	AppointmentStatusCancelled AppointmentStatus = "cancelled"
+	AppointmentStatusConfirmed AppointmentStatus = "confirmed"
+	AppointmentStatusNoShow    AppointmentStatus = "no_show"
+	AppointmentStatusScheduled AppointmentStatus = "scheduled"
+)
+
+// Valid indicates whether the value is a known member of the AppointmentStatus enum.
+func (e AppointmentStatus) Valid() bool {
+	switch e {
+	case AppointmentStatusCancelled:
+		return true
+	case AppointmentStatusConfirmed:
+		return true
+	case AppointmentStatusNoShow:
+		return true
+	case AppointmentStatusScheduled:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttributeScope.
+const (
+	AttributeScopeAppointment AttributeScope = "appointment"
+	AttributeScopeClient      AttributeScope = "client"
+)
+
+// Valid indicates whether the value is a known member of the AttributeScope enum.
+func (e AttributeScope) Valid() bool {
+	switch e {
+	case AttributeScopeAppointment:
+		return true
+	case AttributeScopeClient:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AttributeType.
+const (
+	AttributeTypeDate        AttributeType = "date"
+	AttributeTypeMultiselect AttributeType = "multiselect"
+	AttributeTypeNumber      AttributeType = "number"
+	AttributeTypeSelect      AttributeType = "select"
+	AttributeTypeText        AttributeType = "text"
+)
+
+// Valid indicates whether the value is a known member of the AttributeType enum.
+func (e AttributeType) Valid() bool {
+	switch e {
+	case AttributeTypeDate:
+		return true
+	case AttributeTypeMultiselect:
+		return true
+	case AttributeTypeNumber:
+		return true
+	case AttributeTypeSelect:
+		return true
+	case AttributeTypeText:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProblemType.
 const (
-	UrnOpenCustomerProblemDuplicatePhone       ProblemType = "urn:open-customer:problem:duplicate-phone"
-	UrnOpenCustomerProblemForbiddenOrigin      ProblemType = "urn:open-customer:problem:forbidden-origin"
-	UrnOpenCustomerProblemInternal             ProblemType = "urn:open-customer:problem:internal"
-	UrnOpenCustomerProblemInvalidCredentials   ProblemType = "urn:open-customer:problem:invalid-credentials"
-	UrnOpenCustomerProblemInvalidTransition    ProblemType = "urn:open-customer:problem:invalid-transition"
-	UrnOpenCustomerProblemMustChangePassword   ProblemType = "urn:open-customer:problem:must-change-password"
-	UrnOpenCustomerProblemNotFound             ProblemType = "urn:open-customer:problem:not-found"
-	UrnOpenCustomerProblemOverlap              ProblemType = "urn:open-customer:problem:overlap"
-	UrnOpenCustomerProblemPayloadTooLarge      ProblemType = "urn:open-customer:problem:payload-too-large"
-	UrnOpenCustomerProblemRateLimited          ProblemType = "urn:open-customer:problem:rate-limited"
-	UrnOpenCustomerProblemSetupClosed          ProblemType = "urn:open-customer:problem:setup-closed"
-	UrnOpenCustomerProblemSetupTokenInvalid    ProblemType = "urn:open-customer:problem:setup-token-invalid"
-	UrnOpenCustomerProblemUnauthorized         ProblemType = "urn:open-customer:problem:unauthorized"
-	UrnOpenCustomerProblemUnsupportedMediaType ProblemType = "urn:open-customer:problem:unsupported-media-type"
-	UrnOpenCustomerProblemValidation           ProblemType = "urn:open-customer:problem:validation"
+	ProblemTypeUrnOpenCustomerProblemDuplicatePhone       ProblemType = "urn:open-customer:problem:duplicate-phone"
+	ProblemTypeUrnOpenCustomerProblemForbiddenOrigin      ProblemType = "urn:open-customer:problem:forbidden-origin"
+	ProblemTypeUrnOpenCustomerProblemInternal             ProblemType = "urn:open-customer:problem:internal"
+	ProblemTypeUrnOpenCustomerProblemInvalidCredentials   ProblemType = "urn:open-customer:problem:invalid-credentials"
+	ProblemTypeUrnOpenCustomerProblemInvalidTransition    ProblemType = "urn:open-customer:problem:invalid-transition"
+	ProblemTypeUrnOpenCustomerProblemMustChangePassword   ProblemType = "urn:open-customer:problem:must-change-password"
+	ProblemTypeUrnOpenCustomerProblemNotFound             ProblemType = "urn:open-customer:problem:not-found"
+	ProblemTypeUrnOpenCustomerProblemOverlap              ProblemType = "urn:open-customer:problem:overlap"
+	ProblemTypeUrnOpenCustomerProblemPayloadTooLarge      ProblemType = "urn:open-customer:problem:payload-too-large"
+	ProblemTypeUrnOpenCustomerProblemRateLimited          ProblemType = "urn:open-customer:problem:rate-limited"
+	ProblemTypeUrnOpenCustomerProblemSetupClosed          ProblemType = "urn:open-customer:problem:setup-closed"
+	ProblemTypeUrnOpenCustomerProblemSetupTokenInvalid    ProblemType = "urn:open-customer:problem:setup-token-invalid"
+	ProblemTypeUrnOpenCustomerProblemUnauthorized         ProblemType = "urn:open-customer:problem:unauthorized"
+	ProblemTypeUrnOpenCustomerProblemUnsupportedMediaType ProblemType = "urn:open-customer:problem:unsupported-media-type"
+	ProblemTypeUrnOpenCustomerProblemValidation           ProblemType = "urn:open-customer:problem:validation"
 )
 
 // Valid indicates whether the value is a known member of the ProblemType enum.
 func (e ProblemType) Valid() bool {
 	switch e {
-	case UrnOpenCustomerProblemDuplicatePhone:
+	case ProblemTypeUrnOpenCustomerProblemDuplicatePhone:
 		return true
-	case UrnOpenCustomerProblemForbiddenOrigin:
+	case ProblemTypeUrnOpenCustomerProblemForbiddenOrigin:
 		return true
-	case UrnOpenCustomerProblemInternal:
+	case ProblemTypeUrnOpenCustomerProblemInternal:
 		return true
-	case UrnOpenCustomerProblemInvalidCredentials:
+	case ProblemTypeUrnOpenCustomerProblemInvalidCredentials:
 		return true
-	case UrnOpenCustomerProblemInvalidTransition:
+	case ProblemTypeUrnOpenCustomerProblemInvalidTransition:
 		return true
-	case UrnOpenCustomerProblemMustChangePassword:
+	case ProblemTypeUrnOpenCustomerProblemMustChangePassword:
 		return true
-	case UrnOpenCustomerProblemNotFound:
+	case ProblemTypeUrnOpenCustomerProblemNotFound:
 		return true
-	case UrnOpenCustomerProblemOverlap:
+	case ProblemTypeUrnOpenCustomerProblemOverlap:
 		return true
-	case UrnOpenCustomerProblemPayloadTooLarge:
+	case ProblemTypeUrnOpenCustomerProblemPayloadTooLarge:
 		return true
-	case UrnOpenCustomerProblemRateLimited:
+	case ProblemTypeUrnOpenCustomerProblemRateLimited:
 		return true
-	case UrnOpenCustomerProblemSetupClosed:
+	case ProblemTypeUrnOpenCustomerProblemSetupClosed:
 		return true
-	case UrnOpenCustomerProblemSetupTokenInvalid:
+	case ProblemTypeUrnOpenCustomerProblemSetupTokenInvalid:
 		return true
-	case UrnOpenCustomerProblemUnauthorized:
+	case ProblemTypeUrnOpenCustomerProblemUnauthorized:
 		return true
-	case UrnOpenCustomerProblemUnsupportedMediaType:
+	case ProblemTypeUrnOpenCustomerProblemUnsupportedMediaType:
 		return true
-	case UrnOpenCustomerProblemValidation:
+	case ProblemTypeUrnOpenCustomerProblemValidation:
 		return true
 	default:
 		return false
 	}
+}
+
+// Appointment defines model for Appointment.
+type Appointment struct {
+	// Attrs The appointment-scope attribute values by attribute key.
+	Attrs      json.RawMessage    `json:"attrs"`
+	ClientId   openapi_types.UUID `json:"client_id"`
+	ClientName string             `json:"client_name"`
+	CreatedAt  time.Time          `json:"created_at"`
+
+	// Done Computed on read, never stored. A scheduled or confirmed appointment that has ended.
+	Done       bool                      `json:"done"`
+	EndsAt     time.Time                 `json:"ends_at"`
+	Id         openapi_types.UUID        `json:"id"`
+	Notes      nullable.Nullable[string] `json:"notes"`
+	PaidCents  nullable.Nullable[int64]  `json:"paid_cents"`
+	Services   []AppointmentService      `json:"services"`
+	StartsAt   time.Time                 `json:"starts_at"`
+	Status     AppointmentStatus         `json:"status"`
+	TotalCents int64                     `json:"total_cents"`
+	UpdatedAt  time.Time                 `json:"updated_at"`
+}
+
+// AppointmentInput defines model for AppointmentInput.
+type AppointmentInput struct {
+	AllowOverlap *bool                 `json:"allow_overlap,omitempty"`
+	Attrs        *json.RawMessage      `json:"attrs,omitempty"`
+	ClientId     openapi_types.UUID    `json:"client_id"`
+	EndsAt       *time.Time            `json:"ends_at,omitempty"`
+	Notes        *string               `json:"notes,omitempty"`
+	ServiceIds   *[]openapi_types.UUID `json:"service_ids,omitempty"`
+	StartsAt     time.Time             `json:"starts_at"`
+}
+
+// AppointmentList defines model for AppointmentList.
+type AppointmentList struct {
+	Items []Appointment `json:"items"`
+}
+
+// AppointmentPatch Every field is optional; a field left out is not changed. Only notes and paid_cents may be null.
+type AppointmentPatch struct {
+	AllowOverlap *bool                     `json:"allow_overlap,omitempty"`
+	Attrs        *json.RawMessage          `json:"attrs,omitempty"`
+	EndsAt       *time.Time                `json:"ends_at,omitempty"`
+	Notes        nullable.Nullable[string] `json:"notes,omitempty"`
+	PaidCents    nullable.Nullable[int64]  `json:"paid_cents,omitempty"`
+	ServiceIds   *[]openapi_types.UUID     `json:"service_ids,omitempty"`
+	StartsAt     *time.Time                `json:"starts_at,omitempty"`
+}
+
+// AppointmentService defines model for AppointmentService.
+type AppointmentService struct {
+	DurationMin int    `json:"duration_min"`
+	Name        string `json:"name"`
+
+	// PriceCents The price copied when the line was saved; null when the service had none.
+	PriceCents nullable.Nullable[int64] `json:"price_cents"`
+	ServiceId  openapi_types.UUID       `json:"service_id"`
+}
+
+// AppointmentStatus defines model for AppointmentStatus.
+type AppointmentStatus string
+
+// AppointmentStatusChange defines model for AppointmentStatusChange.
+type AppointmentStatusChange struct {
+	AllowOverlap *bool             `json:"allow_overlap,omitempty"`
+	Status       AppointmentStatus `json:"status"`
+}
+
+// Attribute defines model for Attribute.
+type Attribute struct {
+	Archived bool               `json:"archived"`
+	Id       openapi_types.UUID `json:"id"`
+	Key      string             `json:"key"`
+	Label    string             `json:"label"`
+
+	// Options Every option, archived ones included; empty for a type without options.
+	Options  []Option       `json:"options"`
+	Position int            `json:"position"`
+	Required bool           `json:"required"`
+	Scope    AttributeScope `json:"scope"`
+	Type     AttributeType  `json:"type"`
+}
+
+// AttributeInput defines model for AttributeInput.
+type AttributeInput struct {
+	Label    string         `json:"label"`
+	Required *bool          `json:"required,omitempty"`
+	Scope    AttributeScope `json:"scope"`
+	Type     AttributeType  `json:"type"`
+}
+
+// AttributePatch Every field is optional and none may be null; a field left out is not changed.
+type AttributePatch struct {
+	Archived *bool   `json:"archived,omitempty"`
+	Label    *string `json:"label,omitempty"`
+	Position *int    `json:"position,omitempty"`
+	Required *bool   `json:"required,omitempty"`
+}
+
+// AttributeScope defines model for AttributeScope.
+type AttributeScope string
+
+// AttributeType defines model for AttributeType.
+type AttributeType string
+
+// Client defines model for Client.
+type Client struct {
+	Archived bool `json:"archived"`
+
+	// Attrs The client-scope attribute values by attribute key.
+	Attrs     json.RawMessage           `json:"attrs"`
+	CreatedAt time.Time                 `json:"created_at"`
+	Id        openapi_types.UUID        `json:"id"`
+	Name      string                    `json:"name"`
+	Notes     nullable.Nullable[string] `json:"notes"`
+
+	// PhoneDigits The same digits without the +; null when there is no phone.
+	PhoneDigits nullable.Nullable[string] `json:"phone_digits"`
+
+	// PhoneE164 The phone in E.164 form, for example +34612345678; null when there is none.
+	PhoneE164 nullable.Nullable[string] `json:"phone_e164"`
+	UpdatedAt time.Time                 `json:"updated_at"`
+}
+
+// ClientInput defines model for ClientInput.
+type ClientInput struct {
+	AllowDuplicatePhone *bool            `json:"allow_duplicate_phone,omitempty"`
+	Attrs               *json.RawMessage `json:"attrs,omitempty"`
+	Name                string           `json:"name"`
+	Notes               *string          `json:"notes,omitempty"`
+	Phone               *string          `json:"phone,omitempty"`
+}
+
+// ClientList defines model for ClientList.
+type ClientList struct {
+	Items []Client `json:"items"`
+}
+
+// ClientPatch Every field is optional; a field left out is not changed. Only phone and notes may be null.
+type ClientPatch struct {
+	AllowDuplicatePhone *bool                     `json:"allow_duplicate_phone,omitempty"`
+	Archived            *bool                     `json:"archived,omitempty"`
+	Attrs               *json.RawMessage          `json:"attrs,omitempty"`
+	Name                *string                   `json:"name,omitempty"`
+	Notes               nullable.Nullable[string] `json:"notes,omitempty"`
+	Phone               nullable.Nullable[string] `json:"phone,omitempty"`
 }
 
 // FieldError defines model for FieldError.
@@ -104,6 +325,71 @@ type Me struct {
 	Username           string             `json:"username"`
 }
 
+// Media defines model for Media.
+type Media struct {
+	AppointmentId nullable.Nullable[openapi_types.UUID] `json:"appointment_id"`
+	Archived      bool                                  `json:"archived"`
+
+	// Bytes The size of the full image.
+	Bytes     int                `json:"bytes"`
+	ClientId  openapi_types.UUID `json:"client_id"`
+	CreatedAt time.Time          `json:"created_at"`
+
+	// Height The height of the full image in pixels.
+	Height int                `json:"height"`
+	Id     openapi_types.UUID `json:"id"`
+
+	// Width The width of the full image in pixels.
+	Width int `json:"width"`
+}
+
+// MediaList defines model for MediaList.
+type MediaList struct {
+	Items []Media `json:"items"`
+}
+
+// MediaPatch defines model for MediaPatch.
+type MediaPatch struct {
+	Archived *bool `json:"archived,omitempty"`
+}
+
+// MediaUpload defines model for MediaUpload.
+type MediaUpload struct {
+	AppointmentId *openapi_types.UUID `json:"appointment_id,omitempty"`
+	ClientId      *openapi_types.UUID `json:"client_id,omitempty"`
+
+	// Full The full JPEG, at most 10 MB.
+	Full openapi_types.File `json:"full"`
+
+	// Thumb The thumbnail JPEG, at most 1 MB.
+	Thumb openapi_types.File `json:"thumb"`
+}
+
+// Option defines model for Option.
+type Option struct {
+	Archived    bool               `json:"archived"`
+	AttributeId openapi_types.UUID `json:"attribute_id"`
+	Id          openapi_types.UUID `json:"id"`
+	Label       string             `json:"label"`
+
+	// ParentId The option this one sits under; null for a top-level option.
+	ParentId nullable.Nullable[openapi_types.UUID] `json:"parent_id"`
+	Position int                                   `json:"position"`
+}
+
+// OptionInput defines model for OptionInput.
+type OptionInput struct {
+	Label    string              `json:"label"`
+	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
+}
+
+// OptionPatch Every field is optional and none may be null; a field left out is not changed.
+type OptionPatch struct {
+	Archived *bool   `json:"archived,omitempty"`
+	Label    *string `json:"label,omitempty"`
+	Position *int    `json:"position,omitempty"`
+}
+
 // PasswordChange defines model for PasswordChange.
 type PasswordChange struct {
 	CurrentPassword string `json:"current_password"`
@@ -112,6 +398,11 @@ type PasswordChange struct {
 
 // Problem An RFC 9457 problem, sent as application/problem+json.
 type Problem struct {
+	// Appointments The scheduled or confirmed appointments in the way, on an overlap 409.
+	Appointments *[]Appointment `json:"appointments,omitempty"`
+
+	// Clients The other active clients with the phone, on a duplicate-phone 409.
+	Clients     *[]Client     `json:"clients,omitempty"`
 	Errors      *[]FieldError `json:"errors,omitempty"`
 	RetryAfterS *int          `json:"retry_after_s,omitempty"`
 	Status      int           `json:"status"`
@@ -121,6 +412,37 @@ type Problem struct {
 
 // ProblemType defines model for Problem.Type.
 type ProblemType string
+
+// Service defines model for Service.
+type Service struct {
+	Archived    bool               `json:"archived"`
+	Color       string             `json:"color"`
+	DurationMin int                `json:"duration_min"`
+	Id          openapi_types.UUID `json:"id"`
+	Name        string             `json:"name"`
+	Position    int                `json:"position"`
+
+	// PriceCents The price in cents; null when the service has no price.
+	PriceCents nullable.Nullable[int64] `json:"price_cents"`
+}
+
+// ServiceInput defines model for ServiceInput.
+type ServiceInput struct {
+	Color       string                   `json:"color"`
+	DurationMin int                      `json:"duration_min"`
+	Name        string                   `json:"name"`
+	PriceCents  nullable.Nullable[int64] `json:"price_cents,omitempty"`
+}
+
+// ServicePatch Every field is optional; a field left out is not changed. Only price_cents may be null.
+type ServicePatch struct {
+	Archived    *bool                    `json:"archived,omitempty"`
+	Color       *string                  `json:"color,omitempty"`
+	DurationMin *int                     `json:"duration_min,omitempty"`
+	Name        *string                  `json:"name,omitempty"`
+	Position    *int                     `json:"position,omitempty"`
+	PriceCents  nullable.Nullable[int64] `json:"price_cents,omitempty"`
+}
 
 // Settings defines model for Settings.
 type Settings struct {
@@ -174,11 +496,82 @@ type SetupStatus struct {
 	NeedsSetup bool `json:"needs_setup"`
 }
 
+// Template defines model for Template.
+type Template struct {
+	Archived bool               `json:"archived"`
+	Body     string             `json:"body"`
+	Id       openapi_types.UUID `json:"id"`
+	Name     string             `json:"name"`
+}
+
+// TemplateInput defines model for TemplateInput.
+type TemplateInput struct {
+	Body string `json:"body"`
+	Name string `json:"name"`
+}
+
+// TemplatePatch Every field is optional; a field left out is not changed. None may be null.
+type TemplatePatch struct {
+	Archived *bool   `json:"archived,omitempty"`
+	Body     *string `json:"body,omitempty"`
+	Name     *string `json:"name,omitempty"`
+}
+
+// ListAppointmentsParams defines parameters for ListAppointments.
+type ListAppointmentsParams struct {
+	From openapi_types.Date `form:"from" json:"from"`
+	To   openapi_types.Date `form:"to" json:"to"`
+}
+
+// ListClientsParams defines parameters for ListClients.
+type ListClientsParams struct {
+	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
+}
+
+// CreateAppointmentJSONRequestBody defines body for CreateAppointment for application/json ContentType.
+type CreateAppointmentJSONRequestBody = AppointmentInput
+
+// UpdateAppointmentJSONRequestBody defines body for UpdateAppointment for application/json ContentType.
+type UpdateAppointmentJSONRequestBody = AppointmentPatch
+
+// SetAppointmentStatusJSONRequestBody defines body for SetAppointmentStatus for application/json ContentType.
+type SetAppointmentStatusJSONRequestBody = AppointmentStatusChange
+
+// CreateAttributeJSONRequestBody defines body for CreateAttribute for application/json ContentType.
+type CreateAttributeJSONRequestBody = AttributeInput
+
+// UpdateAttributeJSONRequestBody defines body for UpdateAttribute for application/json ContentType.
+type UpdateAttributeJSONRequestBody = AttributePatch
+
+// CreateOptionJSONRequestBody defines body for CreateOption for application/json ContentType.
+type CreateOptionJSONRequestBody = OptionInput
+
+// UpdateOptionJSONRequestBody defines body for UpdateOption for application/json ContentType.
+type UpdateOptionJSONRequestBody = OptionPatch
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginInput
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = PasswordChange
+
+// CreateClientJSONRequestBody defines body for CreateClient for application/json ContentType.
+type CreateClientJSONRequestBody = ClientInput
+
+// UpdateClientJSONRequestBody defines body for UpdateClient for application/json ContentType.
+type UpdateClientJSONRequestBody = ClientPatch
+
+// UploadMediaMultipartRequestBody defines body for UploadMedia for multipart/form-data ContentType.
+type UploadMediaMultipartRequestBody = MediaUpload
+
+// UpdateMediaJSONRequestBody defines body for UpdateMedia for application/json ContentType.
+type UpdateMediaJSONRequestBody = MediaPatch
+
+// CreateServiceJSONRequestBody defines body for CreateService for application/json ContentType.
+type CreateServiceJSONRequestBody = ServiceInput
+
+// UpdateServiceJSONRequestBody defines body for UpdateService for application/json ContentType.
+type UpdateServiceJSONRequestBody = ServicePatch
 
 // UpdateSettingsJSONRequestBody defines body for UpdateSettings for application/json ContentType.
 type UpdateSettingsJSONRequestBody = SettingsPatch
@@ -189,8 +582,41 @@ type UploadIconMultipartRequestBody = IconUpload
 // CompleteSetupJSONRequestBody defines body for CompleteSetup for application/json ContentType.
 type CompleteSetupJSONRequestBody = SetupInput
 
+// CreateTemplateJSONRequestBody defines body for CreateTemplate for application/json ContentType.
+type CreateTemplateJSONRequestBody = TemplateInput
+
+// UpdateTemplateJSONRequestBody defines body for UpdateTemplate for application/json ContentType.
+type UpdateTemplateJSONRequestBody = TemplatePatch
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAppointments List the appointments of a range of days
+	// (GET /appointments)
+	ListAppointments(w http.ResponseWriter, r *http.Request, params ListAppointmentsParams)
+	// CreateAppointment Book an appointment
+	// (POST /appointments)
+	CreateAppointment(w http.ResponseWriter, r *http.Request)
+	// GetAppointment Get one appointment
+	// (GET /appointments/{id})
+	GetAppointment(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateAppointment Change an appointment
+	// (PATCH /appointments/{id})
+	UpdateAppointment(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// SetAppointmentStatus Change the status of an appointment
+	// (POST /appointments/{id}/status)
+	SetAppointmentStatus(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// CreateAttribute Add an attribute
+	// (POST /attributes)
+	CreateAttribute(w http.ResponseWriter, r *http.Request)
+	// UpdateAttribute Change an attribute
+	// (PATCH /attributes/{id})
+	UpdateAttribute(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// CreateOption Add an option to a select attribute
+	// (POST /attributes/{id}/options)
+	CreateOption(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateOption Change an option
+	// (PATCH /attributes/{id}/options/{optionId})
+	UpdateOption(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, optionId openapi_types.UUID)
 	// Login Sign in with username and password
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -200,9 +626,45 @@ type ServerInterface interface {
 	// ChangePassword Change the signed-in user's password
 	// (POST /auth/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request)
+	// ListClients List the clients
+	// (GET /clients)
+	ListClients(w http.ResponseWriter, r *http.Request, params ListClientsParams)
+	// CreateClient Add a client
+	// (POST /clients)
+	CreateClient(w http.ResponseWriter, r *http.Request)
+	// GetClient Get one client
+	// (GET /clients/{id})
+	GetClient(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateClient Change a client
+	// (PATCH /clients/{id})
+	UpdateClient(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListClientAppointments List one client's appointments
+	// (GET /clients/{id}/appointments)
+	ListClientAppointments(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListClientMedia List one client's photos
+	// (GET /clients/{id}/media)
+	ListClientMedia(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// GetMe The signed-in user
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// UploadMedia Upload a photo
+	// (POST /media)
+	UploadMedia(w http.ResponseWriter, r *http.Request)
+	// GetMedia Get the full image of a photo
+	// (GET /media/{id})
+	GetMedia(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateMedia Archive or restore a photo
+	// (PATCH /media/{id})
+	UpdateMedia(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// GetMediaThumb Get the thumbnail of a photo
+	// (GET /media/{id}/thumb)
+	GetMediaThumb(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// CreateService Add a service
+	// (POST /services)
+	CreateService(w http.ResponseWriter, r *http.Request)
+	// UpdateService Change a service
+	// (PATCH /services/{id})
+	UpdateService(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// UpdateSettings Change the business settings
 	// (PATCH /settings)
 	UpdateSettings(w http.ResponseWriter, r *http.Request)
@@ -218,6 +680,12 @@ type ServerInterface interface {
 	// GetSetupStatus Whether the first-run setup is still open
 	// (GET /setup/status)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
+	// CreateTemplate Add a message template
+	// (POST /templates)
+	CreateTemplate(w http.ResponseWriter, r *http.Request)
+	// UpdateTemplate Change a message template
+	// (PATCH /templates/{id})
+	UpdateTemplate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -228,6 +696,245 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAppointments operation middleware
+func (siw *ServerInterfaceWrapper) ListAppointments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAppointmentsParams
+
+	// ------------- Required query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAppointments(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAppointment operation middleware
+func (siw *ServerInterfaceWrapper) CreateAppointment(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAppointment(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAppointment operation middleware
+func (siw *ServerInterfaceWrapper) GetAppointment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAppointment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAppointment operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAppointment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAppointment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAppointmentStatus operation middleware
+func (siw *ServerInterfaceWrapper) SetAppointmentStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAppointmentStatus(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAttribute operation middleware
+func (siw *ServerInterfaceWrapper) CreateAttribute(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAttribute(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAttribute operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAttribute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAttribute(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOption operation middleware
+func (siw *ServerInterfaceWrapper) CreateOption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOption(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateOption operation middleware
+func (siw *ServerInterfaceWrapper) UpdateOption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "optionId" -------------
+	var optionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "optionId", r.PathValue("optionId"), &optionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "optionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateOption(w, r, id, optionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -271,11 +978,294 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListClients operation middleware
+func (siw *ServerInterfaceWrapper) ListClients(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListClientsParams
+
+	// ------------- Optional query parameter "archived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "archived", r.URL.Query(), &params.Archived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "archived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "archived", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClients(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateClient operation middleware
+func (siw *ServerInterfaceWrapper) CreateClient(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateClient(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClient operation middleware
+func (siw *ServerInterfaceWrapper) GetClient(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClient(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateClient operation middleware
+func (siw *ServerInterfaceWrapper) UpdateClient(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateClient(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClientAppointments operation middleware
+func (siw *ServerInterfaceWrapper) ListClientAppointments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClientAppointments(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClientMedia operation middleware
+func (siw *ServerInterfaceWrapper) ListClientMedia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClientMedia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadMedia operation middleware
+func (siw *ServerInterfaceWrapper) UploadMedia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadMedia(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMedia operation middleware
+func (siw *ServerInterfaceWrapper) GetMedia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMedia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMedia operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMedia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMedia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMediaThumb operation middleware
+func (siw *ServerInterfaceWrapper) GetMediaThumb(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMediaThumb(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateService operation middleware
+func (siw *ServerInterfaceWrapper) CreateService(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateService(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateService operation middleware
+func (siw *ServerInterfaceWrapper) UpdateService(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateService(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -346,6 +1336,46 @@ func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSetupStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateTemplate(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTemplate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTemplate operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTemplate(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -484,6 +1514,29 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/settings", wrapper.UpdateSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/settings/icon", wrapper.UploadIcon)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/attributes", wrapper.CreateAttribute)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/attributes/{id}", wrapper.UpdateAttribute)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/attributes/{id}/options", wrapper.CreateOption)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/attributes/{id}/options/{optionId}", wrapper.UpdateOption)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/services", wrapper.CreateService)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/services/{id}", wrapper.UpdateService)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clients", wrapper.ListClients)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/clients", wrapper.CreateClient)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clients/{id}", wrapper.GetClient)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/clients/{id}", wrapper.UpdateClient)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clients/{id}/appointments", wrapper.ListClientAppointments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/appointments", wrapper.ListAppointments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/appointments", wrapper.CreateAppointment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/appointments/{id}", wrapper.GetAppointment)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/appointments/{id}", wrapper.UpdateAppointment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/appointments/{id}/status", wrapper.SetAppointmentStatus)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clients/{id}/media", wrapper.ListClientMedia)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/templates", wrapper.CreateTemplate)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/templates/{id}", wrapper.UpdateTemplate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/media", wrapper.UploadMedia)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/media/{id}", wrapper.GetMedia)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/media/{id}", wrapper.UpdateMedia)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/media/{id}/thumb", wrapper.GetMediaThumb)
 
 	return m
 }
@@ -493,48 +1546,107 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -6,5 +6,8 @@ generate:
   std-http-server: true
   models: true
   embedded-spec: true
+compatibility:
+  # Enum constants carry their type name, so a later schema (Appointment) cannot clash with a bare one.
+  always-prefix-enum-values: true
 output-options:
   nullable-type: true

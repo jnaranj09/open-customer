@@ -6,11 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/nyaruka/phonenumbers"
@@ -19,7 +16,9 @@ import (
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/sqlc"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
+	"github.com/jnaranj09/open-customer/internal/platform/color"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
+	"github.com/jnaranj09/open-customer/internal/platform/text"
 )
 
 const (
@@ -28,8 +27,6 @@ const (
 	maxNameLen      = 80
 	supportedLocale = "es"
 )
-
-var accentPattern = regexp.MustCompile(`^#[0-9a-f]{6}$`)
 
 // Options is what serve passes to New.
 type Options struct {
@@ -194,8 +191,8 @@ func (e fieldErrors) err() error {
 }
 
 func (e *fieldErrors) name(s string) string {
-	s = strings.TrimSpace(s)
-	if n := utf8.RuneCountInString(s); n < 1 || n > maxNameLen {
+	s, ok := text.Trim(s, 1, maxNameLen)
+	if !ok {
 		e.add("name", problem.MsgNameInvalid)
 	}
 	return s
@@ -236,9 +233,9 @@ func (e *fieldErrors) country(s string) {
 }
 
 func (e *fieldErrors) accent(s string) string {
-	s = strings.ToLower(s)
-	if !accentPattern.MatchString(s) {
-		e.add("accent_color", problem.MsgAccentColorInvalid)
+	s, ok := color.Normalize(s)
+	if !ok {
+		e.add("accent_color", problem.MsgColorInvalid)
 	}
 	return s
 }

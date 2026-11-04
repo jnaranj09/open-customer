@@ -106,3 +106,29 @@ func TestConflictCarriesItsExtensionFields(t *testing.T) {
 		t.Fatalf("appointments = %v, want [a1]", body["appointments"])
 	}
 }
+
+func TestCollectFields(t *testing.T) {
+	t.Parallel()
+	errs := []FieldError{{Field: "name", Message: "a"}}
+	if !CollectFields(&errs, fmt.Errorf("wrapped: %w", Validation{Errors: []FieldError{{Field: "notes", Message: "b"}}})) {
+		t.Fatal("a wrapped Validation must be collected")
+	}
+	if CollectFields(&errs, errors.New("made-up outage")) || CollectFields(&errs, nil) {
+		t.Fatal("a non-Validation error and nil must not be collected")
+	}
+	if len(errs) != 2 || errs[0].Field != "name" || errs[1].Field != "notes" {
+		t.Fatalf("errs = %v, want name then notes", errs)
+	}
+}
+
+func TestFieldIsAValidationOfThatOneField(t *testing.T) {
+	t.Parallel()
+	err := Field("phone", "Teléfono no válido")
+	var v Validation
+	if !errors.As(err, &v) {
+		t.Fatalf("Field returned %T, want Validation", err)
+	}
+	if want := []FieldError{{Field: "phone", Message: "Teléfono no válido"}}; fmt.Sprint(v.Errors) != fmt.Sprint(want) {
+		t.Fatalf("errors = %v, want %v", v.Errors, want)
+	}
+}

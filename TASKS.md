@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8, P1 exit, P2 exit)
+## Done (T1–T8, P1 exit, P2 exit, P3 exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -56,6 +56,21 @@ once by breaking what they protect, then restored.
   run at the P2 exit, before the fix wave, the same way (built binary, isolated network namespace),
   and not re-run since. CI green on PR #1 at 32eda09, including `make cover` (run 41764577606).
   NOT RUN: the plain-host :8080 variant.
+- **P3 exit.** `make check-pins lint test vuln build check-generated test-db cover` exits 0, run as
+  one command from a fresh `git clone` of branch p3 at d31ef86. `make cover`: internal/auth 96.3%,
+  internal/attributes 93.5%, internal/appointments 98.4%, internal/templates 98.8% (floor 90.0%).
+  The Goal 7 grep (`Costa|CRC|America/Costa_Rica|+506|Uña|Nails`) over `internal/*.go` and `*.sql`
+  has no hit outside `internal/locale/es.go` and `_test.go` files. The catalog `curl` checks were
+  run on the image built from that clone (`open-customer:d31ef86`), in an isolated container network
+  namespace with `curlimages/curl:8.22.0` (host :8080 belongs to an unrelated container): setup
+  (Europe/Madrid, ES), attributes and select option, service (color lowercased), client (E.164
+  phone), duplicate phone 409, appointments (end time and total, 409 overlap, `allow_overlap`,
+  back to back), status 422 / 200 / 409 `invalid-transition`, day list (3 items in order), bad UUID
+  422, media upload (client taken from the appointment) and GET headers, templates (201 and 422 on
+  an unknown variable), 401 without a cookie. All matched. After that, an owner change (a
+  `service_ids` edit keeps the saved price of services already on a visit) landed at 946683e; the
+  gate passed on it locally, and the clone run and `curl` checks were not re-run. CI green on PR #2
+  at 946683e, including `make cover` (run 41913102949). NOT RUN: the plain-host :8080 variant.
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 

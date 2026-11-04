@@ -15,7 +15,7 @@ var usernamePattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
 func normalizeUsername(s string) (string, error) {
 	name := strings.ToLower(strings.TrimSpace(s))
 	if !usernamePattern.MatchString(name) {
-		return "", problem.Validation{Errors: []problem.FieldError{{Field: "username", Message: problem.MsgUsernameInvalid}}}
+		return "", problem.Field("username", problem.MsgUsernameInvalid)
 	}
 	return name, nil
 }

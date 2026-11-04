@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. P0–P2 are built; P3 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
+*   **Status:** Accepted. P0–P3 are built; P4 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
 
@@ -304,7 +304,7 @@ Monorepo. The Go module is the repo root. The web app lives in `web/`.
 cmd/open-customer/        main + subcommands
 api/openapi.yaml          the API contract (OpenAPI 3.0.3), source of truth
 internal/
-  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json)
+  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json), color, files, text (trim and length checks, the notes rule), position (the 0..Max position rule), archive (the archived_at rule), nullval (nullable fields to and from pointers)
   db/                     pgx pool, migrations (goose, embedded), sqlc output
   httpapi/                generated server interface, handlers that call domain modules, middleware (incl. the Origin check)
   auth/                   users, sessions, setup tokens, rate limiting
@@ -460,9 +460,11 @@ One validator in `attributes` checks every write (API, CLI, tests). Values are s
 Rules:
 
 *   `key`, `type` and `scope` cannot change after creation. To change them, she creates a new attribute and archives the old one.
-*   `key` is generated from the label (lowercase, no accents, `_` for spaces, a number added if taken). A key uses only `a–z`, `0–9` and `_` and starts with a letter, the same characters the template tokenizer accepts. These names are reserved: `name`, `first_name`, `phone`, `notes`, `date`, `time`, `services`, `id`.
+*   `key` is generated from the label (lowercase, no accents, `_` for spaces, a number added if taken). Two attributes created at the same moment could pick the same key; the second insert then fails on the unique `key` and is a 500. That is accepted: one owner is effectively one writer. A key uses only `a–z`, `0–9` and `_` and starts with a letter, the same characters the template tokenizer accepts. These names are reserved: `name`, `first_name`, `phone`, `notes`, `date`, `time`, `services`, `id`.
 *   **Required** is checked when a record is created, and when a request changes that attribute. Old records without the value can still be edited. An empty text (`""`) counts as no value: it is removed from `attrs`, and it fails a required check.
 *   **Empty values:** `""` and an empty multiselect `[]` count as no value (removed, and they fail a required check). `null` removes a key on `PATCH` and is ignored on create.
+*   **A value equal to the stored one is not new (D4).** On `PATCH`, a key whose request value equals its stored value is accepted unchanged, even when the attribute or option was archived since, because the phone's edit form re-sends the whole form. In a multiselect, only the IDs added in this request are checked for archived options.
+*   **Text is trimmed (D5).** A whitespace-only text counts as empty: it is removed and fails a required check. The 500-character limit counts runes.
 *   **Rejected writes (422, with `errors[].field` = `attrs.<key>` and the attribute's label in the message):** an unknown key, a key of the other scope, any write to an archived attribute, and an archived option ID in a new value. Only the keys in the request are checked, so a stored value that points at an option archived later stays valid.
 *   **One archive rule for attributes and options:** an archived attribute or option keeps its stored values. They are shown read-only, and they still render in templates and in `datos.json` by their last label (the CSV files leave archived attributes out; see "Export"). A record with no stored value renders the fallback, as for any empty value.
 *   **Option trees:** the parent path is not stored in the value. It is read from `parent_id` when the value is shown, rendered or exported. She can pick an option at any level, not only a leaf. Archiving an option hides it and its children from the picker; stored values keep rendering.
@@ -481,7 +483,7 @@ Syntax (internal; she never types it):
 
 Behavior:
 
-*   **Saving:** every variable must exist. An archived attribute counts as existing, so a template that already uses it can still be saved; the chip row shows only active attributes, so she cannot add a new use of it. If a variable does not exist at all, there is no label to show, so the plain Spanish error names the token as written, for example "La variable 'bebida_favorita' no existe". The chip editor never writes such a token; only a bug or a hand-edited body can. Any `{{` that does not start a valid variable is also rejected, with "Hay un {{ sin cerrar" and its position.
+*   **Saving:** every variable must exist. An archived attribute counts as existing, so a template that already uses it can still be saved; the chip row shows only active attributes, so she cannot add a new use of it. If a variable does not exist at all, there is no label to show, so the plain Spanish error names the variable key only, for example "La variable 'bebida_favorita' no existe". The chip editor never writes such a token; only a bug or a hand-edited body can. Any `{{` that does not start a valid variable is also rejected, with "Hay un {{ sin cerrar" and its position, counted in characters (not bytes) from 1. Inside `{{ }}` only ASCII spaces are allowed. Save reports every such error in body order, then unknown variables in body order. The body is stored exactly as sent, with no trimming, so error positions match the editor, and the 2000-character limit counts the body as sent. The renderer is lenient: it copies a bad `{{` as plain text, and a lone `}}`, `{` or `}` is plain text everywhere.
 *   **Rendering:** a missing value becomes the fallback, or empty text. The renderer never fails at send time.
 *   **The editor:** a text box plus a row of chips, one per variable, showing the current label. The chip list comes from the server (`template_vars[]` in `/bootstrap`, built by `templates/vars.go`), so the phone and the save check use one list. Tapping a chip in the row inserts the variable, and the text box shows it as an inline chip. Tapping an inline chip opens "Si no tiene: ___" to set the fallback.
 *   **Preview:** `POST /templates/preview` renders on the server, so there is one renderer, written in Go. Above the preview, "Vista previa con:" lets her pick who it is for:
@@ -515,7 +517,7 @@ There are two rule kinds:
 *   **Return service.** A `come_back` rule has an optional `return_service_id`: the service the client should book next. Empty means the rule's own service. Example: the rule on "Acrílico" says "21 días después → Relleno". One return service per rule.
 *   **Rebooking.** The `come_back` skip rule covers future bookings and also later visits, but only ones that include the return service. A later visit without it does not skip the item: a pedicure after an acrylic set still gets the refill reminder. If that later appointment is cancelled, or the return service is taken off it, the condition is false again, so the reminder returns on the next read. Nothing has to "re-arm" it.
 *   **Booking prompt.** On the due day, if the client has a future appointment (starts after now, not cancelled or no-show) that does not include the return service, the item is shown to her as a prompt instead of a client message, for example "Ana tiene cita el 12/11 (Pedicure). ¿Agregar Relleno?" (the real string lives in `es.json`). The earliest such appointment is used. Actions:
-    *   "Agregar a la cita": `PATCH /appointments/{id}` on that appointment, with its current `service_ids` plus the return service and no `ends_at`, so `ends_at` grows by the return service's duration ("Appointments" → Editing). The overlap check runs as for any edit that changes the times (a 409 shows "Agendar igual"). After that, the skip rule hides the item.
+    *   "Agregar a la cita": `PATCH /appointments/{id}` on that appointment, with its current `service_ids` plus the return service and no `ends_at`. When `service_ids` is sent without `ends_at`, the server sets `ends_at` = `starts_at` + the sum of all line durations, so `ends_at` grows by the return service's duration ("Appointments" → Editing). The overlap check runs as for any edit that changes the times (a 409 shows "Agendar igual"). After that, the skip rule hides the item.
     *   "Enviar mensaje": the normal client message (`wa.me`) and the normal `sent` log row.
     *   "Omitir": the normal `skipped` log row.
 
@@ -629,13 +631,16 @@ This replaces the brief's one-time code (Alternative K1).
 *   The phone decodes the picked photo with `createImageBitmap(file, {imageOrientation: 'from-image'})` and draws it to a canvas. Then it exports two JPEGs: the long side at 2048 px, quality 0.8, and a thumbnail at 400 px.
 *   Canvas export drops EXIF, so GPS data never reaches the server.
 *   **Ownership:** a photo is taken from an appointment (CUJ 3) or from a client. With `appointment_id`, the server fills `client_id` from that appointment; a request with a different `client_id` gets 422. The appointment screen shows the client's photos (`GET /clients/{id}/media`) filtered by `appointment_id` on the phone.
-*   Upload: `POST /media` with multipart parts `full` and `thumb`. The server checks the JPEG signature of each part and the size limits (`full` 10 MB, `thumb` 1 MB, the whole request 12 MB), then stores the files at `media/<yyyy>/<mm>/<id>.jpg` and `<id>_t.jpg`. The files are written and synced before the row is inserted, which is what makes "never a row without its file" in "Backups" true.
+*   Upload: `POST /media` with multipart parts `full` and `thumb`. The server checks the JPEG signature of `full`, decodes the JPEG header of both parts, and checks the size limits (`full` 10 MB, `thumb` 1 MB, the whole request 12 MB), then stores the files at `media/<yyyy>/<mm>/<id>.jpg` and `<id>_t.jpg`. The files are written and synced before the row is inserted, which is what makes "never a row without its file" in "Backups" true.
+*   **Folders and checks:** `<yyyy>/<mm>` is the UTC year and month of the upload. A part that has the JPEG signature but that `jpeg.DecodeConfig` cannot read (`full` or `thumb`) gets 415. `bytes`, `width` and `height` describe `full`. An unknown or archived client gets 422 on `client_id`.
+*   **Failed writes:** if the insert fails, the `media` module removes the two files it just wrote. If the request's commit fails after `Save`, the handler calls `Discard(ctx, md)`, which removes them. A failure of either removal is logged with `code=media_discard_failed`, never with a path.
+*   **Archived photos** are hidden from `GET /clients/{id}/media` only; `GET /media/{id}` and `/media/{id}/thumb` still serve them by ID.
 *   Serving: `GET /media/{id}` and `/media/{id}/thumb` need a session. They send `Cache-Control: private, max-age=31536000, immutable`, because a media ID never changes content.
 
 ### Clients and search
 
 *   Phone numbers are parsed with `nyaruka/phonenumbers`, using the business `country_code` as the default region (the handler reads it from settings and passes it to `clients`). "8888-7777" becomes `+50688887777`. Invalid numbers are rejected with a Spanish message.
-*   Creating a client with a phone that another active client already has returns a warning and lets her "Guardar igual".
+*   Creating a client with a phone that another active client already has returns a warning and lets her "Guardar igual". The check compares the normalized E.164 number with the other active clients, so "612 345 678" and "+34 612-345-678" match. On `PATCH` it runs only when the request sets a phone that differs from the stored one, or when it restores an archived client (`archived: false`); `allow_duplicate_phone` skips it in both cases. An empty `phone` string means no phone, the same as `null`.
 *   **Search runs only on the phone**, online and offline, over the cached active clients (`/bootstrap` sends all of them). There is no server search: the phone already holds the data, and one search function means one result order.
     *   A client matches when the client's name contains the query, ignoring case and accents (NFD normalization, combining marks removed), or when the query has 3 or more digits and the client's `phone_digits` contains them. Non-digits are removed from the query first, so "8888-7777" matches. A query with no digits never matches by phone.
     *   Order: names where the query starts a word come first ("starts a word" = at the start of the name or right after a space), then the rest, each group by name (the same accent-free key, then the raw name). Top 20.
@@ -657,11 +662,11 @@ Status changes:
 *   **Concurrent edits:** last write wins. There is one user and no offline edits, so the only possible conflict is her Safari tab against the installed app. Version checks (`If-Match` / 412) come with staff accounts; a `version` column can be added then without changing existing data.
 *   **Services:** the price and duration of each service are copied at save time. Changing the service later does not change past appointments.
 *   **Editing:** every field can be edited at any time, also on past and done appointments, so she can fix mistakes.
-    *   `PATCH` with `service_ids` replaces the whole service list: each line is copied again from the current service, and `total_cents` is recomputed. `paid_cents` is never changed by this.
+    *   `PATCH` with `service_ids` replaces the whole service list. A service already on the appointment keeps its saved line (name, price, duration), matched by service ID as many times as the appointment has it, so a past visit's lines and `total_cents` never move when a price changes later. Only a service added by the edit (or an extra copy of one already there) is copied from the current service at today's name, price and duration. To take today's price for a kept line, she removes the service and adds it again in a second edit. `total_cents` is recomputed. `paid_cents` is never changed by this.
     *   If the same `PATCH` has no `ends_at`, `ends_at` is recomputed as `starts_at` + the new durations. If it has `ends_at`, that value is kept. No "set by hand" flag is stored.
     *   Changing `starts_at` without `ends_at` moves `ends_at` by the same amount.
-    *   The overlap check counts only `scheduled` and `confirmed` appointments, and runs on every create, on any update that changes the times, and on "Reactivar".
-    *   An archived client or service cannot be put on an appointment (422). Lines already copied from a service archived later stay as they are.
+    *   The overlap check counts only `scheduled` and `confirmed` appointments, and always leaves out the appointment being saved. It runs on every create, on an update that changes the times of a `scheduled` or `confirmed` appointment (a notes-only edit, or an edit of a cancelled one, skips it), and on "Reactivar". It takes no lock, so two saves at the same moment can both pass it (see "Accepted risks").
+    *   An archived client or service cannot be put on an appointment (422 on `client_id` or `service_ids`). Lines already copied from a service archived later stay as they are, by the same keep rule. Only a newly added archived or unknown service is a 422.
 *   **Payment:** `paid_cents` is a column, because the export and future reports need a number. There is no built-in payment-method field; she can create a select attribute for it like any other.
 
 ### API
@@ -875,6 +880,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 *   **Backups stay in the same house.** Fire or theft can take the PC and the USB disk together. Off-site backup is a future improvement.
 *   **Cloudflare sees decrypted traffic** at its edge, because TLS ends there. Accepted for the reference install and written in `deploy/README.md`.
 *   **A dead push subscription shows only on "Estado del sistema".** The re-subscribe check fixes most cases on the next open. Otherwise she notices it as the missing morning notification.
+*   **The overlap check is not race-safe.** It takes no lock and has no exclusion constraint, and an edit reads then writes. One owner is effectively one writer, so the cost is a rare double booking when two of her devices save at the same moment; she sees both appointments in the day view and can move one.
 *   **Ley 8968 (Costa Rica personal data law) is not checked yet.** Before her real data goes in, the author checks her obligations (consent, archive-only deletion, data held on a home PC). This is a step in the pre-handover checklist in `deploy/README.md`, next to the restore drill.
 
 ### Handled risks
@@ -1276,8 +1282,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
 | P0 Repo and tooling | 1–5, 7–10, 17 (`version`), 20–24, 36, 62–63 (plus the placeholder page) | Module, `Makefile`, `web-stub`, the web toolchain, lint config, CI, the platform packages | CI green: `make lint test vuln build check-pins` |
 | P1 Database and HTTP skeleton | 6 (`sqlc.yaml`; it needs the migrations, so it moved here from P0), 15–16 (`GET /setup/status` only), 17 (`serve`), 18 (P1 steps), 25–32, 33 (`handlers_auth.go`: `GET /setup/status` only), 34 (steps 1–5), 35, 37 (middleware steps 1–5, problem JSON, static), 40 (`SetupNeeded` only), 60 (`/healthz`, `/readyz`), 61, 66 (`schema.d.ts` only, generated by `make generate`) | `serve` migrates an empty DB and serves `/healthz`, `/readyz`, `GET /api/v1/setup/status` and the placeholder page | `make check-generated test test-db`; `go run ./cmd/open-customer serve` against Docker Postgres returns 200 on `/readyz` and `{"needs_setup":true}` on `/api/v1/setup/status` |
 | P2 Auth, setup and settings | 17 (`reset-password`, `setup-link`, `healthcheck`), 18 (P2 step), 19, 33 (auth, settings), 34 (steps 6–8), 37 (session and `must_change_password` steps), 38–42, 44 | Setup link, owner creation (setup creates nothing else), login, sessions, settings, manifest, icons | `make test test-db cover` (gate: `auth`); with `curl -H "Origin: $PUBLIC_URL"`: setup → login → `GET /me` → logout |
-| P3 Catalog | 33 (catalog), 37 (409 overlap responses), 45–54 | Attributes, clients, services, appointments, media, templates | `make test test-db cover` (gates added: `attributes`, `appointments`, `templates`) |
-| P4 Reminders, push and export | 18 (P4 steps), 28 (migration `00002`), 33 (reminders and `POST /templates/preview`, push, export, status, bootstrap), 55–59, 60 (`Status()`, client errors) | Due list (messages and booking prompts), reminder log, daily push, export, the status screen data | `make test test-db cover` (gate added: `reminders`); a `db`-tagged Go test in `internal/reminders` inserts the CUJ 4 and 5 rows (CUJ 5 including the booking prompt), and `GET /reminders/due` returns those items |
+| P3 Catalog | 33 (catalog), 37 (409 overlap responses), 45–52, 53 (without `sample.go`), 54 | Attributes, clients, services, appointments, media, templates | `make test test-db cover` (gates added: `attributes`, `appointments`, `templates`) |
+| P4 Reminders, push and export | 18 (P4 steps), 28 (migration `00002`), 33 (reminders and `POST /templates/preview`, push, export, status, bootstrap), 53 (`sample.go`), 55–59, 60 (`Status()`, client errors) | Due list (messages and booking prompts), reminder log, daily push, export, the status screen data | `make test test-db cover` (gate added: `reminders`); a `db`-tagged Go test in `internal/reminders` inserts the CUJ 4 and 5 rows (CUJ 5 including the booking prompt), and `GET /reminders/due` returns those items |
 | P5 Web app | 62–63 (finished), 64–78 | The PWA on top of the finished API | `make lint test build`; the binary serves the real app; manual pass of CUJ 1–6 in Safari's iPhone view |
 | P6 End-to-end tests | 79–80 | Playwright specs | `make e2e` green in CI |
 | P7 Deploy, backups and docs | 9 (backup-image step), 11–14, 81–87 | Compose stack, backup image and scripts, docs moved, root files deleted | The Verification Plan's manual steps on the PC, including the restore drill |
@@ -1346,7 +1352,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 5. `.golangci.yml` (Create)
 
 *   **Type / Scope**: Lint config.
-*   **Proposed Changes**: Enable `govet`, `staticcheck`, `errcheck`, `gosec`, `revive`, `depguard`, plus `exhaustive` (a `default` does not count as covering the cases), `wrapcheck`, `nilerr`, `nolintlint` (a reason and a linter name are required), `thelper`, `tparallel`, `unused` and `dupl` (threshold 80: a pasted 20-line function trips it), from `TASKS.md` T4, T5 and T7; `gofmt` as formatter. Tests are excluded from `dupl` and `wrapcheck`. `internal/platform/problem/messages.go` is excluded from gosec G101 only: it reads a Spanish message constant named `MsgPasswordTooShort` as a credential. `internal/auth/sessions.go` is excluded from gosec G124 only: the session cookie's `Secure` follows `PUBLIC_URL` and is false only for plain-http localhost (development and e2e), where WebKit drops a `Secure` cookie ("Session and request rules"). `run.build-tags: [db]` makes lint also check the `db`-tagged tests. Lint runs on `$(GO_DIRS)` through `make lint`, also in CI, so `web/node_modules` is never loaded. `depguard` enforces only the coarse module rules: no domain package imports `internal/httpapi` or `internal/httpapi/gen`; `internal/auth` imports no domain package; and nothing outside `httpapi`, `scheduler` and `cmd/open-customer` imports `internal/reminders`. The per-module list of allowed domain imports ("Code layout and module rules") is checked in review, not by lint, so the config stays small.
+*   **Proposed Changes**: Enable `govet`, `staticcheck`, `errcheck`, `gosec`, `revive`, `depguard`, plus `exhaustive` (a `default` does not count as covering the cases), `wrapcheck`, `nilerr`, `nolintlint` (a reason and a linter name are required), `thelper`, `tparallel`, `unused` and `dupl` (threshold 80: a pasted 20-line function trips it), from `TASKS.md` T4, T5 and T7; `gofmt` as formatter. Tests are excluded from `dupl` and `wrapcheck`. `wrapcheck` also ignores `problem.Field(` (`extra-ignore-sigs`): it builds a final error value, like `errors.New`, so there is nothing to wrap. `internal/platform/problem/messages.go` is excluded from gosec G101 only: it reads a Spanish message constant named `MsgPasswordTooShort` as a credential. `internal/auth/sessions.go` is excluded from gosec G124 only: the session cookie's `Secure` follows `PUBLIC_URL` and is false only for plain-http localhost (development and e2e), where WebKit drops a `Secure` cookie ("Session and request rules"). `run.build-tags: [db]` makes lint also check the `db`-tagged tests. Lint runs on `$(GO_DIRS)` through `make lint`, also in CI, so `web/node_modules` is never loaded. `depguard` enforces only the coarse module rules: no domain package imports `internal/httpapi` or `internal/httpapi/gen`; `internal/auth` imports no domain package; and nothing outside `httpapi`, `scheduler` and `cmd/open-customer` imports `internal/reminders`. The per-module list of allowed domain imports ("Code layout and module rules") is checked in review, not by lint, so the config stays small.
 
 ##### 6. `sqlc.yaml` (Create)
 
@@ -1526,7 +1532,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | Times | `starts_at`, `created_at` and similar: RFC 3339 in UTC. Local days (`due_date`, `from`, `to`): `YYYY-MM-DD` in the business time zone. `from` and `to` are both inclusive and match the local day of `starts_at`. |
     | `position` | On create, the server puts the row last (the current maximum + 1). To reorder, the phone sends a `PATCH` with the new `position` of each row that moved. |
     | Money | Integer minor units (`*_cents`), plus `currency` from settings. The number of decimals comes from the currency's ISO 4217 exponent, read from `golang.org/x/text/currency` (`currency.Standard.Rounding(unit)` gives the scale; for example 2 for most currencies, 0 for JPY); inputs and display use it, so for a 0-decimal currency `*_cents` holds whole units. |
-    | `PATCH` | `application/json`. An absent field is unchanged; `null` clears a nullable field. `attrs` is merged by key, and a key set to `null` is removed. `archived: true/false` archives or restores. |
+    | `PATCH` | `application/json`. An absent field is unchanged; `null` clears a nullable field. `attrs` is merged by key, and a key set to `null` is removed. `archived: true/false` archives or restores; archiving twice keeps the first time. An unknown id is 404 before any field is validated. |
     | Lists | `{items: [...]}`, with every matching row. No paging (see "API"). |
     | Errors | `type` is `urn:open-customer:problem:<name>`. Every name, status, Spanish `title` and extension field is in the error table below. |
     | Error responses | Each operation lists the problem statuses its own handler answers, plus a `default` response (`$ref: "#/components/responses/Problem"`) for the ones the middleware (item 34) can answer on any route: 403 `forbidden-origin` (every method but GET and HEAD), 403 `must-change-password` (step 8, public routes included) and 500 `internal`. One `default` per operation, not a 403 and a 500 entry per operation, because those answers do not depend on the route, and the web `schema.d.ts` then types every non-2xx answer as a `Problem`. `TestEveryOperationHasADefaultProblemResponse` fails an operation without it. |
@@ -1620,7 +1626,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `GET /clients/{id}` | — | 200 `Client` |
     | `GET /clients/{id}/appointments` | — | 200 `{items: Appointment[]}`, newest first |
     | `GET /clients/{id}/media` | — | 200 `{items: Media[]}`, newest first, archived ones left out |
-    | `GET /appointments` | `from`, `to` (`YYYY-MM-DD`, at most 31 days apart) | 200 `{items: Appointment[]}`, by `starts_at` |
+    | `GET /appointments` | `from`, `to` (`YYYY-MM-DD` local days in the business time zone, both required, `to` not before `from` and at most 31 days after it, else 422 on `to`) | 200 `{items: Appointment[]}`, by `starts_at` |
     | `GET /appointments/{id}` | — | 200 `Appointment` |
     | `GET /media/{id}`, `GET /media/{id}/thumb` | — | 200 `image/jpeg` (binary) |
     | `GET /reminders/due` | — | 200 `{items: DueItem[]}` |
@@ -1634,7 +1640,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 16. `api/oapi-codegen.yaml` (Create)
 
 *   **Type / Scope**: Generator config.
-*   **Proposed Changes**: Package `gen`, output `internal/httpapi/gen/api.gen.go`, `generate: {std-http-server: true, models: true, embedded-spec: true}`, `output-options: {nullable-type: true}` (see item 15 for `x-go-type` and nullable fields). No `compatibility` flags: middleware steps 7 and 8 read `security` and the `x-oc-` extension from the embedded spec (item 34), not from generated context values (the scopes-on-context flag is deprecated and fails open for a route it does not mark). No `strict-server`: the plain interface gives each handler `(w, r, params)`, so headers, multipart and streaming need no workaround. The cost is that Go does not check at compile time which status and body a handler writes; the handler tests (item 37) and e2e cover that.
+*   **Proposed Changes**: Package `gen`, output `internal/httpapi/gen/api.gen.go`, `generate: {std-http-server: true, models: true, embedded-spec: true}`, `output-options: {nullable-type: true}` (see item 15 for `x-go-type` and nullable fields). The one `compatibility` flag is `always-prefix-enum-values: true`, so enum constants carry their type name (`AttributeScopeClient`) and a later schema named like a bare value (`Appointment`) cannot clash with it. No other `compatibility` flags: middleware steps 7 and 8 read `security` and the `x-oc-` extension from the embedded spec (item 34), not from generated context values (the scopes-on-context flag is deprecated and fails open for a route it does not mark). No `strict-server`: the plain interface gives each handler `(w, r, params)`, so headers, multipart and streaming need no workaround. The cost is that Go does not check at compile time which status and body a handler writes; the handler tests (item 37) and e2e cover that.
 
 #### Command
 
@@ -1692,7 +1698,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Errors.
 *   **Proposed Changes**:
-    *   One Go value per row of the error table in item 15: `Validation{Errors []FieldError}`, `NotFound`, `Unauthorized`, `InvalidCredentials`, `MustChangePassword`, `ForbiddenOrigin`, `SetupClosed`, `SetupTokenInvalid`, `Conflict{Name string, Extra map[string]any}` (for `overlap`, `duplicate-phone` and `invalid-transition`, with `appointments` or `clients` in `Extra`), `PayloadTooLarge`, `UnsupportedMediaType`, `RateLimited{RetryAfter}`. Any other error is `internal`.
+    *   One Go value per row of the error table in item 15: `Validation{Errors []FieldError}`, `NotFound`, `Unauthorized`, `InvalidCredentials`, `MustChangePassword`, `ForbiddenOrigin`, `SetupClosed`, `SetupTokenInvalid`, `Conflict{Name string, Extra map[string]any}` (for `overlap`, `duplicate-phone` and `invalid-transition`; `httpapi/conflicts.go` fills `Extra` with `appointments` or `clients` as `gen` types from the typed module errors `appointments.OverlapError` and `clients.DuplicatePhoneError`, which unwrap to a `Conflict` with no `Extra`, because modules cannot import `gen`), `PayloadTooLarge`, `UnsupportedMediaType`, `RateLimited{RetryAfter}`. Any other error is `internal`.
     *   `Write(w, r, err)`: picks the row, writes `application/problem+json` with the status, the Spanish `title` and the extension fields, and logs `internal` errors with the request ID.
     *   Handlers write these errors with `problem.Write`. A JSON body that cannot be decoded is `validation` (the shared `decodeJSON` helper, item 32). Path and query binding errors (a bad UUID in `{id}`, a bad `from` date) are raised by the generated wrapper, and `StdHTTPServerOptions.ErrorHandlerFunc` (item 32) maps them to `validation`. Middleware (item 34) calls `problem.Write` for 401, 403 and the panic 500. `auth.Login` and `status.LogClientError` return `RateLimited`, and their handlers write the 429.
     *   For `RateLimited`, `problem.Write` also sets the `Retry-After` header.
@@ -1762,10 +1768,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: Server implementation.
 *   **Proposed Changes**: The `Server` struct holds the pool and the module values (concrete types), and implements `gen.ServerInterface`.
     *   Mounting: `gen.HandlerWithOptions(server, gen.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: mux, ErrorHandlerFunc: <writes a validation problem>})`.
-    *   `New` refuses an `Options` without one of the module values (`Auth`, `Settings`, `Status`), so a module `serve` forgot to pass fails at startup, not on the first request that reaches it.
+    *   `New` refuses an `Options` without one of the module values (`Auth`, `Settings`, `Attributes`, `Services`, `Clients`, `Appointments`, `Media`, `Templates`, `Status`), so a module `serve` forgot to pass fails at startup, not on the first request that reaches it.
     *   A catch-all `/api/` handler answers every unknown path and every wrong method under `/api/` with 404 `not-found` problem JSON. Without it, the `/` fallback in item 35 would answer them with `index.html` and a 200.
     *   Handler shape: generated handlers take `(w, r, <path params>, params)`, for example `(w, r, id, params)`.
-    *   Shared helpers: `decodeJSON(w, r, &v)` (decodes into the generated request type with `DisallowUnknownFields`, because the web client is ours and an unknown field is a bug; then calls the type's hand-written `Validate() error` where a field has rules; a body over the limit, `*http.MaxBytesError`, gives `payload-too-large`; any other decode failure gives `validation`; the multipart readers check `MaxBytesError` the same way) ; `decodePatch(w, r, &v, nullable...)` for every `PATCH` body: `decodeJSON`, plus a top-level field sent as `null` is `validation` on that field unless the endpoint lists it as nullable (the `?` fields of the `PATCH` table; the generated patch fields are pointers, so a `null` would otherwise read as "not sent"), and a bare `null` body is `validation`; and `writeJSON(w, status, v)`. Response values are the generated `gen` types, so field names come from the spec.
+    *   Shared helpers: `decodeJSON(w, r, &v)` (decodes into the generated request type with `DisallowUnknownFields`, because the web client is ours and an unknown field is a bug; there is no `Validate()` on generated types: the module that owns a field validates it and answers the field errors; a body over the limit, `*http.MaxBytesError`, gives `payload-too-large`; any other decode failure gives `validation`; the multipart readers check `MaxBytesError` the same way) ; `decodePatch(w, r, &v, nullable...)` for every `PATCH` body: `decodeJSON`, plus a top-level field sent as `null` is `validation` on that field unless the endpoint lists it as nullable (the `?` fields of the `PATCH` table; the generated patch fields are pointers, so a `null` would otherwise read as "not sent"), and a bare `null` body is `validation`; `readParts(r, limits)` (in `multipart.go`, with `bodyProblem`, `uploadRejectCode` and `withoutFileText`; the one multipart reader of `POST /media` and `POST /settings/icon`: form-data only, each part at most once, only the named parts, each read up to its limit; the handler checks which parts are required); and `writeJSON(w, status, v)`. Response values are the generated `gen` types, so field names come from the spec.
     *   Body limits are applied by the code that reads the body, not by path in `server.go`: `decodeJSON` wraps `r.Body` in `http.MaxBytesReader` at 1 MB and also rejects trailing data after the value; each multipart handler wraps it with its own limit, `POST /media` (12 MB) and `POST /settings/icon` (3 MB). A body over the limit answers `payload-too-large`.
     *   The SPA handler (item 35) is mounted on `/` for GET and HEAD only; any other method on a path outside `/api/` gets 405 with `Allow: GET, HEAD`. (`GET /` cannot be registered next to the method-less `/api/` catch-all: the standard mux rejects the pair as conflicting.)
 
@@ -1775,12 +1781,12 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | --- | --- |
     | `auth` | `SetupNeeded() bool`; `NewSetupToken() string`; `CompleteSetup(SetupInput) (Me, token)` (the handler opens the transaction); `Login(LoginInput, ip) (Me, token)` (an unknown username is still verified, against a fixed dummy hash, so the response time does not reveal which usernames exist; OP17); `Logout(session)` (the session middleware step 6 loaded, so the cookie is parsed only there); `Authenticate(token) (Me, Session, refreshed bool)` (`refreshed` tells the middleware to re-send the cookie); `ChangePassword(session, current, new)` (keeps that session, revokes the others, clears `must_change_password`; a wrong `current` counts toward the per-username delay, item 41); `ResetPassword(username) tempPassword` |
     | `settings` | `Get() Settings`; `Create(SettingsInput) Settings` (called only through `auth` setup; `cmd` wraps it in a closure that drops the returned `Settings`, to match the creator type in item 40); `Update(SettingsPatch) Settings`; `SetIcons(icon512, icon180 []byte)`; `Manifest() []byte`; `Icon(size) ([]byte, updatedAt)`. `Countries() []string` is a package-level function with no `q`, not a method. |
-    | `attributes` | `List() []Attribute`; `Create(AttributeInput) Attribute`; `Update(id, AttributePatch) Attribute`; `AddOption(attrID, OptionInput) Option`; `UpdateOption(attrID, optionID, OptionPatch) Option`; `Validate(scope, attrs, touchedKeys, isCreate) (attrs, error)` |
-    | `clients` | `ListActive() []Client`; `List(archived) []Client`; `Get(id) Client`; `Create(ClientInput, region) Client`; `Update(id, ClientPatch, region) Client` (`region` is `settings.country_code`, read by the handler) |
-    | `services` | `List() []Service`; `GetMany(ids) []Service`; `Create(ServiceInput) Service`; `Update(id, ServicePatch) Service` |
-    | `appointments` | `ListRange(from, to, loc *time.Location) []Appointment` (the handler passes the business time zone); `ListForClient(clientID) []Appointment`; `Get(id) Appointment`; `Create(AppointmentInput) Appointment`; `Update(id, AppointmentPatch) Appointment`; `SetStatus(id, status, allowOverlap) Appointment` (returns `overlap` 409 when the change is to `scheduled` and an overlap exists) |
-    | `media` | `Save(MediaInput) Media`; `Open(id, thumb bool) (io.ReadCloser, Media)`; `ListForClient(clientID) []Media`; `SetArchived(id, archived) Media` |
-    | `templates` | `List() []Template`; `Vars() []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)` and `SampleData(locale, countryCode)` are plain functions with no `q`. |
+    | `attributes` | `List() []Attribute`; `Create(AttributeInput) Attribute`; `Update(id, AttributePatch) Attribute`; `AddOption(attrID, OptionInput) Option`; `UpdateOption(attrID, optionID, OptionPatch) Option`; `Validate(scope, stored, request, isCreate) (attrs, error)` |
+    | `clients` | `List(archived bool) []Client` (`List(false)` is the active list); `Get(id) Client`; `Create(ClientInput, region) Client`; `Update(id, ClientPatch, region) Client` (`region` is `settings.country_code`, read by the handler) |
+    | `services` | `List() []Service`; `GetMany(ids) map[id]Service`; `Create(ServiceInput) Service`; `Update(id, ServicePatch) Service` |
+    | `appointments` | `ListRange(from, to, loc *time.Location) []Appointment` (the handler passes the business time zone; every status is listed; `to` before `from` is a 422 on `to`, and there is no length limit here: `GET /appointments` checks its 31-day limit and bootstrap reads a longer window); `ListForClient(clientID) []Appointment`; `Get(id) Appointment`; `Create(AppointmentInput) Appointment`; `Update(id, AppointmentPatch) Appointment`; `SetStatus(id, status, allowOverlap) Appointment` (returns `overlap` 409 when the change is to `scheduled` and an overlap exists) |
+    | `media` | `Save(MediaInput) Media`; `Open(id, thumb bool) (io.ReadSeekCloser, Media)`; `Discard(ctx, Media)`; `ListForClient(clientID) []Media`; `SetArchived(id, archived *bool) Media` (an absent `archived` leaves the photo as it is; archiving twice keeps the first time) |
+    | `templates` | `List() []Template`; `Vars(loc) []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)` and `SampleData(locale, countryCode)` are plain functions with no `q`. |
     | `reminders` | `Preview(body, clientID?) Preview` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem` (messages and booking prompts, `DueItem.mode`); `Record(LogEntry) (created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(date) []LogItem` |
     | `push` | `PublicKey() string`; `Subscribe(userID, Subscription) (id, created bool)`; `CountSubscriptions() int`; `EnsureKeys()`; `SendAll(Payload) SendResult` (`attempted`, `delivered`) |
     | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction) |
@@ -1792,7 +1798,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Handlers.
 *   **Proposed Changes**: One file per area. Each handler decodes the request, calls one module function and encodes the result. No business logic lives here.
-    *   `handlers_bootstrap.go` opens one read-only `REPEATABLE READ` transaction with `db.WithTx` and passes the `pgx.Tx` to each module's read function in turn (`settings.Get`, `attributes.List`, `services.List`, `templates.List`, `reminders.ListRules`, `clients.ListActive`, `appointments.ListRange`, `reminders.DueList`, `templates.Vars`), so all parts come from the same snapshot. Outside the transaction it adds `server_time` from the `Clock` and `backup_red` from `status.BackupRed()`. There is no `pgx.Batch`: the sqlc `DBTX` has no `SendBatch`, and one snapshot already makes the reads consistent. `GET /reminders/due` and the timer also call `DueList` inside a read-only `REPEATABLE READ` transaction.
+    *   `handlers_bootstrap.go` opens one read-only `REPEATABLE READ` transaction with `db.WithTx` and passes the `pgx.Tx` to each module's read function in turn (`settings.Get`, `attributes.List`, `services.List`, `templates.List`, `reminders.ListRules`, `clients.List(false)`, `appointments.ListRange`, `reminders.DueList`, `templates.Vars`), so all parts come from the same snapshot. Outside the transaction it adds `server_time` from the `Clock` and `backup_red` from `status.BackupRed()`. There is no `pgx.Batch`: the sqlc `DBTX` has no `SendBatch`, and one snapshot already makes the reads consistent. `GET /reminders/due` and the timer also call `DueList` inside a read-only `REPEATABLE READ` transaction.
     *   Multipart: `handlers_media.go` (`POST /media`) and `handlers_settings.go` (`POST /settings/icon`) read it with `r.MultipartReader()`. Binary bodies: `handlers_media.go` (`GET /media/{id}`, `/thumb`) and `handlers_export.go` write to `w`, with the headers from item 15.
     *   `handlers_auth.go` also serves `GET /setup/options` (no session).
     *   `handlers_settings.go` also holds the handlers, outside `/api/v1` and with no session, of `GET /manifest.webmanifest` (`settings.Manifest`), `GET /icons/512.png` and `GET /apple-touch-icon.png` (`settings.Icon`), with `Cache-Control: no-cache`; `handlers_status.go` holds those of `/healthz` and `/readyz`. `server.go` registers all five by literal path, before `/`. An icon file error's text can name a path, so the icon handlers answer it as `internal` with a fixed text and never log it.
@@ -1811,7 +1817,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     7.  Auth required for `/api/v1/*` except `GET /setup/status`, `GET /setup/options`, `POST /setup`, `POST /auth/login` and `GET /push/key` (401 `unauthorized`). The public set is read once at `httpapi.New` from the embedded spec (`gen.GetSpec`): the operations whose own `security` is present and empty (`security: []`), as `"METHOD /api/v1<path>"` patterns. Every request needs a session unless its `r.Pattern` is in that set, so an empty or unknown pattern needs one too (fail closed). `New` returns an error when a `security` requirement, global or on an operation, names any scheme but `sessionCookie` or is the empty `{}`.
     8.  The `must_change_password` gate. It allows exactly `POST /auth/password`, `GET /me` and `POST /auth/logout`, and answers every other `/api/v1` route with `must-change-password`. That includes the public routes of step 7: a request to `GET /setup/status`, `GET /setup/options`, `POST /setup` or `POST /auth/login` that carries a must-change session cookie is 403 too, because step 6 loaded the session and step 8 checks every session it finds (a request without the cookie is not affected). The allowed set is the operations marked `x-oc-allowed-while-must-change-password: true` in the spec, read once at `httpapi.New` from the embedded spec (`gen.GetSpec`) as `"METHOD /api/v1<path>"` patterns and compared with `r.Pattern`; a non-boolean value stops `New` with an error.
 
-    Steps 6–8 run as `gen.StdHTTPServerOptions.Middlewares`, after routing and only on the generated `/api/v1` routes (OP5); there is no route list in Go. The generated wrapper applies that list so the last entry runs first, so it is ordered 8, 7, 6.
+    Steps 6–8 run as `gen.StdHTTPServerOptions.Middlewares`, after routing and only on the generated `/api/v1` routes (OP5); there is no route list in Go. The generated wrapper applies that list so the last entry runs first, so it is ordered 8, 7, 6. The generated wrapper binds path and query parameters before these steps run, so a malformed or missing parameter gives 422 before the session check (401); that 422 path reads and writes no data.
 
 ##### 35. `internal/httpapi/static.go` (Create)
 
@@ -1842,7 +1848,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   for each endpoint of the phase, the success status and the body fields match the tables in item 15 (the check strict mode would have made at compile time);
     *   problem JSON shape, including a bad UUID path parameter and a bad date query parameter (422 problem JSON, not `text/plain`). P1 has no route with parameters, so P1 tests the `ErrorHandlerFunc` directly; the per-route tests come with the first such routes in P3;
     *   `X-App-Version` present and non-empty on success, error and generated responses;
-    *   409 overlap responses (P3).
+    *   409 overlap responses (P3): the body lists the overlapping appointments and has no `errors` (`TestCreateAppointmentOverlapIs409WithAppointments`).
     *   An unknown `/api/v1` path and a wrong method both return 404 problem JSON, not HTML.
     *   An oversized JSON body returns 413, not 422.
 
@@ -1904,7 +1910,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Settings and branding.
 *   **Proposed Changes**:
-    *   Get and update settings. Validate `name` (trimmed, 1–80 characters), `locale` (`es` only), `accent_color` (lowercased, `^#[0-9a-f]{6}$`), `push_hour` (0–19, default 8 when absent), the time zone with `time.LoadLocation`, the currency with `currency.ParseISO` from `golang.org/x/text/currency` (no hand-written list), and the country code against `phonenumbers.GetSupportedRegions()`.
+    *   Get and update settings. Validate `name` (trimmed, 1–80 characters), `locale` (`es` only), `accent_color` (`color.Normalize`: lowercased, `^#[0-9a-f]{6}$`), `push_hour` (0–19, default 8 when absent), the time zone with `time.LoadLocation`, the currency with `currency.ParseISO` from `golang.org/x/text/currency` (no hand-written list), and the country code against `phonenumbers.GetSupportedRegions()`.
     *   Build the manifest JSON from settings.
     *   Serve the uploaded icons, or the embedded default PNGs (plain neutral 512 and 180 px files, no brand art).
     *   `SetIcons` checks the PNG signature (415) and the 1 MB limit (413) of each part, writes `media/branding/icon-512.png` and `icon-180.png` (temp file, fsync, rename) and only then sets `icon_updated_at`. `Icon` serves the file when `icon_updated_at` is set; a missing file logs `code=icon_file_missing` and serves the default. Any size other than 512 or 180 is `not-found`.
@@ -1915,9 +1921,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: Attributes.
 *   **Proposed Changes**:
     *   CRUD for attributes and options. `type`, `key` and `scope` cannot change. Options nest to any depth; the module rejects a parent from another attribute and a change of `parent_id`. A cycle cannot happen: a parent must exist before its child, and `parent_id` never changes.
-    *   `GenerateKey(label, taken)`: lowercase, remove accents, `_` for spaces, drop every other character outside `a–z0–9_`, prefix `a_` if the result does not start with a letter, a numeric suffix if taken, and a reserved name gets a numeric suffix like a taken one ("name" → "name_2").
-    *   `Validate(scope, attrs, touchedKeys, isCreate)` applies the value table, the "required on create or touch" rule and the rejected writes from "Attribute values".
-    *   `Format(def, options, raw, loc, target) string`: the one function that turns a stored value into text, following the value table. `target` is `ForTemplate` (path labels joined by a space, "A, B y C") or `ForCSV` (" / " and "; "). Archived attributes and options format by their last label. `reminders` (due list and preview) and `exporter` both call it, so the two outputs never drift.
+    *   `GenerateKey(label, taken)` (D7): lowercase, remove accents, `_` for every character outside `a–z0–9`, runs of `_` collapse and leading and trailing `_` are dropped, an empty result is `a`, `a_` is prefixed if the result starts with a digit, the base is cut to 40 characters before any suffix, and a taken or reserved name gets a suffix starting at `_2` ("name" → "name_2"). "Taken" means every key in `attribute_definitions`, archived ones and both scopes included.
+    *   `Validate(ctx, q, scope, stored, request, isCreate) (attrs, error)` loads the definitions, applies the value table, the "required on create or touch" rule and the rejected writes from "Attribute values", and does the merge itself: the touched keys are the keys of `request`, `null` removes a key on `PATCH` and is ignored on create, so no caller computes "touched" differently. Errors are a `validation` problem with one `attrs.<key>` field each.
+    *   Options (D8): only `select` and `multiselect` attributes take options (422 on `type` otherwise). A parent must be an active option of the same attribute (422 on `parent_id`), and an archived attribute takes no new option (422 on `attribute`). Positions count among siblings: the same attribute and the same `parent_id`. Labels are 1–80 runes, trimmed.
+    *   `Format(def, raw, loc, target) string` (the options travel in `def.Options`): the one function that turns a stored value into text, following the value table. `target` is `ForTemplate` (path labels joined by a space, "A, B y C") or `ForCSV` (" / " and "; "). Archived attributes and options format by their last label. `reminders` (due list and preview) and `exporter` both call it, so the two outputs never drift.
 
 ##### 46. `internal/attributes/*_test.go` (Create)
 
@@ -1944,7 +1951,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 49. `internal/services/services.go`, `services_test.go` (Create)
 
 *   **Type / Scope**: Service catalog.
-*   **Proposed Changes**: CRUD, ordering, archive. The test checks that archived services stay readable on past appointments.
+*   **Proposed Changes**: CRUD, ordering, archive. `GetMany` returns archived services too, and an unknown id is absent from the map. The test that archived services stay readable on past appointments lives in `appointments` (it owns `appointment_services`).
 
 ##### 50. `internal/appointments/appointments.go`, `status.go`, `overlap.go` (Create)
 
@@ -1965,25 +1972,26 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `IsDone` at the `ends_at` boundary, and for cancelled and no-show.
     *   Price snapshot unchanged after a service edit.
     *   Overlap detection and `allow_overlap`, also on "Reactivar" through `SetStatus`.
-    *   A create whose service-line insert fails leaves no `appointments` row (the handler's transaction rolls back).
-    *   An archived client or service in a create or `service_ids` is rejected.
+    *   A create whose service-line insert fails leaves no `appointments` row (the handler's transaction rolls back). The test installs a `BEFORE INSERT` trigger on `appointment_services` that raises, and runs `Create` inside `db.WithTx`.
+    *   An archived client or service in a create or `service_ids` is rejected; a line of a service archived later is kept on a `service_ids` edit; a kept active service keeps its saved price, and only an added one is copied at today's price.
+    *   `ListRange` uses the business's local days, also across a DST change (`Europe/Madrid`).
     *   The same service twice in one appointment.
-    *   The editing rules: `service_ids` re-copies lines and recomputes `total_cents` but not `paid_cents`; `ends_at` recomputed without `ends_at` in the request and kept with it; moving `starts_at` moves `ends_at`; a past done appointment can be edited.
+    *   The editing rules: `service_ids` keeps saved lines, copies added ones, and recomputes `total_cents` but not `paid_cents`; `ends_at` recomputed without `ends_at` in the request and kept with it; moving `starts_at` moves `ends_at`; a past done appointment can be edited.
 
 ##### 52. `internal/media/media.go`, `media_test.go` (Create)
 
 *   **Type / Scope**: Photos.
 *   **Proposed Changes**:
-    *   Accepts multipart `full` + `thumb`. Checks the JPEG magic bytes of both parts and the limits (`full` ≤ 10 MB, `thumb` ≤ 1 MB).
-    *   Reads width and height with `image/jpeg.DecodeConfig`.
-    *   Writes and syncs both files to `<MEDIA_DIR>/<yyyy>/<mm>/`, then inserts the row.
+    *   Accepts multipart `full` + `thumb`. Checks the JPEG magic bytes of `full`, decodes the JPEG header of both parts, and checks the limits (`full` ≤ 10 MB, `thumb` ≤ 1 MB).
+    *   Reads width and height of `full` with `image/jpeg.DecodeConfig`; `thumb` must decode too, and either failing is 415.
+    *   Writes and syncs both files to `<MEDIA_DIR>/<yyyy>/<mm>/` (UTC), then inserts the row. A failed insert removes the files; `Discard(ctx, md)` does the same for a failed commit.
     *   Serves with a session and the cache header.
 
     *   With `appointment_id`, sets `client_id` from the appointment (ownership rule in "Photos").
 
     Tests: rejects non-JPEG, rejects oversize, and rejects an upload with neither `client_id` nor `appointment_id`. With only `appointment_id`, the stored `client_id` is the appointment's client; a mismatching `client_id` is rejected.
 
-##### 53. `internal/templates/parse.go`, `render.go`, `vars.go`, `sample.go`, `templates.go` (Create)
+##### 53. `internal/templates/parse.go`, `render.go`, `vars.go`, `templates.go` (Create), `sample.go` (P4)
 
 *   **Type / Scope**: Templates.
 *   **Proposed Changes**:
@@ -1999,8 +2007,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
         ```
 
         A missing or empty entry renders the fallback. `templates` never formats values itself; the caller fills `Data` with `attributes.Format` (item 45) and `internal/locale`.
-    *   `vars.go`: lists the available variables (fixed + active attributes) with their current labels. It is used for save-time validation and sent to the phone as `template_vars[]` in `/bootstrap`, for the chip row.
-    *   `sample.go`: the built-in sample client and appointment data for previews, plus the placeholder value per attribute type (see "Message templates"). The sample names and texts come from `internal/locale` for `settings.locale`, and the sample phone is `phonenumbers.GetExampleNumber(settings.country_code)`, so no country is written in this package (Goal 7).
+    *   `vars.go`: one table of the fixed variables with two views. `Vars(loc)` lists the fixed variables and the active attributes with their current labels, and is sent to the phone as `template_vars[]` in `/bootstrap`, for the chip row. The save check uses the other view, `known`, which counts every attribute of the matching scope, archived ones included, so a template that uses an archived attribute still saves. The labels of the fixed variables come from `locale.VarLabel` (item 61).
+    *   `sample.go` (built in P4, because its only caller is `reminders.Preview`, which sets its inputs): the built-in sample client and appointment data for previews, plus the placeholder value per attribute type (see "Message templates"). The sample names and texts come from `internal/locale` for `settings.locale`, and the sample phone is `phonenumbers.GetExampleNumber(settings.country_code)`, so no country is written in this package (Goal 7).
     *   `templates.go`: CRUD. The preview endpoint is served by `reminders.Preview` (item 32), which loads the data, fills `Data` and calls `Render`.
 
 ##### 54. `internal/templates/*_test.go` (Create)
@@ -2105,7 +2113,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 61. `internal/locale/locale.go`, `es.go`, `locale_test.go` (Create)
 
 *   **Type / Scope**: Formatting.
-*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller. `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
+*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller. `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). `Locale.VarLabel(ns, key)` gives the label of a fixed template variable (`""` for an unknown pair), because Spanish text in Go lives only in `locale` and `problem`. Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
 
 #### Web app (`web/`)
 

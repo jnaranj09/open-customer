@@ -234,6 +234,763 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /attributes:
+    post:
+      operationId: createAttribute
+      summary: Add an attribute
+      description: >-
+        The key is made from the label and never changes. The attribute goes last in its scope.
+        An unknown scope or type is 422 on that field.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttributeInput"
+      responses:
+        "201":
+          description: The new attribute, with no options.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attribute"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /attributes/{id}:
+    patch:
+      operationId: updateAttribute
+      summary: Change an attribute
+      description: >-
+        Changes only the fields sent. The key, scope and type cannot change, so sending one is an
+        unknown field and a 422. archived true archives the attribute and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttributePatch"
+      responses:
+        "200":
+          description: The attribute after the change, with its options.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attribute"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /attributes/{id}/options:
+    post:
+      operationId: createOption
+      summary: Add an option to a select attribute
+      description: >-
+        Only select and multiselect attributes take options. The option goes last among its siblings.
+        A parent_id must be an active option of the same attribute.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OptionInput"
+      responses:
+        "201":
+          description: The new option.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Option"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /attributes/{id}/options/{optionId}:
+    patch:
+      operationId: updateOption
+      summary: Change an option
+      description: >-
+        Changes only the fields sent. The parent cannot change, so sending parent_id is an unknown
+        field and a 422.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: optionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OptionPatch"
+      responses:
+        "200":
+          description: The option after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Option"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /services:
+    post:
+      operationId: createService
+      summary: Add a service
+      description: >-
+        The service goes last. duration_min is 1 to 1440, price_cents is 0 or more (left out or null
+        means no price) and color is #rrggbb (stored in lowercase).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceInput"
+      responses:
+        "201":
+          description: The new service.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /services/{id}:
+    patch:
+      operationId: updateService
+      summary: Change a service
+      description: >-
+        Changes only the fields sent. Only price_cents may be null, which clears the price. archived
+        true archives the service and false restores it. Past appointments keep the values they
+        copied.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePatch"
+      responses:
+        "200":
+          description: The service after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /clients:
+    get:
+      operationId: listClients
+      summary: List the clients
+      description: >-
+        The active clients ordered by name, or the archived ones with archived=true. Unpaged.
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: The clients.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createClient
+      summary: Add a client
+      description: >-
+        name is 1 to 120 characters and notes up to 2000. phone is read with the business country as
+        the default region, and an empty phone means no phone. When another active client has the
+        same phone the answer is 409 duplicate-phone with those clients, unless
+        allow_duplicate_phone is true. attrs holds client-scope attribute values by key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientInput"
+      responses:
+        "201":
+          description: The new client.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /clients/{id}:
+    get:
+      operationId: getClient
+      summary: Get one client
+      description: An archived client is returned too.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The client.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateClient
+      summary: Change a client
+      description: >-
+        Changes only the fields sent. phone and notes may be null, which clears them; an empty phone
+        string also means no phone. attrs merges by key and null removes a key. archived true
+        archives the client and false restores it. The duplicate-phone check (409) runs when the
+        phone changes and when an archived client is restored, unless allow_duplicate_phone is
+        true.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientPatch"
+      responses:
+        "200":
+          description: The client after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /clients/{id}/appointments:
+    get:
+      operationId: listClientAppointments
+      summary: List one client's appointments
+      description: >-
+        Every status, newest first, unpaged. An archived client still lists; an unknown client is
+        404.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The appointments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /appointments:
+    get:
+      operationId: listAppointments
+      summary: List the appointments of a range of days
+      description: >-
+        Every status, ordered by starts_at. from and to are local days in the business time zone,
+        both inclusive. to must not be before from and at most 31 days after it; otherwise the
+        answer is 422 on to.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: The appointments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createAppointment
+      summary: Book an appointment
+      description: >-
+        The appointment starts as scheduled. ends_at defaults to starts_at plus the durations of the
+        services; at least one service or an explicit ends_at is required. An unknown or archived
+        client or service is 422. When it overlaps a scheduled or confirmed appointment the answer
+        is 409 overlap with those appointments, unless allow_overlap is true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentInput"
+      responses:
+        "201":
+          description: The new appointment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /appointments/{id}:
+    get:
+      operationId: getAppointment
+      summary: Get one appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The appointment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateAppointment
+      summary: Change an appointment
+      description: >-
+        Changes only the fields sent. notes and paid_cents may be null, which clears them. attrs
+        merges by key and null removes a key. service_ids replaces the whole list: a service already
+        on the appointment keeps its saved line and price; only added services are copied at
+        today's price. The overlap check (409 overlap) runs when the times of a scheduled or
+        confirmed appointment change, unless allow_overlap is true. client_id and status cannot be
+        changed here.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentPatch"
+      responses:
+        "200":
+          description: The appointment after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /appointments/{id}/status:
+    post:
+      operationId: setAppointmentStatus
+      summary: Change the status of an appointment
+      description: >-
+        An allowed change gives 200; any other is 409 invalid-transition. A change to scheduled
+        ("Reactivar") runs the overlap check (409 overlap) unless allow_overlap is true.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentStatusChange"
+      responses:
+        "200":
+          description: The appointment after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /clients/{id}/media:
+    get:
+      operationId: listClientMedia
+      summary: List one client's photos
+      description: >-
+        The active photos, newest first, unpaged. Archived photos are left out. An archived client
+        still lists; an unknown client is 404.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The photos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /templates:
+    post:
+      operationId: createTemplate
+      summary: Add a message template
+      description: >-
+        The name is 1 to 80 characters. The body is stored exactly as sent and is 1 to 2000
+        characters. A body with a malformed or unknown variable is 422 on body, one error per
+        problem: syntax errors first, then unknown variables, each in body order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateInput"
+      responses:
+        "201":
+          description: The new template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /templates/{id}:
+    patch:
+      operationId: updateTemplate
+      summary: Change a message template
+      description: >-
+        Changes only the fields sent; none may be null. A body that is sent goes through the same
+        check as on create. archived true archives the template and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplatePatch"
+      responses:
+        "200":
+          description: The template after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /media:
+    post:
+      operationId: uploadMedia
+      summary: Upload a photo
+      description: >-
+        Both parts are JPEG files: full of at most 10 MB and thumb of at most 1 MB, and the request
+        is at most 12 MB. client_id and appointment_id are optional but at least one is needed; with
+        appointment_id the photo belongs to that appointment's client, and a different client_id is
+        422. A part that is not a JPEG, or a body that is not multipart/form-data, is 415. A part or
+        request over its limit is 413. A missing, repeated or unknown part, or an owner that is
+        missing, unknown, archived or mismatched, is 422.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/MediaUpload"
+      responses:
+        "201":
+          description: The stored photo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /media/{id}:
+    get:
+      operationId: getMedia
+      summary: Get the full image of a photo
+      description: An archived photo is served too. The image never changes, so it is cached for a year.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The JPEG.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateMedia
+      summary: Archive or restore a photo
+      description: archived true hides the photo from the client's list and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaPatch"
+      responses:
+        "200":
+          description: The photo after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /media/{id}/thumb:
+    get:
+      operationId: getMediaThumb
+      summary: Get the thumbnail of a photo
+      description: An archived photo is served too. The image never changes, so it is cached for a year.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The JPEG thumbnail.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+
 components:
   headers:
     SessionCookie:
@@ -303,6 +1060,103 @@ components:
           type: string
           format: binary
           description: The 180 px PNG (apple-touch-icon).
+    AttributeScope:
+      type: string
+      enum: [client, appointment]
+    AttributeType:
+      type: string
+      enum: [text, number, date, select, multiselect]
+    Option:
+      type: object
+      required: [id, attribute_id, parent_id, label, position, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        attribute_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The option this one sits under; null for a top-level option.
+        label:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+    Attribute:
+      type: object
+      required: [id, key, label, scope, type, required, position, archived, options]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+        scope:
+          $ref: "#/components/schemas/AttributeScope"
+        type:
+          $ref: "#/components/schemas/AttributeType"
+        required:
+          type: boolean
+        position:
+          type: integer
+        archived:
+          type: boolean
+        options:
+          type: array
+          description: Every option, archived ones included; empty for a type without options.
+          items:
+            $ref: "#/components/schemas/Option"
+    AttributeInput:
+      type: object
+      required: [label, scope, type]
+      properties:
+        label:
+          type: string
+        scope:
+          $ref: "#/components/schemas/AttributeScope"
+        type:
+          $ref: "#/components/schemas/AttributeType"
+        required:
+          type: boolean
+          default: false
+    AttributePatch:
+      type: object
+      description: Every field is optional and none may be null; a field left out is not changed.
+      properties:
+        label:
+          type: string
+        required:
+          type: boolean
+        position:
+          type: integer
+        archived:
+          type: boolean
+    OptionInput:
+      type: object
+      required: [label]
+      properties:
+        label:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+    OptionPatch:
+      type: object
+      description: Every field is optional and none may be null; a field left out is not changed.
+      properties:
+        label:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
     Me:
       type: object
       required: [id, username, must_change_password]
@@ -376,6 +1230,370 @@ components:
       properties:
         needs_setup:
           type: boolean
+    Service:
+      type: object
+      required: [id, name, duration_min, price_cents, color, position, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        duration_min:
+          type: integer
+        price_cents:
+          type: integer
+          format: int64
+          nullable: true
+          description: The price in cents; null when the service has no price.
+        color:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+    ServiceInput:
+      type: object
+      required: [name, duration_min, color]
+      properties:
+        name:
+          type: string
+        duration_min:
+          type: integer
+        price_cents:
+          type: integer
+          format: int64
+          nullable: true
+        color:
+          type: string
+    ServicePatch:
+      type: object
+      description: >-
+        Every field is optional; a field left out is not changed. Only price_cents may be null.
+      properties:
+        name:
+          type: string
+        duration_min:
+          type: integer
+        price_cents:
+          type: integer
+          format: int64
+          nullable: true
+        color:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+    Template:
+      type: object
+      required: [id, name, body, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        body:
+          type: string
+        archived:
+          type: boolean
+    TemplateInput:
+      type: object
+      required: [name, body]
+      properties:
+        name:
+          type: string
+        body:
+          type: string
+    TemplatePatch:
+      type: object
+      description: Every field is optional; a field left out is not changed. None may be null.
+      properties:
+        name:
+          type: string
+        body:
+          type: string
+        archived:
+          type: boolean
+    Client:
+      type: object
+      required: [id, name, phone_e164, phone_digits, notes, attrs, archived, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone_e164:
+          type: string
+          nullable: true
+          description: The phone in E.164 form, for example +34612345678; null when there is none.
+        phone_digits:
+          type: string
+          nullable: true
+          description: The same digits without the +; null when there is no phone.
+        notes:
+          type: string
+          nullable: true
+        attrs:
+          type: object
+          additionalProperties: true
+          # No x-go-type-import: oapi-codegen already imports encoding/json for the embedded spec,
+          # and a second import line makes the generated file not compile.
+          x-go-type: json.RawMessage
+          description: The client-scope attribute values by attribute key.
+        archived:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ClientInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        notes:
+          type: string
+        attrs:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        allow_duplicate_phone:
+          type: boolean
+    ClientPatch:
+      type: object
+      description: >-
+        Every field is optional; a field left out is not changed. Only phone and notes may be null.
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        attrs:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        archived:
+          type: boolean
+        allow_duplicate_phone:
+          type: boolean
+    ClientList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+    AppointmentStatus:
+      type: string
+      enum: [scheduled, confirmed, cancelled, no_show]
+    AppointmentService:
+      type: object
+      required: [service_id, name, price_cents, duration_min]
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        price_cents:
+          type: integer
+          format: int64
+          nullable: true
+          description: The price copied when the line was saved; null when the service had none.
+        duration_min:
+          type: integer
+    Appointment:
+      type: object
+      required: [id, client_id, client_name, starts_at, ends_at, status, done, total_cents, paid_cents, attrs, notes, services, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        client_id:
+          type: string
+          format: uuid
+        client_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/AppointmentStatus"
+        done:
+          type: boolean
+          description: Computed on read, never stored. A scheduled or confirmed appointment that has ended.
+        total_cents:
+          type: integer
+          format: int64
+        paid_cents:
+          type: integer
+          format: int64
+          nullable: true
+        attrs:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+          description: The appointment-scope attribute values by attribute key.
+        notes:
+          type: string
+          nullable: true
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppointmentService"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AppointmentInput:
+      type: object
+      required: [client_id, starts_at]
+      properties:
+        client_id:
+          type: string
+          format: uuid
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        service_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        attrs:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        notes:
+          type: string
+        allow_overlap:
+          type: boolean
+    AppointmentPatch:
+      type: object
+      description: >-
+        Every field is optional; a field left out is not changed. Only notes and paid_cents may be
+        null.
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        service_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        attrs:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        notes:
+          type: string
+          nullable: true
+        paid_cents:
+          type: integer
+          format: int64
+          nullable: true
+        allow_overlap:
+          type: boolean
+    AppointmentStatusChange:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/AppointmentStatus"
+        allow_overlap:
+          type: boolean
+    AppointmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+    Media:
+      type: object
+      required: [id, client_id, appointment_id, width, height, bytes, created_at, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        client_id:
+          type: string
+          format: uuid
+        appointment_id:
+          type: string
+          format: uuid
+          nullable: true
+        width:
+          type: integer
+          description: The width of the full image in pixels.
+        height:
+          type: integer
+          description: The height of the full image in pixels.
+        bytes:
+          type: integer
+          description: The size of the full image.
+        created_at:
+          type: string
+          format: date-time
+        archived:
+          type: boolean
+    MediaUpload:
+      type: object
+      required: [full, thumb]
+      properties:
+        full:
+          type: string
+          format: binary
+          description: The full JPEG, at most 10 MB.
+        thumb:
+          type: string
+          format: binary
+          description: The thumbnail JPEG, at most 1 MB.
+        client_id:
+          type: string
+          format: uuid
+        appointment_id:
+          type: string
+          format: uuid
+    MediaPatch:
+      type: object
+      properties:
+        archived:
+          type: boolean
+    MediaList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
     Problem:
       type: object
       description: An RFC 9457 problem, sent as application/problem+json.
@@ -409,6 +1627,16 @@ components:
             $ref: "#/components/schemas/FieldError"
         retry_after_s:
           type: integer
+        clients:
+          type: array
+          description: The other active clients with the phone, on a duplicate-phone 409.
+          items:
+            $ref: "#/components/schemas/Client"
+        appointments:
+          type: array
+          description: The scheduled or confirmed appointments in the way, on an overlap 409.
+          items:
+            $ref: "#/components/schemas/Appointment"
     FieldError:
       type: object
       required: [field, message]

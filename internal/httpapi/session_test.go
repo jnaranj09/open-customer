@@ -45,7 +45,7 @@ func signedInOwner(t *testing.T) (testApp, *pgxpool.Pool, *http.Cookie) {
 	return app, pool, c
 }
 
-// withCookie adds c to a request (an edit for post).
+// withCookie adds c to a request (an edit for send).
 func withCookie(c *http.Cookie) func(*http.Request) {
 	return func(r *http.Request) { r.AddCookie(c) }
 }
@@ -64,7 +64,7 @@ func getMe(h http.Handler, c *http.Cookie) *httptest.ResponseRecorder {
 // login logs in as "ana" with password and returns the new session cookie.
 func login(t *testing.T, app testApp, password string) *http.Cookie {
 	t.Helper()
-	rec := post(app.handler, loginPath, testOrigin, loginBody("ana", password), nil)
+	rec := send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("ana", password), nil)
 	c := sessionCookie(rec)
 	if rec.Code != http.StatusOK || c == nil {
 		t.Fatalf("POST /auth/login = %d %q, want 200 with a cookie", rec.Code, rec.Body.String())
@@ -206,14 +206,14 @@ func TestMustChangePasswordGate(t *testing.T) {
 			t.Fatalf("type = %q, want must-change-password", got)
 		}
 	})
-	assertNoContent(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(temp, newOwnerPassword), withCookie(c)))
+	assertNoContent(t, send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody(temp, newOwnerPassword), withCookie(c)))
 	if mustChange(t, getMe(app.handler, c)) {
 		t.Fatal("GET /me must_change_password = true after POST /auth/password, want false")
 	}
 	if rec := patchSettings(app.handler, `{"name":"Estudio Nuevo"}`, c); rec.Code != http.StatusOK {
 		t.Fatalf("PATCH /settings after the password change = %d %q, want 200", rec.Code, rec.Body.String())
 	}
-	assertNoContent(t, post(app.handler, logoutPath, testOrigin, "", withCookie(c)))
+	assertNoContent(t, send(app.handler, http.MethodPost, logoutPath, testOrigin, "", withCookie(c)))
 }
 
 func TestAllowedWhileMustChangeSetMatchesSpec(t *testing.T) {
@@ -238,7 +238,7 @@ func TestAllowedWhileMustChangeRejectsANonBoolean(t *testing.T) {
 
 func TestLogoutExpiresCookieAndRevokes(t *testing.T) {
 	app, _, c := signedInOwner(t)
-	rec := post(app.handler, logoutPath, testOrigin, "", withCookie(c))
+	rec := send(app.handler, http.MethodPost, logoutPath, testOrigin, "", withCookie(c))
 	assertNoContent(t, rec)
 	if expired := sessionCookie(rec); expired == nil || expired.Value != "" || expired.MaxAge >= 0 {
 		t.Fatalf("cookie = %+v, want an expired oc_session", expired)
@@ -248,7 +248,7 @@ func TestLogoutExpiresCookieAndRevokes(t *testing.T) {
 
 func TestLogoutWithoutOriginIs403(t *testing.T) {
 	app, _, c := signedInOwner(t)
-	rec := post(app.handler, logoutPath, "", "", withCookie(c))
+	rec := send(app.handler, http.MethodPost, logoutPath, "", "", withCookie(c))
 	if got := problemType(t, rec, http.StatusForbidden); !strings.HasSuffix(got, ":forbidden-origin") {
 		t.Fatalf("type = %q, want forbidden-origin", got)
 	}
@@ -259,7 +259,7 @@ func TestLogoutWithoutOriginIs403(t *testing.T) {
 
 func TestChangePasswordWrongCurrentIs422Field(t *testing.T) {
 	app, _, c := signedInOwner(t)
-	rec := post(app.handler, changeAccessPath, testOrigin, passwordBody("made-up wrong password", newOwnerPassword), withCookie(c))
+	rec := send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody("made-up wrong password", newOwnerPassword), withCookie(c))
 	if got := problemType(t, rec, http.StatusUnprocessableEntity); !strings.HasSuffix(got, ":validation") {
 		t.Fatalf("type = %q, want validation", got)
 	}
@@ -273,19 +273,19 @@ func TestChangePasswordWrongCurrentIs422Field(t *testing.T) {
 
 func TestChangePasswordWrongCurrentDelaysTheNextTry(t *testing.T) {
 	app, _, c := signedInOwner(t)
-	wrong := post(app.handler, changeAccessPath, testOrigin, passwordBody("made-up wrong password", newOwnerPassword), withCookie(c))
+	wrong := send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody("made-up wrong password", newOwnerPassword), withCookie(c))
 	if wrong.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("wrong current password = %d %q, want 422", wrong.Code, wrong.Body.String())
 	}
-	assertRateLimited(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
+	assertRateLimited(t, send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
 	app.clock.Advance(time.Second)
-	assertNoContent(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
+	assertNoContent(t, send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
 }
 
 func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	app, _, c := signedInOwner(t)
 	other := login(t, app, ownerPassword)
-	assertNoContent(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
+	assertNoContent(t, send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
 	assertUnauthorized(t, getMe(app.handler, other))
 	if rec := getMe(app.handler, c); rec.Code != http.StatusOK {
 		t.Fatalf("GET /me with the session that changed the password = %d, want 200", rec.Code)
@@ -305,7 +305,7 @@ func TestChangePasswordBadInput(t *testing.T) {
 			http.StatusRequestEntityTooLarge, ":payload-too-large"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			rec := post(app.handler, changeAccessPath, testOrigin, tc.body, withCookie(c))
+			rec := send(app.handler, http.MethodPost, changeAccessPath, testOrigin, tc.body, withCookie(c))
 			if got := problemType(t, rec, tc.status); !strings.HasSuffix(got, tc.suffix) {
 				t.Fatalf("type = %q, want %s", got, tc.suffix)
 			}
@@ -315,14 +315,14 @@ func TestChangePasswordBadInput(t *testing.T) {
 
 func TestChangePasswordWithoutSessionIs401(t *testing.T) {
 	app, _, _ := signedInOwner(t)
-	assertUnauthorized(t, post(app.handler, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), nil))
+	assertUnauthorized(t, send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), nil))
 }
 
 // TestLogoutWithoutSessionIs401: the Logout handler has no 401 of its own (it takes the session
 // step 6 loaded), so this 401 comes from step 7 alone.
 func TestLogoutWithoutSessionIs401(t *testing.T) {
 	app, _, _ := signedInOwner(t)
-	assertUnauthorized(t, post(app.handler, logoutPath, testOrigin, "", nil))
+	assertUnauthorized(t, send(app.handler, http.MethodPost, logoutPath, testOrigin, "", nil))
 }
 
 // pathParam matches a path parameter; the spec-driven test fills each with a made-up UUID.
@@ -335,7 +335,7 @@ func TestEveryOperationNeedsASessionUnlessPublic(t *testing.T) {
 		for method, op := range item.Operations() {
 			public := op.Security != nil && len(*op.Security) == 0
 			t.Run(fmt.Sprintf("%s %s without a cookie is 401 unless security is empty (public=%v)", method, path, public), func(t *testing.T) {
-				target := apiBase + pathParam.ReplaceAllString(path, "00000000-0000-4000-8000-000000000001")
+				target := apiBase + pathParam.ReplaceAllString(path, "00000000-0000-4000-8000-000000000001") + requiredQuery(t, op)
 				req := httptest.NewRequest(method, target, strings.NewReader("{"))
 				req.Header.Set("Origin", testOrigin)
 				rec := httptest.NewRecorder()
@@ -346,6 +346,33 @@ func TestEveryOperationNeedsASessionUnlessPublic(t *testing.T) {
 			})
 		}
 	}
+}
+
+// requiredQuery is the query string holding a valid value for each required query parameter of
+// op. The generated router binds parameters before the session steps run, so a request without
+// them would be a 422 and never reach the session check this file tests.
+func requiredQuery(t *testing.T, op *openapi3.Operation) string {
+	t.Helper()
+	var pairs []string
+	for _, p := range op.Parameters {
+		if p.Value.In != "query" || !p.Value.Required {
+			continue
+		}
+		var value string
+		schema := p.Value.Schema.Value
+		switch schema.Format {
+		case "date":
+			value = "2026-01-01"
+		default:
+			t.Fatalf("%s: required query parameter %q has an unknown type %q/%q; teach requiredQuery a value for it",
+				op.OperationID, p.Value.Name, schema.Type, schema.Format)
+		}
+		pairs = append(pairs, p.Value.Name+"="+value)
+	}
+	if len(pairs) == 0 {
+		return ""
+	}
+	return "?" + strings.Join(pairs, "&")
 }
 
 func TestPublicOperationsAreExactlyTheSetupAndLoginOnes(t *testing.T) {
