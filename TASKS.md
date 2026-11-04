@@ -44,18 +44,19 @@ once by breaking what they protect, then restored.
 - **T8 Boundary.** Every row of the `.claude/rules/boundaries.md` table names its parse site and its
   bad-input test; `DisallowUnknownFields` is in design doc item 32. The tests themselves land with
   each parse site, in the phase that builds it.
-- **P1 exit.** The exit check passed on a clean clone: `make check-pins lint test vuln build
-  check-generated test-db` exits 0. The `serve` and `curl` checks ran as the built binary in an
-  isolated container network namespace, not `go run` on the host (host :8080 belongs to an unrelated
-  container): `/readyz` 200 and `{"needs_setup":true}` on `/api/v1/setup/status`, also after a
-  restart. The plain-host :8080 variant: NOT RUN. CI run ID: pending (the branch is not pushed yet;
-  the owner fills it in after the first push).
-- **P2 exit.** The exit check passed on a clean clone: `make check-pins lint test vuln build
-  check-generated test-db cover` exits 0. The setup, login, logout, settings, manifest, icon and
-  admin-subcommand `curl` checks ran as the built binary in an isolated container network namespace,
-  not `go run` on the host (host :8080 belongs to an unrelated container). The plain-host :8080
-  variant: NOT RUN. CI run ID: pending (the branch is not pushed yet; the owner fills it in after
-  the first push), so the CI `make cover` step: NOT RUN.
+- **P1 exit.** `make check-pins lint test vuln build check-generated test-db` exits 0, each target
+  run once from a fresh `git clone` of branch p1-p2 at commit 1b1c7c0 (the final review fix wave;
+  the commit after it changes only this file). The `serve` and `curl` checks were run at the P1
+  exit itself, not re-run in the fix wave: the built binary in an isolated container network
+  namespace, not `go run` on the host (host :8080 belongs to an unrelated container), gave
+  `/readyz` 200 and `{"needs_setup":true}` on `/api/v1/setup/status`, also after a restart. NOT
+  RUN: the plain-host :8080 variant, and CI (the branch is not pushed; the owner fills in the run
+  ID after the first push).
+- **P2 exit.** The same clone run at 1b1c7c0 also ran `make cover` (internal/auth 96.4%, floor 90%),
+  exit 0. The setup, login, logout, settings, manifest, icon and admin-subcommand `curl` checks were
+  run at the P2 exit, before the fix wave, the same way (built binary, isolated network namespace),
+  and not re-run since. NOT RUN: the plain-host :8080 variant, and CI with its `make cover` step
+  (the branch is not pushed; the owner fills in the run ID after the first push).
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
