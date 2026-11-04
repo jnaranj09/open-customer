@@ -632,6 +632,9 @@ This replaces the brief's one-time code (Alternative K1).
 *   Canvas export drops EXIF, so GPS data never reaches the server.
 *   **Ownership:** a photo is taken from an appointment (CUJ 3) or from a client. With `appointment_id`, the server fills `client_id` from that appointment; a request with a different `client_id` gets 422. The appointment screen shows the client's photos (`GET /clients/{id}/media`) filtered by `appointment_id` on the phone.
 *   Upload: `POST /media` with multipart parts `full` and `thumb`. The server checks the JPEG signature of each part and the size limits (`full` 10 MB, `thumb` 1 MB, the whole request 12 MB), then stores the files at `media/<yyyy>/<mm>/<id>.jpg` and `<id>_t.jpg`. The files are written and synced before the row is inserted, which is what makes "never a row without its file" in "Backups" true.
+*   **Folders and checks:** `<yyyy>/<mm>` is the UTC year and month of the upload. A part that has the JPEG signature but that `jpeg.DecodeConfig` cannot read (`full` or `thumb`) gets 415. `bytes`, `width` and `height` describe `full`. An unknown or archived client gets 422 on `client_id`.
+*   **Failed writes:** if the insert fails, the `media` module removes the two files it just wrote. If the request's commit fails after `Save`, the handler calls `Discard`, which removes them. A failure of either removal is logged with `code=media_discard_failed`, never with a path.
+*   **Archived photos** are hidden from `GET /clients/{id}/media` only; `GET /media/{id}` and `/media/{id}/thumb` still serve them by ID.
 *   Serving: `GET /media/{id}` and `/media/{id}/thumb` need a session. They send `Cache-Control: private, max-age=31536000, immutable`, because a media ID never changes content.
 
 ### Clients and search
@@ -1980,8 +1983,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: Photos.
 *   **Proposed Changes**:
     *   Accepts multipart `full` + `thumb`. Checks the JPEG magic bytes of both parts and the limits (`full` ≤ 10 MB, `thumb` ≤ 1 MB).
-    *   Reads width and height with `image/jpeg.DecodeConfig`.
-    *   Writes and syncs both files to `<MEDIA_DIR>/<yyyy>/<mm>/`, then inserts the row.
+    *   Reads width and height of `full` with `image/jpeg.DecodeConfig`; `thumb` must decode too, and either failing is 415.
+    *   Writes and syncs both files to `<MEDIA_DIR>/<yyyy>/<mm>/` (UTC), then inserts the row. A failed insert removes the files; `Discard` does the same for a failed commit.
     *   Serves with a session and the cache header.
 
     *   With `appointment_id`, sets `client_id` from the appointment (ownership rule in "Photos").

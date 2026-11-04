@@ -77,3 +77,10 @@ const (
 	// 31-day limit.
 	MsgRangeInvalid = "Elige un rango válido de hasta 31 días"
 )
+
+// Field messages for media (design doc "Photos").
+const (
+	MsgMediaOwnerRequired = "Falta la clienta o la cita"
+	MsgMediaOwnerMismatch = "La foto no es de esa clienta"
+	MsgAppointmentUnknown = "Esa cita no existe"
+)

@@ -97,6 +97,11 @@ linters:
         linters:
           - revive
         text: type name will be used as settings\.Settings(Input|Patch)
+      # The design doc (item 52) and the task brief name this type MediaInput.
+      - path: internal/media/media\.go
+        linters:
+          - revive
+        text: type name will be used as media\.MediaInput
       # G101 reads any string constant whose name says "Password" as a credential. messages.go holds
       # only the Spanish field messages the API returns (design doc item 24, OP14).
       - path: internal/platform/problem/messages\.go
