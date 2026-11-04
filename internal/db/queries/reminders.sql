@@ -133,3 +133,18 @@ JOIN appointments a ON a.id = l.appointment_id
 JOIN clients c ON c.id = a.client_id
 WHERE l.acted_at >= @from_at::timestamptz AND l.acted_at < @to_at::timestamptz
 ORDER BY l.acted_at DESC, l.id DESC;
+
+-- The template preview (design doc "Message templates", preview.go). An archived client is
+-- allowed.
+
+-- name: GetPreviewClient :one
+SELECT name, attrs FROM clients WHERE id = @id;
+
+-- name: GetLatestAppointmentForPreview :one
+-- The client's latest appointment that is not cancelled or no-show; its lines come from
+-- ListCandidateLines.
+SELECT id, starts_at, attrs
+FROM appointments
+WHERE client_id = @client_id AND status IN ('scheduled', 'confirmed')
+ORDER BY starts_at DESC, id DESC
+LIMIT 1;

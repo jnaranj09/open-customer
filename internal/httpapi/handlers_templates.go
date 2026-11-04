@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/reminders"
 	"github.com/jnaranj09/open-customer/internal/templates"
 )
 
@@ -52,4 +54,28 @@ func (s *Server) UpdateTemplate(w http.ResponseWriter, r *http.Request, id opena
 
 func toGenTemplate(t templates.Template) gen.Template {
 	return gen.Template{Id: t.ID, Name: t.Name, Body: t.Body, Archived: t.Archived}
+}
+
+// PreviewTemplate renders a body for the sample record or for a client. It runs in a write
+// transaction like every non-GET handler that reads the database.
+func (s *Server) PreviewTemplate(w http.ResponseWriter, r *http.Request) {
+	var body gen.TemplatePreviewInput
+	if decodeJSON(w, r, &body) != nil {
+		return
+	}
+	var clientID uuid.NullUUID
+	if body.ClientId != nil {
+		clientID = uuid.NullUUID{UUID: *body.ClientId, Valid: true}
+	}
+	var out reminders.Preview
+	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
+		var err error
+		if out, err = s.reminders.Preview(r.Context(), tx, body.Body, clientID); err != nil {
+			return fmt.Errorf("preview template: %w", err)
+		}
+		return nil
+	}) {
+		return
+	}
+	writeJSON(w, http.StatusOK, gen.TemplatePreview{Text: out.Text, UnknownVars: out.UnknownVars})
 }

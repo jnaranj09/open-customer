@@ -477,6 +477,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render a template body for a client or the sample
+         * @description Renders the body on the server. Without client_id it uses the built-in sample client and appointment. With client_id it uses that client (archived ones too) and her latest appointment that is not cancelled or no-show, or the sample appointment when she has none; an unknown client is 422 on client_id. The render never fails: a malformed "{{" shows as text and an unknown variable shows its fallback, or nothing. unknown_vars lists each unknown variable once as "namespace.key", in body order.
+         */
+        post: operations["previewTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/templates/{id}": {
         parameters: {
             query?: never;
@@ -768,6 +788,15 @@ export interface components {
         TemplateInput: {
             name: string;
             body: string;
+        };
+        TemplatePreviewInput: {
+            body: string;
+            /** Format: uuid */
+            client_id?: string;
+        };
+        TemplatePreview: {
+            text: string;
+            unknown_vars: string[];
         };
         /** @description Every field is optional; a field left out is not changed. None may be null. */
         TemplatePatch: {
@@ -1751,6 +1780,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Template"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    previewTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePreviewInput"];
+            };
+        };
+        responses: {
+            /** @description The rendered text. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplatePreview"];
                 };
             };
             401: components["responses"]["Problem"];

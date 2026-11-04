@@ -829,6 +829,38 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /templates/preview:
+    post:
+      operationId: previewTemplate
+      summary: Render a template body for a client or the sample
+      description: >-
+        Renders the body on the server. Without client_id it uses the built-in sample client and
+        appointment. With client_id it uses that client (archived ones too) and her latest
+        appointment that is not cancelled or no-show, or the sample appointment when she has none;
+        an unknown client is 422 on client_id. The render never fails: a malformed "{{" shows as
+        text and an unknown variable shows its fallback, or nothing. unknown_vars lists each
+        unknown variable once as "namespace.key", in body order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplatePreviewInput"
+      responses:
+        "200":
+          description: The rendered text.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplatePreview"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /templates/{id}:
     patch:
       operationId: updateTemplate
@@ -1375,6 +1407,25 @@ components:
           type: string
         body:
           type: string
+    TemplatePreviewInput:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+        client_id:
+          type: string
+          format: uuid
+    TemplatePreview:
+      type: object
+      required: [text, unknown_vars]
+      properties:
+        text:
+          type: string
+        unknown_vars:
+          type: array
+          items:
+            type: string
     TemplatePatch:
       type: object
       description: Every field is optional; a field left out is not changed. None may be null.

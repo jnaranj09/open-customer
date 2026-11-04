@@ -55,6 +55,29 @@ func (q *Queries) GetDueSettings(ctx context.Context) (GetDueSettingsRow, error)
 	return i, err
 }
 
+const getLatestAppointmentForPreview = `-- name: GetLatestAppointmentForPreview :one
+SELECT id, starts_at, attrs
+FROM appointments
+WHERE client_id = $1 AND status IN ('scheduled', 'confirmed')
+ORDER BY starts_at DESC, id DESC
+LIMIT 1
+`
+
+type GetLatestAppointmentForPreviewRow struct {
+	ID       uuid.UUID
+	StartsAt time.Time
+	Attrs    json.RawMessage
+}
+
+// The client's latest appointment that is not cancelled or no-show; its lines come from
+// ListCandidateLines.
+func (q *Queries) GetLatestAppointmentForPreview(ctx context.Context, clientID uuid.UUID) (GetLatestAppointmentForPreviewRow, error) {
+	row := q.db.QueryRow(ctx, getLatestAppointmentForPreview, clientID)
+	var i GetLatestAppointmentForPreviewRow
+	err := row.Scan(&i.ID, &i.StartsAt, &i.Attrs)
+	return i, err
+}
+
 const getLogByKey = `-- name: GetLogByKey :one
 SELECT id FROM reminder_log
 WHERE rule_id = $1 AND appointment_id = $2
@@ -114,6 +137,25 @@ func (q *Queries) GetLogItem(ctx context.Context, id uuid.UUID) (GetLogItemRow, 
 		&i.ClientID,
 		&i.ClientName,
 	)
+	return i, err
+}
+
+const getPreviewClient = `-- name: GetPreviewClient :one
+
+SELECT name, attrs FROM clients WHERE id = $1
+`
+
+type GetPreviewClientRow struct {
+	Name  string
+	Attrs json.RawMessage
+}
+
+// The template preview (design doc "Message templates", preview.go). An archived client is
+// allowed.
+func (q *Queries) GetPreviewClient(ctx context.Context, id uuid.UUID) (GetPreviewClientRow, error) {
+	row := q.db.QueryRow(ctx, getPreviewClient, id)
+	var i GetPreviewClientRow
+	err := row.Scan(&i.Name, &i.Attrs)
 	return i, err
 }
 

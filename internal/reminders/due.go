@@ -147,22 +147,11 @@ func (m *Module) DueList(ctx context.Context, q db.DBTX, now time.Time) ([]DueIt
 // compute checks every rule.
 func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData, error) {
 	queries := sqlc.New(q)
-	s, err := queries.GetDueSettings(ctx)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dueData{}, problem.NotFound{}
-	}
+	b, err := loadBusiness(ctx, queries)
 	if err != nil {
-		return dueData{}, fmt.Errorf("get due settings: %w", err)
+		return dueData{}, err
 	}
-	tz, err := time.LoadLocation(s.Timezone)
-	if err != nil {
-		return dueData{}, fmt.Errorf("load business time zone: %w", err)
-	}
-	loc, err := locale.For(s.Locale)
-	if err != nil {
-		return dueData{}, fmt.Errorf("business locale: %w", err)
-	}
-	d := dueData{TZ: tz, Locale: loc, Business: s.Name, Logged: map[logKey]bool{}}
+	d := dueData{TZ: b.TZ, Locale: b.Locale, Business: b.Name, Logged: map[logKey]bool{}}
 	if d.Attrs, err = m.attributes.List(ctx, q); err != nil {
 		return dueData{}, fmt.Errorf("due attributes: %w", err)
 	}
@@ -181,6 +170,7 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 			maxComeBack = max(maxComeBack, row.OffsetDays)
 		}
 	}
+	tz := b.TZ
 	today := locale.LocalDay(now, tz)
 	before, err := queries.ListBeforeCandidates(ctx, sqlc.ListBeforeCandidatesParams{
 		Now: now, Until: locale.AddDays(today, maxBefore+1, tz),
@@ -229,6 +219,34 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 		d.Logged[key] = true
 	}
 	return d, nil
+}
+
+// business is the settings a rendered message needs.
+type business struct {
+	TZ     *time.Location
+	Locale locale.Locale
+	Name   string
+}
+
+// loadBusiness reads the business name, time zone and locale. Before setup (no settings row) it
+// is problem.NotFound. The due list and the template preview share it.
+func loadBusiness(ctx context.Context, queries *sqlc.Queries) (business, error) {
+	s, err := queries.GetDueSettings(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return business{}, problem.NotFound{}
+	}
+	if err != nil {
+		return business{}, fmt.Errorf("get due settings: %w", err)
+	}
+	tz, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return business{}, fmt.Errorf("load business time zone: %w", err)
+	}
+	loc, err := locale.For(s.Locale)
+	if err != nil {
+		return business{}, fmt.Errorf("business locale: %w", err)
+	}
+	return business{TZ: tz, Locale: loc, Name: s.Name}, nil
 }
 
 // serviceLines are the service ids and names of one appointment, in line order.
