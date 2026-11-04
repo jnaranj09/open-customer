@@ -36,8 +36,9 @@ once by breaking what they protect, then restored.
   `t.Skip` fails guard `forbid-only`, `allowOnly: true` fails the web `forbid-only` guard.
 - **T6 Guards.** Go in `internal/guards`, web in `web/tests/guards`, all run by `make test`.
 - **T7 Decay sensors.** `deadcode -test` (exact `DEADCODE_BUDGET`, 0 since P1), `unused`, `dupl` (80), knip,
-  jscpd, all in `make lint`. knip and jscpd both read `.svelte` files (checked). jscpd has `failOnEmpty`, so a scan of no files fails
-  instead of passing (found in P2 task 18b).
+  jscpd, all in `make lint`. knip reads `.svelte` files (checked). jscpd is set to read them, but no
+  `.svelte` file reaches its `minTokens` yet, so that is not shown. jscpd has `failOnEmpty`, so a
+  fully empty scan fails instead of passing (found in P2 task 18b).
 - **T8 Boundary.** Every row of the `.claude/rules/boundaries.md` table names its parse site and its
   bad-input test; `DisallowUnknownFields` is in design doc item 32. The tests themselves land with
   each parse site, in the phase that builds it.

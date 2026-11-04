@@ -99,7 +99,7 @@ Which tool is the sensor for each row in this repo (filled at setup; update when
 | `test-lint` | `thelper`, `tparallel`; branching in tests is prose only | `@vitest/eslint-plugin`, `eslint-plugin-playwright` |
 | `forbid-only-skip` | guard `forbid-only` (`t.Skip`) | Vitest `allowOnly: false`, guard `forbid-only` (also Playwright `forbidOnly: true` once its config lands in P6) |
 | `dead-code` | `deadcode -test` (exact budget in the Makefile), `unused` | knip (reads `.svelte`) |
-| `duplication` | `dupl` (threshold 80) | jscpd (reads `.svelte`; tests excluded; fails on an empty scan) |
+| `duplication` | `dupl` (threshold 80) | jscpd (`*.test.ts` and `schema.d.ts` ignored; fails on a fully empty scan; `.svelte` coverage not yet shown) |
 | `boundary-schema` | typed structs + `DisallowUnknownFields` + `Validate()` | zod |
 | `mutation` | gremlins (`README.md` release checklist, never in the gate) | StrykerJS (same) |
 | `security` | govulncheck, gosec, gitleaks in CI | `pnpm audit --audit-level high` and gitleaks in CI |
