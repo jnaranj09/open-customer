@@ -15,7 +15,7 @@ FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = @token_hash;
 
--- name: TouchSession :exec
+-- name: TouchSession :execrows
 UPDATE sessions SET last_seen_at = @now::timestamptz, expires_at = @expires_at
 WHERE token_hash = @token_hash;
 

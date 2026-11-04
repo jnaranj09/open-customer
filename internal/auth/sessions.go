@@ -81,10 +81,16 @@ func (a *Auth) Authenticate(ctx context.Context, q db.DBTX, token string) (Me, S
 		return me, sess, false, nil
 	}
 	sess.ExpiresAt = now.Add(sessionLifetime)
-	if err := queries.TouchSession(ctx, sqlc.TouchSessionParams{
+	touched, err := queries.TouchSession(ctx, sqlc.TouchSessionParams{
 		Now: now, ExpiresAt: sess.ExpiresAt, TokenHash: hash,
-	}); err != nil {
+	})
+	if err != nil {
 		return Me{}, Session{}, false, fmt.Errorf("slide a session: %w", err)
+	}
+	// A logout or revoke between the SELECT and this UPDATE leaves no row to slide: the session
+	// is gone, so the caller must not re-send a fresh cookie.
+	if touched == 0 {
+		return Me{}, Session{}, false, problem.Unauthorized{}
 	}
 	return me, sess, true, nil
 }
@@ -131,18 +137,17 @@ func ExpiredCookie(secure bool) *http.Cookie {
 	return sessionCookie("", -1, secure)
 }
 
+// sessionCookie builds both cookies. secure is false only for a plain-http localhost PUBLIC_URL
+// (development and e2e), where WebKit drops a Secure cookie. gosec G124 wants a constant true, so
+// .golangci.yml excludes G124 for this file only (design doc item 5).
 func sessionCookie(value string, maxAge int, secure bool) *http.Cookie {
-	c := &http.Cookie{
+	return &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    value,
 		Path:     "/",
 		MaxAge:   maxAge,
-		Secure:   true,
+		Secure:   secure,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	}
-	// Secure by default; only the plain-http PUBLIC_URL case above turns it off. Kept as a
-	// default plus one override so the literal itself is safe (gosec G124).
-	c.Secure = secure
-	return c
 }

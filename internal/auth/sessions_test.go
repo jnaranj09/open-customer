@@ -4,6 +4,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
@@ -13,8 +14,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/dbtest"
 	"github.com/jnaranj09/open-customer/internal/db/sqlc"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
@@ -124,6 +127,31 @@ func TestAuthenticateNoSlideWithinHour(t *testing.T) {
 		t.Fatalf("stored expires_at %v, last_seen_at %v; want unchanged %v, %v",
 			expiresAt, lastSeenAt, wantExpiry, sessionsStart)
 	}
+}
+
+// logoutBeforeSlide is the real database, except that a concurrent logout deletes every session
+// just before the sliding UPDATE runs (the window between Authenticate's SELECT and its UPDATE).
+type logoutBeforeSlide struct {
+	db.DBTX
+}
+
+func (l logoutBeforeSlide) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	if strings.Contains(sql, "-- name: TouchSession ") {
+		if _, err := l.DBTX.Exec(ctx, `DELETE FROM sessions`); err != nil {
+			return pgconn.CommandTag{}, err
+		}
+	}
+	return l.DBTX.Exec(ctx, sql, args...)
+}
+
+func TestAuthenticateSessionDeletedBeforeSlide(t *testing.T) {
+	f := newSessionFixture(t)
+	f.clock.Advance(61 * time.Minute)
+	_, _, refreshed, err := f.auth.Authenticate(t.Context(), logoutBeforeSlide{f.pool}, f.token)
+	if refreshed {
+		t.Fatalf("Authenticate(session deleted before the slide) refreshed = true; want false (no new cookie)")
+	}
+	wantUnauthorized(t, err)
 }
 
 func TestAuthenticateExpired(t *testing.T) {

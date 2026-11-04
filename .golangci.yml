@@ -109,6 +109,13 @@ linters:
         linters:
           - gosec
         text: "G101:"
+      # G124 wants Secure to be a constant true. The session cookie's Secure is false only for a
+      # plain-http localhost PUBLIC_URL (development and e2e), where WebKit drops a Secure cookie
+      # (design doc "Session and request rules" and item 5).
+      - path: internal/auth/sessions\.go
+        linters:
+          - gosec
+        text: "G124:"
       # Tests may repeat setup; duplication is measured on shipped code (TASKS.md T7).
       - path: _test\.go
         linters:

@@ -118,7 +118,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 	return err
 }
 
-const touchSession = `-- name: TouchSession :exec
+const touchSession = `-- name: TouchSession :execrows
 UPDATE sessions SET last_seen_at = $1::timestamptz, expires_at = $2
 WHERE token_hash = $3
 `
@@ -129,9 +129,12 @@ type TouchSessionParams struct {
 	TokenHash []byte
 }
 
-func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
-	_, err := q.db.Exec(ctx, touchSession, arg.Now, arg.ExpiresAt, arg.TokenHash)
-	return err
+func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, touchSession, arg.Now, arg.ExpiresAt, arg.TokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const userExists = `-- name: UserExists :one
