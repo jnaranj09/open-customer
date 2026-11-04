@@ -106,3 +106,13 @@ const (
 	MsgServiceNotAllowed     = "Este recordatorio no lleva servicio"
 	MsgTemplateUnavailable   = "Esa plantilla no existe o está archivada"
 )
+
+// Field messages for the reminder log (design doc item 55). MsgLogFilterInvalid is GET
+// /reminders/log with neither or both of its filters.
+const (
+	MsgActionInvalid      = "Acción no válida"
+	MsgRuleUnknown        = "Ese recordatorio no existe"
+	MsgAnchorInvalid      = "La hora de la cita no corresponde al recordatorio"
+	MsgPhoneDigitsInvalid = "Número no válido"
+	MsgLogFilterInvalid   = "Elige una clienta o una fecha"
+)

@@ -1,4 +1,4 @@
-// Package reminders holds the reminder rules and the due list, and later the reminder log. A rule
+// Package reminders holds the reminder rules, the due list and the reminder log. A rule
 // says when a message to a client is due; the owner sends it by hand.
 package reminders
 

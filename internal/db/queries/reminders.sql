@@ -81,3 +81,55 @@ ORDER BY starts_at, id;
 SELECT rule_id, appointment_id, anchor_at
 FROM reminder_log
 WHERE appointment_id = ANY(@ids::uuid[]);
+
+-- The reminder log (design doc item 55, log.go).
+
+-- name: GetRuleKind :one
+SELECT kind FROM reminder_rules WHERE id = @id;
+
+-- name: GetAppointmentExists :one
+SELECT EXISTS (SELECT 1 FROM appointments WHERE id = @id);
+
+-- name: GetClientExists :one
+SELECT EXISTS (SELECT 1 FROM clients WHERE id = @id);
+
+-- name: InsertLog :one
+INSERT INTO reminder_log (id, rule_id, appointment_id, anchor_at, action, body, phone_digits, acted_at)
+VALUES (@id, @rule_id, @appointment_id, sqlc.narg('anchor_at')::timestamptz, @action,
+        sqlc.narg('body')::text, sqlc.narg('phone_digits')::text, @acted_at::timestamptz)
+ON CONFLICT (rule_id, appointment_id, anchor_at) DO NOTHING
+RETURNING id;
+
+-- name: GetLogByKey :one
+SELECT id FROM reminder_log
+WHERE rule_id = @rule_id AND appointment_id = @appointment_id
+  AND anchor_at IS NOT DISTINCT FROM sqlc.narg('anchor_at')::timestamptz;
+
+-- name: GetLogItem :one
+SELECT l.id, l.rule_id, l.appointment_id, l.anchor_at, l.action, l.body, l.phone_digits, l.acted_at,
+       r.kind, a.client_id, c.name AS client_name
+FROM reminder_log l
+JOIN reminder_rules r ON r.id = l.rule_id
+JOIN appointments a ON a.id = l.appointment_id
+JOIN clients c ON c.id = a.client_id
+WHERE l.id = @id;
+
+-- name: ListLogForClient :many
+SELECT l.id, l.rule_id, l.appointment_id, l.anchor_at, l.action, l.body, l.phone_digits, l.acted_at,
+       r.kind, a.client_id, c.name AS client_name
+FROM reminder_log l
+JOIN reminder_rules r ON r.id = l.rule_id
+JOIN appointments a ON a.id = l.appointment_id
+JOIN clients c ON c.id = a.client_id
+WHERE a.client_id = @client_id
+ORDER BY l.acted_at DESC, l.id DESC;
+
+-- name: ListLogInRange :many
+SELECT l.id, l.rule_id, l.appointment_id, l.anchor_at, l.action, l.body, l.phone_digits, l.acted_at,
+       r.kind, a.client_id, c.name AS client_name
+FROM reminder_log l
+JOIN reminder_rules r ON r.id = l.rule_id
+JOIN appointments a ON a.id = l.appointment_id
+JOIN clients c ON c.id = a.client_id
+WHERE l.acted_at >= @from_at::timestamptz AND l.acted_at < @to_at::timestamptz
+ORDER BY l.acted_at DESC, l.id DESC;

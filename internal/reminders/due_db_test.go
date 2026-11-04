@@ -126,6 +126,15 @@ func (e dueEnv) rule(t *testing.T, in RuleInput) Rule {
 	return r
 }
 
+func (e dueEnv) record(t *testing.T, entry LogEntry) LogItem {
+	t.Helper()
+	it, _, err := e.m.Record(t.Context(), e.pool, entry)
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	return it
+}
+
 func (e dueEnv) due(t *testing.T, q db.DBTX) []DueItem {
 	t.Helper()
 	items, err := e.m.DueList(t.Context(), q, e.now())
@@ -264,12 +273,7 @@ func TestDueListLoggedBeforeItemIsHidden(t *testing.T) {
 	e.clock.Set(e.now())
 	one(t, e.due(t, e.pool))
 
-	// Task 7 builds the log API; until then the row is written by hand.
-	if _, err := e.pool.Exec(t.Context(),
-		`INSERT INTO reminder_log (id, rule_id, appointment_id, anchor_at, action, acted_at) VALUES ($1, $2, $3, $4, 'sent', $5)`,
-		newID(t), r.ID, a.ID, a.StartsAt, e.now()); err != nil {
-		t.Fatalf("insert log row: %v", err)
-	}
+	e.record(t, LogEntry{RuleID: r.ID, AppointmentID: a.ID, AnchorAt: &a.StartsAt, Action: ActionSent, ActedAt: e.now()})
 	none(t, e.due(t, e.pool))
 }
 
@@ -339,11 +343,7 @@ func TestDueListDBErrors(t *testing.T) {
 		r := e.rule(t, RuleInput{Kind: KindBefore, OffsetDays: 1, TemplateID: e.template(t, "Cita", "Hola"), IncludeOverdue: true})
 		e.book(t, s.ana.ID, e.at(2026, 11, 12, 10, 0), s.pedicure)
 		soon := e.book(t, s.ana.ID, e.at(2026, 10, 23, 15, 0), s.pedicure)
-		if _, err := e.pool.Exec(t.Context(),
-			`INSERT INTO reminder_log (id, rule_id, appointment_id, anchor_at, action, acted_at) VALUES ($1, $2, $3, $4, 'skipped', $5)`,
-			newID(t), r.ID, soon.ID, soon.StartsAt, e.now()); err != nil {
-			t.Fatalf("insert log row: %v", err)
-		}
+		e.record(t, LogEntry{RuleID: r.ID, AppointmentID: soon.ID, AnchorAt: &soon.StartsAt, Action: ActionSkipped, ActedAt: e.now()})
 		return e.pool, func(q db.DBTX) error { _, err := e.m.DueList(t.Context(), q, e.now()); return err }
 	})
 }

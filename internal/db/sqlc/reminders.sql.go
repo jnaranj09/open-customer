@@ -13,6 +13,28 @@ import (
 	"github.com/google/uuid"
 )
 
+const getAppointmentExists = `-- name: GetAppointmentExists :one
+SELECT EXISTS (SELECT 1 FROM appointments WHERE id = $1)
+`
+
+func (q *Queries) GetAppointmentExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, getAppointmentExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const getClientExists = `-- name: GetClientExists :one
+SELECT EXISTS (SELECT 1 FROM clients WHERE id = $1)
+`
+
+func (q *Queries) GetClientExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, getClientExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getDueSettings = `-- name: GetDueSettings :one
 
 SELECT name, timezone, locale FROM business_settings WHERE id = 1
@@ -30,6 +52,68 @@ func (q *Queries) GetDueSettings(ctx context.Context) (GetDueSettingsRow, error)
 	row := q.db.QueryRow(ctx, getDueSettings)
 	var i GetDueSettingsRow
 	err := row.Scan(&i.Name, &i.Timezone, &i.Locale)
+	return i, err
+}
+
+const getLogByKey = `-- name: GetLogByKey :one
+SELECT id FROM reminder_log
+WHERE rule_id = $1 AND appointment_id = $2
+  AND anchor_at IS NOT DISTINCT FROM $3::timestamptz
+`
+
+type GetLogByKeyParams struct {
+	RuleID        uuid.UUID
+	AppointmentID uuid.UUID
+	AnchorAt      *time.Time
+}
+
+func (q *Queries) GetLogByKey(ctx context.Context, arg GetLogByKeyParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getLogByKey, arg.RuleID, arg.AppointmentID, arg.AnchorAt)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getLogItem = `-- name: GetLogItem :one
+SELECT l.id, l.rule_id, l.appointment_id, l.anchor_at, l.action, l.body, l.phone_digits, l.acted_at,
+       r.kind, a.client_id, c.name AS client_name
+FROM reminder_log l
+JOIN reminder_rules r ON r.id = l.rule_id
+JOIN appointments a ON a.id = l.appointment_id
+JOIN clients c ON c.id = a.client_id
+WHERE l.id = $1
+`
+
+type GetLogItemRow struct {
+	ID            uuid.UUID
+	RuleID        uuid.UUID
+	AppointmentID uuid.UUID
+	AnchorAt      *time.Time
+	Action        string
+	Body          *string
+	PhoneDigits   *string
+	ActedAt       time.Time
+	Kind          string
+	ClientID      uuid.UUID
+	ClientName    string
+}
+
+func (q *Queries) GetLogItem(ctx context.Context, id uuid.UUID) (GetLogItemRow, error) {
+	row := q.db.QueryRow(ctx, getLogItem, id)
+	var i GetLogItemRow
+	err := row.Scan(
+		&i.ID,
+		&i.RuleID,
+		&i.AppointmentID,
+		&i.AnchorAt,
+		&i.Action,
+		&i.Body,
+		&i.PhoneDigits,
+		&i.ActedAt,
+		&i.Kind,
+		&i.ClientID,
+		&i.ClientName,
+	)
 	return i, err
 }
 
@@ -56,6 +140,19 @@ func (q *Queries) GetRule(ctx context.Context, id uuid.UUID) (ReminderRule, erro
 	return i, err
 }
 
+const getRuleKind = `-- name: GetRuleKind :one
+
+SELECT kind FROM reminder_rules WHERE id = $1
+`
+
+// The reminder log (design doc item 55, log.go).
+func (q *Queries) GetRuleKind(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getRuleKind, id)
+	var kind string
+	err := row.Scan(&kind)
+	return kind, err
+}
+
 const getServiceState = `-- name: GetServiceState :one
 SELECT archived_at FROM services WHERE id = $1
 `
@@ -76,6 +173,41 @@ func (q *Queries) GetTemplateState(ctx context.Context, id uuid.UUID) (*time.Tim
 	var archived_at *time.Time
 	err := row.Scan(&archived_at)
 	return archived_at, err
+}
+
+const insertLog = `-- name: InsertLog :one
+INSERT INTO reminder_log (id, rule_id, appointment_id, anchor_at, action, body, phone_digits, acted_at)
+VALUES ($1, $2, $3, $4::timestamptz, $5,
+        $6::text, $7::text, $8::timestamptz)
+ON CONFLICT (rule_id, appointment_id, anchor_at) DO NOTHING
+RETURNING id
+`
+
+type InsertLogParams struct {
+	ID            uuid.UUID
+	RuleID        uuid.UUID
+	AppointmentID uuid.UUID
+	AnchorAt      *time.Time
+	Action        string
+	Body          *string
+	PhoneDigits   *string
+	ActedAt       time.Time
+}
+
+func (q *Queries) InsertLog(ctx context.Context, arg InsertLogParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, insertLog,
+		arg.ID,
+		arg.RuleID,
+		arg.AppointmentID,
+		arg.AnchorAt,
+		arg.Action,
+		arg.Body,
+		arg.PhoneDigits,
+		arg.ActedAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertRule = `-- name: InsertRule :exec
@@ -348,6 +480,125 @@ func (q *Queries) ListLaterAppointments(ctx context.Context, arg ListLaterAppoin
 	for rows.Next() {
 		var i ListLaterAppointmentsRow
 		if err := rows.Scan(&i.ID, &i.ClientID, &i.StartsAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLogForClient = `-- name: ListLogForClient :many
+SELECT l.id, l.rule_id, l.appointment_id, l.anchor_at, l.action, l.body, l.phone_digits, l.acted_at,
+       r.kind, a.client_id, c.name AS client_name
+FROM reminder_log l
+JOIN reminder_rules r ON r.id = l.rule_id
+JOIN appointments a ON a.id = l.appointment_id
+JOIN clients c ON c.id = a.client_id
+WHERE a.client_id = $1
+ORDER BY l.acted_at DESC, l.id DESC
+`
+
+type ListLogForClientRow struct {
+	ID            uuid.UUID
+	RuleID        uuid.UUID
+	AppointmentID uuid.UUID
+	AnchorAt      *time.Time
+	Action        string
+	Body          *string
+	PhoneDigits   *string
+	ActedAt       time.Time
+	Kind          string
+	ClientID      uuid.UUID
+	ClientName    string
+}
+
+func (q *Queries) ListLogForClient(ctx context.Context, clientID uuid.UUID) ([]ListLogForClientRow, error) {
+	rows, err := q.db.Query(ctx, listLogForClient, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLogForClientRow
+	for rows.Next() {
+		var i ListLogForClientRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RuleID,
+			&i.AppointmentID,
+			&i.AnchorAt,
+			&i.Action,
+			&i.Body,
+			&i.PhoneDigits,
+			&i.ActedAt,
+			&i.Kind,
+			&i.ClientID,
+			&i.ClientName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLogInRange = `-- name: ListLogInRange :many
+SELECT l.id, l.rule_id, l.appointment_id, l.anchor_at, l.action, l.body, l.phone_digits, l.acted_at,
+       r.kind, a.client_id, c.name AS client_name
+FROM reminder_log l
+JOIN reminder_rules r ON r.id = l.rule_id
+JOIN appointments a ON a.id = l.appointment_id
+JOIN clients c ON c.id = a.client_id
+WHERE l.acted_at >= $1::timestamptz AND l.acted_at < $2::timestamptz
+ORDER BY l.acted_at DESC, l.id DESC
+`
+
+type ListLogInRangeParams struct {
+	FromAt time.Time
+	ToAt   time.Time
+}
+
+type ListLogInRangeRow struct {
+	ID            uuid.UUID
+	RuleID        uuid.UUID
+	AppointmentID uuid.UUID
+	AnchorAt      *time.Time
+	Action        string
+	Body          *string
+	PhoneDigits   *string
+	ActedAt       time.Time
+	Kind          string
+	ClientID      uuid.UUID
+	ClientName    string
+}
+
+func (q *Queries) ListLogInRange(ctx context.Context, arg ListLogInRangeParams) ([]ListLogInRangeRow, error) {
+	rows, err := q.db.Query(ctx, listLogInRange, arg.FromAt, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLogInRangeRow
+	for rows.Next() {
+		var i ListLogInRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RuleID,
+			&i.AppointmentID,
+			&i.AnchorAt,
+			&i.Action,
+			&i.Body,
+			&i.PhoneDigits,
+			&i.ActedAt,
+			&i.Kind,
+			&i.ClientID,
+			&i.ClientName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
