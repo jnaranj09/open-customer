@@ -33,7 +33,8 @@ const (
 	readHeaderTimeout = 10 * time.Second
 )
 
-// serve runs the server (design doc item 18; P1 has steps 1, 2, 5, 7 and 8) until ctx is done.
+// serve runs the server (design doc item 18; P1 and P2 have steps 1, 2, 4, 5, 7 and 8) until ctx is
+// done.
 // It returns 0 after a graceful shutdown and 1 on a config, database, migration or listen error,
 // which it prints to stderr.
 func serve(ctx context.Context, getenv func(string) string, stdout, stderr io.Writer) int {
@@ -57,7 +58,7 @@ func serveOn(ctx context.Context, cfg config.Config, ln net.Listener, stdout, st
 	// Every slog.Default() line (problem.Write, decodeJSON, migrate, status) goes to the JSON log.
 	slog.SetDefault(log)
 
-	srv, pool, err := startup(ctx, cfg, log)
+	srv, pool, err := startup(ctx, cfg, log, stdout)
 	if err != nil {
 		closeListener(ln)
 		printf(stderr, "%v\n", err)
@@ -92,9 +93,9 @@ func serveOn(ctx context.Context, cfg config.Config, ln net.Listener, stdout, st
 	return 0
 }
 
-// startup opens the pool, runs the migrations behind the backup guard and builds the HTTP server.
-// On an error the pool is already closed.
-func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Server, *pgxpool.Pool, error) {
+// startup opens the pool, runs the migrations behind the backup guard, prints the setup link while
+// no user exists and builds the HTTP server. On an error the pool is already closed.
+func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io.Writer) (*http.Server, *pgxpool.Pool, error) {
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("serve: %w", err)
@@ -109,21 +110,19 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
+	settingsModule, authModule, err := newModules(cfg)
+	if err != nil {
+		pool.Close()
+		return nil, nil, fmt.Errorf("serve: %w", err)
+	}
+	if err := printSetupLink(ctx, cfg, pool, authModule, stdout); err != nil {
+		pool.Close()
+		return nil, nil, fmt.Errorf("serve: %w", err)
+	}
 	static, err := fs.Sub(web.Build, "build")
 	if err != nil {
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
-	}
-	settingsModule := settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})
-	authModule, err := auth.New(auth.Options{
-		Clock:           clock.Real{},
-		SettingsCreator: settingsCreator(settingsModule),
-		// starter.Seed in P4.
-		Seeder: func(context.Context, db.DBTX, string) error { return nil },
-	})
-	if err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	handler, err := httpapi.New(httpapi.Options{
 		Pool:           pool,
@@ -146,6 +145,41 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		// net/http's own errors (a bad TLS handshake, a broken connection) go to the JSON log too.
 		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}, pool, nil
+}
+
+// newModules builds the settings and auth modules, for serve and the admin subcommands.
+func newModules(cfg config.Config) (*settings.Module, *auth.Auth, error) {
+	settingsModule := settings.New(settings.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir})
+	authModule, err := auth.New(auth.Options{
+		Clock:           clock.Real{},
+		SettingsCreator: settingsCreator(settingsModule),
+		// starter.Seed in P4.
+		Seeder: func(context.Context, db.DBTX, string) error { return nil },
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("build the modules: %w", err)
+	}
+	return settingsModule, authModule, nil
+}
+
+// printSetupLink is serve step 4 (design doc item 18): while no user exists it makes a new setup
+// token and prints "Setup: <PUBLIC_URL>/setup#<token>" to stdout. The line holds a secret, so it is
+// one plain fmt line, not a slog record: the "never log a token" rule has this one exception, by
+// design ("Auth, sessions and handover"; OP11).
+func printSetupLink(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, authModule *auth.Auth, stdout io.Writer) error {
+	needed, err := authModule.SetupNeeded(ctx, pool)
+	if err != nil {
+		return fmt.Errorf("setup link: %w", err)
+	}
+	if !needed {
+		return nil
+	}
+	link, err := newSetupLink(ctx, cfg.PublicURL, pool, authModule)
+	if err != nil {
+		return err
+	}
+	printf(stdout, "Setup: %s\n", link)
+	return nil
 }
 
 // settingsCreator is the setup settings creator auth gets (design doc item 40): it converts

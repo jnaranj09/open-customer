@@ -162,16 +162,22 @@ func Empty(t *testing.T) Conn {
 	return newDatabase(t, startServer(t), "")
 }
 
-// Pool returns a pool on a fresh, fully migrated database. The migrations run once per process
-// into a template; each test gets a copy.
-func Pool(t *testing.T) *pgxpool.Pool {
+// Migrated returns a fresh, fully migrated database. The migrations run once per process into a
+// template; each test gets a copy.
+func Migrated(t *testing.T) Conn {
 	t.Helper()
 	s := startServer(t)
 	templateOnce.Do(func() { templateErr = buildTemplate(s) })
 	if templateErr != nil {
 		t.Fatalf("build migrated template: %v", templateErr)
 	}
-	c := newDatabase(t, s, templateName)
+	return newDatabase(t, s, templateName)
+}
+
+// Pool returns a pool on a fresh, fully migrated database (see Migrated).
+func Pool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	c := Migrated(t)
 	pool, err := db.Open(t.Context(), c.URL)
 	if err != nil {
 		t.Fatalf("open pool: %v", err)

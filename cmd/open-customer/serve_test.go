@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,8 +44,8 @@ func (l *lockedBuffer) String() string {
 	return l.b.String()
 }
 
-// serveConfig loads the config serve would see for a database on host:port.
-func serveConfig(t *testing.T, c dbtest.Conn) config.Config {
+// connEnv is the environment serve and the admin commands see for the database c.
+func connEnv(t *testing.T, c dbtest.Conn) func(string) string {
 	t.Helper()
 	env := map[string]string{
 		"PUBLIC_URL":    "http://localhost:5173",
@@ -57,7 +58,13 @@ func serveConfig(t *testing.T, c dbtest.Conn) config.Config {
 		// No backup has run; a fresh database migrates anyway, with the guard on.
 		"BACKUP_STATUS_FILE": filepath.Join(t.TempDir(), "status.json"),
 	}
-	cfg, err := config.Load(func(k string) string { return env[k] })
+	return func(k string) string { return env[k] }
+}
+
+// serveConfig loads the config serve would see for the database c.
+func serveConfig(t *testing.T, c dbtest.Conn) config.Config {
+	t.Helper()
+	cfg, err := config.Load(connEnv(t, c))
 	if err != nil {
 		t.Fatalf("config.Load: %v", err)
 	}
@@ -95,49 +102,90 @@ func get(t *testing.T, client *http.Client, url string) (*http.Response, string)
 	return resp, string(body)
 }
 
-func TestServeMigratesEmptyDBAndAnswers(t *testing.T) {
+// runningServe is a serveOn running in the background on a test listener.
+type runningServe struct {
+	base           string
+	client         *http.Client
+	stdout, stderr *lockedBuffer
+	cancel         context.CancelFunc
+	done           chan int
+}
+
+// startServe runs serveOn for cfg and waits until /readyz answers 200, so startup (migrations and
+// the setup link) has finished. It restores slog.Default when the test ends.
+func startServe(t *testing.T, cfg config.Config) *runningServe {
+	t.Helper()
 	prev := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(prev) })
-	cfg := serveConfig(t, dbtest.Empty(t))
 	ln := listen(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	var stdout, stderr lockedBuffer
-	done := make(chan int, 1)
+	t.Cleanup(cancel)
+	s := &runningServe{
+		base:   "http://" + ln.Addr().String(),
+		client: &http.Client{Timeout: 30 * time.Second},
+		stdout: &lockedBuffer{}, stderr: &lockedBuffer{},
+		cancel: cancel, done: make(chan int, 1),
+	}
 	// No wait for "ready": the listener is already bound, so the backlog holds each request
 	// until serveOn has migrated and starts serving.
-	go func() { done <- serveOn(ctx, cfg, ln, &stdout, &stderr) }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	base := "http://" + ln.Addr().String()
-
-	if resp, body := get(t, client, base+"/readyz"); resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /readyz = %d %q, want 200 (stderr %q)", resp.StatusCode, body, stderr.String())
+	go func() { s.done <- serveOn(ctx, cfg, ln, s.stdout, s.stderr) }()
+	if resp, body := get(t, s.client, s.base+"/readyz"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /readyz = %d %q, want 200 (stderr %q)", resp.StatusCode, body, s.stderr.String())
 	}
-	if resp, body := get(t, client, base+"/api/v1/setup/status"); resp.StatusCode != http.StatusOK ||
+	return s
+}
+
+// stop cancels serveOn and checks it shut down gracefully.
+func (s *runningServe) stop(t *testing.T) {
+	t.Helper()
+	s.client.CloseIdleConnections()
+	s.cancel()
+	if code := <-s.done; code != 0 {
+		t.Fatalf("serveOn returned %d after cancel, want 0 (stderr %q)", code, s.stderr.String())
+	}
+}
+
+func TestServeMigratesEmptyDBAndAnswers(t *testing.T) {
+	s := startServe(t, serveConfig(t, dbtest.Empty(t)))
+
+	if resp, body := get(t, s.client, s.base+"/api/v1/setup/status"); resp.StatusCode != http.StatusOK ||
 		strings.TrimSpace(body) != `{"needs_setup":true}` {
 		t.Fatalf("GET /api/v1/setup/status = %d %q, want 200 {\"needs_setup\":true}", resp.StatusCode, body)
 	}
 	// The manifest and icon routes sit outside /api/v1, before the SPA fallback.
-	if resp, body := get(t, client, base+"/manifest.webmanifest"); resp.StatusCode != http.StatusOK ||
+	if resp, body := get(t, s.client, s.base+"/manifest.webmanifest"); resp.StatusCode != http.StatusOK ||
 		resp.Header.Get("Content-Type") != "application/manifest+json" {
 		t.Fatalf("GET /manifest.webmanifest = %d %q, want 200 application/manifest+json", resp.StatusCode, body)
 	}
-	resp, body := get(t, client, base+"/")
+	resp, body := get(t, s.client, s.base+"/")
 	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
 		t.Fatalf("GET / = %d %q (Content-Type %q), want 200 HTML", resp.StatusCode, body, resp.Header.Get("Content-Type"))
 	}
 
 	// A line through slog.Default (problem.Write, migrate, status use it) lands in the JSON log.
 	slog.Info("default logger probe")
-	if !hasJSONLine(stdout.String(), "default logger probe") {
-		t.Errorf("stdout has no JSON line with msg %q:\n%s", "default logger probe", stdout.String())
+	if !hasJSONLine(s.stdout.String(), "default logger probe") {
+		t.Errorf("stdout has no JSON line with msg %q:\n%s", "default logger probe", s.stdout.String())
 	}
+	s.stop(t)
+}
 
-	client.CloseIdleConnections()
-	cancel()
-	if code := <-done; code != 0 {
-		t.Fatalf("serveOn returned %d after cancel, want 0 (stderr %q)", code, stderr.String())
+func TestServePrintsSetupLinkOnEmptyDB(t *testing.T) {
+	s := startServe(t, serveConfig(t, dbtest.Empty(t)))
+	s.stop(t)
+
+	link := regexp.MustCompile(`(?m)^Setup: http://localhost:5173/setup#[A-Za-z0-9_-]{43}$`)
+	if !link.MatchString(s.stdout.String()) {
+		t.Errorf("stdout has no plain setup link line:\n%s", s.stdout.String())
+	}
+}
+
+func TestServeNoSetupLinkWhenUserExists(t *testing.T) {
+	s := startServe(t, serveConfig(t, withOwner(t)))
+	s.stop(t)
+
+	if strings.Contains(s.stdout.String(), "/setup#") {
+		t.Errorf("stdout has a setup link although a user exists:\n%s", s.stdout.String())
 	}
 }
 

@@ -591,7 +591,7 @@ sequenceDiagram
 
 ### Auth, sessions and handover
 
-1.  First, on start, if no user exists, `serve` deletes any old setup token, creates a new one (valid 24 h, stored as a hash) and logs `Setup: <PUBLIC_URL>/setup#<token>`. Only the hash is stored, so an old link cannot be printed again; a restart or `setup-link` makes a new one and the old link stops working.
+1.  First, on start, if no user exists, `serve` deletes any old setup token, creates a new one (valid 24 h, stored as a hash) and prints `Setup: <PUBLIC_URL>/setup#<token>` to stdout as one plain line, not a log record (the one exception to "never log a token"). Only the hash is stored, so an old link cannot be printed again; a restart or `setup-link` makes a new one and the old link stops working.
 2.  Then `/setup` runs the wizard. `POST /setup` creates the settings row, the owner user and her first session in one transaction, and deletes all setup tokens. From then on `/setup` answers `setup-closed`.
 3.  The icon is uploaded after that, as the wizard's last branding step, because the upload needs the new session: `POST /settings/icon` with two PNGs. Icons are stored as files under `media/branding/` and recorded only by `icon_updated_at`; they are not rows in `media`, whose rows need a client. This still happens before the install step (see "Branding and the manifest").
 4.  After that, in the installed PWA (separate cookie storage from Safari), she logs in with her username and password.
@@ -1637,7 +1637,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     1.  Loads config and opens the pool. (P1)
     2.  Runs `db.Migrate` with the backup guard. (P1)
     3.  Ensures the VAPID keys exist. (P4)
-    4.  Prints the setup link if there are no users. (P2)
+    4.  Prints the setup link if there are no users: `Setup: <PUBLIC_URL>/setup#<token>`, one plain stdout line, not slog (see "Auth, sessions and handover"). `NewSetupToken` runs in its own `db.WithTx`. (P2)
     5.  Builds the modules and `httpapi.Server`. (P1, with each phase adding its modules)
     6.  Starts `scheduler.Run`. (P4)
     7.  Serves on `:8080`. (P1)
@@ -1647,9 +1647,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Admin subcommands.
 *   **Proposed Changes**:
-    *   `reset-password <username>`: prints a random 12-character temporary password from `crypto/rand` over `a–z`, `A–Z` and `2–9` without look-alike characters (no `0`, `O`, `1`, `l`, `I`), and sets `must_change_password`.
-    *   `setup-link`: only when no user exists; deletes old tokens and prints a new 24 h link.
-    *   `healthcheck`: GET `http://127.0.0.1:8080/healthz`, exit 0 or 1.
+    *   `reset-password <username>`: prints a random 12-character temporary password from `crypto/rand` over `a–z`, `A–Z` and `2–9` without look-alike characters (no `0`, `O`, `1`, `l`, `I`), and sets `must_change_password`. The username is normalized like login; an unknown one exits 1 with "no such user".
+    *   `setup-link`: only when no user exists (otherwise exit 1, "setup is already complete"); deletes old tokens and prints a new 24 h link, `<PUBLIC_URL>/setup#<token>`.
+    *   `healthcheck`: GET `http://127.0.0.1:8080/healthz` with a 3 s timeout; exit 0 on 200, otherwise 1. It reads no config, so it runs in the distroless image with no environment.
+    *   `reset-password` and `setup-link` do not migrate: only `serve` does, behind the backup guard. If migrations are pending they exit 1 with "migrations pending; start serve first". Their stdout carries only the password or the link; every error goes to stderr.
+    *   A wrong argument count prints `usage: open-customer serve|reset-password <username>|setup-link|healthcheck|version` and exits 1.
 
 #### Platform
 

@@ -35,6 +35,9 @@ run.
 The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover`.
 A later phase adds `e2e`; the design doc's "Build order" says when.
 
+The binary's own subcommands (`serve`, `reset-password <username>`, `setup-link`, `healthcheck`,
+`version`) are described in the design doc's "Process model" and item 19.
+
 ## Release checklist
 
 Run before each release tag (the first time: before `v1.0.0`). Each item is behaviour-neutral, in
