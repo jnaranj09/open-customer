@@ -610,7 +610,7 @@ This replaces the brief's one-time code (Alternative K1).
 
 ### Branding and the manifest
 
-*   `GET /manifest.webmanifest` is generated from settings and served with `Cache-Control: no-cache`. Fields: `name` (business name), `short_name` (the business name cut to 12 characters), `start_url: "/"`, `scope: "/"`, `display: "standalone"`, `theme_color` and `background_color` (the accent color), `lang` (the locale), and `icons` (512 px, `purpose: "any"`). The service worker never caches it, so iOS reads the current name at install.
+*   `GET /manifest.webmanifest` is generated from settings and served with `Cache-Control: no-cache`. Fields: `name` (business name), `short_name` (the business name cut to 12 characters), `start_url: "/"`, `scope: "/"`, `display: "standalone"`, `theme_color` and `background_color` (the accent color), `lang` (the locale), and `icons` (512 px, `purpose: "any"`). The service worker never caches it, so iOS reads the current name at install. Before setup (no settings row) the manifest has `name` and `short_name` "open-customer", `lang: "es"`, no colors, and the default icons.
 *   Icon upload: the phone crops the image to a square, resizes it to 512 px and 180 px PNGs, and uploads both. They are served at `/icons/512.png` and `/apple-touch-icon.png` with `Cache-Control: no-cache`, and Cloudflare does not cache them (see "Deployment"). If no icon was uploaded, the built-in default is served at the same paths. iOS copies the name and icon only when the app is added to the Home Screen, so the wizard sets them before the install step, and a later change shows only after she reinstalls it. The files are `media/branding/icon-512.png` and `icon-180.png`.
 
 ### Photos
@@ -1579,7 +1579,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `POST /reminders/log` | `LogEntry`. An unknown `rule_id` or `appointment_id` is 422, not a foreign-key 500. | 201, or 200 when the row already existed |
     | `POST /push/subscriptions` | the browser's `PushSubscription` JSON (`endpoint`, `keys.p256dh`, `keys.auth`) | 201 `{id}` for a new endpoint, 200 `{id}` for a known one (keys updated) |
     | `POST /media` | multipart: `full` (JPEG, ≤ 10 MB), `thumb` (JPEG, ≤ 1 MB), `client_id?`, `appointment_id?` (at least one; the request is ≤ 12 MB). The server always stores `client_id`: with `appointment_id`, it is filled from the appointment; a different one is 422 (see "Photos"). | 201 `Media` |
-    | `POST /settings/icon` | multipart: `icon512`, `icon180` (PNG, each ≤ 1 MB; the PNG signature is checked, otherwise 415) | 204 |
+    | `POST /settings/icon` | multipart: `icon512`, `icon180` (PNG, each ≤ 1 MB; the request is ≤ 3 MB; the PNG signature is checked, otherwise 415) | 204 |
     | `POST /client-errors` | `message`, `stack?`, `app_version`, `route` | 204 |
 
     **`PATCH` bodies** (every field optional; `?` = may be `null` to clear)
@@ -1749,7 +1749,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   A catch-all `/api/` handler answers every unknown path and every wrong method under `/api/` with 404 `not-found` problem JSON. Without it, the `/` fallback in item 35 would answer them with `index.html` and a 200.
     *   Handler shape: generated handlers take `(w, r, <path params>, params)`, for example `(w, r, id, params)`.
     *   Shared helpers: `decodeJSON(w, r, &v)` (decodes into the generated request type with `DisallowUnknownFields`, because the web client is ours and an unknown field is a bug; then calls the type's hand-written `Validate() error` where a field has rules; a body over the limit, `*http.MaxBytesError`, gives `payload-too-large`; any other decode failure gives `validation`; the multipart readers check `MaxBytesError` the same way) and `writeJSON(w, status, v)`. Response values are the generated `gen` types, so field names come from the spec.
-    *   Body limits are applied by the code that reads the body, not by path in `server.go`: `decodeJSON` wraps `r.Body` in `http.MaxBytesReader` at 1 MB and also rejects trailing data after the value; each multipart handler wraps it with its own limit, `POST /media` (12 MB) and `POST /settings/icon` (2 MB). A body over the limit answers `payload-too-large`.
+    *   Body limits are applied by the code that reads the body, not by path in `server.go`: `decodeJSON` wraps `r.Body` in `http.MaxBytesReader` at 1 MB and also rejects trailing data after the value; each multipart handler wraps it with its own limit, `POST /media` (12 MB) and `POST /settings/icon` (3 MB). A body over the limit answers `payload-too-large`.
     *   The SPA handler (item 35) is mounted on `/` for GET and HEAD only; any other method on a path outside `/api/` gets 405 with `Allow: GET, HEAD`. (`GET /` cannot be registered next to the method-less `/api/` catch-all: the standard mux rejects the pair as conflicting.)
 
     **Module methods.** Every method also takes `ctx` and `q db.DBTX` first; they are left out below. Types are the module's own structs, named after the API schemas (item 15). `scheduler` and `starter` are not called by `httpapi`.
@@ -1890,7 +1890,9 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   Get and update settings. Validate `name` (trimmed, 1–80 characters), `locale` (`es` only), `accent_color` (lowercased, `^#[0-9a-f]{6}$`), `push_hour` (0–19, default 8 when absent), the time zone with `time.LoadLocation`, the currency with `currency.ParseISO` from `golang.org/x/text/currency` (no hand-written list), and the country code against `phonenumbers.GetSupportedRegions()`.
     *   Build the manifest JSON from settings.
-    *   Serve the uploaded icons, or the embedded default PNGs.
+    *   Serve the uploaded icons, or the embedded default PNGs (plain neutral 512 and 180 px files, no brand art).
+    *   `SetIcons` checks the PNG signature (415) and the 1 MB limit (413) of each part, writes `media/branding/icon-512.png` and `icon-180.png` (temp file, fsync, rename) and only then sets `icon_updated_at`. `Icon` serves the file when `icon_updated_at` is set; a missing file logs `code=icon_file_missing` and serves the default. Any size other than 512 or 180 is `not-found`.
+    *   Before setup there is no settings row: the manifest is minimal (`name` and `short_name` "open-customer", `lang: "es"`, no colors, the default icons) and the icons are the defaults.
 
 ##### 45. `internal/attributes/attributes.go`, `keys.go`, `validate.go` (Create)
 

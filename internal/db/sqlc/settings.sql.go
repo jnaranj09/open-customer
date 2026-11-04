@@ -73,6 +73,18 @@ func (q *Queries) InsertSettings(ctx context.Context, arg InsertSettingsParams) 
 	return err
 }
 
+const setIconUpdatedAt = `-- name: SetIconUpdatedAt :execrows
+UPDATE business_settings SET icon_updated_at = $1::timestamptz, updated_at = $1 WHERE id = 1
+`
+
+func (q *Queries) SetIconUpdatedAt(ctx context.Context, now time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, setIconUpdatedAt, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateSettings = `-- name: UpdateSettings :exec
 UPDATE business_settings SET
     name         = COALESCE($1::text, name),

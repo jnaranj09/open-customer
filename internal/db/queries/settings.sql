@@ -15,3 +15,6 @@ UPDATE business_settings SET
     push_hour    = COALESCE(sqlc.narg('push_hour')::smallint, push_hour),
     updated_at   = @now
 WHERE id = 1;
+
+-- name: SetIconUpdatedAt :execrows
+UPDATE business_settings SET icon_updated_at = @now::timestamptz, updated_at = @now WHERE id = 1;
