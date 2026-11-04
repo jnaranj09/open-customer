@@ -143,3 +143,13 @@ func TestPasswordTooShort(t *testing.T) {
 		}
 	})
 }
+
+// An unknown username verifies against dummyHash (OP17); it must cost what a real hash costs, or
+// the response time tells which usernames exist.
+func TestDummyHashUsesDefaultParams(t *testing.T) {
+	t.Parallel()
+	p, _, _, err := parsePHC(dummyHash)
+	if err != nil || p != defaultParams {
+		t.Fatalf("parsePHC(dummyHash) = %+v, %v; want %+v, nil", p, err, defaultParams)
+	}
+}

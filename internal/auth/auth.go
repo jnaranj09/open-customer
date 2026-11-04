@@ -23,6 +23,8 @@ type Auth struct {
 	clock           clock.Clock
 	settingsCreator SettingsCreator
 	seeder          Seeder
+	// limiter is the login rate limit state (item 41); it has its own mutex.
+	limiter *loginLimiter
 }
 
 // New returns the auth module. A nil SettingsCreator or Seeder is an error, so setup can never
@@ -34,5 +36,8 @@ func New(opts Options) (*Auth, error) {
 	if opts.Seeder == nil {
 		return nil, errors.New("auth: the seeder is nil")
 	}
-	return &Auth{clock: opts.Clock, settingsCreator: opts.SettingsCreator, seeder: opts.Seeder}, nil
+	return &Auth{
+		clock: opts.Clock, settingsCreator: opts.SettingsCreator, seeder: opts.Seeder,
+		limiter: newLoginLimiter(),
+	}, nil
 }

@@ -39,3 +39,6 @@ SELECT expires_at, used_at FROM setup_tokens WHERE token_hash = @token_hash;
 
 -- name: LockSetup :exec
 SELECT pg_advisory_xact_lock(@key::bigint);
+
+-- name: GetUserByUsername :one
+SELECT id, username, password_hash, must_change_password FROM users WHERE username = @username;

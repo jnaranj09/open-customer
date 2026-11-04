@@ -99,6 +99,29 @@ func (q *Queries) GetSetupToken(ctx context.Context, tokenHash []byte) (GetSetup
 	return i, err
 }
 
+const getUserByUsername = `-- name: GetUserByUsername :one
+SELECT id, username, password_hash, must_change_password FROM users WHERE username = $1
+`
+
+type GetUserByUsernameRow struct {
+	ID                 uuid.UUID
+	Username           string
+	PasswordHash       string
+	MustChangePassword bool
+}
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error) {
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
+	var i GetUserByUsernameRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.MustChangePassword,
+	)
+	return i, err
+}
+
 const insertSession = `-- name: InsertSession :exec
 INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at)
 VALUES ($1, $2, $3, $4, $3)
