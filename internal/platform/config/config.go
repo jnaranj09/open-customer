@@ -14,7 +14,7 @@ import (
 
 // Config is the parsed app configuration.
 type Config struct {
-	PublicURL                 *url.URL
+	PublicURL                 *url.URL // never nil when Load returns no error
 	DatabaseURL               string
 	VAPIDSubject              string
 	TrustedProxyCIDRs         []netip.Prefix

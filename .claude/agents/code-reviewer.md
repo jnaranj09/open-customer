@@ -20,9 +20,8 @@ the changed files (its item numbers and the current build phase). The precedence
 
 ## Step 1 — re-run the gate yourself
 
-`make check-pins lint test vuln build`, plus `make check-generated test-db` from P1 and `make cover`
-from P2. Report each result with its real output. A gate you could not run is reported as NOT RUN,
-never as passing.
+`make check-pins lint test vuln build check-generated test-db cover`. Report each result with its
+real output. A gate you could not run is reported as NOT RUN, never as passing.
 
 ## Step 2 — fault-inject every guard
 

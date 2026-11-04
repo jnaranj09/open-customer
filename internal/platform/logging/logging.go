@@ -24,19 +24,40 @@ func RequestID(ctx context.Context) string {
 	return id
 }
 
+type routeKey struct{}
+
+// routeHolder carries the matched pattern back out to Middleware. The mux sets Pattern only on the
+// request it is given, and a layer between Middleware and the mux that calls r.WithContext hands
+// it a copy, so Middleware's own r.Pattern stays empty.
+type routeHolder struct{ pattern string }
+
+// SetRoute records the matched route pattern for the request log line. The layer just outside the
+// mux calls it after routing. Outside a request it does nothing.
+func SetRoute(ctx context.Context, pattern string) {
+	if h, ok := ctx.Value(routeKey{}).(*routeHolder); ok {
+		h.pattern = pattern
+	}
+}
+
 // Middleware gives each request an ID and writes one log line after it: request ID, cf_ray,
-// route pattern, status and duration.
+// route pattern, status and duration. The route is the one SetRoute recorded, or r.Pattern when
+// the mux sits directly inside Middleware.
 func Middleware(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		r = r.WithContext(context.WithValue(r.Context(), requestIDKey{}, newID()))
+		route := &routeHolder{}
+		ctx := context.WithValue(r.Context(), requestIDKey{}, newID())
+		r = r.WithContext(context.WithValue(ctx, routeKey{}, route))
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
+		if route.pattern == "" {
+			route.pattern = r.Pattern
+		}
 		log.LogAttrs(r.Context(), slog.LevelInfo, "request",
 			slog.String("request_id", RequestID(r.Context())),
 			slog.String("cf_ray", r.Header.Get("CF-Ray")),
 			slog.String("method", r.Method),
-			slog.String("route", r.Pattern),
+			slog.String("route", route.pattern),
 			slog.Int("status", rec.status),
 			slog.Duration("duration", time.Since(start)),
 		)

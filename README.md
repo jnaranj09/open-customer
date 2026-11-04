@@ -20,16 +20,23 @@ run.
 
 | Command | What it does |
 | --- | --- |
-| `make check-pins` | Image and tool versions agree across the Makefile, `go.mod`, `web/package.json`, the Dockerfile and CI |
-| `make lint` | golangci-lint, shellcheck, svelte-check, eslint, prettier |
+| `make check-pins` | Pins agree across the Makefile, `go.mod`, `web/package.json`, Dockerfile and CI |
+| `make lint` | `go mod tidy -diff`, golangci-lint, deadcode, shellcheck, svelte-check, eslint, prettier, knip, jscpd |
 | `make test` | Go unit tests and Vitest |
+| `make generate` | oapi-codegen, sqlc (Docker image) and openapi-typescript |
+| `make check-generated` | `generate`, then fails if a generated file differs from the committed one |
+| `make test-db` | Go tests tagged `db` against a testcontainers Postgres (needs Docker) |
+| `make cover` | The `db` tests with coverage for each package in `COVER_PKGS`; fails when one is under 90% |
 | `make vuln` | govulncheck |
 | `make build` | The web build, then `bin/open-customer` |
+| `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
 | `make image` | The app Docker image |
 
-The gate before any change is done: `make check-pins lint test vuln build`. Later phases add
-targets (`generate`, `check-generated`, `test-db`, `cover`, `dev`, `e2e`); the design doc's
-"Build order" says when.
+The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover`.
+A later phase adds `e2e`; the design doc's "Build order" says when.
+
+The binary's own subcommands (`serve`, `reset-password <username>`, `setup-link`, `healthcheck`,
+`version`) are described in the design doc's "Process model" and item 19.
 
 ## Release checklist
 

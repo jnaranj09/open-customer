@@ -4,8 +4,9 @@ open-customer: a self-hosted app (Go API + SvelteKit PWA) for one small service 
 clients, appointments and hand-sent WhatsApp reminders.
 
 <!-- Budget: this file loads in EVERY session. Keep it under 200 lines (guard `agent-context`).
-     Only what an agent cannot learn from the code: commands, traps, reasons, bans tied to incidents.
-     No overview of folders or architecture. Add a line only after an agent repeats a mistake. -->
+     Only what an agent cannot learn from the code: commands, traps, reasons, bans tied to
+     incidents. No overview of folders or architecture. Add a line only after an agent repeats a
+     mistake. -->
 
 **Designing or choosing without the owner?** Read `technical-taste.md` first. **Setting up?** Work
 through `TASKS.md` in order.
@@ -27,22 +28,22 @@ All Go commands go through `make`: on a clean checkout web/build is missing and 
 fails to compile until `make web-stub` has run. Node must be the pinned one (`make node-check`;
 with fnm, `fnm use` in web/).
 
-- `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript (from P1).
-- `make check-generated`: `generate`, then fails on any diff (from P1).
+- `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript.
+- `make check-generated`: `generate`, then fails on any diff.
 - `make check-pins`: Postgres, Node, Go and golangci-lint pins agree across files.
-- `make lint`: golangci-lint, deadcode (exact `DEADCODE_BUDGET`), shellcheck, svelte-check, eslint,
-  prettier check, knip, jscpd.
+- `make lint`: `go mod tidy -diff`, golangci-lint, deadcode (exact `DEADCODE_BUDGET`), shellcheck,
+  svelte-check, eslint, prettier check, knip, jscpd (fails on an empty scan).
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
-  (testcontainers; from P1).
-- `make cover`: the 90% gate on the packages in `COVER_PKGS` (from P2).
+  (testcontainers).
+- `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
   app Docker image.
 - `make e2e`: build, fresh e2e database, Playwright WebKit (from P6).
-- `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173 (from P1).
+- `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build` (P0), plus `check-generated test-db` from P1 and `cover`
-from P2. CI (`.github/workflows/ci.yml`) also runs gitleaks and `pnpm audit --audit-level high`.
+`make check-pins lint test vuln build check-generated test-db cover`. CI
+(`.github/workflows/ci.yml`) also runs gitleaks and `pnpm audit --audit-level high`.
 
 A check that could not run is reported as NOT RUN, never as passing.
 

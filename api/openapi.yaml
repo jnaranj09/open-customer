@@ -1,0 +1,419 @@
+openapi: 3.0.3
+info:
+  title: open-customer API
+  version: 1.0.0
+  description: >-
+    The contract for the open-customer API. It holds only the endpoints of the current build
+    phase (design doc item 15). Each operation lists the problem statuses its own handler can
+    answer, plus a `default` Problem response for the ones the middleware can answer on any
+    route: 403 forbidden-origin (every method but GET and HEAD), 403 must-change-password (any
+    route not marked x-oc-allowed-while-must-change-password, public ones included, when the
+    cookie is a must-change session) and 500 internal.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /setup/status:
+    get:
+      operationId: getSetupStatus
+      summary: Whether the first-run setup is still open
+      description: >-
+        Has no authentication on purpose: the setup wizard calls it before any user or session
+        exists, to decide whether to show the wizard.
+      security: []
+      responses:
+        "200":
+          description: Setup state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupStatus"
+        default:
+          $ref: "#/components/responses/Problem"
+  /setup/options:
+    get:
+      operationId: getSetupOptions
+      summary: The choices the setup wizard offers
+      description: >-
+        No session: the setup wizard needs it before any user exists. It lists the supported
+        country codes.
+      security: []
+      responses:
+        "200":
+          description: Setup choices.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupOptions"
+        default:
+          $ref: "#/components/responses/Problem"
+  /setup:
+    post:
+      operationId: completeSetup
+      summary: Finish first-run setup
+      description: >-
+        No session: it creates the owner user and her first session. The setup token from the
+        setup link is what authorizes it.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupInput"
+      responses:
+        "201":
+          description: The owner user; the session cookie is set.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "410":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /auth/login:
+    post:
+      operationId: login
+      summary: Sign in with username and password
+      description: >-
+        No session: it is how a session is made. It is rate limited per client IP and per
+        username.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: The signed-in user; the session cookie is set.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Sign out of this session
+      description: >-
+        Deletes the current session and expires the cookie. Allowed while must_change_password is
+        set, so she can always sign out.
+      x-oc-allowed-while-must-change-password: true
+      responses:
+        "204":
+          description: Signed out; the cookie is expired.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/ExpiredSessionCookie"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /auth/password:
+    post:
+      operationId: changePassword
+      summary: Change the signed-in user's password
+      description: >-
+        Keeps this session and closes every other one, and clears must_change_password (allowed
+        while it is set: this is how it is cleared). A wrong current_password is 422 validation on
+        that field, not 401, and counts toward the same per-username delay as a failed login.
+      x-oc-allowed-while-must-change-password: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChange"
+      responses:
+        "204":
+          description: The password is changed.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me:
+    get:
+      operationId: getMe
+      summary: The signed-in user
+      description: >-
+        Allowed while must_change_password is set, so the app can tell that it must ask for a new
+        password.
+      x-oc-allowed-while-must-change-password: true
+      responses:
+        "200":
+          description: The signed-in user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /settings:
+    patch:
+      operationId: updateSettings
+      summary: Change the business settings
+      description: >-
+        Changes only the fields sent. currency, country_code and locale are fixed at setup, so
+        sending one is an unknown field and a 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsPatch"
+      responses:
+        "200":
+          description: The settings after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /settings/icon:
+    post:
+      operationId: uploadIcon
+      summary: Replace the app icon
+      description: >-
+        Both parts are PNG files of at most 1 MB each, and the request is at most 3 MB. A part
+        without the PNG signature, or a body that is not multipart/form-data, is 415. A missing,
+        repeated or unknown part is 422.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/IconUpload"
+      responses:
+        "204":
+          description: The icons are stored; /icons/512.png and /apple-touch-icon.png serve them.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "415":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+components:
+  headers:
+    SessionCookie:
+      description: >-
+        The oc_session cookie: HttpOnly, SameSite=Lax, Path=/, 90 days, and Secure unless
+        PUBLIC_URL is plain http.
+      schema:
+        type: string
+    ExpiredSessionCookie:
+      description: The oc_session cookie with an empty value and Max-Age=0, which deletes it.
+      schema:
+        type: string
+  responses:
+    Problem:
+      description: An RFC 9457 problem.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: oc_session
+  schemas:
+    Settings:
+      type: object
+      required: [name, timezone, locale, currency, country_code, accent_color, push_hour, has_custom_icon]
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        locale:
+          type: string
+        currency:
+          type: string
+        country_code:
+          type: string
+        accent_color:
+          type: string
+        push_hour:
+          type: integer
+        has_custom_icon:
+          type: boolean
+    SettingsPatch:
+      type: object
+      description: Every field is optional; a field left out is not changed.
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        accent_color:
+          type: string
+        push_hour:
+          type: integer
+    IconUpload:
+      type: object
+      required: [icon512, icon180]
+      properties:
+        icon512:
+          type: string
+          format: binary
+          description: The 512 px PNG.
+        icon180:
+          type: string
+          format: binary
+          description: The 180 px PNG (apple-touch-icon).
+    Me:
+      type: object
+      required: [id, username, must_change_password]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        must_change_password:
+          type: boolean
+    SetupOptions:
+      type: object
+      required: [countries]
+      properties:
+        countries:
+          type: array
+          description: ISO 3166-1 alpha-2 codes, sorted.
+          items:
+            type: string
+    SetupSettings:
+      type: object
+      description: The Settings fields without has_custom_icon. A missing push_hour means 8.
+      required: [name, timezone, locale, currency, country_code, accent_color]
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        locale:
+          type: string
+        currency:
+          type: string
+        country_code:
+          type: string
+        accent_color:
+          type: string
+        push_hour:
+          type: integer
+    SetupInput:
+      type: object
+      required: [token, username, password, settings]
+      properties:
+        token:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        settings:
+          $ref: "#/components/schemas/SetupSettings"
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    PasswordChange:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+    SetupStatus:
+      type: object
+      required: [needs_setup]
+      properties:
+        needs_setup:
+          type: boolean
+    Problem:
+      type: object
+      description: An RFC 9457 problem, sent as application/problem+json.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          enum:
+            - urn:open-customer:problem:validation
+            - urn:open-customer:problem:not-found
+            - urn:open-customer:problem:unauthorized
+            - urn:open-customer:problem:invalid-credentials
+            - urn:open-customer:problem:must-change-password
+            - urn:open-customer:problem:forbidden-origin
+            - urn:open-customer:problem:setup-closed
+            - urn:open-customer:problem:setup-token-invalid
+            - urn:open-customer:problem:overlap
+            - urn:open-customer:problem:duplicate-phone
+            - urn:open-customer:problem:invalid-transition
+            - urn:open-customer:problem:payload-too-large
+            - urn:open-customer:problem:unsupported-media-type
+            - urn:open-customer:problem:rate-limited
+            - urn:open-customer:problem:internal
+        title:
+          type: string
+        status:
+          type: integer
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+        retry_after_s:
+          type: integer
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string

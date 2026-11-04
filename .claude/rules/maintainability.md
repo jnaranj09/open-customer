@@ -13,8 +13,9 @@ Every change keeps these rules. Each one names its sensor, or says "prose only".
 
 - **Search before you write.** Look for the existing helper, component or type before adding one. No
   new abstraction without a second real caller. Inline a shared helper once it grows a flag or branch
-  for one caller. Sensor: golangci-lint `dupl` (Go); jscpd (web, `.svelte` included; both in
-  `make lint`).
+  for one caller. Sensor: golangci-lint `dupl` (Go); jscpd (web, configured for `.svelte`, not yet
+  shown: no `.svelte` file reaches `minTokens`; both in `make lint`). jscpd fails when it analyzes no files
+  (`failOnEmpty`); a partly empty scan still passes.
 - **One owner per shared value.** A value two places must agree on (a port, a size, a color, a list
   one side mirrors) is defined once, and the other side imports it. Where one side cannot import the
   other (Go and TypeScript, CSS and code), a test reads both sides and fails when they drift. Sensor:
@@ -41,7 +42,8 @@ Every change keeps these rules. Each one names its sensor, or says "prose only".
   missing is a failure. Sensor: guard `catch-blocks`, `errcheck` + `nilerr` (Go); per-surface tests.
 - **A contained error logs a stable `code=<token>`, never the value.** Never log a request body, a
   parsed value, a client's name or phone, a raw error message from outside input, a token or a file
-  path. Prose only.
+  path, except the setup link `serve` and `setup-link` print by design (design doc 'Auth, sessions
+  and handover'): one plain stdout line, never a slog record. Prose only.
 - **A guard that stays green when the code it protects is broken is not a guard.** Break the code,
   see it red, restore. Prose only (reviewer step 2).
 - **"Why" comments stay.** A comment that states a constraint or an incident is kept; a commit that

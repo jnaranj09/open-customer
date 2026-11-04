@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"math"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -40,6 +42,12 @@ var rows = map[string]row{
 	"unsupported-media-type": {http.StatusUnsupportedMediaType, "Tipo de archivo no permitido"},
 	"rate-limited":           {http.StatusTooManyRequests, "Demasiados intentos. Espera un momento"},
 	"internal":               {http.StatusInternalServerError, "Algo salió mal"},
+}
+
+// Names returns the problem names of the error table, sorted. The httpapi drift test compares
+// them with the Problem.type enum in api/openapi.yaml.
+func Names() []string {
+	return slices.Sorted(maps.Keys(rows))
 }
 
 // problemError is implemented by every value below.

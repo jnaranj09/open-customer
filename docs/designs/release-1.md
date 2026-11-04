@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Proposed
+*   **Status:** Accepted. P0–P2 are built; P3 is next (it needs an owner interview first).
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
 
@@ -300,7 +300,7 @@ Monorepo. The Go module is the repo root. The web app lives in `web/`.
 cmd/open-customer/        main + subcommands
 api/openapi.yaml          the API contract (OpenAPI 3.0.3), source of truth
 internal/
-  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457)
+  platform/               config, logging, clock, ids (UUIDv7), errors (RFC 9457), backupstatus (reads status.json)
   db/                     pgx pool, migrations (goose, embedded), sqlc output
   httpapi/                generated server interface, handlers that call domain modules, middleware (incl. the Origin check)
   auth/                   users, sessions, setup tokens, rate limiting
@@ -591,7 +591,7 @@ sequenceDiagram
 
 ### Auth, sessions and handover
 
-1.  First, on start, if no user exists, `serve` deletes any old setup token, creates a new one (valid 24 h, stored as a hash) and logs `Setup: <PUBLIC_URL>/setup#<token>`. Only the hash is stored, so an old link cannot be printed again; a restart or `setup-link` makes a new one and the old link stops working.
+1.  First, on start, if no user exists, `serve` deletes any old setup token, creates a new one (valid 24 h, stored as a hash) and prints `Setup: <PUBLIC_URL>/setup#<token>` to stdout as one plain line, not a log record (the one exception to "never log a token"). Only the hash is stored, so an old link cannot be printed again; a restart or `setup-link` makes a new one and the old link stops working.
 2.  Then `/setup` runs the wizard. `POST /setup` creates the settings row, the owner user and her first session in one transaction, and deletes all setup tokens. From then on `/setup` answers `setup-closed`.
 3.  The icon is uploaded after that, as the wizard's last branding step, because the upload needs the new session: `POST /settings/icon` with two PNGs. Icons are stored as files under `media/branding/` and recorded only by `icon_updated_at`; they are not rows in `media`, whose rows need a client. This still happens before the install step (see "Branding and the manifest").
 4.  After that, in the installed PWA (separate cookie storage from Safari), she logs in with her username and password.
@@ -602,7 +602,7 @@ Session and request rules:
 *   **Username:** trimmed and lowercased by the server on setup and login, then 3–32 characters of `a–z`, `0–9`, `.`, `_` and `-` (422 otherwise). The inputs use `autocapitalize="off"`, `autocorrect="off"` and `autocomplete` (`username`, `new-password`, `current-password`), so iOS does not capitalize the first letter and iCloud Keychain can fill them.
 *   **Tokens:** the setup token and the session token are 32 random bytes, written as unpadded base64url in the link and the cookie, and stored as a SHA-256 hash.
 *   **Session cookie:** `oc_session`. `HttpOnly; Secure; SameSite=Lax; Path=/`. `Secure` is left off only when `PUBLIC_URL` is `http://localhost` or `http://127.0.0.1` (development and e2e), because WebKit does not store a `Secure` cookie over plain http. 90-day expiry that slides forward. `last_seen_at` is written at most once per hour per session; the same write extends `expires_at` and re-sends the cookie with a new 90-day `Max-Age`.
-*   **Writes:** every non-GET request must have an `Origin` header equal to `PUBLIC_URL`, or it gets a 403. The check is the same in development: `make dev` sets `PUBLIC_URL` to the Vite address (item 2).
+*   **Writes:** every request except GET and HEAD must have an `Origin` header equal to `PUBLIC_URL`, or it gets a 403. The check is the same in development: `make dev` sets `PUBLIC_URL` to the Vite address (item 2).
 *   **Login rate limit:** 5 attempts per minute per client IP, plus a growing delay per username after failures (exact rule in item 41). The client IP is `CF-Connecting-IP` only when the TCP peer is in `TRUSTED_PROXY_CIDRS` (default: the private ranges, which include the Compose network). Otherwise it is the TCP peer address.
 *   **No device list:** there is no screen that lists sessions. If she loses a phone, she changes her password from another device (Ajustes → "Cambiar contraseña"), which closes every other session (item 39). If she has no other device, the author runs `reset-password`, which closes all of them.
 
@@ -610,7 +610,7 @@ This replaces the brief's one-time code (Alternative K1).
 
 ### Branding and the manifest
 
-*   `GET /manifest.webmanifest` is generated from settings and served with `Cache-Control: no-cache`. Fields: `name` (business name), `short_name` (the business name cut to 12 characters), `start_url: "/"`, `scope: "/"`, `display: "standalone"`, `theme_color` and `background_color` (the accent color), `lang` (the locale), and `icons` (512 px, `purpose: "any"`). The service worker never caches it, so iOS reads the current name at install.
+*   `GET /manifest.webmanifest` is generated from settings and served with `Cache-Control: no-cache`. Fields: `name` (business name), `short_name` (the business name cut to 12 characters), `start_url: "/"`, `scope: "/"`, `display: "standalone"`, `theme_color` and `background_color` (the accent color), `lang` (the locale), and `icons` (512 px, `purpose: "any"`). The service worker never caches it, so iOS reads the current name at install. Before setup (no settings row) the manifest has `name` and `short_name` "open-customer", `lang: "es"`, no colors, and the default icons.
 *   Icon upload: the phone crops the image to a square, resizes it to 512 px and 180 px PNGs, and uploads both. They are served at `/icons/512.png` and `/apple-touch-icon.png` with `Cache-Control: no-cache`, and Cloudflare does not cache them (see "Deployment"). If no icon was uploaded, the built-in default is served at the same paths. iOS copies the name and icon only when the app is added to the Home Screen, so the wizard sets them before the install step, and a later change shows only after she reinstalls it. The files are `media/branding/icon-512.png` and `icon-180.png`.
 
 ### Photos
@@ -1261,8 +1261,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 | Phase | Items | What exists at the end | Exit check |
 | --- | --- | --- | --- |
-| P0 Repo and tooling | 1–10, 17 (`version`), 20–24, 36, 62–63 (plus the placeholder page) | Module, `Makefile`, `web-stub`, the web toolchain, lint config, CI, the platform packages | CI green: `make lint test vuln build check-pins` |
-| P1 Database and HTTP skeleton | 15–16 (`GET /setup/status` only), 17 (`serve`), 18 (P1 steps), 25–32, 33 (`handlers_auth.go`: `GET /setup/status` only), 34 (steps 1–5), 35, 37 (middleware steps 1–5, problem JSON, static), 40 (`SetupNeeded` only), 60 (`/healthz`, `/readyz`), 61, 66 (`schema.d.ts` only, generated by `make generate`) | `serve` migrates an empty DB and serves `/healthz`, `/readyz`, `GET /api/v1/setup/status` and the placeholder page | `make check-generated test test-db`; `go run ./cmd/open-customer serve` against Docker Postgres returns 200 on `/readyz` and `{"needs_setup":true}` on `/api/v1/setup/status` |
+| P0 Repo and tooling | 1–5, 7–10, 17 (`version`), 20–24, 36, 62–63 (plus the placeholder page) | Module, `Makefile`, `web-stub`, the web toolchain, lint config, CI, the platform packages | CI green: `make lint test vuln build check-pins` |
+| P1 Database and HTTP skeleton | 6 (`sqlc.yaml`; it needs the migrations, so it moved here from P0), 15–16 (`GET /setup/status` only), 17 (`serve`), 18 (P1 steps), 25–32, 33 (`handlers_auth.go`: `GET /setup/status` only), 34 (steps 1–5), 35, 37 (middleware steps 1–5, problem JSON, static), 40 (`SetupNeeded` only), 60 (`/healthz`, `/readyz`), 61, 66 (`schema.d.ts` only, generated by `make generate`) | `serve` migrates an empty DB and serves `/healthz`, `/readyz`, `GET /api/v1/setup/status` and the placeholder page | `make check-generated test test-db`; `go run ./cmd/open-customer serve` against Docker Postgres returns 200 on `/readyz` and `{"needs_setup":true}` on `/api/v1/setup/status` |
 | P2 Auth, setup and settings | 17 (`reset-password`, `setup-link`, `healthcheck`), 18 (P2 step), 19, 33 (auth, settings), 34 (steps 6–8), 37 (session and `must_change_password` steps), 38–42, 44 | Setup link, owner creation (no starter content yet), login, sessions, settings, manifest, icons | `make test test-db cover` (gate: `auth`); with `curl -H "Origin: $PUBLIC_URL"`: setup → login → `GET /me` → logout |
 | P3 Catalog | 33 (catalog), 37 (409 overlap responses), 45–54 | Attributes, clients, services, appointments, media, templates | `make test test-db cover` (gates added: `attributes`, `appointments`, `templates`) |
 | P4 Reminders, push and export | 18 (P4 steps), 33 (reminders and `POST /templates/preview`, push, export, status, bootstrap), 43, 55–59, 60 (`Status()`, client errors) | Due list, reminder log, daily push, export, the status screen data, starter content wired into setup | `make test test-db cover` (gate added: `reminders`); a `db`-tagged Go test in `internal/reminders` inserts the CUJ 4 and 5 rows, and `GET /reminders/due` returns those items; a fresh setup creates the starter template, rule and attribute |
@@ -1298,7 +1298,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | Target | What it runs |
     | --- | --- |
     | `generate` | oapi-codegen, sqlc, openapi-typescript (from P1; P0 has no spec or queries) |
-    | `check-generated` | `generate`, then fails if `git status --porcelain` shows any change, so new untracked generated files are caught too |
+    | `check-generated` | `generate`, then fails if `git status --porcelain` shows a change under `internal/httpapi/gen`, `internal/db/sqlc` or `web/src/lib/api/schema.d.ts`, so modified and new untracked generated files are caught, but unrelated uncommitted work is not |
     | `check-pins` | Runs `scripts/check-pins.sh`. Scans only `deploy/compose.yaml`, `deploy/backup/Dockerfile`, `.github/workflows/ci.yml` and the root `Dockerfile` (each once it exists; never `docs/` or `*.md`). Fails if a `postgres:` tag differs from `PG_IMAGE`, if the `Dockerfile`'s `node:`, `golang:` and `pnpm@` versions differ from `engines.node`, the `toolchain` line and `packageManager`, or if the CI golangci-lint `version:` differs from `GOLANGCI_LINT_VERSION` (see "Pins") |
     | `web-stub` | Creates `web/build/index.html` with the text "Run make web" if the file is missing. Never overwrites a real build. |
     | `node-check` | Fails unless `node --version` equals `engines.node` (with fnm: `fnm use` in `web/`). `web`, `test` and `lint` depend on it |
@@ -1308,12 +1308,12 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `test-db` | `web-stub`, then Go tests tagged `db` |
     | `vuln` | `web-stub`, then `govulncheck` on `$(GO_PKGS)` |
     | `e2e` | `build`; then drop and recreate the e2e database (`dropdb --if-exists` and `createdb` with `psql` tools against the maintenance database; locally through `docker exec` on the `dev` container); then Playwright (item 79). If `E2E_DATABASE_URL` is already set (CI sets it to its service container), that database is used and no container is started. Otherwise the target starts the `dev` Postgres container if needed and uses `open_customer_e2e` on it. |
-    | `lint` | `web-stub`, then golangci-lint on `$(GO_DIRS)` (installed by the Makefile into `bin/tools/golangci-lint-<version>/`; CI passes `GOLANGCI_LINT=golangci-lint` from its action), `go tool deadcode -test` against an exact `DEADCODE_BUDGET`, shellcheck on every `*.sh`, `pnpm check` (`svelte-kit sync` + svelte-check), and `pnpm lint` (eslint, prettier check, knip, jscpd) |
-    | `cover` | `web-stub`, then `go test -tags db -coverprofile` for each package in `COVER_PKGS`; fails if any package's total (`go tool cover -func`) is below 90%. `COVER_PKGS` grows by phase: `auth` (P2); `attributes`, `appointments`, `templates` (P3); `reminders` (P4) |
-    | `dev` | `web-stub`, then Docker Postgres (`PG_IMAGE`), `go run ./cmd/open-customer serve` on `:8080`, and the Vite dev server on `:5173` with the proxy from item 63. Env and the Origin rule are below the table. |
+    | `lint` | `web-stub`, then `go mod tidy -diff` (fails on `go.mod` or `go.sum` drift), golangci-lint on `$(GO_DIRS)` (installed by the Makefile into `bin/tools/golangci-lint-<version>/`; CI passes `GOLANGCI_LINT=golangci-lint` from its action), `go tool deadcode -test -tags db` (so the db-tagged tests are roots and the `dbtest` helper is not dead) against an exact `DEADCODE_BUDGET`, shellcheck on every `*.sh`, `pnpm check` (`svelte-kit sync` + svelte-check), and `pnpm lint` (eslint, prettier check, knip, jscpd) |
+    | `cover` | `web-stub`, then `go test -tags db -coverprofile` for each package in `COVER_PKGS`; writes `coverage-<name>.out` and fails, naming the package, if any package's total (`go tool cover -func`) is below `COVER_FLOOR` (90.0). `COVER_PKGS` grows by phase: `auth` (P2); `attributes`, `appointments`, `templates` (P3); `reminders` (P4) |
+    | `dev` | `web-stub`, then Docker Postgres (`PG_IMAGE`) in the container `open-customer-dev` on host port `DEV_PG_PORT` (default `5433`; started or reused, password `devpassword`, dev only), the binary built to `bin/dev/open-customer` running `serve` on `:8080` in the background, and the Vite dev server on `:5173` in the foreground with the proxy from item 63. A `trap` stops `serve` when Vite exits; it runs the built binary, not `go run`, because `go run` does not pass SIGTERM on to the server. Env and the Origin rule are below the table. |
     | `image` | `docker build --build-arg VERSION=$(VERSION)` of the app image |
 
-    *   **`dev` env:** the Go server gets `PUBLIC_URL=http://localhost:5173`, `DB_*` for the container, `VAPID_SUBJECT=mailto:dev@localhost` and `ALLOW_MIGRATE_WITHOUT_BACKUP=true` (there is no backup status file in dev). The browser's `Origin` is `http://localhost:5173`, and the Vite proxy forwards it unchanged, so the Origin check passes.
+    *   **`dev` env:** the Go server gets `PUBLIC_URL=http://localhost:5173`, `DB_HOST=localhost`, `DB_PORT=$(DEV_PG_PORT)` and `DB_PASSWORD=devpassword` for the container, `VAPID_SUBJECT=mailto:dev@localhost` and `ALLOW_MIGRATE_WITHOUT_BACKUP=true` (there is no backup status file in dev). The browser's `Origin` is `http://localhost:5173`, and the Vite proxy forwards it unchanged, so the Origin check passes.
     *   `VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)`. The same value goes to `-ldflags`, the web build and `make image`; the release workflow sets it from the tag.
     *   `GO_PKGS := $(shell go list -e ./... | grep -v /node_modules/)`. Every Go target uses it instead of a bare `./...`, so Go never walks into `web/node_modules` (some npm packages ship `.go` files). golangci-lint takes directories, not import paths, so `lint` uses `GO_DIRS` (the same list as `./`-relative folders).
     *   **Targets by phase:** P0 has `check-pins`, `node-check`, `web-stub`, `web`, `build`, `test`, `vuln`, `lint` and `image`. `generate` and `check-generated` come in P1, `test-db` in P1, `cover` in P2, `dev` in P1 (it needs `serve`), `e2e` in P6.
@@ -1334,7 +1334,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 5. `.golangci.yml` (Create)
 
 *   **Type / Scope**: Lint config.
-*   **Proposed Changes**: Enable `govet`, `staticcheck`, `errcheck`, `gosec`, `revive`, `depguard`, plus `exhaustive` (a `default` does not count as covering the cases), `wrapcheck`, `nilerr`, `nolintlint` (a reason and a linter name are required), `thelper`, `tparallel`, `unused` and `dupl` (threshold 80: a pasted 20-line function trips it), from `TASKS.md` T4, T5 and T7; `gofmt` as formatter. Tests are excluded from `dupl` and `wrapcheck`. Lint runs on `$(GO_DIRS)` through `make lint`, also in CI, so `web/node_modules` is never loaded. `depguard` enforces only the coarse module rules: no domain package imports `internal/httpapi` or `internal/httpapi/gen`; `internal/auth` imports no domain package; nothing outside `httpapi`, `scheduler`, `starter` and `cmd/open-customer` imports `internal/reminders`; and only `cmd/open-customer` imports `internal/starter`. The per-module list of allowed domain imports ("Code layout and module rules") is checked in review, not by lint, so the config stays small.
+*   **Proposed Changes**: Enable `govet`, `staticcheck`, `errcheck`, `gosec`, `revive`, `depguard`, plus `exhaustive` (a `default` does not count as covering the cases), `wrapcheck`, `nilerr`, `nolintlint` (a reason and a linter name are required), `thelper`, `tparallel`, `unused` and `dupl` (threshold 80: a pasted 20-line function trips it), from `TASKS.md` T4, T5 and T7; `gofmt` as formatter. Tests are excluded from `dupl` and `wrapcheck`. `internal/platform/problem/messages.go` is excluded from gosec G101 only: it reads a Spanish message constant named `MsgPasswordTooShort` as a credential. `internal/auth/sessions.go` is excluded from gosec G124 only: the session cookie's `Secure` follows `PUBLIC_URL` and is false only for plain-http localhost (development and e2e), where WebKit drops a `Secure` cookie ("Session and request rules"). `run.build-tags: [db]` makes lint also check the `db`-tagged tests. Lint runs on `$(GO_DIRS)` through `make lint`, also in CI, so `web/node_modules` is never loaded. `depguard` enforces only the coarse module rules: no domain package imports `internal/httpapi` or `internal/httpapi/gen`; `internal/auth` imports no domain package; nothing outside `httpapi`, `scheduler`, `starter` and `cmd/open-customer` imports `internal/reminders`; and only `cmd/open-customer` imports `internal/starter`. The per-module list of allowed domain imports ("Code layout and module rules") is checked in review, not by lint, so the config stays small.
 
 ##### 6. `sqlc.yaml` (Create)
 
@@ -1347,7 +1347,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `uuid` | true | `github.com/google/uuid.NullUUID` |
     | `jsonb` | false | `encoding/json.RawMessage` |
     | `timestamptz` | false | `time.Time` |
-    | `timestamptz` | true | `time.Time` with `pointer: true` (the object form of `go_type`; check the exact syntax against the pinned sqlc at P1) |
+    | `timestamptz` | true | `time.Time` with `pointer: true` (the object form of `go_type`: `go_type: {import: time, type: Time, pointer: true}`; verified against sqlc 1.31.1, which generates `*time.Time`) |
     | `date` | false | `time.Time` |
 
     Nullable `text`, `int` and `bigint` become pointers through `emit_pointers_for_null_types`.
@@ -1374,7 +1374,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | Step | From phase |
     | --- | --- |
     | Setup: `actions/checkout` with `fetch-depth: 0`, `actions/setup-go`, `pnpm/action-setup`, `actions/setup-node`, `pnpm install --frozen-lockfile` in `web/`, `golangci/golangci-lint-action` with `install-only: true` and the pinned `version:` | P0 |
-    | Secret scan: `gitleaks/gitleaks-action` over the whole history (no license key is needed for a personal account) | P0 |
+    | Secret scan: `gitleaks/gitleaks-action` over the whole history (no license key is needed for a personal account). Reviewed false positives are listed by fingerprint, each with its reason, in `.gitleaksignore` (today the item 19 temp-password alphabet and one made-up hash fixture in a test) | P0 |
     | `pnpm audit --audit-level high` in `web/` | P0 |
     | `make check-pins` | P0 |
     | `make lint GOLANGCI_LINT=golangci-lint` | P0 |
@@ -1517,6 +1517,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `PATCH` | `application/json`. An absent field is unchanged; `null` clears a nullable field. `attrs` is merged by key, and a key set to `null` is removed. `archived: true/false` archives or restores. |
     | Lists | `{items: [...]}`, with every matching row. No paging (see "API"). |
     | Errors | `type` is `urn:open-customer:problem:<name>`. Every name, status, Spanish `title` and extension field is in the error table below. |
+    | Error responses | Each operation lists the problem statuses its own handler answers, plus a `default` response (`$ref: "#/components/responses/Problem"`) for the ones the middleware (item 34) can answer on any route: 403 `forbidden-origin` (every method but GET and HEAD), 403 `must-change-password` (step 8, public routes included) and 500 `internal`. One `default` per operation, not a 403 and a 500 entry per operation, because those answers do not depend on the route, and the web `schema.d.ts` then types every non-2xx answer as a `Problem`. `TestEveryOperationHasADefaultProblemResponse` fails an operation without it. |
 
     **Errors** (`application/problem+json`; `title` is shown to her as is)
 
@@ -1579,7 +1580,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `POST /reminders/log` | `LogEntry`. An unknown `rule_id` or `appointment_id` is 422, not a foreign-key 500. | 201, or 200 when the row already existed |
     | `POST /push/subscriptions` | the browser's `PushSubscription` JSON (`endpoint`, `keys.p256dh`, `keys.auth`) | 201 `{id}` for a new endpoint, 200 `{id}` for a known one (keys updated) |
     | `POST /media` | multipart: `full` (JPEG, ≤ 10 MB), `thumb` (JPEG, ≤ 1 MB), `client_id?`, `appointment_id?` (at least one; the request is ≤ 12 MB). The server always stores `client_id`: with `appointment_id`, it is filled from the appointment; a different one is 422 (see "Photos"). | 201 `Media` |
-    | `POST /settings/icon` | multipart: `icon512`, `icon180` (PNG, each ≤ 1 MB; the PNG signature is checked, otherwise 415) | 204 |
+    | `POST /settings/icon` | multipart: `icon512`, `icon180` (PNG, each ≤ 1 MB; the request is ≤ 3 MB; the PNG signature is checked, otherwise 415) | 204 |
     | `POST /client-errors` | `message`, `stack?`, `app_version`, `route` | 204 |
 
     **`PATCH` bodies** (every field optional; `?` = may be `null` to clear)
@@ -1621,7 +1622,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 16. `api/oapi-codegen.yaml` (Create)
 
 *   **Type / Scope**: Generator config.
-*   **Proposed Changes**: Package `gen`, output `internal/httpapi/gen/api.gen.go`, `generate: {std-http-server: true, models: true, embedded-spec: true}`, `output-options: {nullable-type: true}` (see item 15 for `x-go-type` and nullable fields). No `strict-server`: the plain interface gives each handler `(w, r, params)`, so headers, multipart and streaming need no workaround. The cost is that Go does not check at compile time which status and body a handler writes; the handler tests (item 37) and e2e cover that.
+*   **Proposed Changes**: Package `gen`, output `internal/httpapi/gen/api.gen.go`, `generate: {std-http-server: true, models: true, embedded-spec: true}`, `output-options: {nullable-type: true}` (see item 15 for `x-go-type` and nullable fields). No `compatibility` flags: middleware steps 7 and 8 read `security` and the `x-oc-` extension from the embedded spec (item 34), not from generated context values (the scopes-on-context flag is deprecated and fails open for a route it does not mark). No `strict-server`: the plain interface gives each handler `(w, r, params)`, so headers, multipart and streaming need no workaround. The cost is that Go does not check at compile time which status and body a handler writes; the handler tests (item 37) and e2e cover that.
 
 #### Command
 
@@ -1637,7 +1638,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     1.  Loads config and opens the pool. (P1)
     2.  Runs `db.Migrate` with the backup guard. (P1)
     3.  Ensures the VAPID keys exist. (P4)
-    4.  Prints the setup link if there are no users. (P2)
+    4.  Prints the setup link if there are no users: `Setup: <PUBLIC_URL>/setup#<token>`, one plain stdout line, not slog (see "Auth, sessions and handover"). `NewSetupToken` runs in its own `db.WithTx`. (P2)
     5.  Builds the modules and `httpapi.Server`. (P1, with each phase adding its modules)
     6.  Starts `scheduler.Run`. (P4)
     7.  Serves on `:8080`. (P1)
@@ -1647,9 +1648,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Admin subcommands.
 *   **Proposed Changes**:
-    *   `reset-password <username>`: prints a random 12-character temporary password from `crypto/rand` over `a–z`, `A–Z` and `2–9` without look-alike characters (no `0`, `O`, `1`, `l`, `I`), and sets `must_change_password`.
-    *   `setup-link`: only when no user exists; deletes old tokens and prints a new 24 h link.
-    *   `healthcheck`: GET `http://127.0.0.1:8080/healthz`, exit 0 or 1.
+    *   `reset-password <username>`: prints a random 12-character temporary password from `crypto/rand` over `a–z`, `A–Z` and `2–9` without look-alike characters (no `0`, `O`, `1`, `l`, `I`), and sets `must_change_password`. The username is normalized like login; an unknown one exits 1 with "no such user".
+    *   `setup-link`: only when no user exists (otherwise exit 1, "setup is already complete"); deletes old tokens and prints a new 24 h link, `<PUBLIC_URL>/setup#<token>`.
+    *   `healthcheck`: GET `http://127.0.0.1:8080/healthz` with a 3 s timeout; exit 0 on 200, otherwise 1. It reads no config, so it runs in the distroless image with no environment.
+    *   `reset-password` and `setup-link` do not migrate: only `serve` does, behind the backup guard. If migrations are pending they exit 1 with "migrations pending; start serve first". Their stdout carries only the password or the link; every error goes to stderr.
+    *   A wrong argument count prints `usage: open-customer serve|reset-password <username>|setup-link|healthcheck|version` and exits 1.
 
 #### Platform
 
@@ -1681,20 +1684,21 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `Write(w, r, err)`: picks the row, writes `application/problem+json` with the status, the Spanish `title` and the extension fields, and logs `internal` errors with the request ID.
     *   Handlers write these errors with `problem.Write`. A JSON body that cannot be decoded is `validation` (the shared `decodeJSON` helper, item 32). Path and query binding errors (a bad UUID in `{id}`, a bad `from` date) are raised by the generated wrapper, and `StdHTTPServerOptions.ErrorHandlerFunc` (item 32) maps them to `validation`. Middleware (item 34) calls `problem.Write` for 401, 403 and the panic 500. `auth.Login` and `status.LogClientError` return `RateLimited`, and their handlers write the 429.
     *   For `RateLimited`, `problem.Write` also sets the `Retry-After` header.
+    *   `messages.go` holds the Spanish `errors[].message` texts as named constants (OP14), for example `MsgUsernameInvalid` and `MsgPasswordTooShort`. Modules build `Validation` errors with these constants; no field message is written inline.
 
 #### Database
 
 ##### 25. `internal/db/db.go` (Create)
 
 *   **Type / Scope**: Connection.
-*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`, which begins the transaction with `opts` (read-write for every non-GET handler; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
+*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`. `pool` is a `db.Beginner`: the `*pgxpool.Pool`, or in a test a fake whose `Commit` fails (item 37). `WithTx` begins the transaction with `opts` (read-write for every non-GET handler; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
 
 ##### 26. `internal/db/migrate.go` (Create)
 
 *   **Type / Scope**: Migrations.
 *   **Proposed Changes**: Embeds `migrations/*.sql` with `//go:embed migrations/*.sql` and passes `fs.Sub(embedFS, "migrations")` to goose, because the Provider looks for files at the root of the FS it gets. Opens a `*sql.DB` from the pool with `pgx/v5/stdlib` (`stdlib.OpenDBFromPool`), then runs these steps:
     1.  Build a goose v3 `Provider` (`goose.NewProvider(goose.DialectPostgres, db, fs)`). The pinned goose version must include `HasPending` (check it when pinning).
-    2.  Unless `ALLOW_MIGRATE_WITHOUT_BACKUP=true`, return an error when all three conditions from "Upgrades and the migration guard" hold: `HasPending` is true, AND the goose version (the Provider's `GetDBVersion`) is above 0, AND `last_copy_at` in `BACKUP_STATUS_FILE` (default `/backup-status/status.json`) is missing or more than 60 minutes old.
+    2.  Unless `ALLOW_MIGRATE_WITHOUT_BACKUP=true`, return an error when all three conditions from "Upgrades and the migration guard" hold: `HasPending` is true, AND the goose version (the Provider's `GetDBVersion`) is above 0, AND `last_copy_at` in `BACKUP_STATUS_FILE` (default `/backup-status/status.json`, read with `backupstatus.Read`) is missing or more than 60 minutes old.
     3.  Call `Up`.
 
     It also exports `Version(ctx, pool)` (the goose version) and `HasPending(ctx, pool)`, for `status` and `/readyz`.
@@ -1714,7 +1718,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
         *   `id` is `uuid PRIMARY KEY` (no default; the server sets UUIDv7).
         *   A `*_id` column is `uuid NOT NULL REFERENCES <table>(id)` unless it is marked `NULL`. Targets that are not obvious: `template_id` → `message_templates`, `rule_id` → `reminder_rules`, `attribute_id` → `attribute_definitions`.
         *   `created_at` and `updated_at` are `timestamptz NOT NULL DEFAULT now()`. `archived_at`, `used_at` and `last_seen_at` are `timestamptz NULL`. `expires_at` is `timestamptz NOT NULL`.
-        *   `name`, `label`, `storage_key`, `thumb_key`, `content_type`, `color`, `endpoint`, `p256dh` and `auth` are `text NOT NULL`. `notes` and `body` are `text NULL` where "Data model" gives no type (`message_templates.body` is `NOT NULL`). `server_keys.value` and `scheduler_state.value` are `text NOT NULL`. `position` is `int NOT NULL`, except `appointment_services.position`, which is `smallint`. `starts_at`, `ends_at` and `acted_at` are `timestamptz NOT NULL`; `appointment_services.duration_min` is `int NOT NULL`.
+        *   `name`, `label`, `storage_key`, `thumb_key`, `content_type`, `color`, `endpoint`, `p256dh` and `auth` are `text NOT NULL`. `notes` and `body` are `text NULL` where "Data model" gives no type (`message_templates.body` is `NOT NULL`). `server_keys.value` and `scheduler_state.value` are `text NOT NULL`. `position` is `int NOT NULL`, except `appointment_services.position`, which is `smallint`. `starts_at`, `ends_at` and `acted_at` are `timestamptz NOT NULL`; `appointment_services.duration_min` is `int NOT NULL`; `appointment_services.service_id` is `uuid NOT NULL REFERENCES services(id)`; `media.bytes`, `media.width` and `media.height` are `int NOT NULL`.
     *   **Foreign keys:** every reference uses the default `NO ACTION`, because release 1 never hard-deletes, with three exceptions that use `ON DELETE CASCADE`: `appointment_services.appointment_id`, `sessions.user_id` and `push_subscriptions.user_id`. `attribute_options.parent_id` references `attribute_options(id)`.
     *   **Extra CHECKs:** `ends_at > starts_at`; `duration_min > 0`; `price_cents`, `total_cents` and `paid_cents` `>= 0`; `offset_days >= 0`; `kind <> 'come_back' OR offset_days > 0`.
     *   **Extra indexes** the queries need: `appointments(ends_at) WHERE status NOT IN ('cancelled','no_show')`, `reminder_log(appointment_id)`, `media(client_id)`, `media(appointment_id)`, `sessions(user_id)`, `attribute_options(attribute_id)`.
@@ -1745,17 +1749,19 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: Server implementation.
 *   **Proposed Changes**: The `Server` struct holds the pool and the module values (concrete types), and implements `gen.ServerInterface`.
     *   Mounting: `gen.HandlerWithOptions(server, gen.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: mux, ErrorHandlerFunc: <writes a validation problem>})`.
+    *   `New` refuses an `Options` without one of the module values (`Auth`, `Settings`, `Status`), so a module `serve` forgot to pass fails at startup, not on the first request that reaches it.
     *   A catch-all `/api/` handler answers every unknown path and every wrong method under `/api/` with 404 `not-found` problem JSON. Without it, the `/` fallback in item 35 would answer them with `index.html` and a 200.
     *   Handler shape: generated handlers take `(w, r, <path params>, params)`, for example `(w, r, id, params)`.
-    *   Shared helpers: `decodeJSON(w, r, &v)` (decodes into the generated request type with `DisallowUnknownFields`, because the web client is ours and an unknown field is a bug; then calls the type's hand-written `Validate() error` where a field has rules; a body over the limit, `*http.MaxBytesError`, gives `payload-too-large`; any other decode failure gives `validation`; the multipart readers check `MaxBytesError` the same way) and `writeJSON(w, status, v)`. Response values are the generated `gen` types, so field names come from the spec.
-    *   Body limits: before the generated routes, `server.go` wraps `r.Body` in `http.MaxBytesReader` for `POST /api/v1/media` (12 MB) and `POST /api/v1/settings/icon` (2 MB). Every other JSON body is limited to 1 MB. A body over the limit answers `payload-too-large`.
+    *   Shared helpers: `decodeJSON(w, r, &v)` (decodes into the generated request type with `DisallowUnknownFields`, because the web client is ours and an unknown field is a bug; then calls the type's hand-written `Validate() error` where a field has rules; a body over the limit, `*http.MaxBytesError`, gives `payload-too-large`; any other decode failure gives `validation`; the multipart readers check `MaxBytesError` the same way) ; `decodePatch(w, r, &v, nullable...)` for every `PATCH` body: `decodeJSON`, plus a top-level field sent as `null` is `validation` on that field unless the endpoint lists it as nullable (the `?` fields of the `PATCH` table; the generated patch fields are pointers, so a `null` would otherwise read as "not sent"), and a bare `null` body is `validation`; and `writeJSON(w, status, v)`. Response values are the generated `gen` types, so field names come from the spec.
+    *   Body limits are applied by the code that reads the body, not by path in `server.go`: `decodeJSON` wraps `r.Body` in `http.MaxBytesReader` at 1 MB and also rejects trailing data after the value; each multipart handler wraps it with its own limit, `POST /media` (12 MB) and `POST /settings/icon` (3 MB). A body over the limit answers `payload-too-large`.
+    *   The SPA handler (item 35) is mounted on `/` for GET and HEAD only; any other method on a path outside `/api/` gets 405 with `Allow: GET, HEAD`. (`GET /` cannot be registered next to the method-less `/api/` catch-all: the standard mux rejects the pair as conflicting.)
 
     **Module methods.** Every method also takes `ctx` and `q db.DBTX` first; they are left out below. Types are the module's own structs, named after the API schemas (item 15). `scheduler` and `starter` are not called by `httpapi`.
 
     | Module | Methods |
     | --- | --- |
-    | `auth` | `SetupNeeded() bool`; `NewSetupToken() string`; `CompleteSetup(SetupInput) (Me, token)` (the handler opens the transaction); `Login(LoginInput, ip) (Me, token)`; `Logout(token)`; `Authenticate(token) (Me, Session, refreshed bool)` (`refreshed` tells the middleware to re-send the cookie); `ChangePassword(session, current, new)` (keeps that session, revokes the others, clears `must_change_password`); `ResetPassword(username) tempPassword` |
-    | `settings` | `Get() Settings`; `Create(SettingsInput) Settings` (called only through `auth` setup; `cmd` wraps it in a closure that drops the returned `Settings`, to match the creator type in item 40); `Update(SettingsPatch) Settings`; `Countries() []string`; `SetIcons(icon512, icon180 []byte)`; `Manifest() []byte`; `Icon(size) ([]byte, updatedAt)` |
+    | `auth` | `SetupNeeded() bool`; `NewSetupToken() string`; `CompleteSetup(SetupInput) (Me, token)` (the handler opens the transaction); `Login(LoginInput, ip) (Me, token)` (an unknown username is still verified, against a fixed dummy hash, so the response time does not reveal which usernames exist; OP17); `Logout(session)` (the session middleware step 6 loaded, so the cookie is parsed only there); `Authenticate(token) (Me, Session, refreshed bool)` (`refreshed` tells the middleware to re-send the cookie); `ChangePassword(session, current, new)` (keeps that session, revokes the others, clears `must_change_password`; a wrong `current` counts toward the per-username delay, item 41); `ResetPassword(username) tempPassword` |
+    | `settings` | `Get() Settings`; `Create(SettingsInput) Settings` (called only through `auth` setup; `cmd` wraps it in a closure that drops the returned `Settings`, to match the creator type in item 40); `Update(SettingsPatch) Settings`; `SetIcons(icon512, icon180 []byte)`; `Manifest() []byte`; `Icon(size) ([]byte, updatedAt)`. `Countries() []string` is a package-level function with no `q`, not a method. |
     | `attributes` | `List() []Attribute`; `Create(AttributeInput) Attribute`; `Update(id, AttributePatch) Attribute`; `AddOption(attrID, OptionInput) Option`; `UpdateOption(attrID, optionID, OptionPatch) Option`; `Validate(scope, attrs, touchedKeys, isCreate) (attrs, error)` |
     | `clients` | `ListActive() []Client`; `List(archived) []Client`; `Get(id) Client`; `Create(ClientInput, region) Client`; `Update(id, ClientPatch, region) Client` (`region` is `settings.country_code`, read by the handler) |
     | `services` | `List() []Service`; `GetMany(ids) []Service`; `Create(ServiceInput) Service`; `Update(id, ServicePatch) Service` |
@@ -1765,7 +1771,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `reminders` | `Preview(body, clientID?) Preview` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem`; `Record(LogEntry) (created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(date) []LogItem` |
     | `push` | `PublicKey() string`; `Subscribe(userID, Subscription) (id, created bool)`; `CountSubscriptions() int`; `EnsureKeys()`; `SendAll(Payload) SendResult` (`attempted`, `delivered`) |
     | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction) |
-    | `status` | `Health()`; `Ready() bool`; `Status() Status`; `BackupRed() bool` (reads `BACKUP_STATUS_FILE`, no `q`); `LogClientError(sessionID, ClientError)` |
+    | `status` | `Health()`; `Ready() bool`; `Status() Status`; `BackupRed() bool` (reads `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(sessionID, ClientError)` |
 
     Every method returns `error` last. Errors are `problem` types (item 24).
 
@@ -1776,21 +1782,23 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `handlers_bootstrap.go` opens one read-only `REPEATABLE READ` transaction with `db.WithTx` and passes the `pgx.Tx` to each module's read function in turn (`settings.Get`, `attributes.List`, `services.List`, `templates.List`, `reminders.ListRules`, `clients.ListActive`, `appointments.ListRange`, `reminders.DueList`, `templates.Vars`), so all parts come from the same snapshot. Outside the transaction it adds `server_time` from the `Clock` and `backup_red` from `status.BackupRed()`. There is no `pgx.Batch`: the sqlc `DBTX` has no `SendBatch`, and one snapshot already makes the reads consistent. `GET /reminders/due` and the timer also call `DueList` inside a read-only `REPEATABLE READ` transaction.
     *   Multipart: `handlers_media.go` (`POST /media`) and `handlers_settings.go` (`POST /settings/icon`) read it with `r.MultipartReader()`. Binary bodies: `handlers_media.go` (`GET /media/{id}`, `/thumb`) and `handlers_export.go` write to `w`, with the headers from item 15.
     *   `handlers_auth.go` also serves `GET /setup/options` (no session).
-    *   `handlers_settings.go` also registers, outside `/api/v1` and with no session: `GET /manifest.webmanifest` (`settings.Manifest`), `GET /icons/512.png` and `GET /apple-touch-icon.png` (`settings.Icon`), with `Cache-Control: no-cache`. `handlers_status.go` registers `/healthz` and `/readyz`.
+    *   `handlers_settings.go` also holds the handlers, outside `/api/v1` and with no session, of `GET /manifest.webmanifest` (`settings.Manifest`), `GET /icons/512.png` and `GET /apple-touch-icon.png` (`settings.Icon`), with `Cache-Control: no-cache`; `handlers_status.go` holds those of `/healthz` and `/readyz`. `server.go` registers all five by literal path, before `/`. An icon file error's text can name a path, so the icon handlers answer it as `internal` with a fixed text and never log it.
     *   Every non-GET handler wraps its module call in `db.WithTx` ("Code layout and module rules").
 
 ##### 34. `internal/httpapi/middleware.go` (Create)
 
 *   **Type / Scope**: Middleware.
 *   **Proposed Changes**: Applied in this order. Steps 1–5 are built in P1. Steps 6–8 are built in P2, because they need `auth.Authenticate`.
-    1.  Request ID + logging.
+    1.  Request ID + logging. The layer just inside step 5 (around the mux) records the matched route pattern with `logging.SetRoute`, because the `r.WithContext` copies in steps 2–5 keep the mux's `r.Pattern` from reaching the log line.
     2.  `X-App-Version` header. It is set before any handler or the recovery code runs, so every response from the app has it, including errors and panics; the PWA uses its absence to detect "server off".
     3.  Panic recovery: logs the stack with the request ID and answers `internal` through `problem.Write`.
     4.  Client IP (`CF-Connecting-IP` only from `TRUSTED_PROXY_CIDRS`).
-    5.  Origin check on non-GET requests.
-    6.  Session loading, plus the hourly sliding write from "Session and request rules" (`last_seen_at`, `expires_at` and a new `Set-Cookie`).
-    7.  Auth required for `/api/v1/*` except `GET /setup/status`, `GET /setup/options`, `POST /setup`, `POST /auth/login` and `GET /push/key`.
-    8.  The `must_change_password` gate. It allows exactly `POST /auth/password`, `GET /me` and `POST /auth/logout`, and answers every other `/api/v1` route with `must-change-password`.
+    5.  Origin check on every method except GET and HEAD (the mux routes HEAD to GET handlers).
+    6.  Session loading, plus the hourly sliding write from "Session and request rules" (`last_seen_at`, `expires_at` and a new `Set-Cookie`). `auth.Authenticate` runs in a short `db.WithTx`, because it may write the slide. A malformed, unknown or expired cookie leaves the request without a session; a database error is a 500.
+    7.  Auth required for `/api/v1/*` except `GET /setup/status`, `GET /setup/options`, `POST /setup`, `POST /auth/login` and `GET /push/key` (401 `unauthorized`). The public set is read once at `httpapi.New` from the embedded spec (`gen.GetSpec`): the operations whose own `security` is present and empty (`security: []`), as `"METHOD /api/v1<path>"` patterns. Every request needs a session unless its `r.Pattern` is in that set, so an empty or unknown pattern needs one too (fail closed). `New` returns an error when a `security` requirement, global or on an operation, names any scheme but `sessionCookie` or is the empty `{}`.
+    8.  The `must_change_password` gate. It allows exactly `POST /auth/password`, `GET /me` and `POST /auth/logout`, and answers every other `/api/v1` route with `must-change-password`. That includes the public routes of step 7: a request to `GET /setup/status`, `GET /setup/options`, `POST /setup` or `POST /auth/login` that carries a must-change session cookie is 403 too, because step 6 loaded the session and step 8 checks every session it finds (a request without the cookie is not affected). The allowed set is the operations marked `x-oc-allowed-while-must-change-password: true` in the spec, read once at `httpapi.New` from the embedded spec (`gen.GetSpec`) as `"METHOD /api/v1<path>"` patterns and compared with `r.Pattern`; a non-boolean value stops `New` with an error.
+
+    Steps 6–8 run as `gen.StdHTTPServerOptions.Middlewares`, after routing and only on the generated `/api/v1` routes (OP5); there is no route list in Go. The generated wrapper applies that list so the last entry runs first, so it is ordered 8, 7, 6.
 
 ##### 35. `internal/httpapi/static.go` (Create)
 
@@ -1819,7 +1827,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   client IP trust;
     *   the SPA fallback and cache headers, and `GET /index.html` answering 200 with the HTML, not a redirect;
     *   for each endpoint of the phase, the success status and the body fields match the tables in item 15 (the check strict mode would have made at compile time);
-    *   problem JSON shape, including a bad UUID path parameter and a bad date query parameter (422 problem JSON, not `text/plain`);
+    *   problem JSON shape, including a bad UUID path parameter and a bad date query parameter (422 problem JSON, not `text/plain`). P1 has no route with parameters, so P1 tests the `ErrorHandlerFunc` directly; the per-route tests come with the first such routes in P3;
     *   `X-App-Version` present and non-empty on success, error and generated responses;
     *   409 overlap responses (P3).
     *   An unknown `/api/v1` path and a wrong method both return 404 problem JSON, not HTML.
@@ -1846,9 +1854,9 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: First-run setup.
 *   **Proposed Changes**:
-    *   `NewSetupToken`: deletes old tokens, creates one valid 24 h. Used by `serve` at start and by `setup-link`.
+    *   `NewSetupToken`: deletes old tokens, creates one valid 24 h. Used by `serve` at start and by `setup-link`. Once a user exists it returns 409 `setup-closed`, even though both callers check first (fail closed). Both `NewSetupToken` and `CompleteSetup` take a transaction from the caller and take one advisory lock (`pg_advisory_xact_lock`) as their first statement, so two token calls never leave two live tokens and two setups never both create a user.
     *   `CompleteSetup` runs in the handler's transaction: it checks first that no user exists (409 `setup-closed`), then the token (unused, not expired, else 410), normalizes and checks the username ("Session and request rules"), calls the settings creator (which validates and inserts the settings row), creates the owner user, calls the seeder, deletes all setup tokens, and creates a session.
-    *   `auth` defines the types: `SetupSettings{Name, Timezone, Locale, Currency, CountryCode, AccentColor string; PushHour int}`, `SettingsCreator func(ctx, q db.DBTX, s SetupSettings) error` and `Seeder func(ctx, q db.DBTX, locale string) error`. In P2, `serve.go` passes a no-op seeder; in P4, `starter.Seed` (item 43). The settings creator, from P2, is a closure in `cmd` that converts `SetupSettings` to `settings.SettingsInput` and calls `settings.Create`. This keeps `auth` from importing `starter`, `settings` and the other domain modules.
+    *   `auth` defines the types: `SetupSettings{Name, Timezone, Locale, Currency, CountryCode, AccentColor string; PushHour *int}` (a pointer, so an absent push hour reaches `settings`, which fills in 8), `SettingsCreator func(ctx, q db.DBTX, s SetupSettings) error` and `Seeder func(ctx, q db.DBTX, locale string) error`. In P2, `serve.go` passes a no-op seeder; in P4, `starter.Seed` (item 43). The settings creator, from P2, is a closure in `cmd` that converts `SetupSettings` to `settings.SettingsInput` and calls `settings.Create`. This keeps `auth` from importing `starter`, `settings` and the other domain modules. `auth.New` returns an error when either function is nil (fail closed).
 
 ##### 41. `internal/auth/ratelimit.go` (Create)
 
@@ -1856,6 +1864,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   An `x/time/rate` limiter per client IP on `POST /auth/login` only (5/min, burst 5), with idle entries removed after 10 min.
     *   A per-username delay: after the first failure the next attempt must wait 1 s, doubling after each failure up to 30 s. An attempt that comes too early gets 429 `rate-limited` with `Retry-After`; the server never sleeps. It resets on success. Entries expire 15 min after the last failure, so the map holds only names that failed in the last 15 min; there is no size cap.
+    *   `POST /auth/password` shares the per-username delay: `ChangePassword` counts the attempt for the session user's username before it checks `current_password` and clears the delay when it is right, so a stolen session cannot guess the current password without limit. A wrong one is still 422 on `current_password`; a try that comes too early is 429 `rate-limited`, and so is a login for that username until the delay has passed. The per-IP limiter does not apply to it.
+    *   **Open risk (P7 hardening).** Each argon2id hash or verify takes 64 MiB and runs inside the handler's open `db.WithTx`, and nothing caps how many run at once: a burst of logins (one per username, each under its own delay) can hold that much memory and that many transactions together (the per-IP bucket caps only what one address sends). The IP bucket is keyed by the full address (`netip.Addr`, a /128 for IPv6), so one IPv6 client gets a fresh bucket per address of its /64. Planned in P7: a semaphore around hash and verify, the limiter checks before `db.WithTx` opens the transaction, and IPv6 addresses grouped by /64 for the IP bucket.
 
 ##### 42. `internal/auth/*_test.go` (Create)
 
@@ -1888,7 +1898,9 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   Get and update settings. Validate `name` (trimmed, 1–80 characters), `locale` (`es` only), `accent_color` (lowercased, `^#[0-9a-f]{6}$`), `push_hour` (0–19, default 8 when absent), the time zone with `time.LoadLocation`, the currency with `currency.ParseISO` from `golang.org/x/text/currency` (no hand-written list), and the country code against `phonenumbers.GetSupportedRegions()`.
     *   Build the manifest JSON from settings.
-    *   Serve the uploaded icons, or the embedded default PNGs.
+    *   Serve the uploaded icons, or the embedded default PNGs (plain neutral 512 and 180 px files, no brand art).
+    *   `SetIcons` checks the PNG signature (415) and the 1 MB limit (413) of each part, writes `media/branding/icon-512.png` and `icon-180.png` (temp file, fsync, rename) and only then sets `icon_updated_at`. `Icon` serves the file when `icon_updated_at` is set; a missing file logs `code=icon_file_missing` and serves the default. Any size other than 512 or 180 is `not-found`.
+    *   Before setup there is no settings row: the manifest is minimal (`name` and `short_name` "open-customer", `lang: "es"`, no colors, the default icons) and the icons are the defaults.
 
 ##### 45. `internal/attributes/attributes.go`, `keys.go`, `validate.go` (Create)
 
@@ -2067,9 +2079,9 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Health and status.
 *   **Proposed Changes**:
-    *   `/healthz` (P1).
-    *   `/readyz` (DB ping + no pending migrations, through `db.HasPending`) (P1).
-    *   `Status()` (P4). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content, and media volume free space via `golang.org/x/sys/unix.Statfs`.
+    *   `/healthz` (P1): `200` with the plain-text body `ok`.
+    *   `/readyz` (DB ping + no pending migrations, through `db.HasPending`) (P1): `200 ok`, or `503` with the plain-text body `not ready`.
+    *   `Status()` (P4). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content (`backupstatus.Read`), and media volume free space via `golang.org/x/sys/unix.Statfs`.
     *   The client-error log endpoint, rate limited to 10 per minute per session (P4).
 
     Tests: missing or corrupt `status.json` gives `backup.red: true` with null times, not a crash; each red rule from "Backups" (old `last_copy_at`, `last_error` set, old `checked_at`); a file written in the exact `backup.sh` time form parses.
@@ -2077,7 +2089,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 61. `internal/locale/locale.go`, `es.go`, `locale_test.go` (Create)
 
 *   **Type / Scope**: Formatting.
-*   **Proposed Changes**: Day and month names, date and time formats, number and currency formats per locale. `import _ "time/tzdata"`. Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
+*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller. `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
 
 #### Web app (`web/`)
 
@@ -2087,7 +2099,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   Dependencies (shipped in the bundle): `dexie`, `openapi-fetch`, `zod` (runtime parsing of API responses and cache rows, items 66–67).
     *   Dev dependencies (build and check tools; the app is static, so nothing else ships): `@sveltejs/kit` (v3), `@sveltejs/adapter-static`, `@sveltejs/vite-plugin-svelte`, `vite`, `svelte` 5, `tailwindcss` v4 + `@tailwindcss/vite`, `typescript` (6.0.x: typescript-eslint and SvelteKit do not accept 7 yet), `openapi-typescript`, `vitest`, `@playwright/test` (exact version), `eslint`, `@eslint/js`, `globals`, `typescript-eslint`, `eslint-plugin-svelte`, `@vitest/eslint-plugin`, `eslint-plugin-playwright`, `prettier`, `prettier-plugin-svelte`, `svelte-check`, `knip`, `jscpd`, `@types/node`, `fake-indexeddb`, `pg` and `@types/pg` (for `seed.ts`, item 80).
-    *   Scripts: `build`, `dev`, `check` (`svelte-kit sync && svelte-check --fail-on-warnings`), `lint` (`eslint . && prettier --check . && knip && jscpd`), `format`, `test` (`vitest run --passWithNoTests`); `e2e` comes in P6 and `gen:api` in P1.
+    *   Scripts: `build`, `dev`, `check` (`svelte-kit sync && svelte-check --fail-on-warnings`), `lint` (`eslint . && prettier --check . && knip && jscpd`), `format`, `test` (`vitest run --passWithNoTests`); `e2e` comes in P6. `gen:api` (`openapi-typescript ../api/openapi.yaml -o src/lib/api/schema.d.ts`) exists since P1.
     *   `web/pnpm-workspace.yaml` is written by pnpm (its release-age settings) and committed. `web/eslint-suppressions.json` is the ESLint bulk-suppressions file (`{}` at P0), pinned by the web `suppression-budget` guard.
     *   Created in P0 with a minimal `web/src/app.html` and a placeholder `web/src/routes/+page.svelte` (one line of text), so `make lint test build` work from the first commit. P5 replaces both (items 64 and 72).
 
@@ -2105,7 +2117,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   Strict TypeScript: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noImplicitReturns`.
     *   Vitest (the `test` block of `vite.config.ts`): `include` `src/**/*.test.ts` and `tests/guards/**/*.test.ts`, `allowOnly: false`, `restoreMocks: true`.
     *   `eslint.config.js`: flat config (`defineConfig`) with `typescript-eslint` `strictTypeChecked` (type-aware; `no-explicit-any`, `no-floating-promises`, `consistent-type-imports`, `switch-exhaustiveness-check` as errors) and `eslint-plugin-svelte`; `@vitest/eslint-plugin` on test files (`valid-title`, `expect-expect`, `no-conditional-in-test`, `no-conditional-expect`, `no-focused-tests`, `no-disabled-tests`, `no-restricted-matchers` for snapshots); `eslint-plugin-playwright` on `tests/e2e` (`no-skipped-test`, `no-wait-for-timeout`, `no-focused-test`). `.prettierrc`: `prettier-plugin-svelte`. All plugins are dev dependencies (item 62).
-    *   `knip.json`: lists the dependencies a later phase starts using; each phase removes the ones it uses. `.jscpd.json`: `src`, TypeScript, JavaScript and Svelte, tests excluded, threshold 0.
+    *   `knip.json`: lists the dependencies a later phase starts using; each phase removes the ones it uses. `.jscpd.json`: `src`, `tests`, `eslint.config.js` and `vite.config.ts`, TypeScript, JavaScript and Svelte, `**/*.test.ts` and `**/schema.d.ts` ignored, threshold 0, `failOnEmpty` (a scan that analyzes no files fails; `src` alone is too small early on to pass it). `failOnEmpty` fails only on a fully empty scan, and no `.svelte` file reaches `minTokens` yet, so Svelte coverage is not yet shown.
 
 ##### 64. `web/src/app.html`, `web/src/app.css` (Create)
 

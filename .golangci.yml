@@ -1,5 +1,10 @@
 version: "2"
 
+run:
+  # Lint the db-tagged tests too (make test-db runs them).
+  build-tags:
+    - db
+
 linters:
   default: none
   enable:
@@ -93,6 +98,29 @@ linters:
     presets:
       - std-error-handling
     rules:
+      # db.DBTX is the name the design doc fixes for the interface modules take (item 25).
+      - path: internal/db/db\.go
+        linters:
+          - revive
+        text: type name will be used as db\.DBTX
+      # The design doc (items 40 and 44) names these types SettingsInput and SettingsPatch.
+      - path: internal/settings/settings\.go
+        linters:
+          - revive
+        text: type name will be used as settings\.Settings(Input|Patch)
+      # G101 reads any string constant whose name says "Password" as a credential. messages.go holds
+      # only the Spanish field messages the API returns (design doc item 24, OP14).
+      - path: internal/platform/problem/messages\.go
+        linters:
+          - gosec
+        text: "G101:"
+      # G124 wants Secure to be a constant true. The session cookie's Secure is false only for a
+      # plain-http localhost PUBLIC_URL (development and e2e), where WebKit drops a Secure cookie
+      # (design doc "Session and request rules" and item 5).
+      - path: internal/auth/sessions\.go
+        linters:
+          - gosec
+        text: "G124:"
       # Tests may repeat setup; duplication is measured on shipped code (TASKS.md T7).
       - path: _test\.go
         linters:

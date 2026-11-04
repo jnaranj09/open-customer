@@ -2,6 +2,7 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -48,5 +49,32 @@ func TestRequestIDOutsideARequestIsEmpty(t *testing.T) {
 	t.Parallel()
 	if got := RequestID(t.Context()); got != "" {
 		t.Fatalf("RequestID = %q, want empty", got)
+	}
+}
+
+// A layer between Middleware and the mux copies the request (r.WithContext), so the mux sets
+// Pattern on a copy Middleware never sees. SetRoute carries it back through the context.
+func TestMiddlewareLogsRouteSetBehindARequestCopy(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /items/{id}", func(w http.ResponseWriter, r *http.Request) {
+		SetRoute(r.Context(), r.Pattern)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	type copyKey struct{}
+	copying := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), copyKey{}, true)))
+	})
+	h := Middleware(New(&buf, slog.LevelInfo), copying)
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/items/42", nil))
+
+	var line map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
+		t.Fatalf("log is not one JSON line: %v (%q)", err, buf.String())
+	}
+	if line["route"] != "GET /items/{id}" {
+		t.Fatalf("log route = %v, want %q", line["route"], "GET /items/{id}")
 	}
 }
