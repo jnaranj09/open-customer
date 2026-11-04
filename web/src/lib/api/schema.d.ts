@@ -557,6 +557,50 @@ export interface paths {
         patch: operations["updateReminderRule"];
         trace?: never;
     };
+    "/reminders/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the reminders to send today
+         * @description The items due today or earlier, computed on read from one snapshot, ordered by due date, then client name. Items already sent or skipped are not listed.
+         */
+        get: operations["listDueReminders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reminders/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the reminder log of one client or one day
+         * @description Exactly one of client_id or date is required; none or both is 422 on client_id. date is a local day in the business time zone and filters on acted_at. Newest acted_at first. An unknown client_id is 404.
+         */
+        get: operations["listReminderLog"];
+        put?: never;
+        /**
+         * Record that a due item was sent or skipped
+         * @description Stores what the owner did with a due item. When the same item (rule, appointment and anchor) is already logged, nothing is written and the stored row comes back with 200. An unknown rule or appointment, an anchor that does not fit the rule's kind, an action other than sent or skipped, or phone digits that are not 1 to 15 digits, is 422 on that field.
+         */
+        post: operations["recordReminder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media": {
         parameters: {
             query?: never;
@@ -844,6 +888,77 @@ export interface components {
             return_service_id?: string | null;
             archived?: boolean;
             include_overdue?: boolean;
+        };
+        /** @enum {string} */
+        DueItemMode: "message" | "booking_prompt";
+        /** @description The future booking a come-back item asks to extend with the return service. */
+        BookingPrompt: {
+            /** Format: uuid */
+            appointment_id: string;
+            /** Format: date-time */
+            starts_at: string;
+            services: string[];
+            /** Format: uuid */
+            return_service_id: string;
+            return_service_name: string;
+        };
+        DueItem: {
+            id: string;
+            /** Format: uuid */
+            rule_id: string;
+            /** Format: uuid */
+            appointment_id: string;
+            /**
+             * Format: date-time
+             * @description The appointment start for a before_appointment item; null for come_back.
+             */
+            anchor_at: string | null;
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            client_id: string;
+            client_name: string;
+            /** Format: date */
+            due_date: string;
+            late: boolean;
+            text: string;
+            phone_digits: string | null;
+            /** @description Null when the client has no phone. */
+            wa_link: string | null;
+            mode: components["schemas"]["DueItemMode"];
+            /** @description Set only when mode is booking_prompt. */
+            prompt: components["schemas"]["BookingPrompt"] | null;
+        };
+        DueList: {
+            items: components["schemas"]["DueItem"][];
+        };
+        /** @enum {string} */
+        LogAction: "sent" | "skipped";
+        LogEntry: {
+            /** Format: uuid */
+            rule_id: string;
+            /** Format: uuid */
+            appointment_id: string;
+            /**
+             * Format: date-time
+             * @description The appointment start for a before_appointment rule; null or left out for come_back.
+             */
+            anchor_at?: string | null;
+            action: components["schemas"]["LogAction"];
+            body?: string | null;
+            phone_digits?: string | null;
+            /** Format: date-time */
+            acted_at: string;
+        };
+        LogItem: components["schemas"]["LogEntry"] & {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            client_id: string;
+            client_name: string;
+        };
+        LogList: {
+            items: components["schemas"]["LogItem"][];
         };
         Client: {
             /** Format: uuid */
@@ -1901,6 +2016,92 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDueReminders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The due items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DueList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listReminderLog: {
+        parameters: {
+            query?: {
+                client_id?: string;
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The log rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    recordReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogEntry"];
+            };
+        };
+        responses: {
+            /** @description The row was already logged; the stored row. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogItem"];
+                };
+            };
+            /** @description The new log row. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogItem"];
+                };
+            };
+            401: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

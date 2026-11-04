@@ -27,6 +27,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/media"
+	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/reminders"
@@ -61,6 +62,7 @@ type Options struct {
 	Templates      *templates.Module
 	Reminders      *reminders.Module
 	Status         *status.Status
+	Clock          clock.Clock
 	Log            *slog.Logger
 	// beginner opens the write transactions; nil means Pool. Only tests set it (a Commit that
 	// fails).
@@ -81,6 +83,7 @@ type Server struct {
 	templates    *templates.Module
 	reminders    *reminders.Module
 	status       *status.Status
+	clock        clock.Clock
 	// secureCookies is PUBLIC_URL's scheme == https: the session cookie drops Secure only for a
 	// plain-http PUBLIC_URL (localhost in development and e2e).
 	secureCookies bool
@@ -91,12 +94,12 @@ var _ gen.ServerInterface = (*Server)(nil)
 // New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
 // /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
 // middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes,
-// Services, Clients, Appointments, Media, Templates, Reminders, Status) is missing, or when the embedded spec
+// Services, Clients, Appointments, Media, Templates, Reminders, Status, Clock) is missing, or when the embedded spec
 // cannot be read or its security or x-oc-allowed-while-must-change-password values are not ones
 // steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
-	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Reminders == nil || opts.Status == nil {
-		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates, Reminders and Status are required")
+	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Reminders == nil || opts.Status == nil || opts.Clock == nil {
+		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates, Reminders, Status and Clock are required")
 	}
 	spec, err := gen.GetSpec()
 	if err != nil {
@@ -112,7 +115,7 @@ func New(opts Options) (http.Handler, error) {
 	}
 	s := &Server{
 		pool: opts.Pool, beginner: opts.beginner,
-		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, templates: opts.Templates, reminders: opts.Reminders, status: opts.Status,
+		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, templates: opts.Templates, reminders: opts.Reminders, status: opts.Status, clock: opts.Clock,
 		secureCookies: opts.PublicURL.Scheme == "https",
 	}
 	if s.beginner == nil {
@@ -289,6 +292,16 @@ func (s *Server) inWriteTx(w http.ResponseWriter, r *http.Request, fn func(pgx.T
 		return false
 	}
 	return true
+}
+
+// snapshot runs fn in a read-only REPEATABLE READ transaction, so every query in fn sees one
+// snapshot (design doc "Code layout and module rules"). The caller maps the returned error with
+// writeError.
+func (s *Server) snapshot(r *http.Request, fn func(pgx.Tx) error) error {
+	if err := db.WithTx(r.Context(), s.beginner, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, fn); err != nil {
+		return fmt.Errorf("snapshot: %w", err)
+	}
+	return nil
 }
 
 // writeJSON writes v as a JSON response with status. The status is already sent when encoding

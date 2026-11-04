@@ -147,6 +147,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Reminders:      mods.reminders,
 		Appointments:   mods.appointments,
 		Status:         status.New(version),
+		Clock:          clock.Real{},
 		Log:            log,
 	})
 	if err != nil {

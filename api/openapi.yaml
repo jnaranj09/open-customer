@@ -967,6 +967,95 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /reminders/due:
+    get:
+      operationId: listDueReminders
+      summary: List the reminders to send today
+      description: >-
+        The items due today or earlier, computed on read from one snapshot, ordered by due date, then
+        client name. Items already sent or skipped are not listed.
+      responses:
+        "200":
+          description: The due items.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DueList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /reminders/log:
+    post:
+      operationId: recordReminder
+      summary: Record that a due item was sent or skipped
+      description: >-
+        Stores what the owner did with a due item. When the same item (rule, appointment and
+        anchor) is already logged, nothing is written and the stored row comes back with 200. An
+        unknown rule or appointment, an anchor that does not fit the rule's kind, an action other
+        than sent or skipped, or phone digits that are not 1 to 15 digits, is 422 on that field.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogEntry"
+      responses:
+        "201":
+          description: The new log row.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogItem"
+        "200":
+          description: The row was already logged; the stored row.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogItem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    get:
+      operationId: listReminderLog
+      summary: List the reminder log of one client or one day
+      description: >-
+        Exactly one of client_id or date is required; none or both is 422 on client_id. date is a
+        local day in the business time zone and filters on acted_at. Newest acted_at first. An
+        unknown client_id is 404.
+      parameters:
+        - name: client_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: The log rows.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /media:
     post:
       operationId: uploadMedia
@@ -1507,6 +1596,135 @@ components:
           type: boolean
         include_overdue:
           type: boolean
+    DueItemMode:
+      type: string
+      enum: [message, booking_prompt]
+    BookingPrompt:
+      type: object
+      description: The future booking a come-back item asks to extend with the return service.
+      required: [appointment_id, starts_at, services, return_service_id, return_service_name]
+      properties:
+        appointment_id:
+          type: string
+          format: uuid
+        starts_at:
+          type: string
+          format: date-time
+        services:
+          type: array
+          items:
+            type: string
+        return_service_id:
+          type: string
+          format: uuid
+        return_service_name:
+          type: string
+    DueItem:
+      type: object
+      required: [id, rule_id, appointment_id, anchor_at, kind, client_id, client_name, due_date, late, text, phone_digits, wa_link, mode, prompt]
+      properties:
+        id:
+          type: string
+        rule_id:
+          type: string
+          format: uuid
+        appointment_id:
+          type: string
+          format: uuid
+        anchor_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: The appointment start for a before_appointment item; null for come_back.
+        kind:
+          $ref: "#/components/schemas/RuleKind"
+        client_id:
+          type: string
+          format: uuid
+        client_name:
+          type: string
+        due_date:
+          type: string
+          format: date
+        late:
+          type: boolean
+        text:
+          type: string
+        phone_digits:
+          type: string
+          nullable: true
+        wa_link:
+          type: string
+          nullable: true
+          description: Null when the client has no phone.
+        mode:
+          $ref: "#/components/schemas/DueItemMode"
+        prompt:
+          allOf:
+            - $ref: "#/components/schemas/BookingPrompt"
+          nullable: true
+          description: Set only when mode is booking_prompt.
+    DueList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DueItem"
+    LogAction:
+      type: string
+      enum: [sent, skipped]
+    LogEntry:
+      type: object
+      required: [rule_id, appointment_id, action, acted_at]
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+        appointment_id:
+          type: string
+          format: uuid
+        anchor_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: The appointment start for a before_appointment rule; null or left out for come_back.
+        action:
+          $ref: "#/components/schemas/LogAction"
+        body:
+          type: string
+          nullable: true
+        phone_digits:
+          type: string
+          nullable: true
+        acted_at:
+          type: string
+          format: date-time
+    LogItem:
+      allOf:
+        - $ref: "#/components/schemas/LogEntry"
+        - type: object
+          required: [id, kind, client_id, client_name]
+          properties:
+            id:
+              type: string
+              format: uuid
+            kind:
+              $ref: "#/components/schemas/RuleKind"
+            client_id:
+              type: string
+              format: uuid
+            client_name:
+              type: string
+    LogList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogItem"
     Client:
       type: object
       required: [id, name, phone_e164, phone_digits, notes, attrs, archived, created_at, updated_at]

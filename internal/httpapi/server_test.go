@@ -112,6 +112,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Templates:      templates.New(templates.Options{Clock: fake, Attributes: attrsModule}),
 		Reminders:      reminders.New(reminders.Options{Clock: fake, Attributes: attrsModule}),
 		Status:         status.New(testVersion),
+		Clock:          fake,
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
 	})
@@ -463,6 +464,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		Templates: templates.New(templates.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Reminders: reminders.New(reminders.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Status:    status.New(testVersion),
+		Clock:     clock.NewFake(testStart),
 	}
 	for _, tc := range []struct {
 		name   string
@@ -478,6 +480,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		{"a nil Templates is refused", func(o *Options) { o.Templates = nil }},
 		{"a nil Reminders is refused", func(o *Options) { o.Reminders = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
+		{"a nil Clock is refused", func(o *Options) { o.Clock = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := full
