@@ -34,6 +34,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
+	"github.com/jnaranj09/open-customer/internal/templates"
 )
 
 // testStart is the fake clock's time in every test server.
@@ -107,6 +108,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Clients:        clients.New(clients.Options{Clock: fake, Attributes: attrsModule}),
 		Appointments:   appointments.New(appointments.Options{Clock: fake, Services: servicesModule, Attributes: attrsModule}),
 		Media:          media.New(media.Options{Clock: fake, MediaDir: cfg.mediaDir}),
+		Templates:      templates.New(templates.Options{Clock: fake, Attributes: attrsModule}),
 		Status:         status.New(testVersion),
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -455,8 +457,9 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		Appointments: appointments.New(appointments.Options{
 			Clock: clock.NewFake(testStart), Services: servicesModule, Attributes: attrs,
 		}),
-		Media:  media.New(media.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
-		Status: status.New(testVersion),
+		Media:     media.New(media.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
+		Templates: templates.New(templates.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
+		Status:    status.New(testVersion),
 	}
 	for _, tc := range []struct {
 		name   string
@@ -469,6 +472,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		{"a nil Clients is refused", func(o *Options) { o.Clients = nil }},
 		{"a nil Appointments is refused", func(o *Options) { o.Appointments = nil }},
 		{"a nil Media is refused", func(o *Options) { o.Media = nil }},
+		{"a nil Templates is refused", func(o *Options) { o.Templates = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

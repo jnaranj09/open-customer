@@ -26,6 +26,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
+	"github.com/jnaranj09/open-customer/internal/templates"
 	"github.com/jnaranj09/open-customer/web"
 )
 
@@ -141,6 +142,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Services:       mods.services,
 		Clients:        mods.clients,
 		Media:          mods.media,
+		Templates:      mods.templates,
 		Appointments:   mods.appointments,
 		Status:         status.New(version),
 		Log:            log,
@@ -165,6 +167,7 @@ type modules struct {
 	clients      *clients.Module
 	appointments *appointments.Module
 	media        *media.Module
+	templates    *templates.Module
 	auth         *auth.Auth
 }
 
@@ -187,6 +190,7 @@ func newModules(cfg config.Config) (modules, error) {
 		clients:      clients.New(clients.Options{Clock: clock.Real{}, Attributes: attributesModule}),
 		appointments: appointments.New(appointments.Options{Clock: clock.Real{}, Services: servicesModule, Attributes: attributesModule}),
 		media:        media.New(media.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir}),
+		templates:    templates.New(templates.Options{Clock: clock.Real{}, Attributes: attributesModule}),
 		auth:         authModule,
 	}, nil
 }

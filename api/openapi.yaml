@@ -798,6 +798,72 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /templates:
+    post:
+      operationId: createTemplate
+      summary: Add a message template
+      description: >-
+        The name is 1 to 80 characters. The body is stored exactly as sent and is 1 to 2000
+        characters. A body with a malformed or unknown variable is 422 on body, one error per
+        problem: syntax errors first, then unknown variables, each in body order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateInput"
+      responses:
+        "201":
+          description: The new template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /templates/{id}:
+    patch:
+      operationId: updateTemplate
+      summary: Change a message template
+      description: >-
+        Changes only the fields sent; none may be null. A body that is sent goes through the same
+        check as on create. archived true archives the template and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplatePatch"
+      responses:
+        "200":
+          description: The template after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /media:
     post:
       operationId: uploadMedia
@@ -1215,6 +1281,37 @@ components:
           type: string
         position:
           type: integer
+        archived:
+          type: boolean
+    Template:
+      type: object
+      required: [id, name, body, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        body:
+          type: string
+        archived:
+          type: boolean
+    TemplateInput:
+      type: object
+      required: [name, body]
+      properties:
+        name:
+          type: string
+        body:
+          type: string
+    TemplatePatch:
+      type: object
+      description: Every field is optional; a field left out is not changed. None may be null.
+      properties:
+        name:
+          type: string
+        body:
+          type: string
         archived:
           type: boolean
     Client:

@@ -32,6 +32,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
+	"github.com/jnaranj09/open-customer/internal/templates"
 )
 
 // apiBase is servers[0].url of api/openapi.yaml; TestAPIBaseMatchesSpec keeps the two equal.
@@ -56,6 +57,7 @@ type Options struct {
 	Clients        *clients.Module
 	Appointments   *appointments.Module
 	Media          *media.Module
+	Templates      *templates.Module
 	Status         *status.Status
 	Log            *slog.Logger
 	// beginner opens the write transactions; nil means Pool. Only tests set it (a Commit that
@@ -74,6 +76,7 @@ type Server struct {
 	clients      *clients.Module
 	appointments *appointments.Module
 	media        *media.Module
+	templates    *templates.Module
 	status       *status.Status
 	// secureCookies is PUBLIC_URL's scheme == https: the session cookie drops Secure only for a
 	// plain-http PUBLIC_URL (localhost in development and e2e).
@@ -84,12 +87,12 @@ var _ gen.ServerInterface = (*Server)(nil)
 
 // New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
 // /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
-// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes, Services, Clients, Appointments, Media, Status) is
+// middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates, Status) is
 // missing, or when the embedded spec cannot be read or its security or
 // x-oc-allowed-while-must-change-password values are not ones steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
-	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Status == nil {
-		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media and Status are required")
+	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Status == nil {
+		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates and Status are required")
 	}
 	spec, err := gen.GetSpec()
 	if err != nil {
@@ -105,7 +108,7 @@ func New(opts Options) (http.Handler, error) {
 	}
 	s := &Server{
 		pool: opts.Pool, beginner: opts.beginner,
-		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, status: opts.Status,
+		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, templates: opts.Templates, status: opts.Status,
 		secureCookies: opts.PublicURL.Scheme == "https",
 	}
 	if s.beginner == nil {

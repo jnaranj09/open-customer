@@ -457,6 +457,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a message template
+         * @description The name is 1 to 80 characters. The body is stored exactly as sent and is 1 to 2000 characters. A body with a malformed or unknown variable is 422 on body, one error per problem: syntax errors first, then unknown variables, each in body order.
+         */
+        post: operations["createTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a message template
+         * @description Changes only the fields sent; none may be null. A body that is sent goes through the same check as on create. archived true archives the template and false restores it.
+         */
+        patch: operations["updateTemplate"];
+        trace?: never;
+    };
     "/media": {
         parameters: {
             query?: never;
@@ -676,6 +716,23 @@ export interface components {
             price_cents?: number | null;
             color?: string;
             position?: number;
+            archived?: boolean;
+        };
+        Template: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            body: string;
+            archived: boolean;
+        };
+        TemplateInput: {
+            name: string;
+            body: string;
+        };
+        /** @description Every field is optional; a field left out is not changed. None may be null. */
+        TemplatePatch: {
+            name?: string;
+            body?: string;
             archived?: boolean;
         };
         Client: {
@@ -1589,6 +1646,65 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateInput"];
+            };
+        };
+        responses: {
+            /** @description The new template. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePatch"];
+            };
+        };
+        responses: {
+            /** @description The template after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
