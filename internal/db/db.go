@@ -29,10 +29,16 @@ func Open(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// WithTx runs fn in a transaction begun with opts. It commits when fn returns nil and rolls back
-// when fn returns an error or panics (the panic is re-raised). A commit error is returned: the
-// caller must never report a failed commit as saved.
-func WithTx(ctx context.Context, pool *pgxpool.Pool, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
+// Beginner begins a transaction: the pool (*pgxpool.Pool) in the app, or a test fake whose Commit
+// fails.
+type Beginner interface {
+	BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error)
+}
+
+// WithTx runs fn in a transaction that pool begins with opts. It commits when fn returns nil and
+// rolls back when fn returns an error or panics (the panic is re-raised). A commit error is
+// returned: the caller must never report a failed commit as saved.
+func WithTx(ctx context.Context, pool Beginner, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
 	tx, err := pool.BeginTx(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("db: begin: %w", err)

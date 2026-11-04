@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jnaranj09/open-customer/internal/auth"
@@ -24,36 +27,77 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
+	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
 )
 
-// newTestServer builds the full handler like serve does, on pool (nil when no route the test
-// calls touches the database).
-func newTestServer(t *testing.T, pool *pgxpool.Pool) http.Handler {
+// testStart is the fake clock's time in every test server.
+var testStart = time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)
+
+// testServerConfig is what a test can change in newTestApp; the zero value is newTestServer.
+type testServerConfig struct {
+	pool      *pgxpool.Pool // nil when no route the test calls touches the database
+	publicURL string        // PUBLIC_URL; empty means testOrigin
+	trusted   []netip.Prefix
+	seeder    auth.Seeder // nil means one that writes nothing (starter.Seed comes in P4)
+	beginner  db.Beginner // nil means the pool
+}
+
+// testApp is the full handler and the auth module behind it.
+type testApp struct {
+	handler http.Handler
+	auth    *auth.Auth
+}
+
+// newTestApp builds the full handler like serve does, with real modules on a fake clock.
+func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 	t.Helper()
-	public, err := url.Parse(testOrigin)
-	if err != nil {
-		t.Fatalf("parse test origin: %v", err)
+	if cfg.publicURL == "" {
+		cfg.publicURL = testOrigin
 	}
-	// No route here runs setup yet (POST /setup comes in Task 20), so the creator and seeder do
-	// nothing.
+	public, err := url.Parse(cfg.publicURL)
+	if err != nil {
+		t.Fatalf("parse PUBLIC_URL: %v", err)
+	}
+	if cfg.seeder == nil {
+		cfg.seeder = func(context.Context, db.DBTX, string) error { return nil }
+	}
+	fake := clock.NewFake(testStart)
+	settingsModule := settings.New(settings.Options{Clock: fake, MediaDir: t.TempDir()})
 	a, err := auth.New(auth.Options{
-		Clock:           clock.NewFake(time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC)),
-		SettingsCreator: func(context.Context, db.DBTX, auth.SetupSettings) error { return nil },
-		Seeder:          func(context.Context, db.DBTX, string) error { return nil },
+		Clock: fake,
+		// The same conversion serve's settingsCreator makes.
+		SettingsCreator: func(ctx context.Context, q db.DBTX, s auth.SetupSettings) error {
+			if _, err := settingsModule.Create(ctx, q, settings.SettingsInput{
+				Name: s.Name, Timezone: s.Timezone, Locale: s.Locale, Currency: s.Currency,
+				CountryCode: s.CountryCode, AccentColor: s.AccentColor, PushHour: s.PushHour,
+			}); err != nil {
+				return fmt.Errorf("create settings: %w", err)
+			}
+			return nil
+		},
+		Seeder: cfg.seeder,
 	})
 	if err != nil {
 		t.Fatalf("auth.New: %v", err)
 	}
-	return New(Options{
-		Pool:      pool,
-		Version:   testVersion,
-		PublicURL: public,
-		Static:    testBuild(),
-		Auth:      a,
-		Status:    status.New(testVersion),
-		Log:       logging.New(io.Discard, slog.LevelInfo),
-	})
+	return testApp{auth: a, handler: New(Options{
+		Pool:           cfg.pool,
+		Version:        testVersion,
+		PublicURL:      public,
+		TrustedProxies: cfg.trusted,
+		Static:         testBuild(),
+		Auth:           a,
+		Status:         status.New(testVersion),
+		Log:            logging.New(io.Discard, slog.LevelInfo),
+		beginner:       cfg.beginner,
+	})}
+}
+
+// newTestServer is newTestApp's handler with the default config, on pool.
+func newTestServer(t *testing.T, pool *pgxpool.Pool) http.Handler {
+	t.Helper()
+	return newTestApp(t, testServerConfig{pool: pool}).handler
 }
 
 // serve sends one request with the public Origin through h.
@@ -292,5 +336,18 @@ func TestPublicOrigin(t *testing.T) {
 				t.Fatalf("publicOrigin(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestDeadlockIsInternalAndLogsOnlyTheSQLState(t *testing.T) {
+	logBuf := captureDefaultLog(t)
+	rec := httptest.NewRecorder()
+	err := fmt.Errorf("db: tx: %w", &pgconn.PgError{Code: "40P01", Message: "deadlock on made-up-owner"})
+	writeError(rec, httptest.NewRequest(http.MethodPost, "/api/v1/setup", nil), err)
+	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
+		t.Fatalf("type = %q, want internal", got)
+	}
+	if logs := logBuf.String(); !strings.Contains(logs, "40P01") || strings.Contains(logs, "made-up-owner") {
+		t.Fatalf("log = %q, want SQLSTATE 40P01 and not the Postgres message", logs)
 	}
 }

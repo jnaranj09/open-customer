@@ -1688,7 +1688,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 25. `internal/db/db.go` (Create)
 
 *   **Type / Scope**: Connection.
-*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`, which begins the transaction with `opts` (read-write for every non-GET handler; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
+*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`. `pool` is a `db.Beginner`: the `*pgxpool.Pool`, or in a test a fake whose `Commit` fails (item 37). `WithTx` begins the transaction with `opts` (read-write for every non-GET handler; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
 
 ##### 26. `internal/db/migrate.go` (Create)
 

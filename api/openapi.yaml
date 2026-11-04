@@ -25,13 +25,163 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SetupStatus"
+  /setup/options:
+    get:
+      operationId: getSetupOptions
+      summary: The choices the setup wizard offers
+      description: >-
+        No session: the setup wizard needs it before any user exists. It lists the supported
+        country codes.
+      security: []
+      responses:
+        "200":
+          description: Setup choices.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupOptions"
+  /setup:
+    post:
+      operationId: completeSetup
+      summary: Finish first-run setup
+      description: >-
+        No session: it creates the owner user and her first session. The setup token from the
+        setup link is what authorizes it.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupInput"
+      responses:
+        "201":
+          description: The owner user; the session cookie is set.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "410":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /auth/login:
+    post:
+      operationId: login
+      summary: Sign in with username and password
+      description: >-
+        No session: it is how a session is made. It is rate limited per client IP and per
+        username.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: The signed-in user; the session cookie is set.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
 components:
+  headers:
+    SessionCookie:
+      description: >-
+        The oc_session cookie: HttpOnly, SameSite=Lax, Path=/, 90 days, and Secure unless
+        PUBLIC_URL is plain http.
+      schema:
+        type: string
+  responses:
+    Problem:
+      description: An RFC 9457 problem.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
   securitySchemes:
     sessionCookie:
       type: apiKey
       in: cookie
       name: oc_session
   schemas:
+    Me:
+      type: object
+      required: [id, username, must_change_password]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        must_change_password:
+          type: boolean
+    SetupOptions:
+      type: object
+      required: [countries]
+      properties:
+        countries:
+          type: array
+          description: ISO 3166-1 alpha-2 codes, sorted.
+          items:
+            type: string
+    SetupSettings:
+      type: object
+      description: The Settings fields without has_custom_icon. A missing push_hour means 8.
+      required: [name, timezone, locale, currency, country_code, accent_color]
+      properties:
+        name:
+          type: string
+        timezone:
+          type: string
+        locale:
+          type: string
+        currency:
+          type: string
+        country_code:
+          type: string
+        accent_color:
+          type: string
+        push_hour:
+          type: integer
+    SetupInput:
+      type: object
+      required: [token, username, password, settings]
+      properties:
+        token:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        settings:
+          $ref: "#/components/schemas/SetupSettings"
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
     SetupStatus:
       type: object
       required: [needs_setup]

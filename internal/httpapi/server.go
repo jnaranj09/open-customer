@@ -13,9 +13,11 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jnaranj09/open-customer/internal/auth"
+	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
@@ -40,13 +42,20 @@ type Options struct {
 	Auth           *auth.Auth
 	Status         *status.Status
 	Log            *slog.Logger
+	// beginner opens the write transactions; nil means Pool. Only tests set it (a Commit that
+	// fails).
+	beginner db.Beginner
 }
 
 // Server implements gen.ServerInterface over the module values (design doc item 32).
 type Server struct {
-	pool   *pgxpool.Pool
-	auth   *auth.Auth
-	status *status.Status
+	pool     *pgxpool.Pool
+	beginner db.Beginner // begins every write transaction (db.WithTx)
+	auth     *auth.Auth
+	status   *status.Status
+	// secureCookies is PUBLIC_URL's scheme == https: the session cookie drops Secure only for a
+	// plain-http PUBLIC_URL (localhost in development and e2e).
+	secureCookies bool
 }
 
 var _ gen.ServerInterface = (*Server)(nil)
@@ -54,7 +63,13 @@ var _ gen.ServerInterface = (*Server)(nil)
 // New returns the app's whole HTTP handler: the probes, the generated /api/v1 routes, the /api/
 // catch-all and the SPA, inside the middleware steps of design doc item 34.
 func New(opts Options) http.Handler {
-	s := &Server{pool: opts.Pool, auth: opts.Auth, status: opts.Status}
+	s := &Server{
+		pool: opts.Pool, beginner: opts.beginner, auth: opts.Auth, status: opts.Status,
+		secureCookies: opts.PublicURL.Scheme == "https",
+	}
+	if s.beginner == nil {
+		s.beginner = opts.Pool
+	}
 	mux := http.NewServeMux()
 	// The probes are outside /api/v1 and the spec, so they are registered by literal path.
 	mux.HandleFunc("GET /healthz", s.healthz)
@@ -143,6 +158,18 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 		"code", code, "path", r.URL.Path, "request_id", logging.RequestID(r.Context()))
 	problem.Write(w, r, p)
 	return p
+}
+
+// writeError writes err as a problem. A Postgres error is replaced by its SQLSTATE first, because
+// problem.Write logs an internal error's text and a Postgres message can quote input (a unique
+// violation names the key, an invalid-input error quotes the value). A unique violation or a
+// deadlock is then a plain 500 internal.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		err = fmt.Errorf("database error (SQLSTATE %s)", pgErr.Code)
+	}
+	problem.Write(w, r, err)
 }
 
 // writeJSON writes v as a JSON response with status. The status is already sent when encoding

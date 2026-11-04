@@ -24,10 +24,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The choices the setup wizard offers
+         * @description No session: the setup wizard needs it before any user exists. It lists the supported country codes.
+         */
+        get: operations["getSetupOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish first-run setup
+         * @description No session: it creates the owner user and her first session. The setup token from the setup link is what authorizes it.
+         */
+        post: operations["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with username and password
+         * @description No session: it is how a session is made. It is rate limited per client IP and per username.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Me: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+            must_change_password: boolean;
+        };
+        SetupOptions: {
+            /** @description ISO 3166-1 alpha-2 codes, sorted. */
+            countries: string[];
+        };
+        /** @description The Settings fields without has_custom_icon. A missing push_hour means 8. */
+        SetupSettings: {
+            name: string;
+            timezone: string;
+            locale: string;
+            currency: string;
+            country_code: string;
+            accent_color: string;
+            push_hour?: number;
+        };
+        SetupInput: {
+            token: string;
+            username: string;
+            password: string;
+            settings: components["schemas"]["SetupSettings"];
+        };
+        LoginInput: {
+            username: string;
+            password: string;
+        };
         SetupStatus: {
             needs_setup: boolean;
         };
@@ -45,10 +135,23 @@ export interface components {
             message: string;
         };
     };
-    responses: never;
+    responses: {
+        /** @description An RFC 9457 problem. */
+        Problem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description The oc_session cookie: HttpOnly, SameSite=Lax, Path=/, 90 days, and Secure unless PUBLIC_URL is plain http. */
+        SessionCookie: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -71,6 +174,83 @@ export interface operations {
                     "application/json": components["schemas"]["SetupStatus"];
                 };
             };
+        };
+    };
+    getSetupOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Setup choices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupOptions"];
+                };
+            };
+        };
+    };
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupInput"];
+            };
+        };
+        responses: {
+            /** @description The owner user; the session cookie is set. */
+            201: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            409: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginInput"];
+            };
+        };
+        responses: {
+            /** @description The signed-in user; the session cookie is set. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
         };
     };
 }

@@ -16,15 +16,146 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for ProblemType.
+const (
+	UrnOpenCustomerProblemDuplicatePhone       ProblemType = "urn:open-customer:problem:duplicate-phone"
+	UrnOpenCustomerProblemForbiddenOrigin      ProblemType = "urn:open-customer:problem:forbidden-origin"
+	UrnOpenCustomerProblemInternal             ProblemType = "urn:open-customer:problem:internal"
+	UrnOpenCustomerProblemInvalidCredentials   ProblemType = "urn:open-customer:problem:invalid-credentials"
+	UrnOpenCustomerProblemInvalidTransition    ProblemType = "urn:open-customer:problem:invalid-transition"
+	UrnOpenCustomerProblemMustChangePassword   ProblemType = "urn:open-customer:problem:must-change-password"
+	UrnOpenCustomerProblemNotFound             ProblemType = "urn:open-customer:problem:not-found"
+	UrnOpenCustomerProblemOverlap              ProblemType = "urn:open-customer:problem:overlap"
+	UrnOpenCustomerProblemPayloadTooLarge      ProblemType = "urn:open-customer:problem:payload-too-large"
+	UrnOpenCustomerProblemRateLimited          ProblemType = "urn:open-customer:problem:rate-limited"
+	UrnOpenCustomerProblemSetupClosed          ProblemType = "urn:open-customer:problem:setup-closed"
+	UrnOpenCustomerProblemSetupTokenInvalid    ProblemType = "urn:open-customer:problem:setup-token-invalid"
+	UrnOpenCustomerProblemUnauthorized         ProblemType = "urn:open-customer:problem:unauthorized"
+	UrnOpenCustomerProblemUnsupportedMediaType ProblemType = "urn:open-customer:problem:unsupported-media-type"
+	UrnOpenCustomerProblemValidation           ProblemType = "urn:open-customer:problem:validation"
+)
+
+// Valid indicates whether the value is a known member of the ProblemType enum.
+func (e ProblemType) Valid() bool {
+	switch e {
+	case UrnOpenCustomerProblemDuplicatePhone:
+		return true
+	case UrnOpenCustomerProblemForbiddenOrigin:
+		return true
+	case UrnOpenCustomerProblemInternal:
+		return true
+	case UrnOpenCustomerProblemInvalidCredentials:
+		return true
+	case UrnOpenCustomerProblemInvalidTransition:
+		return true
+	case UrnOpenCustomerProblemMustChangePassword:
+		return true
+	case UrnOpenCustomerProblemNotFound:
+		return true
+	case UrnOpenCustomerProblemOverlap:
+		return true
+	case UrnOpenCustomerProblemPayloadTooLarge:
+		return true
+	case UrnOpenCustomerProblemRateLimited:
+		return true
+	case UrnOpenCustomerProblemSetupClosed:
+		return true
+	case UrnOpenCustomerProblemSetupTokenInvalid:
+		return true
+	case UrnOpenCustomerProblemUnauthorized:
+		return true
+	case UrnOpenCustomerProblemUnsupportedMediaType:
+		return true
+	case UrnOpenCustomerProblemValidation:
+		return true
+	default:
+		return false
+	}
+}
+
+// FieldError defines model for FieldError.
+type FieldError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+// LoginInput defines model for LoginInput.
+type LoginInput struct {
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
+// Me defines model for Me.
+type Me struct {
+	Id                 openapi_types.UUID `json:"id"`
+	MustChangePassword bool               `json:"must_change_password"`
+	Username           string             `json:"username"`
+}
+
+// Problem An RFC 9457 problem, sent as application/problem+json.
+type Problem struct {
+	Errors      *[]FieldError `json:"errors,omitempty"`
+	RetryAfterS *int          `json:"retry_after_s,omitempty"`
+	Status      int           `json:"status"`
+	Title       string        `json:"title"`
+	Type        ProblemType   `json:"type"`
+}
+
+// ProblemType defines model for Problem.Type.
+type ProblemType string
+
+// SetupInput defines model for SetupInput.
+type SetupInput struct {
+	Password string `json:"password"`
+
+	// Settings The Settings fields without has_custom_icon. A missing push_hour means 8.
+	Settings SetupSettings `json:"settings"`
+	Token    string        `json:"token"`
+	Username string        `json:"username"`
+}
+
+// SetupOptions defines model for SetupOptions.
+type SetupOptions struct {
+	// Countries ISO 3166-1 alpha-2 codes, sorted.
+	Countries []string `json:"countries"`
+}
+
+// SetupSettings The Settings fields without has_custom_icon. A missing push_hour means 8.
+type SetupSettings struct {
+	AccentColor string `json:"accent_color"`
+	CountryCode string `json:"country_code"`
+	Currency    string `json:"currency"`
+	Locale      string `json:"locale"`
+	Name        string `json:"name"`
+	PushHour    *int   `json:"push_hour,omitempty"`
+	Timezone    string `json:"timezone"`
+}
 
 // SetupStatus defines model for SetupStatus.
 type SetupStatus struct {
 	NeedsSetup bool `json:"needs_setup"`
 }
 
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginInput
+
+// CompleteSetupJSONRequestBody defines body for CompleteSetup for application/json ContentType.
+type CompleteSetupJSONRequestBody = SetupInput
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Login Sign in with username and password
+	// (POST /auth/login)
+	Login(w http.ResponseWriter, r *http.Request)
+	// CompleteSetup Finish first-run setup
+	// (POST /setup)
+	CompleteSetup(w http.ResponseWriter, r *http.Request)
+	// GetSetupOptions The choices the setup wizard offers
+	// (GET /setup/options)
+	GetSetupOptions(w http.ResponseWriter, r *http.Request)
 	// GetSetupStatus Whether the first-run setup is still open
 	// (GET /setup/status)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
@@ -38,6 +169,48 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// Login operation middleware
+func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteSetup operation middleware
+func (siw *ServerInterfaceWrapper) CompleteSetup(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteSetup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSetupOptions operation middleware
+func (siw *ServerInterfaceWrapper) GetSetupOptions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSetupOptions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetSetupStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +347,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/setup/status", wrapper.GetSetupStatus)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/setup/options", wrapper.GetSetupOptions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/setup", wrapper.CompleteSetup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login", wrapper.Login)
 
 	return m
 }
@@ -183,15 +359,31 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"ZFLNbtw8DHwVgt93aAHH3jToxbeihzbopUAK9BAsAq3MjZXaokpSSbeB372QvPk/WSTHQ3I49+h5Thwp",
-	"mmJ/j+pHml19XpDldGHOcg2TcCKxQDWKRINeaYGU0A6JsMcd80Qu4rI0KPQ7B6EB+8sX6G3zgObdDXmr",
-	"YCWfJdjhorRfOyipBo6fmX8FKokQsUe/hg1GN1cOf3UE4iOvS+EbHXApxCHuufw8kHoJyQqwxx8jgedo",
-	"4rzBngVsJOBE8cRnNZ5J4NP38xbODUaeBgWO06GCKA6JQzQF3teEzyIUDXY5TAOk0SnBu4E0XEcY2EMw",
-	"muH04/u2zBdsqkO/7oQN3pLoOtxpu2k3uDQV5lLAHs/aTXuGDSZnYxWnq1p2+nida7K3a351CpHBZRsp",
-	"WvCu5IEjpCyJlfq6QaWCu/DXyQDeTZNCMNjRnoXAxQNkJQEWOAoN9CeoaQPGMJAPA8HdSDaSlIyOfFdp",
-	"V8KydvFNbX0+YI9fyJ47qxhFE0ddr/5hsymfchyKdSWX0nQcvbtRjk8uLa//hfbY43/dk427tard8zbV",
-	"DC/VqWUoElL7woTYX24b1DzPTg7Y48+H7UaCfRC1E8nxKFtQUAvTVN2DyyuaNy6+3C6FmqScuwKyTNhj",
-	"51Lobk9x2S7/BgA=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
