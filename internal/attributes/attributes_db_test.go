@@ -15,6 +15,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/db/dbtest"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
+	"github.com/jnaranj09/open-customer/internal/platform/position"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
@@ -153,24 +154,44 @@ func TestCreateRecordsClockTime(t *testing.T) {
 	}
 }
 
-func TestCreateAfterMaxPositionReturnsStoredPosition(t *testing.T) {
+func TestCreateAfterMaxPositionIs422(t *testing.T) {
 	f := newFixture(t)
 	a := f.create(t, "Talla", ScopeClient, TypeText)
-	top := math.MaxInt32 - 1
+	top := position.Max
 	if _, err := f.m.Update(t.Context(), f.pool, a.ID, AttributePatch{Position: &top}); err != nil {
 		t.Fatalf("Update to the largest allowed position: %v", err)
 	}
-	b, err := f.m.Create(t.Context(), f.pool, AttributeInput{Label: "Edad", Scope: ScopeClient, Type: TypeText})
-	if err != nil {
-		t.Fatalf("Create after the max: %v", err)
+	_, err := f.m.Create(t.Context(), f.pool, AttributeInput{Label: "Edad", Scope: ScopeClient, Type: TypeText})
+	wantField(t, err, "position", problem.MsgPositionInvalid)
+}
+
+func TestCreateAtLastFreePositionStoresIt(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, "Talla", ScopeClient, TypeText)
+	below := position.Max - 1
+	if _, err := f.m.Update(t.Context(), f.pool, a.ID, AttributePatch{Position: &below}); err != nil {
+		t.Fatalf("Update: %v", err)
 	}
+	b := f.create(t, "Edad", ScopeClient, TypeText)
 	var stored int
 	if err := f.pool.QueryRow(t.Context(), `SELECT position FROM attribute_definitions WHERE id = $1`, b.ID).Scan(&stored); err != nil {
 		t.Fatalf("read position: %v", err)
 	}
-	if b.Position != math.MaxInt32 || stored != b.Position {
-		t.Errorf("returned %d, stored %d, want both %d", b.Position, stored, math.MaxInt32)
+	if b.Position != position.Max || stored != position.Max {
+		t.Errorf("returned %d, stored %d, want both %d", b.Position, stored, position.Max)
 	}
+}
+
+func TestAddOptionAfterMaxPositionIs422(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, "Zona", ScopeClient, TypeSelect)
+	o := f.option(t, a, "Norte", uuid.NullUUID{})
+	top := position.Max
+	if _, err := f.m.UpdateOption(t.Context(), f.pool, a.ID, o.ID, OptionPatch{Position: &top}); err != nil {
+		t.Fatalf("UpdateOption to the largest allowed position: %v", err)
+	}
+	_, err := f.m.AddOption(t.Context(), f.pool, a.ID, OptionInput{Label: "Sur"})
+	wantField(t, err, "position", problem.MsgPositionInvalid)
 }
 
 func TestCreateAcceptsEightyRuneLabel(t *testing.T) {

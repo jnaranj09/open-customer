@@ -14,6 +14,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/db/dbtest"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
+	"github.com/jnaranj09/open-customer/internal/platform/position"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
@@ -246,10 +247,23 @@ func TestListServicesIsOrderedAndNeverNil(t *testing.T) {
 	}
 }
 
-func TestCreateServiceAfterMaxPositionReturnsStoredPosition(t *testing.T) {
+func TestCreateServiceAfterMaxPositionIs422(t *testing.T) {
 	f := newFixture(t)
 	a := f.create(t, validInput())
-	if _, err := f.m.Update(t.Context(), f.pool, a.ID, ServicePatch{Position: ptr(math.MaxInt32 - 1)}); err != nil {
+	if _, err := f.m.Update(t.Context(), f.pool, a.ID, ServicePatch{Position: ptr(position.Max)}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	_, err := f.m.Create(t.Context(), f.pool, validInput())
+	got := fieldsOf(t, err)
+	if len(got) != 1 || got[0].Field != "position" || got[0].Message != problem.MsgPositionInvalid {
+		t.Fatalf("errors = %+v, want one on position", got)
+	}
+}
+
+func TestCreateServiceAtLastFreePositionStoresIt(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, validInput())
+	if _, err := f.m.Update(t.Context(), f.pool, a.ID, ServicePatch{Position: ptr(position.Max - 1)}); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
 	b := f.create(t, validInput())
@@ -257,8 +271,8 @@ func TestCreateServiceAfterMaxPositionReturnsStoredPosition(t *testing.T) {
 	if err := f.pool.QueryRow(t.Context(), `SELECT position FROM services WHERE id = $1`, b.ID).Scan(&stored); err != nil {
 		t.Fatalf("read position: %v", err)
 	}
-	if b.Position != math.MaxInt32 || stored != b.Position {
-		t.Fatalf("returned %d, stored %d, want both %d", b.Position, stored, math.MaxInt32)
+	if b.Position != position.Max || stored != position.Max {
+		t.Fatalf("returned %d, stored %d, want both %d", b.Position, stored, position.Max)
 	}
 }
 

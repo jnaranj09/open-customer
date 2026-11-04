@@ -7,16 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/sqlc"
+	"github.com/jnaranj09/open-customer/internal/platform/archive"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/ids"
+	"github.com/jnaranj09/open-customer/internal/platform/position"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/platform/text"
 )
@@ -201,13 +201,17 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in AttributeInput) (Attr
 	if err != nil {
 		return Attribute{}, fmt.Errorf("max attribute position: %w", err)
 	}
+	next, ok := position.Next(last)
+	if !ok {
+		return Attribute{}, fieldError("position", problem.MsgPositionInvalid)
+	}
 	a := Attribute{
 		ID: id, Key: GenerateKey(label, taken), Label: label, Scope: in.Scope, Type: in.Type,
-		Required: in.Required, Position: int(last + 1),
+		Required: in.Required, Position: int(next),
 	}
 	if err := queries.InsertAttribute(ctx, sqlc.InsertAttributeParams{
 		ID: a.ID, Key: a.Key, Label: a.Label, Scope: string(a.Scope), Type: string(a.Type),
-		Required: a.Required, Position: last + 1, Now: m.clock.Now(),
+		Required: a.Required, Position: next, Now: m.clock.Now(),
 	}); err != nil {
 		return Attribute{}, fmt.Errorf("insert attribute: %w", err)
 	}
@@ -228,7 +232,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Attribut
 	var pos int32
 	if p.Position != nil {
 		var ok bool
-		if pos, ok = position(*p.Position); !ok {
+		if pos, ok = position.Check(*p.Position); !ok {
 			errs = append(errs, problem.FieldError{Field: "position", Message: problem.MsgPositionInvalid})
 		}
 	}
@@ -255,7 +259,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p Attribut
 	if p.Position != nil {
 		params.Position = pos
 	}
-	params.ArchivedAt = archivedAt(p.Archived, row.ArchivedAt, m.clock.Now())
+	params.ArchivedAt = archive.At(p.Archived, row.ArchivedAt, m.clock.Now())
 	if err := queries.UpdateAttribute(ctx, params); err != nil {
 		return Attribute{}, fmt.Errorf("update attribute: %w", err)
 	}
@@ -317,7 +321,10 @@ func (m *Module) AddOption(ctx context.Context, q db.DBTX, attrID uuid.UUID, in 
 	if err != nil {
 		return Option{}, fmt.Errorf("max option position: %w", err)
 	}
-	next := last + 1
+	next, ok := position.Next(last)
+	if !ok {
+		return Option{}, fieldError("position", problem.MsgPositionInvalid)
+	}
 	o := Option{ID: id, AttributeID: attrID, ParentID: in.ParentID, Label: label, Position: int(next)}
 	if err := queries.InsertAttributeOption(ctx, sqlc.InsertAttributeOptionParams{
 		ID: o.ID, AttributeID: attrID, ParentID: in.ParentID, Label: label, Position: next,
@@ -341,7 +348,7 @@ func (m *Module) UpdateOption(ctx context.Context, q db.DBTX, attrID, optionID u
 	var pos int32
 	if p.Position != nil {
 		var ok bool
-		if pos, ok = position(*p.Position); !ok {
+		if pos, ok = position.Check(*p.Position); !ok {
 			errs = append(errs, problem.FieldError{Field: "position", Message: problem.MsgPositionInvalid})
 		}
 	}
@@ -365,7 +372,7 @@ func (m *Module) UpdateOption(ctx context.Context, q db.DBTX, attrID, optionID u
 		o.Position = int(pos)
 		storedPos = pos
 	}
-	at := archivedAt(p.Archived, row.ArchivedAt, m.clock.Now())
+	at := archive.At(p.Archived, row.ArchivedAt, m.clock.Now())
 	o.Archived = at != nil
 	if err := queries.UpdateAttributeOption(ctx, sqlc.UpdateAttributeOptionParams{
 		ID: optionID, Label: o.Label, Position: storedPos, ArchivedAt: at,
@@ -387,31 +394,6 @@ func (m *Module) Validate(ctx context.Context, q db.DBTX, scope Scope, stored, r
 		return nil, problem.Validation{Errors: errs}
 	}
 	return merged, nil
-}
-
-// archivedAt is the archive time after a patch: unchanged when archived is nil, the stored time
-// (or now, when none) for true, and none for false.
-func archivedAt(archived *bool, stored *time.Time, now time.Time) *time.Time {
-	switch {
-	case archived == nil:
-		return stored
-	case !*archived:
-		return nil
-	case stored != nil:
-		return stored
-	}
-	return &now
-}
-
-// maxPosition leaves room for the "last + 1" of Create and AddOption.
-const maxPosition = math.MaxInt32 - 1
-
-// position checks a requested position and converts it to the column type.
-func position(n int) (int32, bool) {
-	if n < 0 || n > maxPosition {
-		return 0, false
-	}
-	return int32(n), true
 }
 
 // optionsOrEmpty gives an attribute without options an empty slice, so its JSON is [] and never null.

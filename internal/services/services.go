@@ -6,8 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -15,9 +13,11 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/sqlc"
+	"github.com/jnaranj09/open-customer/internal/platform/archive"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/color"
 	"github.com/jnaranj09/open-customer/internal/platform/ids"
+	"github.com/jnaranj09/open-customer/internal/platform/position"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/platform/text"
 )
@@ -25,8 +25,6 @@ import (
 const (
 	maxNameLen     = 80
 	maxDurationMin = 1440
-	// maxPosition leaves room for the "last + 1" of Create.
-	maxPosition = math.MaxInt32 - 1
 )
 
 // Service is one catalog entry. PriceCents is nil when the service has no price.
@@ -126,13 +124,17 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in ServiceInput) (Servic
 	if err != nil {
 		return Service{}, fmt.Errorf("max service position: %w", err)
 	}
+	next, ok := position.Next(last)
+	if !ok {
+		return Service{}, problem.Validation{Errors: []problem.FieldError{{Field: "position", Message: problem.MsgPositionInvalid}}}
+	}
 	if err := queries.InsertService(ctx, sqlc.InsertServiceParams{
-		ID: id, Name: name, DurationMin: duration, PriceCents: in.PriceCents, Color: hex, Position: last + 1,
+		ID: id, Name: name, DurationMin: duration, PriceCents: in.PriceCents, Color: hex, Position: next,
 	}); err != nil {
 		return Service{}, fmt.Errorf("insert service: %w", err)
 	}
 	return Service{
-		ID: id, Name: name, DurationMin: in.DurationMin, PriceCents: in.PriceCents, Color: hex, Position: int(last + 1),
+		ID: id, Name: name, DurationMin: in.DurationMin, PriceCents: in.PriceCents, Color: hex, Position: int(next),
 	}, nil
 }
 
@@ -167,7 +169,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ServiceP
 	var pos int32
 	if p.Position != nil {
 		var ok bool
-		if pos, ok = position(*p.Position); !ok {
+		if pos, ok = position.Check(*p.Position); !ok {
 			errs = append(errs, problem.FieldError{Field: "position", Message: problem.MsgPositionInvalid})
 		}
 	}
@@ -204,7 +206,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ServiceP
 	if p.Position != nil {
 		params.Position = pos
 	}
-	params.ArchivedAt = archivedAt(p.Archived, row.ArchivedAt, m.clock.Now())
+	params.ArchivedAt = archive.At(p.Archived, row.ArchivedAt, m.clock.Now())
 	if err := queries.UpdateService(ctx, params); err != nil {
 		return Service{}, fmt.Errorf("update service: %w", err)
 	}
@@ -220,28 +222,6 @@ func durationMin(n int) (int32, bool) {
 		return 0, false
 	}
 	return int32(n), true
-}
-
-// position checks a requested position and converts it to the column type.
-func position(n int) (int32, bool) {
-	if n < 0 || n > maxPosition {
-		return 0, false
-	}
-	return int32(n), true
-}
-
-// archivedAt is the archive time after a patch: unchanged when archived is nil, the stored time
-// (or now, when none) for true, and none for false.
-func archivedAt(archived *bool, stored *time.Time, now time.Time) *time.Time {
-	switch {
-	case archived == nil:
-		return stored
-	case !*archived:
-		return nil
-	case stored != nil:
-		return stored
-	}
-	return &now
 }
 
 func serviceFrom(r sqlc.Service) Service {
