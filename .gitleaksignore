@@ -1,3 +1,5 @@
 # Reviewed gitleaks false positives. One line each: the finding's fingerprint, with the reason above it.
 # The temp-password alphabet (item 19) is a public list of allowed characters, not a secret.
 a65d7fa64b782b4b3daa6cae7c3149982b6c6307:internal/auth/password_change.go:generic-api-key:20
+# A made-up test fixture (password_test.go): base64 of "saltsaltsaltsalt" and 32 zero bytes, not a secret.
+6c4156fc64186e4ed5ad234048674fb4f063ac5d:internal/auth/password_test.go:generic-api-key:68

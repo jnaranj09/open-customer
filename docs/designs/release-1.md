@@ -1374,7 +1374,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | Step | From phase |
     | --- | --- |
     | Setup: `actions/checkout` with `fetch-depth: 0`, `actions/setup-go`, `pnpm/action-setup`, `actions/setup-node`, `pnpm install --frozen-lockfile` in `web/`, `golangci/golangci-lint-action` with `install-only: true` and the pinned `version:` | P0 |
-    | Secret scan: `gitleaks/gitleaks-action` over the whole history (no license key is needed for a personal account). Reviewed false positives are listed by fingerprint, each with its reason, in `.gitleaksignore` (today only the item 19 temp-password alphabet) | P0 |
+    | Secret scan: `gitleaks/gitleaks-action` over the whole history (no license key is needed for a personal account). Reviewed false positives are listed by fingerprint, each with its reason, in `.gitleaksignore` (today the item 19 temp-password alphabet and one made-up hash fixture in a test) | P0 |
     | `pnpm audit --audit-level high` in `web/` | P0 |
     | `make check-pins` | P0 |
     | `make lint GOLANGCI_LINT=golangci-lint` | P0 |
