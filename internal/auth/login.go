@@ -27,9 +27,11 @@ type LoginInput struct {
 // Login checks the username and password and creates a session. ip is the client IP the caller
 // derived (httpapi decides whether to trust CF-Connecting-IP). In order: a malformed username is
 // Validation (422); a used-up IP bucket or a username still waiting out its delay is RateLimited
-// (429); an unknown username or a wrong password is InvalidCredentials (401) and counts a failure
-// for that username; success clears the username's delay. It returns the user and the session
-// token for the cookie. The handler runs it in db.WithTx.
+// (429); otherwise the attempt counts as a failure for that username before the password is
+// checked, so parallel attempts cannot skip the delay. An unknown username or a wrong password is
+// then InvalidCredentials (401) and the failure stands; success takes it back and clears the
+// username's delay. It returns the user and the session token for the cookie. The handler runs it
+// in db.WithTx.
 func (a *Auth) Login(ctx context.Context, q db.DBTX, in LoginInput, ip netip.Addr) (Me, string, error) {
 	username, err := normalizeUsername(in.Username)
 	if err != nil {
@@ -38,7 +40,7 @@ func (a *Auth) Login(ctx context.Context, q db.DBTX, in LoginInput, ip netip.Add
 	if err := a.limiter.allowIP(ip, a.clock.Now()); err != nil {
 		return Me{}, "", err
 	}
-	if err := a.limiter.checkName(username, a.clock.Now()); err != nil {
+	if err := a.limiter.reserveName(username, a.clock.Now()); err != nil {
 		return Me{}, "", err
 	}
 	user, found, err := loadLoginUser(ctx, q, username)
@@ -54,7 +56,6 @@ func (a *Auth) Login(ctx context.Context, q db.DBTX, in LoginInput, ip netip.Add
 		return Me{}, "", err
 	}
 	if !found || !ok {
-		a.limiter.recordFailure(username, a.clock.Now())
 		return Me{}, "", problem.InvalidCredentials{}
 	}
 	a.limiter.recordSuccess(username)

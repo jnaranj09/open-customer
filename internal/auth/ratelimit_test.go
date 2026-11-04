@@ -79,16 +79,18 @@ func TestIPEntriesSweptAfterTenMinutes(t *testing.T) {
 	}
 }
 
+// Each failed attempt is a reserveName that returned nil: the reservation counts the failure up
+// front, and only a success (recordSuccess) takes it back.
+
 func TestUsernameDelayDoubles(t *testing.T) {
 	t.Parallel()
 	l := newLoginLimiter()
 	at := limitStart
 	for _, want := range []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second} {
-		if err := l.checkName("made-up-name", at); err != nil {
+		if err := l.reserveName("made-up-name", at); err != nil {
 			t.Fatalf("attempt at +%v: %v; want nil", at.Sub(limitStart), err)
 		}
-		l.recordFailure("made-up-name", at)
-		if got := retryAfter(t, l.checkName("made-up-name", at)); got != want {
+		if got := retryAfter(t, l.reserveName("made-up-name", at)); got != want {
 			t.Fatalf("right after the failure at +%v: RetryAfter = %v; want %v", at.Sub(limitStart), got, want)
 		}
 		at = at.Add(want)
@@ -99,12 +101,14 @@ func TestUsernameDelayCappedAtThirtySeconds(t *testing.T) {
 	t.Parallel()
 	l := newLoginLimiter()
 	at := limitStart
-	for range 10 {
-		l.recordFailure("made-up-name", at)
+	for i := range 10 {
+		if err := l.reserveName("made-up-name", at); err != nil {
+			t.Fatalf("failure %d: %v", i+1, err)
+		}
 		at = at.Add(time.Minute)
 	}
 	last := at.Add(-time.Minute)
-	if got := retryAfter(t, l.checkName("made-up-name", last)); got != 30*time.Second {
+	if got := retryAfter(t, l.reserveName("made-up-name", last)); got != 30*time.Second {
 		t.Fatalf("after 10 failures: RetryAfter = %v; want 30s", got)
 	}
 }
@@ -112,14 +116,16 @@ func TestUsernameDelayCappedAtThirtySeconds(t *testing.T) {
 func TestUsernameDelayResetsOnSuccess(t *testing.T) {
 	t.Parallel()
 	l := newLoginLimiter()
-	l.recordFailure("made-up-name", limitStart)
-	l.recordFailure("made-up-name", limitStart.Add(time.Second))
+	for _, at := range []time.Time{limitStart, limitStart.Add(time.Second)} {
+		if err := l.reserveName("made-up-name", at); err != nil {
+			t.Fatalf("attempt at +%v: %v", at.Sub(limitStart), err)
+		}
+	}
 	l.recordSuccess("made-up-name")
-	if err := l.checkName("made-up-name", limitStart.Add(time.Second)); err != nil {
+	if err := l.reserveName("made-up-name", limitStart.Add(time.Second)); err != nil {
 		t.Fatalf("after a success: %v; want nil", err)
 	}
-	l.recordFailure("made-up-name", limitStart.Add(time.Second))
-	if got := retryAfter(t, l.checkName("made-up-name", limitStart.Add(time.Second))); got != time.Second {
+	if got := retryAfter(t, l.reserveName("made-up-name", limitStart.Add(time.Second))); got != time.Second {
 		t.Fatalf("first failure after a success: RetryAfter = %v; want 1s (the doubling restarts)", got)
 	}
 }
@@ -128,37 +134,118 @@ func TestUsernameEntryExpiresAfterFifteenMinutes(t *testing.T) {
 	t.Parallel()
 	l := newLoginLimiter()
 	for i := range 6 {
-		l.recordFailure("made-up-name", limitStart.Add(time.Duration(i)*time.Minute))
+		if err := l.reserveName("made-up-name", limitStart.Add(time.Duration(i)*time.Minute)); err != nil {
+			t.Fatalf("failure %d: %v", i+1, err)
+		}
 	}
 	last := limitStart.Add(5 * time.Minute)
-	if err := l.checkName("made-up-name", last.Add(15*time.Minute-time.Second)); err != nil {
-		t.Fatalf("14m59s after the last failure: %v; want nil (the 30s wait is over)", err)
+	// allowIP sweeps both maps; the two calls are a second apart, so both sweeps run.
+	if err := l.allowIP(ipA, last.Add(15*time.Minute-time.Second)); err != nil {
+		t.Fatalf("allowIP: %v", err)
 	}
 	if _, kept := l.names["made-up-name"]; !kept {
 		t.Fatal("14m59s after the last failure: the entry is gone; want it kept")
 	}
-	if err := l.checkName("other-name", last.Add(15*time.Minute)); err != nil {
-		t.Fatalf("another name: %v", err)
+	if err := l.allowIP(ipA, last.Add(15*time.Minute)); err != nil {
+		t.Fatalf("allowIP: %v", err)
 	}
 	if _, kept := l.names["made-up-name"]; kept {
 		t.Fatal("15m after the last failure: the entry is kept; want it removed")
 	}
-	l.recordFailure("made-up-name", last.Add(15*time.Minute))
-	if got := retryAfter(t, l.checkName("made-up-name", last.Add(15*time.Minute))); got != time.Second {
+	if err := l.reserveName("made-up-name", last.Add(15*time.Minute)); err != nil {
+		t.Fatalf("first attempt after expiry: %v; want nil", err)
+	}
+	if got := retryAfter(t, l.reserveName("made-up-name", last.Add(15*time.Minute))); got != time.Second {
 		t.Fatalf("first failure after expiry: RetryAfter = %v; want 1s", got)
+	}
+}
+
+// The sweep runs at most once per second, so an expired entry can still be in the map; it must
+// count as gone all the same.
+func TestExpiredNameEntryIgnoredBeforeTheSweep(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	for _, at := range []time.Time{limitStart, limitStart.Add(time.Second), limitStart.Add(3 * time.Second)} {
+		if err := l.reserveName("made-up-name", at); err != nil {
+			t.Fatalf("attempt at +%v: %v", at.Sub(limitStart), err)
+		}
+	}
+	expiry := limitStart.Add(3*time.Second + 15*time.Minute)
+	if err := l.allowIP(ipA, expiry.Add(-500*time.Millisecond)); err != nil {
+		t.Fatalf("allowIP: %v", err)
+	}
+	if err := l.reserveName("made-up-name", expiry); err != nil {
+		t.Fatalf("at expiry, sweep skipped: %v; want nil", err)
+	}
+	if got := retryAfter(t, l.reserveName("made-up-name", expiry)); got != time.Second {
+		t.Fatalf("at expiry, sweep skipped: RetryAfter = %v; want 1s (a fresh entry, not 8s)", got)
 	}
 }
 
 func TestTooEarlyAttemptReturnsRetryAfter(t *testing.T) {
 	t.Parallel()
 	l := newLoginLimiter()
-	l.recordFailure("made-up-name", limitStart)
-	l.recordFailure("made-up-name", limitStart.Add(time.Second))
+	for _, at := range []time.Time{limitStart, limitStart.Add(time.Second)} {
+		if err := l.reserveName("made-up-name", at); err != nil {
+			t.Fatalf("attempt at +%v: %v", at.Sub(limitStart), err)
+		}
+	}
 	// The second failure asks for 2s; 500ms later 1.5s remain.
-	if got := retryAfter(t, l.checkName("made-up-name", limitStart.Add(1500*time.Millisecond))); got != 1500*time.Millisecond {
+	if got := retryAfter(t, l.reserveName("made-up-name", limitStart.Add(1500*time.Millisecond))); got != 1500*time.Millisecond {
 		t.Fatalf("RetryAfter = %v; want 1.5s (what remains of the wait)", got)
 	}
-	if err := l.checkName("made-up-name", limitStart.Add(3*time.Second)); err != nil {
+	if err := l.reserveName("made-up-name", limitStart.Add(3*time.Second)); err != nil {
 		t.Fatalf("once the wait is over: %v; want nil", err)
+	}
+}
+
+// Two logins for one name that arrive together must not both pass before either has failed: the
+// reservation is taken under the lock, before the slow password check.
+func TestTwoAttemptsAtOnceOnOneNameGetOneThrough(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	if err := l.reserveName("made-up-name", limitStart); err != nil {
+		t.Fatalf("first attempt: %v; want nil", err)
+	}
+	if got := retryAfter(t, l.reserveName("made-up-name", limitStart)); got != time.Second {
+		t.Fatalf("second attempt in the same instant: RetryAfter = %v; want 1s", got)
+	}
+}
+
+func TestIPv4MappedAddressSharesTheIPv4Bucket(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	for range 5 {
+		if err := l.allowIP(ipA, limitStart); err != nil {
+			t.Fatalf("burst: %v", err)
+		}
+	}
+	mapped := netip.AddrFrom16(ipA.As16())
+	if got := retryAfter(t, l.allowIP(mapped, limitStart)); got != 12*time.Second {
+		t.Fatalf("%v after 5 attempts from %v: RetryAfter = %v; want 12s (one bucket)", mapped, ipA, got)
+	}
+}
+
+func TestSweepRunsAtMostOncePerSecond(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	if err := l.allowIP(ipA, limitStart); err != nil {
+		t.Fatalf("allowIP: %v", err)
+	}
+	idle := limitStart.Add(10 * time.Minute)
+	if err := l.allowIP(ipB, idle.Add(-500*time.Millisecond)); err != nil {
+		t.Fatalf("allowIP: %v", err)
+	}
+	if err := l.allowIP(ipB, idle); err != nil {
+		t.Fatalf("allowIP: %v", err)
+	}
+	if _, kept := l.ips[ipA]; !kept {
+		t.Fatal("500ms after the last sweep: the idle entry is gone; want the sweep skipped")
+	}
+	if err := l.allowIP(ipB, idle.Add(500*time.Millisecond)); err != nil {
+		t.Fatalf("allowIP: %v", err)
+	}
+	if _, kept := l.ips[ipA]; kept {
+		t.Fatal("1s after the last sweep: the idle entry is kept; want it swept")
 	}
 }

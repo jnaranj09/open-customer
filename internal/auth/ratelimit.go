@@ -23,15 +23,19 @@ const (
 	nameMaxDelay   = 30 * time.Second
 	// nameEntryLifetime: a username entry is removed this long after its last failure.
 	nameEntryLifetime = 15 * time.Minute
+	// sweepInterval: the idle-entry sweep runs at most this often, so a burst of logins does not
+	// walk both maps under the lock on every call.
+	sweepInterval = time.Second
 )
 
-// loginLimiter holds the per-IP buckets and the per-username delays. Idle entries are swept on
-// each call, so there is no goroutine and no size cap. It never sleeps: a blocked attempt gets
-// problem.RateLimited with the time left.
+// loginLimiter holds the per-IP buckets and the per-username delays. Idle entries are swept by
+// the calls themselves, at most once per sweepInterval, so there is no goroutine and no size cap.
+// It never sleeps: a blocked attempt gets problem.RateLimited with the time left.
 type loginLimiter struct {
-	mu    sync.Mutex
-	ips   map[netip.Addr]*ipEntry
-	names map[string]*nameEntry
+	mu        sync.Mutex
+	ips       map[netip.Addr]*ipEntry
+	names     map[string]*nameEntry
+	lastSweep time.Time
 }
 
 type ipEntry struct {
@@ -49,7 +53,9 @@ func newLoginLimiter() *loginLimiter {
 }
 
 // allowIP takes one attempt from ip's bucket, or is problem.RateLimited until a token refills.
+// An IPv4-mapped IPv6 address (::ffff:a.b.c.d) shares the bucket of a.b.c.d.
 func (l *loginLimiter) allowIP(ip netip.Addr, now time.Time) error {
+	ip = ip.Unmap()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.sweep(now)
@@ -68,37 +74,31 @@ func (l *loginLimiter) allowIP(ip netip.Addr, now time.Time) error {
 	return problem.RateLimited{RetryAfter: time.Duration(missing * float64(ipRefill)).Round(time.Millisecond)}
 }
 
-// checkName is problem.RateLimited while name is still waiting out the delay its last failure set.
-func (l *loginLimiter) checkName(name string, now time.Time) error {
+// reserveName is problem.RateLimited while name is still waiting out the delay its last failure
+// set. Otherwise it counts a failure for name at now and returns nil: the attempt is assumed to
+// fail until recordSuccess takes it back. Checking and counting under one lock means two logins
+// for one name that arrive together cannot both pass before the slow password check.
+func (l *loginLimiter) reserveName(name string, now time.Time) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.sweep(now)
 	e, ok := l.names[name]
-	if !ok {
-		return nil
-	}
-	until := e.lastFailure.Add(nameDelay(e.failures))
-	if now.Before(until) {
-		return problem.RateLimited{RetryAfter: until.Sub(now)}
-	}
-	return nil
-}
-
-// recordFailure counts a failed login for name at now.
-func (l *loginLimiter) recordFailure(name string, now time.Time) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.sweep(now)
-	e, ok := l.names[name]
-	if !ok {
+	// The sweep may have been skipped, so an expired entry can still be here; it counts as gone.
+	if !ok || nameEntryExpired(e, now) {
 		e = &nameEntry{}
 		l.names[name] = e
 	}
+	if e.failures > 0 {
+		if until := e.lastFailure.Add(nameDelay(e.failures)); now.Before(until) {
+			return problem.RateLimited{RetryAfter: until.Sub(now)}
+		}
+	}
 	e.failures++
 	e.lastFailure = now
+	return nil
 }
 
-// recordSuccess clears name's delay.
+// recordSuccess clears name's delay, including the failure its reservation counted.
 func (l *loginLimiter) recordSuccess(name string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -106,18 +106,27 @@ func (l *loginLimiter) recordSuccess(name string) {
 }
 
 // sweep removes IP entries idle for ipIdleLimit and username entries whose last failure is
-// nameEntryLifetime old. l.mu must be held.
+// nameEntryLifetime old. It does nothing if it ran less than sweepInterval ago. l.mu must be held.
 func (l *loginLimiter) sweep(now time.Time) {
+	if now.Before(l.lastSweep.Add(sweepInterval)) {
+		return
+	}
+	l.lastSweep = now
 	for ip, e := range l.ips {
 		if !now.Before(e.lastSeen.Add(ipIdleLimit)) {
 			delete(l.ips, ip)
 		}
 	}
 	for name, e := range l.names {
-		if !now.Before(e.lastFailure.Add(nameEntryLifetime)) {
+		if nameEntryExpired(e, now) {
 			delete(l.names, name)
 		}
 	}
+}
+
+// nameEntryExpired reports whether e's last failure is nameEntryLifetime old at now.
+func nameEntryExpired(e *nameEntry, now time.Time) bool {
+	return !now.Before(e.lastFailure.Add(nameEntryLifetime))
 }
 
 // nameDelay is the wait after the given number of failures: 1 s, 2 s, 4 s, … up to 30 s.
