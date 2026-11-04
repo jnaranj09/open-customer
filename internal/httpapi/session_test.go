@@ -335,7 +335,7 @@ func TestEveryOperationNeedsASessionUnlessPublic(t *testing.T) {
 		for method, op := range item.Operations() {
 			public := op.Security != nil && len(*op.Security) == 0
 			t.Run(fmt.Sprintf("%s %s without a cookie is 401 unless security is empty (public=%v)", method, path, public), func(t *testing.T) {
-				target := apiBase + pathParam.ReplaceAllString(path, "00000000-0000-4000-8000-000000000001")
+				target := apiBase + pathParam.ReplaceAllString(path, "00000000-0000-4000-8000-000000000001") + requiredQuery(op)
 				req := httptest.NewRequest(method, target, strings.NewReader("{"))
 				req.Header.Set("Origin", testOrigin)
 				rec := httptest.NewRecorder()
@@ -346,6 +346,27 @@ func TestEveryOperationNeedsASessionUnlessPublic(t *testing.T) {
 			})
 		}
 	}
+}
+
+// requiredQuery is the query string holding a valid value for each required query parameter of
+// op. The generated router binds parameters before the session steps run, so a request without
+// them would be a 422 and never reach the session check this file tests.
+func requiredQuery(op *openapi3.Operation) string {
+	var pairs []string
+	for _, p := range op.Parameters {
+		if p.Value.In != "query" || !p.Value.Required {
+			continue
+		}
+		value := "1"
+		if p.Value.Schema.Value.Format == "date" {
+			value = "2026-01-01"
+		}
+		pairs = append(pairs, p.Value.Name+"="+value)
+	}
+	if len(pairs) == 0 {
+		return ""
+	}
+	return "?" + strings.Join(pairs, "&")
 }
 
 func TestPublicOperationsAreExactlyTheSetupAndLoginOnes(t *testing.T) {

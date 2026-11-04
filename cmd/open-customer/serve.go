@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jnaranj09/open-customer/internal/appointments"
 	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/clients"
@@ -138,6 +139,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Attributes:     mods.attributes,
 		Services:       mods.services,
 		Clients:        mods.clients,
+		Appointments:   mods.appointments,
 		Status:         status.New(version),
 		Log:            log,
 	})
@@ -155,11 +157,12 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 
 // modules are the domain modules serve and the admin subcommands build.
 type modules struct {
-	settings   *settings.Module
-	attributes *attributes.Module
-	services   *services.Module
-	clients    *clients.Module
-	auth       *auth.Auth
+	settings     *settings.Module
+	attributes   *attributes.Module
+	services     *services.Module
+	clients      *clients.Module
+	appointments *appointments.Module
+	auth         *auth.Auth
 }
 
 // newModules builds the modules, for serve and the admin subcommands.
@@ -173,12 +176,14 @@ func newModules(cfg config.Config) (modules, error) {
 		return modules{}, fmt.Errorf("build the modules: %w", err)
 	}
 	attributesModule := attributes.New(attributes.Options{Clock: clock.Real{}})
+	servicesModule := services.New(services.Options{Clock: clock.Real{}})
 	return modules{
-		settings:   settingsModule,
-		attributes: attributesModule,
-		services:   services.New(services.Options{Clock: clock.Real{}}),
-		clients:    clients.New(clients.Options{Clock: clock.Real{}, Attributes: attributesModule}),
-		auth:       authModule,
+		settings:     settingsModule,
+		attributes:   attributesModule,
+		services:     servicesModule,
+		clients:      clients.New(clients.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		appointments: appointments.New(appointments.Options{Clock: clock.Real{}, Services: servicesModule, Attributes: attributesModule}),
+		auth:         authModule,
 	}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/jnaranj09/open-customer/internal/appointments"
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
@@ -20,5 +21,13 @@ func TestConflictProblemDuplicatePhoneListsClients(t *testing.T) {
 	var c problem.Conflict
 	if !errors.As(got, &c) || c.Name != "duplicate-phone" || len(c.Extra) != 1 {
 		t.Fatalf("got %#v, want a duplicate-phone conflict with one extension", got)
+	}
+}
+
+func TestConflictProblemOverlapListsAppointments(t *testing.T) {
+	got := conflictProblem(appointments.OverlapError{Appointments: []appointments.Appointment{{ClientName: "Lucía Rojas"}}})
+	var c problem.Conflict
+	if !errors.As(got, &c) || c.Name != "overlap" || len(c.Extra) != 1 {
+		t.Fatalf("got %#v, want an overlap conflict with one extension", got)
 	}
 }

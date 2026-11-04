@@ -24,6 +24,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AppointmentStatus.
+const (
+	AppointmentStatusCancelled AppointmentStatus = "cancelled"
+	AppointmentStatusConfirmed AppointmentStatus = "confirmed"
+	AppointmentStatusNoShow    AppointmentStatus = "no_show"
+	AppointmentStatusScheduled AppointmentStatus = "scheduled"
+)
+
+// Valid indicates whether the value is a known member of the AppointmentStatus enum.
+func (e AppointmentStatus) Valid() bool {
+	switch e {
+	case AppointmentStatusCancelled:
+		return true
+	case AppointmentStatusConfirmed:
+		return true
+	case AppointmentStatusNoShow:
+		return true
+	case AppointmentStatusScheduled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AttributeScope.
 const (
 	AttributeScopeAppointment AttributeScope = "appointment"
@@ -124,6 +148,73 @@ func (e ProblemType) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Appointment defines model for Appointment.
+type Appointment struct {
+	// Attrs The appointment-scope attribute values by attribute key.
+	Attrs      json.RawMessage    `json:"attrs"`
+	ClientId   openapi_types.UUID `json:"client_id"`
+	ClientName string             `json:"client_name"`
+	CreatedAt  time.Time          `json:"created_at"`
+
+	// Done Computed on read, never stored. A scheduled or confirmed appointment that has ended.
+	Done       bool                      `json:"done"`
+	EndsAt     time.Time                 `json:"ends_at"`
+	Id         openapi_types.UUID        `json:"id"`
+	Notes      nullable.Nullable[string] `json:"notes"`
+	PaidCents  nullable.Nullable[int64]  `json:"paid_cents"`
+	Services   []AppointmentService      `json:"services"`
+	StartsAt   time.Time                 `json:"starts_at"`
+	Status     AppointmentStatus         `json:"status"`
+	TotalCents int64                     `json:"total_cents"`
+	UpdatedAt  time.Time                 `json:"updated_at"`
+}
+
+// AppointmentInput defines model for AppointmentInput.
+type AppointmentInput struct {
+	AllowOverlap *bool                 `json:"allow_overlap,omitempty"`
+	Attrs        *json.RawMessage      `json:"attrs,omitempty"`
+	ClientId     openapi_types.UUID    `json:"client_id"`
+	EndsAt       *time.Time            `json:"ends_at,omitempty"`
+	Notes        *string               `json:"notes,omitempty"`
+	ServiceIds   *[]openapi_types.UUID `json:"service_ids,omitempty"`
+	StartsAt     time.Time             `json:"starts_at"`
+}
+
+// AppointmentList defines model for AppointmentList.
+type AppointmentList struct {
+	Items []Appointment `json:"items"`
+}
+
+// AppointmentPatch Every field is optional; a field left out is not changed. Only notes and paid_cents may be null.
+type AppointmentPatch struct {
+	AllowOverlap *bool                     `json:"allow_overlap,omitempty"`
+	Attrs        *json.RawMessage          `json:"attrs,omitempty"`
+	EndsAt       *time.Time                `json:"ends_at,omitempty"`
+	Notes        nullable.Nullable[string] `json:"notes,omitempty"`
+	PaidCents    nullable.Nullable[int64]  `json:"paid_cents,omitempty"`
+	ServiceIds   *[]openapi_types.UUID     `json:"service_ids,omitempty"`
+	StartsAt     *time.Time                `json:"starts_at,omitempty"`
+}
+
+// AppointmentService defines model for AppointmentService.
+type AppointmentService struct {
+	DurationMin int    `json:"duration_min"`
+	Name        string `json:"name"`
+
+	// PriceCents The price copied when the line was saved; null when the service had none.
+	PriceCents nullable.Nullable[int64] `json:"price_cents"`
+	ServiceId  openapi_types.UUID       `json:"service_id"`
+}
+
+// AppointmentStatus defines model for AppointmentStatus.
+type AppointmentStatus string
+
+// AppointmentStatusChange defines model for AppointmentStatusChange.
+type AppointmentStatusChange struct {
+	AllowOverlap *bool             `json:"allow_overlap,omitempty"`
+	Status       AppointmentStatus `json:"status"`
 }
 
 // Attribute defines model for Attribute.
@@ -267,6 +358,9 @@ type PasswordChange struct {
 
 // Problem An RFC 9457 problem, sent as application/problem+json.
 type Problem struct {
+	// Appointments The scheduled or confirmed appointments in the way, on an overlap 409.
+	Appointments *[]Appointment `json:"appointments,omitempty"`
+
 	// Clients The other active clients with the phone, on a duplicate-phone 409.
 	Clients     *[]Client     `json:"clients,omitempty"`
 	Errors      *[]FieldError `json:"errors,omitempty"`
@@ -362,10 +456,25 @@ type SetupStatus struct {
 	NeedsSetup bool `json:"needs_setup"`
 }
 
+// ListAppointmentsParams defines parameters for ListAppointments.
+type ListAppointmentsParams struct {
+	From openapi_types.Date `form:"from" json:"from"`
+	To   openapi_types.Date `form:"to" json:"to"`
+}
+
 // ListClientsParams defines parameters for ListClients.
 type ListClientsParams struct {
 	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
 }
+
+// CreateAppointmentJSONRequestBody defines body for CreateAppointment for application/json ContentType.
+type CreateAppointmentJSONRequestBody = AppointmentInput
+
+// UpdateAppointmentJSONRequestBody defines body for UpdateAppointment for application/json ContentType.
+type UpdateAppointmentJSONRequestBody = AppointmentPatch
+
+// SetAppointmentStatusJSONRequestBody defines body for SetAppointmentStatus for application/json ContentType.
+type SetAppointmentStatusJSONRequestBody = AppointmentStatusChange
 
 // CreateAttributeJSONRequestBody defines body for CreateAttribute for application/json ContentType.
 type CreateAttributeJSONRequestBody = AttributeInput
@@ -408,6 +517,21 @@ type CompleteSetupJSONRequestBody = SetupInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAppointments List the appointments of a range of days
+	// (GET /appointments)
+	ListAppointments(w http.ResponseWriter, r *http.Request, params ListAppointmentsParams)
+	// CreateAppointment Book an appointment
+	// (POST /appointments)
+	CreateAppointment(w http.ResponseWriter, r *http.Request)
+	// GetAppointment Get one appointment
+	// (GET /appointments/{id})
+	GetAppointment(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateAppointment Change an appointment
+	// (PATCH /appointments/{id})
+	UpdateAppointment(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// SetAppointmentStatus Change the status of an appointment
+	// (POST /appointments/{id}/status)
+	SetAppointmentStatus(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// CreateAttribute Add an attribute
 	// (POST /attributes)
 	CreateAttribute(w http.ResponseWriter, r *http.Request)
@@ -441,6 +565,9 @@ type ServerInterface interface {
 	// UpdateClient Change a client
 	// (PATCH /clients/{id})
 	UpdateClient(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListClientAppointments List one client's appointments
+	// (GET /clients/{id}/appointments)
+	ListClientAppointments(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// GetMe The signed-in user
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -475,6 +602,144 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAppointments operation middleware
+func (siw *ServerInterfaceWrapper) ListAppointments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAppointmentsParams
+
+	// ------------- Required query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAppointments(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAppointment operation middleware
+func (siw *ServerInterfaceWrapper) CreateAppointment(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAppointment(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAppointment operation middleware
+func (siw *ServerInterfaceWrapper) GetAppointment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAppointment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAppointment operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAppointment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAppointment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAppointmentStatus operation middleware
+func (siw *ServerInterfaceWrapper) SetAppointmentStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAppointmentStatus(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // CreateAttribute operation middleware
 func (siw *ServerInterfaceWrapper) CreateAttribute(w http.ResponseWriter, r *http.Request) {
@@ -709,6 +974,32 @@ func (siw *ServerInterfaceWrapper) UpdateClient(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateClient(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClientAppointments operation middleware
+func (siw *ServerInterfaceWrapper) ListClientAppointments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClientAppointments(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -981,6 +1272,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/clients", wrapper.CreateClient)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clients/{id}", wrapper.GetClient)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/clients/{id}", wrapper.UpdateClient)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clients/{id}/appointments", wrapper.ListClientAppointments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/appointments", wrapper.ListAppointments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/appointments", wrapper.CreateAppointment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/appointments/{id}", wrapper.GetAppointment)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/appointments/{id}", wrapper.UpdateAppointment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/appointments/{id}/status", wrapper.SetAppointmentStatus)
 
 	return m
 }
@@ -990,78 +1287,93 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"3ce7/w0A",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -352,6 +352,91 @@ export interface paths {
         patch: operations["updateClient"];
         trace?: never;
     };
+    "/clients/{id}/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one client's appointments
+         * @description Every status, newest first, unpaged. An archived client still lists; an unknown client is 404.
+         */
+        get: operations["listClientAppointments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the appointments of a range of days
+         * @description Every status, ordered by starts_at. from and to are local days in the business time zone, both inclusive. to must not be before from and at most 31 days after it; otherwise the answer is 422 on to.
+         */
+        get: operations["listAppointments"];
+        put?: never;
+        /**
+         * Book an appointment
+         * @description The appointment starts as scheduled. ends_at defaults to starts_at plus the durations of the services; at least one service or an explicit ends_at is required. An unknown or archived client or service is 422. When it overlaps a scheduled or confirmed appointment the answer is 409 overlap with those appointments, unless allow_overlap is true.
+         */
+        post: operations["createAppointment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/appointments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one appointment */
+        get: operations["getAppointment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an appointment
+         * @description Changes only the fields sent. notes and paid_cents may be null, which clears them. attrs merges by key and null removes a key. service_ids replaces the whole list. The overlap check (409 overlap) runs when the times of a scheduled or confirmed appointment change, unless allow_overlap is true. client_id and status cannot be changed here.
+         */
+        patch: operations["updateAppointment"];
+        trace?: never;
+    };
+    "/appointments/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the status of an appointment
+         * @description An allowed change gives 200; any other is 409 invalid-transition. A change to scheduled ("Reactivar") runs the overlap check (409 overlap) unless allow_overlap is true.
+         */
+        post: operations["setAppointmentStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -551,6 +636,83 @@ export interface components {
         ClientList: {
             items: components["schemas"]["Client"][];
         };
+        /** @enum {string} */
+        AppointmentStatus: "scheduled" | "confirmed" | "cancelled" | "no_show";
+        AppointmentService: {
+            /** Format: uuid */
+            service_id: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description The price copied when the line was saved; null when the service had none.
+             */
+            price_cents: number | null;
+            duration_min: number;
+        };
+        Appointment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            client_id: string;
+            client_name: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            status: components["schemas"]["AppointmentStatus"];
+            /** @description Computed on read, never stored. A scheduled or confirmed appointment that has ended. */
+            done: boolean;
+            /** Format: int64 */
+            total_cents: number;
+            /** Format: int64 */
+            paid_cents: number | null;
+            /** @description The appointment-scope attribute values by attribute key. */
+            attrs: {
+                [key: string]: unknown;
+            };
+            notes: string | null;
+            services: components["schemas"]["AppointmentService"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AppointmentInput: {
+            /** Format: uuid */
+            client_id: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at?: string;
+            service_ids?: string[];
+            attrs?: {
+                [key: string]: unknown;
+            };
+            notes?: string;
+            allow_overlap?: boolean;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only notes and paid_cents may be null. */
+        AppointmentPatch: {
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string;
+            service_ids?: string[];
+            attrs?: {
+                [key: string]: unknown;
+            };
+            notes?: string | null;
+            /** Format: int64 */
+            paid_cents?: number | null;
+            allow_overlap?: boolean;
+        };
+        AppointmentStatusChange: {
+            status: components["schemas"]["AppointmentStatus"];
+            allow_overlap?: boolean;
+        };
+        AppointmentList: {
+            items: components["schemas"]["Appointment"][];
+        };
         /** @description An RFC 9457 problem, sent as application/problem+json. */
         Problem: {
             /** @enum {string} */
@@ -561,6 +723,8 @@ export interface components {
             retry_after_s?: number;
             /** @description The other active clients with the phone, on a duplicate-phone 409. */
             clients?: components["schemas"]["Client"][];
+            /** @description The scheduled or confirmed appointments in the way, on an overlap 409. */
+            appointments?: components["schemas"]["Appointment"][];
         };
         FieldError: {
             field: string;
@@ -1099,6 +1263,177 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClientAppointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The appointments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAppointments: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The appointments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentInput"];
+            };
+        };
+        responses: {
+            /** @description The new appointment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The appointment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentPatch"];
+            };
+        };
+        responses: {
+            /** @description The appointment after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAppointmentStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentStatusChange"];
+            };
+        };
+        responses: {
+            /** @description The appointment after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
                 };
             };
             401: components["responses"]["Problem"];

@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jnaranj09/open-customer/internal/appointments"
 	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/clients"
@@ -70,6 +71,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		cfg.mediaDir = t.TempDir()
 	}
 	fake := clock.NewFake(testStart)
+	servicesModule := services.New(services.Options{Clock: fake})
 	settingsModule := settings.New(settings.Options{Clock: fake, MediaDir: cfg.mediaDir})
 	attrsModule := attributes.New(attributes.Options{Clock: fake})
 	a, err := auth.New(auth.Options{
@@ -100,8 +102,9 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Auth:           a,
 		Settings:       settingsModule,
 		Attributes:     attrsModule,
-		Services:       services.New(services.Options{Clock: fake}),
+		Services:       servicesModule,
 		Clients:        clients.New(clients.Options{Clock: fake, Attributes: attrsModule}),
+		Appointments:   appointments.New(appointments.Options{Clock: fake, Services: servicesModule, Attributes: attrsModule}),
 		Status:         status.New(testVersion),
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
@@ -440,13 +443,17 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		t.Fatalf("auth.New: %v", err)
 	}
 	attrs := attributes.New(attributes.Options{Clock: clock.NewFake(testStart)})
+	servicesModule := services.New(services.Options{Clock: clock.NewFake(testStart)})
 	full := Options{
 		PublicURL: public, Static: testBuild(), Auth: a,
 		Settings:   settings.New(settings.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
 		Attributes: attrs,
-		Services:   services.New(services.Options{Clock: clock.NewFake(testStart)}),
+		Services:   servicesModule,
 		Clients:    clients.New(clients.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
-		Status:     status.New(testVersion),
+		Appointments: appointments.New(appointments.Options{
+			Clock: clock.NewFake(testStart), Services: servicesModule, Attributes: attrs,
+		}),
+		Status: status.New(testVersion),
 	}
 	for _, tc := range []struct {
 		name   string
@@ -457,6 +464,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		{"a nil Attributes is refused", func(o *Options) { o.Attributes = nil }},
 		{"a nil Services is refused", func(o *Options) { o.Services = nil }},
 		{"a nil Clients is refused", func(o *Options) { o.Clients = nil }},
+		{"a nil Appointments is refused", func(o *Options) { o.Appointments = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

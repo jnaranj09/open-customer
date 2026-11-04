@@ -1623,7 +1623,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `GET /clients/{id}` | — | 200 `Client` |
     | `GET /clients/{id}/appointments` | — | 200 `{items: Appointment[]}`, newest first |
     | `GET /clients/{id}/media` | — | 200 `{items: Media[]}`, newest first, archived ones left out |
-    | `GET /appointments` | `from`, `to` (`YYYY-MM-DD`, at most 31 days apart) | 200 `{items: Appointment[]}`, by `starts_at` |
+    | `GET /appointments` | `from`, `to` (`YYYY-MM-DD` local days in the business time zone, both required, `to` not before `from` and at most 31 days after it, else 422 on `to`) | 200 `{items: Appointment[]}`, by `starts_at` |
     | `GET /appointments/{id}` | — | 200 `Appointment` |
     | `GET /media/{id}`, `GET /media/{id}/thumb` | — | 200 `image/jpeg` (binary) |
     | `GET /reminders/due` | — | 200 `{items: DueItem[]}` |
@@ -1845,7 +1845,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   for each endpoint of the phase, the success status and the body fields match the tables in item 15 (the check strict mode would have made at compile time);
     *   problem JSON shape, including a bad UUID path parameter and a bad date query parameter (422 problem JSON, not `text/plain`). P1 has no route with parameters, so P1 tests the `ErrorHandlerFunc` directly; the per-route tests come with the first such routes in P3;
     *   `X-App-Version` present and non-empty on success, error and generated responses;
-    *   409 overlap responses (P3).
+    *   409 overlap responses (P3): the body lists the overlapping appointments and has no `errors` (`TestCreateAppointmentOverlapIs409WithAppointments`).
     *   An unknown `/api/v1` path and a wrong method both return 404 problem JSON, not HTML.
     *   An oversized JSON body returns 413, not 422.
 
