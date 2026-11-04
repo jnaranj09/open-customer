@@ -13,8 +13,8 @@ Every change keeps these rules. Each one names its sensor, or says "prose only".
 
 - **Search before you write.** Look for the existing helper, component or type before adding one. No
   new abstraction without a second real caller. Inline a shared helper once it grows a flag or branch
-  for one caller. Sensor: golangci-lint `dupl` (Go); jscpd (web, configured for `.svelte`, not yet shown: no
-  `.svelte` file reaches `minTokens`; both in `make lint`). jscpd fails when it analyzes no files
+  for one caller. Sensor: golangci-lint `dupl` (Go); jscpd (web, configured for `.svelte`, not yet
+  shown: no `.svelte` file reaches `minTokens`; both in `make lint`). jscpd fails when it analyzes no files
   (`failOnEmpty`); a partly empty scan still passes.
 - **One owner per shared value.** A value two places must agree on (a port, a size, a color, a list
   one side mirrors) is defined once, and the other side imports it. Where one side cannot import the

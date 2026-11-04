@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8)
+## Done (T1–T8, P1 exit, P2 exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -35,17 +35,25 @@ once by breaking what they protect, then restored.
   lint rules; `thelper`, `tparallel`. Proven: `it.only` fails the run, `it.skip` fails lint, a bare
   `t.Skip` fails guard `forbid-only`, `allowOnly: true` fails the web `forbid-only` guard.
 - **T6 Guards.** Go in `internal/guards`, web in `web/tests/guards`, all run by `make test`.
-- **T7 Decay sensors.** `deadcode -test` (exact `DEADCODE_BUDGET`, 0 since P1), `unused`, `dupl` (80), knip,
-  jscpd, all in `make lint`. knip reads `.svelte` files (checked). jscpd is set to read them, but no
-  `.svelte` file reaches its `minTokens` yet, so that is not shown. jscpd has `failOnEmpty`, so a
-  fully empty scan fails instead of passing (found in P2 task 18b).
+- **T7 Decay sensors.** `deadcode -test` (exact `DEADCODE_BUDGET`, 0 since P1), `unused`, `dupl`
+  (80), knip, jscpd, all in `make lint`. knip reads `.svelte` files (checked). jscpd is set to read
+  them, but no `.svelte` file reaches its `minTokens` yet, so that is not shown. jscpd has
+  `failOnEmpty`, so a fully empty scan fails instead of passing (found in P2 task 18b).
 - **T8 Boundary.** Every row of the `.claude/rules/boundaries.md` table names its parse site and its
   bad-input test; `DisallowUnknownFields` is in design doc item 32. The tests themselves land with
   each parse site, in the phase that builds it.
 - **P1 exit.** The exit check passed on a clean clone: `make check-pins lint test vuln build
-  check-generated test-db` exits 0, and `serve` against Docker Postgres returns 200 on `/readyz` and
-  `{"needs_setup":true}` on `/api/v1/setup/status`, also after a restart. CI run ID: pending (the
-  branch is not pushed yet; the owner fills it in after the first push).
+  check-generated test-db` exits 0. The `serve` and `curl` checks ran as the built binary in an
+  isolated container network namespace, not `go run` on the host (host :8080 belongs to an unrelated
+  container): `/readyz` 200 and `{"needs_setup":true}` on `/api/v1/setup/status`, also after a
+  restart. The plain-host :8080 variant: NOT RUN. CI run ID: pending (the branch is not pushed yet;
+  the owner fills it in after the first push).
+- **P2 exit.** The exit check passed on a clean clone: `make check-pins lint test vuln build
+  check-generated test-db cover` exits 0. The setup, login, logout, settings, manifest, icon and
+  admin-subcommand `curl` checks ran as the built binary in an isolated container network namespace,
+  not `go run` on the host (host :8080 belongs to an unrelated container). The plain-host :8080
+  variant: NOT RUN. CI run ID: pending (the branch is not pushed yet; the owner fills it in after
+  the first push), so the CI `make cover` step: NOT RUN.
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
