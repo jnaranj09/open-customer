@@ -379,6 +379,72 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /services:
+    post:
+      operationId: createService
+      summary: Add a service
+      description: >-
+        The service goes last. duration_min is 1 to 1440, price_cents is 0 or more (left out or null
+        means no price) and color is #rrggbb (stored in lowercase).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceInput"
+      responses:
+        "201":
+          description: The new service.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /services/{id}:
+    patch:
+      operationId: updateService
+      summary: Change a service
+      description: >-
+        Changes only the fields sent. Only price_cents may be null, which clears the price. archived
+        true archives the service and false restores it. Past appointments keep the values they
+        copied.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePatch"
+      responses:
+        "200":
+          description: The service after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   headers:
     SessionCookie:
@@ -617,6 +683,61 @@ components:
       required: [needs_setup]
       properties:
         needs_setup:
+          type: boolean
+    Service:
+      type: object
+      required: [id, name, duration_min, price_cents, color, position, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        duration_min:
+          type: integer
+        price_cents:
+          type: integer
+          format: int64
+          nullable: true
+          description: The price in cents; null when the service has no price.
+        color:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+    ServiceInput:
+      type: object
+      required: [name, duration_min, color]
+      properties:
+        name:
+          type: string
+        duration_min:
+          type: integer
+        price_cents:
+          type: integer
+          format: int64
+          nullable: true
+        color:
+          type: string
+    ServicePatch:
+      type: object
+      description: >-
+        Every field is optional; a field left out is not changed. Only price_cents may be null.
+      properties:
+        name:
+          type: string
+        duration_min:
+          type: integer
+        price_cents:
+          type: integer
+          format: int64
+          nullable: true
+        color:
+          type: string
+        position:
+          type: integer
+        archived:
           type: boolean
     Problem:
       type: object

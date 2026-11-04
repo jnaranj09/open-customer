@@ -1779,7 +1779,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `settings` | `Get() Settings`; `Create(SettingsInput) Settings` (called only through `auth` setup; `cmd` wraps it in a closure that drops the returned `Settings`, to match the creator type in item 40); `Update(SettingsPatch) Settings`; `SetIcons(icon512, icon180 []byte)`; `Manifest() []byte`; `Icon(size) ([]byte, updatedAt)`. `Countries() []string` is a package-level function with no `q`, not a method. |
     | `attributes` | `List() []Attribute`; `Create(AttributeInput) Attribute`; `Update(id, AttributePatch) Attribute`; `AddOption(attrID, OptionInput) Option`; `UpdateOption(attrID, optionID, OptionPatch) Option`; `Validate(scope, stored, request, isCreate) (attrs, error)` |
     | `clients` | `ListActive() []Client`; `List(archived) []Client`; `Get(id) Client`; `Create(ClientInput, region) Client`; `Update(id, ClientPatch, region) Client` (`region` is `settings.country_code`, read by the handler) |
-    | `services` | `List() []Service`; `GetMany(ids) []Service`; `Create(ServiceInput) Service`; `Update(id, ServicePatch) Service` |
+    | `services` | `List() []Service`; `GetMany(ids) map[id]Service`; `Create(ServiceInput) Service`; `Update(id, ServicePatch) Service` |
     | `appointments` | `ListRange(from, to, loc *time.Location) []Appointment` (the handler passes the business time zone); `ListForClient(clientID) []Appointment`; `Get(id) Appointment`; `Create(AppointmentInput) Appointment`; `Update(id, AppointmentPatch) Appointment`; `SetStatus(id, status, allowOverlap) Appointment` (returns `overlap` 409 when the change is to `scheduled` and an overlap exists) |
     | `media` | `Save(MediaInput) Media`; `Open(id, thumb bool) (io.ReadCloser, Media)`; `ListForClient(clientID) []Media`; `SetArchived(id, archived) Media` |
     | `templates` | `List() []Template`; `Vars() []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)` and `SampleData(locale, countryCode)` are plain functions with no `q`. |
@@ -1947,7 +1947,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 49. `internal/services/services.go`, `services_test.go` (Create)
 
 *   **Type / Scope**: Service catalog.
-*   **Proposed Changes**: CRUD, ordering, archive. The test checks that archived services stay readable on past appointments.
+*   **Proposed Changes**: CRUD, ordering, archive. `GetMany` returns archived services too, and an unknown id is absent from the map. The test that archived services stay readable on past appointments lives in `appointments` (it owns `appointment_services`).
 
 ##### 50. `internal/appointments/appointments.go`, `status.go`, `overlap.go` (Create)
 

@@ -264,6 +264,46 @@ export interface paths {
         patch: operations["updateOption"];
         trace?: never;
     };
+    "/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a service
+         * @description The service goes last. duration_min is 1 to 1440, price_cents is 0 or more (left out or null means no price) and color is #rrggbb (stored in lowercase).
+         */
+        post: operations["createService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a service
+         * @description Changes only the fields sent. Only price_cents may be null, which clears the price. archived true archives the service and false restores it. Past appointments keep the values they copied.
+         */
+        patch: operations["updateService"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -389,6 +429,37 @@ export interface components {
         };
         SetupStatus: {
             needs_setup: boolean;
+        };
+        Service: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            duration_min: number;
+            /**
+             * Format: int64
+             * @description The price in cents; null when the service has no price.
+             */
+            price_cents: number | null;
+            color: string;
+            position: number;
+            archived: boolean;
+        };
+        ServiceInput: {
+            name: string;
+            duration_min: number;
+            /** Format: int64 */
+            price_cents?: number | null;
+            color: string;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only price_cents may be null. */
+        ServicePatch: {
+            name?: string;
+            duration_min?: number;
+            /** Format: int64 */
+            price_cents?: number | null;
+            color?: string;
+            position?: number;
+            archived?: boolean;
         };
         /** @description An RFC 9457 problem, sent as application/problem+json. */
         Problem: {
@@ -766,6 +837,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Option"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceInput"];
+            };
+        };
+        responses: {
+            /** @description The new service. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Service"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicePatch"];
+            };
+        };
+        responses: {
+            /** @description The service after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Service"];
                 };
             };
             401: components["responses"]["Problem"];

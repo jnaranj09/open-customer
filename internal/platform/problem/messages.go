@@ -50,3 +50,9 @@ const (
 	MsgAttributeArchived = "Este dato está archivado"
 	MsgPositionInvalid   = "La posición no es válida"
 )
+
+// Field messages for services (design doc item 49).
+const (
+	MsgDurationInvalid = "Escribe una duración de 1 a 1440 minutos"
+	MsgPriceInvalid    = "El precio no puede ser negativo"
+)
