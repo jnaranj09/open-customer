@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -114,6 +115,37 @@ func TestChangePasswordWrongCurrentIsValidation(t *testing.T) {
 	}
 	wantValidationOn(t, err, "current_password", problem.MsgCurrentPasswordWrong)
 	f.wantPasswordIs(t, madeUpPassword)
+}
+
+func TestChangePasswordWrongCurrentDelaysTheUsername(t *testing.T) {
+	f := newPasswordFixture(t)
+	wrong := f.auth.ChangePassword(t.Context(), f.pool, f.session, "made-up-wrong-password", madeUpNewPassword)
+	wantValidationOn(t, wrong, "current_password", problem.MsgCurrentPasswordWrong)
+
+	t.Run("the next change within a second is rate limited, even with the right password", func(t *testing.T) {
+		err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, madeUpNewPassword)
+		if got := retryAfter(t, err); got != time.Second {
+			t.Fatalf("RetryAfter = %v; want 1s", got)
+		}
+		f.wantPasswordIs(t, madeUpPassword)
+	})
+	t.Run("a login for the same username shares the delay", func(t *testing.T) {
+		_, _, err := f.auth.Login(t.Context(), f.pool,
+			LoginInput{Username: "made-up-owner", Password: madeUpPassword}, ipA)
+		retryAfter(t, err)
+	})
+}
+
+func TestChangePasswordSuccessClearsTheDelay(t *testing.T) {
+	f := newPasswordFixture(t)
+	wrong := f.auth.ChangePassword(t.Context(), f.pool, f.session, "made-up-wrong-password", madeUpNewPassword)
+	wantValidationOn(t, wrong, "current_password", problem.MsgCurrentPasswordWrong)
+	f.clock.Advance(time.Second)
+	if err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, madeUpNewPassword); err != nil {
+		t.Fatalf("ChangePassword after the delay: %v", err)
+	}
+	err := f.auth.ChangePassword(t.Context(), f.pool, f.session, "made-up-wrong-password", madeUpPassword)
+	wantValidationOn(t, err, "current_password", problem.MsgCurrentPasswordWrong)
 }
 
 func TestChangePasswordTooShort(t *testing.T) {

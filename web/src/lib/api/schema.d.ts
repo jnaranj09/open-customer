@@ -84,6 +84,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign out of this session
+         * @description Deletes the current session and expires the cookie. Allowed while must_change_password is set, so she can always sign out.
+         */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the signed-in user's password
+         * @description Keeps this session and closes every other one, and clears must_change_password (allowed while it is set: this is how it is cleared). A wrong current_password is 422 validation on that field, not 401, and counts toward the same per-username delay as a failed login.
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in user
+         * @description Allowed while must_change_password is set, so the app can tell that it must ask for a new password.
+         */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -118,6 +178,10 @@ export interface components {
             username: string;
             password: string;
         };
+        PasswordChange: {
+            current_password: string;
+            new_password: string;
+        };
         SetupStatus: {
             needs_setup: boolean;
         };
@@ -151,6 +215,8 @@ export interface components {
     headers: {
         /** @description The oc_session cookie: HttpOnly, SameSite=Lax, Path=/, 90 days, and Secure unless PUBLIC_URL is plain http. */
         SessionCookie: string;
+        /** @description The oc_session cookie with an empty value and Max-Age=0, which deletes it. */
+        ExpiredSessionCookie: string;
     };
     pathItems: never;
 }
@@ -251,6 +317,73 @@ export interface operations {
             401: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             429: components["responses"]["Problem"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out; the cookie is expired. */
+            204: {
+                headers: {
+                    "Set-Cookie": components["headers"]["ExpiredSessionCookie"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description The password is changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
 }

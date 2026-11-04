@@ -23,24 +23,32 @@ const (
 
 // ChangePassword sets the signed-in user's password to next (POST /auth/password). A wrong
 // current is Validation on current_password, never Unauthorized, which would sign her out; a next
-// under the minimum length is Validation on new_password. On success it clears
-// must_change_password and revokes every other session of the user, keeping session (item 39). A
-// session whose user is gone is Unauthorized. The handler runs it in db.WithTx.
+// under the minimum length is Validation on new_password. The current password check goes
+// through the same per-username delay as Login (item 41): the attempt is counted before the
+// check and taken back when current is right, so a stolen session cannot guess the current
+// password without limit, and an attempt that comes too early is RateLimited. On success it
+// clears must_change_password and revokes every other session of the user, keeping session
+// (item 39). A session whose user is gone is Unauthorized. The handler runs it in db.WithTx.
 func (a *Auth) ChangePassword(ctx context.Context, q db.DBTX, session Session, current, next string) error {
-	stored, err := sqlc.New(q).GetUserPasswordHash(ctx, session.UserID)
+	user, err := sqlc.New(q).GetUserCredentials(ctx, session.UserID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return problem.Unauthorized{}
 	}
 	if err != nil {
 		return fmt.Errorf("load the password hash: %w", err)
 	}
-	ok, err := verifyPassword(stored, current)
+	// The stored username is already normalized, so it is the key Login uses.
+	if err := a.limiter.reserveName(user.Username, a.clock.Now()); err != nil {
+		return err
+	}
+	ok, err := verifyPassword(user.PasswordHash, current)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return problem.Validation{Errors: []problem.FieldError{{Field: "current_password", Message: problem.MsgCurrentPasswordWrong}}}
 	}
+	a.limiter.recordSuccess(user.Username)
 	if err := validatePassword("new_password", next); err != nil {
 		return err
 	}

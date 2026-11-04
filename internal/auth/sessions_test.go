@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -293,6 +294,31 @@ func TestSessionCookieAttributes(t *testing.T) {
 			}
 			if h := c.String(); !strings.Contains(h, "Max-Age=0") {
 				t.Fatalf("ExpiredCookie header = %q; want Max-Age=0 (delete now)", h)
+			}
+		})
+	}
+}
+
+func TestSessionTokenReadsTheSessionCookie(t *testing.T) {
+	t.Parallel()
+	otherCookie := &http.Cookie{Name: "other", Value: "x", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode}
+	for _, tt := range []struct {
+		name    string
+		cookies []*http.Cookie
+		want    string
+	}{
+		{"a request without cookies has no token", nil, ""},
+		{"another cookie is not the token", []*http.Cookie{otherCookie}, ""},
+		{"the oc_session value is the token", []*http.Cookie{otherCookie, SessionCookie("made-up-token", true)}, "made-up-token"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			for _, c := range tt.cookies {
+				r.AddCookie(c)
+			}
+			if got := SessionToken(r); got != tt.want {
+				t.Fatalf("SessionToken = %q; want %q", got, tt.want)
 			}
 		})
 	}

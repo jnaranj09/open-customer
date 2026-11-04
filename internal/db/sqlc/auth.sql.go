@@ -122,15 +122,20 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUs
 	return i, err
 }
 
-const getUserPasswordHash = `-- name: GetUserPasswordHash :one
-SELECT password_hash FROM users WHERE id = $1
+const getUserCredentials = `-- name: GetUserCredentials :one
+SELECT username, password_hash FROM users WHERE id = $1
 `
 
-func (q *Queries) GetUserPasswordHash(ctx context.Context, id uuid.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getUserPasswordHash, id)
-	var password_hash string
-	err := row.Scan(&password_hash)
-	return password_hash, err
+type GetUserCredentialsRow struct {
+	Username     string
+	PasswordHash string
+}
+
+func (q *Queries) GetUserCredentials(ctx context.Context, id uuid.UUID) (GetUserCredentialsRow, error) {
+	row := q.db.QueryRow(ctx, getUserCredentials, id)
+	var i GetUserCredentialsRow
+	err := row.Scan(&i.Username, &i.PasswordHash)
+	return i, err
 }
 
 const insertSession = `-- name: InsertSession :exec

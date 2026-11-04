@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -60,9 +61,18 @@ type Server struct {
 
 var _ gen.ServerInterface = (*Server)(nil)
 
-// New returns the app's whole HTTP handler: the probes, the generated /api/v1 routes, the /api/
-// catch-all and the SPA, inside the middleware steps of design doc item 34.
-func New(opts Options) http.Handler {
+// New returns the app's whole HTTP handler: the probes, the generated /api/v1 routes (behind the
+// session steps 6–8), the /api/ catch-all and the SPA, inside the middleware steps 1–5 of design
+// doc item 34. It fails only when the embedded spec cannot be read.
+func New(opts Options) (http.Handler, error) {
+	spec, err := gen.GetSpec()
+	if err != nil {
+		return nil, fmt.Errorf("httpapi: load the embedded spec: %w", err)
+	}
+	allowed, err := allowedWhileMustChangePassword(spec)
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
 		pool: opts.Pool, beginner: opts.beginner, auth: opts.Auth, status: opts.Status,
 		secureCookies: opts.PublicURL.Scheme == "https",
@@ -78,6 +88,7 @@ func New(opts Options) http.Handler {
 		BaseURL:          apiBase,
 		BaseRouter:       mux,
 		ErrorHandlerFunc: bindErrorHandler,
+		Middlewares:      s.sessionMiddlewares(allowed),
 	})
 	// Every other path and method under /api/ is a 404 problem. Without this, the / pattern
 	// below would answer it with index.html and a 200.
@@ -92,7 +103,7 @@ func New(opts Options) http.Handler {
 		PublicOrigin:   publicOrigin(opts.PublicURL),
 		TrustedProxies: opts.TrustedProxies,
 		Log:            opts.Log,
-	})
+	}), nil
 }
 
 // getOrHeadOnly answers every method except GET and HEAD with 405.
@@ -178,6 +189,18 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		err = errors.New(path + redacted)
 	}
 	problem.Write(w, r, err)
+}
+
+// inWriteTx runs fn in a read-write transaction (db.WithTx, default options) and reports whether
+// fn and the commit succeeded. On false it has written the error as a problem and the handler
+// returns. A handler sets cookies and writes its response only after true, so a failed commit is
+// never shown as saved.
+func (s *Server) inWriteTx(w http.ResponseWriter, r *http.Request, fn func(pgx.Tx) error) bool {
+	if err := db.WithTx(r.Context(), s.beginner, pgx.TxOptions{}, fn); err != nil {
+		writeError(w, r, err)
+		return false
+	}
+	return true
 }
 
 // writeJSON writes v as a JSON response with status. The status is already sent when encoding

@@ -23,7 +23,8 @@ type Auth struct {
 	clock           clock.Clock
 	settingsCreator SettingsCreator
 	seeder          Seeder
-	// limiter is the login rate limit state (item 41); it has its own mutex.
+	// limiter is the login rate limit state (item 41), whose per-username delay also covers the
+	// current password check of ChangePassword; it has its own mutex.
 	limiter *loginLimiter
 }
 

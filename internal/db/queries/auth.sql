@@ -43,8 +43,8 @@ SELECT pg_advisory_xact_lock(@key::bigint);
 -- name: GetUserByUsername :one
 SELECT id, username, password_hash, must_change_password FROM users WHERE username = @username;
 
--- name: GetUserPasswordHash :one
-SELECT password_hash FROM users WHERE id = @id;
+-- name: GetUserCredentials :one
+SELECT username, password_hash FROM users WHERE id = @id;
 
 -- name: SetUserPassword :exec
 UPDATE users SET password_hash = @password_hash, must_change_password = @must_change_password

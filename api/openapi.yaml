@@ -102,12 +102,75 @@ paths:
           $ref: "#/components/responses/Problem"
         "429":
           $ref: "#/components/responses/Problem"
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Sign out of this session
+      description: >-
+        Deletes the current session and expires the cookie. Allowed while must_change_password is
+        set, so she can always sign out.
+      x-oc-allowed-while-must-change-password: true
+      responses:
+        "204":
+          description: Signed out; the cookie is expired.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/ExpiredSessionCookie"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /auth/password:
+    post:
+      operationId: changePassword
+      summary: Change the signed-in user's password
+      description: >-
+        Keeps this session and closes every other one, and clears must_change_password (allowed
+        while it is set: this is how it is cleared). A wrong current_password is 422 validation on
+        that field, not 401, and counts toward the same per-username delay as a failed login.
+      x-oc-allowed-while-must-change-password: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChange"
+      responses:
+        "204":
+          description: The password is changed.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /me:
+    get:
+      operationId: getMe
+      summary: The signed-in user
+      description: >-
+        Allowed while must_change_password is set, so the app can tell that it must ask for a new
+        password.
+      x-oc-allowed-while-must-change-password: true
+      responses:
+        "200":
+          description: The signed-in user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Problem"
 components:
   headers:
     SessionCookie:
       description: >-
         The oc_session cookie: HttpOnly, SameSite=Lax, Path=/, 90 days, and Secure unless
         PUBLIC_URL is plain http.
+      schema:
+        type: string
+    ExpiredSessionCookie:
+      description: The oc_session cookie with an empty value and Max-Age=0, which deletes it.
       schema:
         type: string
   responses:
@@ -181,6 +244,14 @@ components:
         username:
           type: string
         password:
+          type: string
+    PasswordChange:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+        new_password:
           type: string
     SetupStatus:
       type: object

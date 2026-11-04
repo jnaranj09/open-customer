@@ -132,6 +132,16 @@ func SessionCookie(token string, secure bool) *http.Cookie {
 	return sessionCookie(token, int(sessionLifetime/time.Second), secure)
 }
 
+// SessionToken returns the session cookie's value from r, or "" when r has none. Authenticate and
+// Logout parse it; nothing else reads the cookie.
+func SessionToken(r *http.Request) string {
+	c, err := r.Cookie(sessionCookieName)
+	if err != nil { // http.ErrNoCookie is the only error
+		return ""
+	}
+	return c.Value
+}
+
 // ExpiredCookie tells the browser to delete the session cookie now.
 func ExpiredCookie(secure bool) *http.Cookie {
 	return sessionCookie("", -1, secure)

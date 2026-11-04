@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/jnaranj09/open-customer/internal/auth"
-	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/settings"
 )
 
@@ -48,15 +48,13 @@ func (s *Server) CompleteSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	var me auth.Me
 	var token string
-	err := db.WithTx(r.Context(), s.beginner, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
 		var err error
 		if me, token, err = s.auth.CompleteSetup(r.Context(), tx, in); err != nil {
 			return fmt.Errorf("complete setup: %w", err)
 		}
 		return nil
-	})
-	if err != nil {
-		writeError(w, r, err)
+	}) {
 		return
 	}
 	http.SetCookie(w, auth.SessionCookie(token, s.secureCookies))
@@ -74,19 +72,67 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	in := auth.LoginInput{Username: body.Username, Password: body.Password}
 	var me auth.Me
 	var token string
-	err := db.WithTx(r.Context(), s.beginner, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
 		var err error
 		if me, token, err = s.auth.Login(r.Context(), tx, in, clientIP(r.Context())); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}
 		return nil
-	})
-	if err != nil {
-		writeError(w, r, err)
+	}) {
 		return
 	}
 	http.SetCookie(w, auth.SessionCookie(token, s.secureCookies))
 	writeJSON(w, http.StatusOK, toMe(me))
+}
+
+// GetMe answers the signed-in user from the session step 6 loaded. It is allowed while
+// must_change_password is set (the spec's x-oc-allowed-while-must-change-password).
+func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
+	cur, ok := currentSession(r.Context())
+	if !ok { // step 7 already refused a request without a session; fail closed anyway
+		problem.Write(w, r, problem.Unauthorized{})
+		return
+	}
+	writeJSON(w, http.StatusOK, toMe(cur.me))
+}
+
+// Logout deletes the current session and expires the cookie, only after the commit.
+func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
+	token := auth.SessionToken(r)
+	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
+		if err := s.auth.Logout(r.Context(), tx, token); err != nil {
+			return fmt.Errorf("logout: %w", err)
+		}
+		return nil
+	}) {
+		return
+	}
+	http.SetCookie(w, auth.ExpiredCookie(s.secureCookies))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ChangePassword changes the signed-in user's password, keeping this session and closing the
+// others. A wrong current password is 422 on current_password and counts toward the username's
+// login delay (429 when the next try comes too early).
+func (s *Server) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	var body gen.PasswordChange
+	if decodeJSON(w, r, &body) != nil {
+		return
+	}
+	cur, ok := currentSession(r.Context())
+	if !ok { // step 7 already refused a request without a session; fail closed anyway
+		problem.Write(w, r, problem.Unauthorized{})
+		return
+	}
+	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
+		if err := s.auth.ChangePassword(r.Context(), tx, cur.session, body.CurrentPassword, body.NewPassword); err != nil {
+			return fmt.Errorf("change the password: %w", err)
+		}
+		return nil
+	}) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func toMe(me auth.Me) gen.Me {

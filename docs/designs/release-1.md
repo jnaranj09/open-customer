@@ -1621,7 +1621,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 16. `api/oapi-codegen.yaml` (Create)
 
 *   **Type / Scope**: Generator config.
-*   **Proposed Changes**: Package `gen`, output `internal/httpapi/gen/api.gen.go`, `generate: {std-http-server: true, models: true, embedded-spec: true}`, `output-options: {nullable-type: true}` (see item 15 for `x-go-type` and nullable fields). No `strict-server`: the plain interface gives each handler `(w, r, params)`, so headers, multipart and streaming need no workaround. The cost is that Go does not check at compile time which status and body a handler writes; the handler tests (item 37) and e2e cover that.
+*   **Proposed Changes**: Package `gen`, output `internal/httpapi/gen/api.gen.go`, `generate: {std-http-server: true, models: true, embedded-spec: true}`, `output-options: {nullable-type: true}` (see item 15 for `x-go-type` and nullable fields). `compatibility: {enable-auth-scopes-on-context: true}`: the wrapper of every operation under the global `security` puts `gen.SessionCookieScopes` on the request context, which middleware step 7 reads (item 34). oapi-codegen marks the flag deprecated because it cannot express OR or AND of schemes; the spec has one scheme, so it is exact here. No `strict-server`: the plain interface gives each handler `(w, r, params)`, so headers, multipart and streaming need no workaround. The cost is that Go does not check at compile time which status and body a handler writes; the handler tests (item 37) and e2e cover that.
 
 #### Command
 
@@ -1756,7 +1756,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
     | Module | Methods |
     | --- | --- |
-    | `auth` | `SetupNeeded() bool`; `NewSetupToken() string`; `CompleteSetup(SetupInput) (Me, token)` (the handler opens the transaction); `Login(LoginInput, ip) (Me, token)` (an unknown username is still verified, against a fixed dummy hash, so the response time does not reveal which usernames exist; OP17); `Logout(token)`; `Authenticate(token) (Me, Session, refreshed bool)` (`refreshed` tells the middleware to re-send the cookie); `ChangePassword(session, current, new)` (keeps that session, revokes the others, clears `must_change_password`); `ResetPassword(username) tempPassword` |
+    | `auth` | `SetupNeeded() bool`; `NewSetupToken() string`; `CompleteSetup(SetupInput) (Me, token)` (the handler opens the transaction); `Login(LoginInput, ip) (Me, token)` (an unknown username is still verified, against a fixed dummy hash, so the response time does not reveal which usernames exist; OP17); `Logout(token)`; `Authenticate(token) (Me, Session, refreshed bool)` (`refreshed` tells the middleware to re-send the cookie); `ChangePassword(session, current, new)` (keeps that session, revokes the others, clears `must_change_password`; a wrong `current` counts toward the per-username delay, item 41); `ResetPassword(username) tempPassword` |
     | `settings` | `Get() Settings`; `Create(SettingsInput) Settings` (called only through `auth` setup; `cmd` wraps it in a closure that drops the returned `Settings`, to match the creator type in item 40); `Update(SettingsPatch) Settings`; `SetIcons(icon512, icon180 []byte)`; `Manifest() []byte`; `Icon(size) ([]byte, updatedAt)`. `Countries() []string` is a package-level function with no `q`, not a method. |
     | `attributes` | `List() []Attribute`; `Create(AttributeInput) Attribute`; `Update(id, AttributePatch) Attribute`; `AddOption(attrID, OptionInput) Option`; `UpdateOption(attrID, optionID, OptionPatch) Option`; `Validate(scope, attrs, touchedKeys, isCreate) (attrs, error)` |
     | `clients` | `ListActive() []Client`; `List(archived) []Client`; `Get(id) Client`; `Create(ClientInput, region) Client`; `Update(id, ClientPatch, region) Client` (`region` is `settings.country_code`, read by the handler) |
@@ -1790,9 +1790,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
     3.  Panic recovery: logs the stack with the request ID and answers `internal` through `problem.Write`.
     4.  Client IP (`CF-Connecting-IP` only from `TRUSTED_PROXY_CIDRS`).
     5.  Origin check on every method except GET and HEAD (the mux routes HEAD to GET handlers).
-    6.  Session loading, plus the hourly sliding write from "Session and request rules" (`last_seen_at`, `expires_at` and a new `Set-Cookie`).
-    7.  Auth required for `/api/v1/*` except `GET /setup/status`, `GET /setup/options`, `POST /setup`, `POST /auth/login` and `GET /push/key`.
-    8.  The `must_change_password` gate. It allows exactly `POST /auth/password`, `GET /me` and `POST /auth/logout`, and answers every other `/api/v1` route with `must-change-password`.
+    6.  Session loading, plus the hourly sliding write from "Session and request rules" (`last_seen_at`, `expires_at` and a new `Set-Cookie`). `auth.Authenticate` runs in a short `db.WithTx`, because it may write the slide. A malformed, unknown or expired cookie leaves the request without a session; a database error is a 500.
+    7.  Auth required for `/api/v1/*` except `GET /setup/status`, `GET /setup/options`, `POST /setup`, `POST /auth/login` and `GET /push/key` (401 `unauthorized`). The public set is the spec's operations with `security: []`; every other operation falls under the global `security`, and its generated wrapper puts `gen.SessionCookieScopes` on the context (item 16), which marks the route as needing a session.
+    8.  The `must_change_password` gate. It allows exactly `POST /auth/password`, `GET /me` and `POST /auth/logout`, and answers every other `/api/v1` route with `must-change-password`. The allowed set is the operations marked `x-oc-allowed-while-must-change-password: true` in the spec, read once at `httpapi.New` from the embedded spec (`gen.GetSpec`) as `"METHOD /api/v1<path>"` patterns and compared with `r.Pattern`; a non-boolean value stops `New` with an error.
+
+    Steps 6–8 run as `gen.StdHTTPServerOptions.Middlewares`, after routing and only on the generated `/api/v1` routes (OP5); there is no route list in Go. The generated wrapper applies that list so the last entry runs first, so it is ordered 8, 7, 6.
 
 ##### 35. `internal/httpapi/static.go` (Create)
 
@@ -1858,6 +1860,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   An `x/time/rate` limiter per client IP on `POST /auth/login` only (5/min, burst 5), with idle entries removed after 10 min.
     *   A per-username delay: after the first failure the next attempt must wait 1 s, doubling after each failure up to 30 s. An attempt that comes too early gets 429 `rate-limited` with `Retry-After`; the server never sleeps. It resets on success. Entries expire 15 min after the last failure, so the map holds only names that failed in the last 15 min; there is no size cap.
+    *   `POST /auth/password` shares the per-username delay: `ChangePassword` counts the attempt for the session user's username before it checks `current_password` and clears the delay when it is right, so a stolen session cannot guess the current password without limit. A wrong one is still 422 on `current_password`; a try that comes too early is 429 `rate-limited`, and so is a login for that username until the delay has passed. The per-IP limiter does not apply to it.
 
 ##### 42. `internal/auth/*_test.go` (Create)
 

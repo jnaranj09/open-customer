@@ -8,3 +8,9 @@ generate:
   embedded-spec: true
 output-options:
   nullable-type: true
+compatibility:
+  # The wrapper of every operation with a security requirement puts gen.SessionCookieScopes on
+  # the request context; httpapi's step 7 (design doc item 34) reads it to tell secured routes
+  # from the `security: []` ones. oapi-codegen marks this flag deprecated (it cannot express OR or
+  # AND of schemes); the spec has one scheme, so it is exact here.
+  enable-auth-scopes-on-context: true

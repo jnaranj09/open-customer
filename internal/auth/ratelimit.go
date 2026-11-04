@@ -10,7 +10,8 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
-// Login protection (design doc item 41). Every time comes from the caller's injected clock.
+// Login protection (design doc item 41); ChangePassword shares the per-username delay. Every
+// time comes from the caller's injected clock.
 const (
 	// ipRefill and ipBurst are 5 attempts per minute per client IP, burst 5.
 	ipRefill = 12 * time.Second

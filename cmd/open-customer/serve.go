@@ -124,7 +124,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		pool.Close()
 		return nil, nil, fmt.Errorf("serve: %w", err)
 	}
-	handler := httpapi.New(httpapi.Options{
+	handler, err := httpapi.New(httpapi.Options{
 		Pool:           pool,
 		Version:        version,
 		PublicURL:      cfg.PublicURL,
@@ -134,6 +134,10 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger) (*http.Se
 		Status:         status.New(version),
 		Log:            log,
 	})
+	if err != nil {
+		pool.Close()
+		return nil, nil, fmt.Errorf("serve: %w", err)
+	}
 	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,

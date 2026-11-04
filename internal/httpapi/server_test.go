@@ -43,10 +43,11 @@ type testServerConfig struct {
 	beginner  db.Beginner // nil means the pool
 }
 
-// testApp is the full handler and the auth module behind it.
+// testApp is the full handler, the auth module behind it and their fake clock.
 type testApp struct {
 	handler http.Handler
 	auth    *auth.Auth
+	clock   *clock.Fake
 }
 
 // newTestApp builds the full handler like serve does, with real modules on a fake clock.
@@ -81,7 +82,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 	if err != nil {
 		t.Fatalf("auth.New: %v", err)
 	}
-	return testApp{auth: a, handler: New(Options{
+	handler, err := New(Options{
 		Pool:           cfg.pool,
 		Version:        testVersion,
 		PublicURL:      public,
@@ -91,7 +92,11 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Status:         status.New(testVersion),
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
-	})}
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return testApp{handler: handler, auth: a, clock: fake}
 }
 
 // newTestServer is newTestApp's handler with the default config, on pool.
