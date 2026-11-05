@@ -1,6 +1,5 @@
 // Photo and icon preparation on the phone (design doc items 69 and 73). The sizing math is pure
-// and tested; the canvas parts need a browser and are checked in the running app. `toJpegs` (the
-// photo pair, 2048 and 400 px at quality 0.8) comes with the photo screen (Task 11).
+// and tested; the canvas parts need a browser and are checked in the running app.
 
 export type Size = { w: number; h: number };
 
@@ -105,15 +104,19 @@ function canvasOf(
 	return { canvas, ctx };
 }
 
-function toBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
+function toBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
 	return new Promise((resolve, reject) => {
-		canvas.toBlob((blob) => {
-			if (blob === null) {
-				reject(new Error('canvas export failed'));
-			} else {
-				resolve(blob);
-			}
-		}, type);
+		canvas.toBlob(
+			(blob) => {
+				if (blob === null) {
+					reject(new Error('canvas export failed'));
+				} else {
+					resolve(blob);
+				}
+			},
+			type,
+			quality
+		);
 	});
 }
 
@@ -129,6 +132,29 @@ export async function toIconPngs(file: File): Promise<{ big: Blob; small: Blob }
 	const d = await withTimeout(decode(file), DECODE_TIMEOUT_MS);
 	try {
 		return { big: await pngSquare(d, ICON_BIG), small: await pngSquare(d, ICON_SMALL) };
+	} finally {
+		d.release();
+	}
+}
+
+const PHOTO_FULL = 2048;
+const PHOTO_THUMB = 400;
+const JPEG_QUALITY = 0.8;
+
+async function jpegAt(d: Decoded, longEdge: number): Promise<Blob> {
+	const { w, h } = fitLongEdge(d.w, d.h, longEdge);
+	const { canvas, ctx } = canvasOf(w, h);
+	ctx.drawImage(d.source, 0, 0, w, h);
+	return toBlob(canvas, 'image/jpeg', JPEG_QUALITY);
+}
+
+/** The photo pair the server takes (design doc "Photos"): the full JPEG with its long edge at
+ *  2048 px and a 400 px thumbnail, both at quality 0.8. Drawing to a canvas drops the EXIF, so GPS
+ *  data never leaves the phone. */
+export async function toJpegs(file: File): Promise<{ full: Blob; thumb: Blob }> {
+	const d = await withTimeout(decode(file), DECODE_TIMEOUT_MS);
+	try {
+		return { full: await jpegAt(d, PHOTO_FULL), thumb: await jpegAt(d, PHOTO_THUMB) };
 	} finally {
 		d.release();
 	}

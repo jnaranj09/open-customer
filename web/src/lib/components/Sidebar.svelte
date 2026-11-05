@@ -11,11 +11,14 @@
 		name,
 		pathname,
 		dueCount,
+		newDay,
 		sync
 	}: {
 		name: string;
 		pathname: string;
 		dueCount: number;
+		/** The day "Nueva cita" opens on: the day Hoy shows, or today. */
+		newDay: string;
 		/** The sync line: when the data is from, or that the system is off. */
 		sync: string;
 	} = $props();
@@ -43,7 +46,10 @@
 		<p class="min-w-0 font-display text-xl font-semibold wrap-break-word text-ink">{name}</p>
 	</div>
 
-	<a href={resolve('/citas/nueva')} class="{buttonClasses('primary')} w-full">
+	<a
+		href={resolve(`/citas/nueva?dia=${newDay}` as const)}
+		class="{buttonClasses('primary')} w-full"
+	>
 		<Icon name="plus" />
 		{t('appointment_new')}
 	</a>

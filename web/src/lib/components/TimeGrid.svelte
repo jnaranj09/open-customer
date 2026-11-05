@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { Appointment } from '../api/schemas';
 	import { hourSpan, layoutDay, type Placed } from '../agenda';
 	import { t } from '../i18n';
@@ -97,8 +98,9 @@
 										p.cols) *
 										100}%; width: {100 / p.cols}%"
 								>
-									<div
-										class="h-full overflow-hidden rounded-sm border-l-4 bg-glass-strong py-1 {p.cols >
+									<a
+										href={resolve('/citas/[id]', { id: a.id })}
+										class="block h-full overflow-hidden hover:bg-accent-100 rounded-sm border-l-4 bg-glass-strong py-1 {p.cols >
 										1
 											? 'px-1'
 											: 'px-2'} {STATUS_EDGE[a.status]}"
@@ -116,7 +118,7 @@
 										<p class="truncate text-xs text-ink-muted">
 											{a.services.map((s) => s.name).join(' · ')}
 										</p>
-									</div>
+									</a>
 								</div>
 							{/if}
 						{/each}

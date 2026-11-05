@@ -26,6 +26,16 @@
 	let dragY = $state(0);
 	let dragStart: number | null = null;
 
+	// A sheet is a fixed layer above the whole app. A card with `backdrop-filter` (a glass card) is
+	// its own stacking context, so a sheet declared inside one would sit under the tab bar: the sheet
+	// moves to <body> instead of staying where it is written.
+	function toBody(node: HTMLElement): () => void {
+		document.body.appendChild(node);
+		return () => {
+			node.remove();
+		};
+	}
+
 	function focusables(): HTMLElement[] {
 		return panel === undefined ? [] : Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
 	}
@@ -101,7 +111,7 @@
 <svelte:window {onkeydown} />
 
 {#if open}
-	<div class="fixed inset-0 z-50 flex items-end justify-center lg:items-center">
+	<div {@attach toBody} class="fixed inset-0 z-50 flex items-end justify-center lg:items-center">
 		<button
 			type="button"
 			tabindex="-1"

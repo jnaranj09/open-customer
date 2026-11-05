@@ -6,11 +6,14 @@
 		label,
 		value = $bindable(),
 		options,
+		clearLabel,
 		error
 	}: {
 		label: string;
 		value: string;
 		options: readonly Option[];
+		/** Given, the empty choice can be picked again (it clears the field) and reads this text. */
+		clearLabel?: string;
 		error?: string | undefined;
 	} = $props();
 
@@ -30,7 +33,9 @@
 			? 'border-glass-edge'
 			: 'border-error'}"
 	>
-		<option value="" disabled>{t('select_placeholder')}</option>
+		<option value="" disabled={clearLabel === undefined}>
+			{clearLabel ?? t('select_placeholder')}
+		</option>
 		{#each options as option (option.id)}
 			<option value={option.id}>{option.label}</option>
 		{/each}

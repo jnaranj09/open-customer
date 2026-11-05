@@ -234,7 +234,27 @@ export const PushSubscriptionInputSchema = z.object({
 	keys: z.object({ p256dh: z.string(), auth: z.string() })
 }) satisfies z.ZodType<Schemas['PushSubscriptionInput']>;
 
+export const MediaSchema = z.object({
+	id,
+	client_id: id,
+	appointment_id: z.nullable(id),
+	width: z.number().int(),
+	height: z.number().int(),
+	bytes: z.number().int(),
+	created_at: instant,
+	archived: z.boolean()
+}) satisfies z.ZodType<Schemas['Media']>;
+
+export const MediaListSchema = z.object({
+	items: z.array(MediaSchema)
+}) satisfies z.ZodType<Schemas['MediaList']>;
+
 export type Appointment = z.infer<typeof AppointmentSchema>;
+export type AttrOption = z.infer<typeof OptionSchema>;
+export type Attribute = z.infer<typeof AttributeSchema>;
+export type Service = z.infer<typeof ServiceSchema>;
+export type Client = z.infer<typeof ClientSchema>;
+export type Media = z.infer<typeof MediaSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 export type DueItem = z.infer<typeof DueItemSchema>;
 export type LogItem = z.infer<typeof LogItemSchema>;

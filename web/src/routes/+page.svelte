@@ -16,6 +16,7 @@
 	import WeekView from '../lib/components/WeekView.svelte';
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
+	import { shownDay } from '../lib/shownDay.svelte';
 	import { addDays, formatDayLong, formatDayShort, formatWeekdayShort, todayIn } from '../lib/time';
 
 	const zone = $derived(
@@ -49,6 +50,14 @@
 	const day = $derived(pickedDay ?? today);
 	const view = $derived<AgendaView>(pickedView ?? (layout.current === 'wide' ? 'week' : 'day'));
 	const range = $derived(viewRange(view, day));
+
+	// The sidebar's "Nueva cita" opens on the day shown here.
+	$effect(() => {
+		shownDay.set(day);
+		return () => {
+			shownDay.set(null);
+		};
+	});
 
 	// The cache holds the `/bootstrap` window around the day of the last refresh.
 	const win = $derived.by(() => {

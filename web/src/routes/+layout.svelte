@@ -20,8 +20,10 @@
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
 	import { syncLine } from '../lib/nav';
+	import { clock } from '../lib/clock.svelte';
 	import { pushControl } from '../lib/pushControl.svelte';
 	import { resolveSession } from '../lib/session';
+	import { shownDay } from '../lib/shownDay.svelte';
 	import { systemNow } from '../lib/time';
 
 	let { children }: { children: Snippet } = $props();
@@ -175,6 +177,7 @@
 			name={cache.snapshot?.settings.name ?? ''}
 			pathname={path}
 			dueCount={cache.snapshot?.due.length ?? 0}
+			newDay={shownDay.current ?? clock.today(zone)}
 			sync={syncLine(cache.meta.lastSyncAt, zone, cache.offline)}
 		/>
 		<main class="ml-64 p-8">{@render content()}</main>

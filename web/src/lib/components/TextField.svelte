@@ -9,6 +9,8 @@
 		autocomplete,
 		autocapitalize,
 		autocorrect,
+		inputmode,
+		placeholder,
 		hint
 	}: {
 		label: string;
@@ -18,6 +20,8 @@
 		autocomplete?: HTMLInputAttributes['autocomplete'];
 		autocapitalize?: HTMLInputAttributes['autocapitalize'];
 		autocorrect?: HTMLInputAttributes['autocorrect'];
+		inputmode?: HTMLInputAttributes['inputmode'];
+		placeholder?: string;
 		hint?: string;
 	} = $props();
 
@@ -34,6 +38,8 @@
 		{autocomplete}
 		{autocapitalize}
 		{autocorrect}
+		{inputmode}
+		{placeholder}
 		bind:value
 		aria-invalid={error !== undefined}
 		aria-describedby={note === undefined ? undefined : noteId}

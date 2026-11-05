@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DECODE_TIMEOUT_MS, fitLongEdge, squareCrop, toIconPngs, withTimeout } from './photos';
+import {
+	DECODE_TIMEOUT_MS,
+	fitLongEdge,
+	squareCrop,
+	toIconPngs,
+	toJpegs,
+	withTimeout
+} from './photos';
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -63,6 +70,52 @@ describe('toIconPngs', () => {
 		vi.useFakeTimers();
 		vi.stubGlobal('createImageBitmap', () => new Promise<never>(() => undefined));
 		const outcome = toIconPngs(new File(['x'], 'icon.png')).catch((e: unknown) =>
+			e instanceof Error ? e.message : ''
+		);
+		await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS);
+		expect(await outcome).toBe('timeout');
+	});
+});
+
+describe('toJpegs', () => {
+	type Export = { w: number; h: number; type: string | undefined; quality: number | undefined };
+
+	/** A browser with a 4032x3024 photo and a canvas that records what it was asked to export. */
+	function stubBrowser(): Export[] {
+		const exports: Export[] = [];
+		vi.stubGlobal('createImageBitmap', () =>
+			Promise.resolve({ width: 4032, height: 3024, close: () => undefined })
+		);
+		vi.stubGlobal('document', {
+			createElement: () => {
+				const canvas = {
+					width: 0,
+					height: 0,
+					getContext: () => ({ drawImage: () => undefined }),
+					toBlob: (done: (b: Blob) => void, type?: string, quality?: number) => {
+						exports.push({ w: canvas.width, h: canvas.height, type, quality });
+						done(new Blob(['x'], { type: type ?? '' }));
+					}
+				};
+				return canvas;
+			}
+		});
+		return exports;
+	}
+
+	it('exports the full photo at 2048 px and the thumbnail at 400 px, as JPEG at 0.8', async () => {
+		const exports = stubBrowser();
+		await toJpegs(new File(['x'], 'photo.heic'));
+		expect(exports).toEqual([
+			{ w: 2048, h: 1536, type: 'image/jpeg', quality: 0.8 },
+			{ w: 400, h: 300, type: 'image/jpeg', quality: 0.8 }
+		]);
+	});
+
+	it('rejects with the timeout when the browser never finishes decoding', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal('createImageBitmap', () => new Promise<never>(() => undefined));
+		const outcome = toJpegs(new File(['x'], 'photo.heic')).catch((e: unknown) =>
 			e instanceof Error ? e.message : ''
 		);
 		await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS);

@@ -8,8 +8,11 @@ import {
 	AppointmentListSchema,
 	AppointmentSchema,
 	BootstrapSchema,
+	ClientSchema,
 	LogItemSchema,
 	LogListSchema,
+	MediaListSchema,
+	MediaSchema,
 	MeSchema,
 	PROBLEM_PREFIX,
 	ProblemSchema,
@@ -18,7 +21,8 @@ import {
 	SetupOptionsSchema,
 	SetupStatusSchema,
 	type Appointment,
-	type LogItem
+	type LogItem,
+	type Media
 } from './schemas';
 
 export type ApiOptions = {
@@ -41,7 +45,8 @@ type Schemas = components['schemas'];
 class NotTheApp extends Error {}
 
 export function createApi(opts: ApiOptions) {
-	const client = createClient<paths>({ baseUrl: opts.baseUrl ?? '/api/v1', fetch: opts.fetch });
+	const baseUrl = opts.baseUrl ?? '/api/v1';
+	const client = createClient<paths>({ baseUrl, fetch: opts.fetch });
 
 	// Runs before openapi-fetch reads the body. The app sets X-App-Version on every answer, so an
 	// answer without it came from Cloudflare (502, 524, 530): the server is off.
@@ -143,6 +148,46 @@ export function createApi(opts: ApiOptions) {
 			read('/appointments/{id}', AppointmentSchema, () =>
 				client.PATCH('/appointments/{id}', { params: { path: { id } }, body })
 			),
+		/** Books an appointment. A 409 comes back as the typed `overlap` error. */
+		createAppointment: (body: Schemas['AppointmentInput']) =>
+			read('/appointments', AppointmentSchema, () => client.POST('/appointments', { body })),
+		/** Moves the appointment to another status. Only "scheduled" can overlap (409 `overlap`). */
+		setAppointmentStatus: (id: string, body: Schemas['AppointmentStatusChange']) =>
+			read('/appointments/{id}/status', AppointmentSchema, () =>
+				client.POST('/appointments/{id}/status', { params: { path: { id } }, body })
+			),
+		/** Adds a client. A shared phone is a `duplicate-phone` problem carrying those clients. */
+		createClient: (body: Schemas['ClientInput']) =>
+			read('/clients', ClientSchema, () => client.POST('/clients', { body })),
+		/** The active photos of a client, newest first. */
+		listClientMedia: async (id: string): Promise<Result<Media[]>> => {
+			const got = await read('/clients/{id}/media', MediaListSchema, () =>
+				client.GET('/clients/{id}/media', { params: { path: { id } } })
+			);
+			return got.ok ? { ok: true, data: got.data.items } : got;
+		},
+		/** Uploads a photo (the full JPEG and its thumbnail) for an appointment. */
+		uploadMedia: (photo: { full: Blob; thumb: Blob; appointment_id: string }) =>
+			read('/media', MediaSchema, () =>
+				client.POST('/media', {
+					// The generated type calls a binary part a string; the form carries the real blobs.
+					body: { full: '', thumb: '' },
+					bodySerializer: () => {
+						const form = new FormData();
+						form.append('full', photo.full, 'full.jpg');
+						form.append('thumb', photo.thumb, 'thumb.jpg');
+						form.append('appointment_id', photo.appointment_id);
+						return form;
+					}
+				})
+			),
+		/** Hides a photo from the client's list. */
+		archiveMedia: (id: string) =>
+			read('/media/{id}', MediaSchema, () =>
+				client.PATCH('/media/{id}', { params: { path: { id } }, body: { archived: true } })
+			),
+		/** The address of a photo's thumbnail, for an `<img>`. */
+		mediaThumbUrl: (id: string): string => `${baseUrl}/media/${id}/thumb`,
 		/** Records a due item as sent or skipped. A repeat of a logged item is safe (the server answers 200). */
 		recordReminder: (body: Schemas['LogEntry']) =>
 			read('/reminders/log', LogItemSchema, () => client.POST('/reminders/log', { body })),

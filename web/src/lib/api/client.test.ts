@@ -399,3 +399,164 @@ describe('getAppointment', () => {
 		expect(result).toMatchObject({ ok: false, error: { kind: 'problem', type: 'not-found' } });
 	});
 });
+
+const media = {
+	id: USER_ID,
+	client_id: USER_ID,
+	appointment_id: USER_ID,
+	width: 2048,
+	height: 1536,
+	bytes: 120000,
+	created_at: '2026-11-04T15:00:00Z',
+	archived: false
+};
+
+describe('createAppointment', () => {
+	it('posts the body and returns the appointment', async () => {
+		const { api, fetchFn } = setup(() => json(appointment, 201));
+		const body = { client_id: USER_ID, starts_at: '2026-11-04T16:00:00Z', service_ids: ['s1'] };
+		const result = await api.createAppointment(body);
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result.ok, request.method, request.url, await request.text()]).toEqual([
+			true,
+			'POST',
+			`${BASE}/appointments`,
+			JSON.stringify(body)
+		]);
+	});
+
+	it('types a 409 as overlap with the appointments in the way', async () => {
+		const { api } = setup(() => problem('overlap', 409, { appointments: [appointment] }));
+		const result = await api.createAppointment({
+			client_id: USER_ID,
+			starts_at: appointment.starts_at
+		});
+		expect(result).toEqual({ ok: false, error: { kind: 'overlap', overlapping: [appointment] } });
+	});
+});
+
+describe('setAppointmentStatus', () => {
+	it('posts the new status to the appointment', async () => {
+		const { api, fetchFn } = setup(() => json(appointment));
+		const result = await api.setAppointmentStatus(USER_ID, { status: 'confirmed' });
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result.ok, request.method, request.url, await request.text()]).toEqual([
+			true,
+			'POST',
+			`${BASE}/appointments/${USER_ID}/status`,
+			'{"status":"confirmed"}'
+		]);
+	});
+
+	it('types a 409 invalid-transition as a problem', async () => {
+		const { api } = setup(() => problem('invalid-transition', 409));
+		const result = await api.setAppointmentStatus(USER_ID, { status: 'confirmed' });
+		expect(result).toMatchObject({
+			ok: false,
+			error: { kind: 'problem', type: 'invalid-transition' }
+		});
+	});
+});
+
+describe('createClient', () => {
+	const client = {
+		id: USER_ID,
+		name: 'Ana Rojas',
+		phone_e164: null,
+		phone_digits: null,
+		notes: null,
+		attrs: {},
+		archived: false,
+		created_at: '2026-11-01T10:00:00Z',
+		updated_at: '2026-11-01T10:00:00Z'
+	};
+
+	it('posts the client and returns it', async () => {
+		const { api, fetchFn } = setup(() => json(client, 201));
+		const result = await api.createClient({ name: 'Ana Rojas' });
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result, request.method, request.url]).toEqual([
+			{ ok: true, data: client },
+			'POST',
+			`${BASE}/clients`
+		]);
+	});
+
+	it('hands back the clients that share the phone on a duplicate-phone 409', async () => {
+		const { api } = setup(() => problem('duplicate-phone', 409, { clients: [client] }));
+		const result = await api.createClient({ name: 'Ana', phone: '8888-7777' });
+		expect(result).toMatchObject({
+			ok: false,
+			error: { kind: 'problem', type: 'duplicate-phone', problem: { clients: [client] } }
+		});
+	});
+});
+
+describe('listClientMedia', () => {
+	it('asks for the client and returns the photos', async () => {
+		const { api, fetchFn } = setup(() => json({ items: [media] }));
+		const result = await api.listClientMedia(USER_ID);
+		expect([result, (fetchFn.mock.calls[0]?.[0] as Request).url]).toEqual([
+			{ ok: true, data: [media] },
+			`${BASE}/clients/${USER_ID}/media`
+		]);
+	});
+
+	it('returns response_invalid for a photo that fails its schema', async () => {
+		const { api } = setup(() => json({ items: [{ ...media, width: 'wide' }] }));
+		const result = await api.listClientMedia(USER_ID);
+		expect(result).toEqual({
+			ok: false,
+			error: { kind: 'response_invalid', path: '/clients/{id}/media' }
+		});
+	});
+});
+
+describe('uploadMedia', () => {
+	it('sends the two parts and the appointment as multipart', async () => {
+		const { api, fetchFn } = setup(() => json(media, 201));
+		const full = new Blob(['f'], { type: 'image/jpeg' });
+		const thumb = new Blob(['t'], { type: 'image/jpeg' });
+		const result = await api.uploadMedia({ full, thumb, appointment_id: USER_ID });
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		const form = await request.formData();
+		expect([
+			result.ok,
+			request.method,
+			request.url,
+			[...form.keys()].sort(),
+			form.get('appointment_id')
+		]).toEqual([true, 'POST', `${BASE}/media`, ['appointment_id', 'full', 'thumb'], USER_ID]);
+	});
+
+	it('types a 415 as a problem', async () => {
+		const { api } = setup(() => problem('unsupported-media-type', 415));
+		const blob = new Blob(['f']);
+		const result = await api.uploadMedia({ full: blob, thumb: blob, appointment_id: USER_ID });
+		expect(result).toMatchObject({
+			ok: false,
+			error: { kind: 'problem', type: 'unsupported-media-type' }
+		});
+	});
+});
+
+describe('archiveMedia', () => {
+	it('patches archived to true', async () => {
+		const { api, fetchFn } = setup(() => json({ ...media, archived: true }));
+		const result = await api.archiveMedia(USER_ID);
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result.ok, request.method, request.url, await request.text()]).toEqual([
+			true,
+			'PATCH',
+			`${BASE}/media/${USER_ID}`,
+			'{"archived":true}'
+		]);
+	});
+});
+
+describe('mediaThumbUrl', () => {
+	it('names the thumbnail of a photo', () => {
+		const { api } = setup(() => json({}));
+		expect(api.mediaThumbUrl(USER_ID)).toBe(`${BASE}/media/${USER_ID}/thumb`);
+	});
+});
