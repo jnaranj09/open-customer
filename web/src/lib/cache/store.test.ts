@@ -73,6 +73,22 @@ describe('the cache read model', () => {
 		expect(cache.snapshot?.clients.map((c) => c.name)).toEqual(['Ana Rojas']);
 	});
 
+	it('keeps a logged item hidden while the refresh after it fails', async () => {
+		await writeSnapshot(bootstrap(1), '2026-11-03T12:00:00Z');
+		const { cache } = setup({ ok: false, error: { kind: 'offline' } });
+		await cache.reload();
+		cache.markLogged('a');
+		await cache.refresh();
+		expect(cache.logged).toEqual(['a']);
+	});
+
+	it('forgets logged items once a refresh succeeds', async () => {
+		const { cache } = setup({ ok: true, data: bootstrap(0) });
+		cache.markLogged('a');
+		await cache.refresh();
+		expect(cache.logged).toEqual([]);
+	});
+
 	it('a server error after being offline is not offline, and the error is visible', async () => {
 		const { cache } = setup(
 			{ ok: false, error: { kind: 'response_invalid', path: '/bootstrap' } },

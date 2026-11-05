@@ -46,4 +46,24 @@ describe('delayed', () => {
 		await vi.advanceTimersByTimeAsync(5000);
 		expect(await settled).toEqual(new Error('boom'));
 	});
+
+	it('flush runs the action now, once, and waits for it', async () => {
+		const action = vi.fn(() => Promise.resolve());
+		const pending = delayed(action, 5000);
+		const outcome = await pending.flush();
+		await vi.advanceTimersByTimeAsync(10_000);
+		expect([outcome, action.mock.calls.length]).toEqual(['ran', 1]);
+	});
+
+	it('flush after cancel does not run the action', async () => {
+		const action = vi.fn(() => Promise.resolve());
+		const pending = delayed(action, 5000);
+		pending.cancel();
+		expect([await pending.flush(), action.mock.calls.length]).toEqual(['cancelled', 0]);
+	});
+
+	it('flush rejects when the action fails', async () => {
+		const pending = delayed(() => Promise.reject(new Error('boom')), 5000);
+		await expect(pending.flush()).rejects.toEqual(new Error('boom'));
+	});
 });

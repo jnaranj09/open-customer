@@ -12,8 +12,9 @@
 
 	// "¿Lo enviaste a …?" (design doc "Sending flow"). Mounted once in the app shell, so it opens
 	// first on any app start while a confirmation is stored. It reads the stored confirmation and
-	// the cached due list from the cache store and clears the confirmation on "Sí", "Todavía no"
-	// (also Escape and a tap outside) and when its item has left the due list.
+	// the cached due list from the cache store and clears the confirmation only on "Sí", "Todavía no"
+	// and when its item has left the due list. It cannot be dismissed (Escape, a tap outside, a
+	// swipe do nothing): a dismissed question would leave the item listed with "Enviar" enabled.
 	const pending = $derived(cache.meta.pending);
 	const due = $derived(cache.snapshot?.due ?? []);
 	// Before the cache is read the list is empty, and an empty list would clear a real question.
@@ -46,7 +47,7 @@
 			}
 			error = null;
 			try {
-				const result = await confirmSent(pending, item, {
+				const result = await confirmSent(item, {
 					api,
 					store: cache,
 					badge: appBadge,
@@ -90,7 +91,8 @@
 <BottomSheet
 	open={decision === 'ask'}
 	title={t('due_confirm_sent', { name: pending?.client_name ?? '' })}
-	onclose={() => void later.run()}
+	dismissable={false}
+	onclose={() => undefined}
 >
 	{#if item !== null}
 		<p class="line-clamp-4 text-sm whitespace-pre-wrap text-ink-muted">{item.text}</p>

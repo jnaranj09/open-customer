@@ -114,7 +114,7 @@ describe('pendingToAsk', () => {
 describe('confirmSent', () => {
 	it('posts the log entry with the exact text that was sent', async () => {
 		const { deps, recordReminder } = setup();
-		await confirmSent(PENDING, item('a'), { ...deps, due: [item('a')] });
+		await confirmSent(item('a'), { ...deps, due: [item('a')] });
 		expect(recordReminder).toHaveBeenCalledWith({
 			rule_id: ID,
 			appointment_id: ID,
@@ -129,14 +129,14 @@ describe('confirmSent', () => {
 	it('clears the confirmation on success', async () => {
 		const { deps, cache } = setup();
 		await startSend(item('a'), () => undefined, deps);
-		const result = await confirmSent(PENDING, item('a'), { ...deps, due: [item('a')] });
+		const result = await confirmSent(item('a'), { ...deps, due: [item('a')] });
 		expect([result.ok, cache.meta.pending, (await readMeta()).pending]).toEqual([true, null, null]);
 	});
 
 	it('keeps the confirmation when the POST fails', async () => {
 		const { deps, cache } = setup({ ok: false, error: { kind: 'offline' } });
 		await startSend(item('a'), () => undefined, deps);
-		const result = await confirmSent(PENDING, item('a'), { ...deps, due: [item('a')] });
+		const result = await confirmSent(item('a'), { ...deps, due: [item('a')] });
 		expect([result, cache.meta.pending]).toEqual([
 			{ ok: false, error: { kind: 'offline' } },
 			PENDING
@@ -145,19 +145,19 @@ describe('confirmSent', () => {
 
 	it('leaves the badge alone when the POST fails', async () => {
 		const { deps, badge } = setup({ ok: false, error: { kind: 'offline' } });
-		await confirmSent(PENDING, item('a'), { ...deps, due: [item('a')] });
+		await confirmSent(item('a'), { ...deps, due: [item('a')] });
 		expect([badge.set.mock.calls.length, badge.clear.mock.calls.length]).toEqual([0, 0]);
 	});
 
 	it('sets the badge to the items that are left', async () => {
 		const { deps, badge } = setup();
-		await confirmSent(PENDING, item('a'), { ...deps, due: [item('a'), item('b'), item('c')] });
+		await confirmSent(item('a'), { ...deps, due: [item('a'), item('b'), item('c')] });
 		expect(badge.set).toHaveBeenCalledWith(2);
 	});
 
 	it('after the last log POST the badge is cleared', async () => {
 		const { deps, badge } = setup();
-		await confirmSent(PENDING, item('a'), { ...deps, due: [item('a')] });
+		await confirmSent(item('a'), { ...deps, due: [item('a')] });
 		expect(badge.clear).toHaveBeenCalledOnce();
 	});
 });
@@ -168,6 +168,32 @@ describe('notYet', () => {
 		await startSend(item('a'), () => undefined, deps);
 		await notYet(cache);
 		expect([cache.meta.pending, (await readMeta()).pending]).toEqual([null, null]);
+	});
+});
+
+describe('logged items', () => {
+	it('confirmSent hides the item from the cached list once the server logged it', async () => {
+		const { deps, cache } = setup();
+		await confirmSent(item('a'), { ...deps, due: [item('a')] });
+		expect(cache.logged).toEqual(['a']);
+	});
+
+	it('confirmSent does not hide the item when the POST fails', async () => {
+		const { deps, cache } = setup({ ok: false, error: { kind: 'offline' } });
+		await confirmSent(item('a'), { ...deps, due: [item('a')] });
+		expect(cache.logged).toEqual([]);
+	});
+
+	it('skipItem hides the item once the server logged it', async () => {
+		const { deps, cache } = setup();
+		await skipItem(item('a'), { ...deps, due: [item('a')] });
+		expect(cache.logged).toEqual(['a']);
+	});
+
+	it('skipItem does not hide the item when the POST fails', async () => {
+		const { deps, cache } = setup({ ok: false, error: { kind: 'offline' } });
+		await skipItem(item('a'), { ...deps, due: [item('a')] });
+		expect(cache.logged).toEqual([]);
 	});
 });
 

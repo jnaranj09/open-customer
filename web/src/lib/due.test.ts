@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Appointment, DueItem } from './api/schemas';
-import { addReturnService, groupDue, nextAfter, visibleDue } from './due';
+import type { Api } from './api/client';
+import type { Result } from './api/errors';
+import { addReturnService, addToBooking, groupDue, nextAfter, visibleDue } from './due';
 
 const ID = '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f';
 const RULE = '7a1c9e20-2b3d-4f5a-8b6c-0d9e8f7a6b5c';
@@ -95,5 +97,51 @@ describe('addReturnService', () => {
 
 	it('keeps a service she booked twice', () => {
 		expect(addReturnService(appt(['s1', 's1']), 's3')).toEqual(['s1', 's1', 's3']);
+	});
+});
+
+describe('addToBooking', () => {
+	const prompt = {
+		appointment_id: ID,
+		starts_at: '2026-11-12T17:00:00Z',
+		services: ['Pedicure'],
+		return_service_id: 's3',
+		return_service_name: 'Relleno'
+	};
+	const current = {
+		id: ID,
+		services: [{ service_id: 's1', name: 'x', price_cents: null, duration_min: 30 }]
+	} as unknown as Appointment;
+
+	function fake(got: Result<Appointment>) {
+		const getAppointment = vi.fn<Api['getAppointment']>(() => Promise.resolve(got));
+		const updateAppointment = vi.fn<Api['updateAppointment']>(() =>
+			Promise.resolve({ ok: true, data: current })
+		);
+		return { api: { getAppointment, updateAppointment }, getAppointment, updateAppointment };
+	}
+
+	it('patches the lines the server has now, plus the return service', async () => {
+		const { api, updateAppointment } = fake({ ok: true, data: current });
+		await addToBooking(api, prompt, false);
+		expect(updateAppointment).toHaveBeenCalledWith(ID, { service_ids: ['s1', 's3'] });
+	});
+
+	it('sends allow_overlap only when asked', async () => {
+		const { api, updateAppointment } = fake({ ok: true, data: current });
+		await addToBooking(api, prompt, true);
+		expect(updateAppointment).toHaveBeenCalledWith(ID, {
+			service_ids: ['s1', 's3'],
+			allow_overlap: true
+		});
+	});
+
+	it('does not patch when the appointment cannot be read', async () => {
+		const { api, updateAppointment } = fake({ ok: false, error: { kind: 'offline' } });
+		const result = await addToBooking(api, prompt, false);
+		expect([result, updateAppointment.mock.calls.length]).toEqual([
+			{ ok: false, error: { kind: 'offline' } },
+			0
+		]);
 	});
 });

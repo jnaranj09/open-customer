@@ -25,6 +25,9 @@ export function createCache(deps: Deps) {
 	let meta = $state<Meta>(EMPTY_META);
 	let offline = $state(false);
 	let lastError = $state<ApiError | null>(null);
+	// Due items the server has logged (a 201 or 200) that the cached list may still hold, because the
+	// refresh after the POST failed. Hidden until a refresh succeeds. Not optimistic: it follows the answer.
+	let logged = $state<string[]>([]);
 
 	// A cleared cache (401, bad row, logout) must not leave the old session's data on screen, nor
 	// its user for an offline open to reuse.
@@ -33,6 +36,7 @@ export function createCache(deps: Deps) {
 		meta = EMPTY_META;
 		offline = false;
 		lastError = null;
+		logged = [];
 	});
 
 	async function load(): Promise<void> {
@@ -56,6 +60,9 @@ export function createCache(deps: Deps) {
 		const result = await attempt();
 		offline = !result.ok && result.error.kind === 'offline';
 		lastError = result.ok ? null : result.error;
+		if (result.ok) {
+			logged = [];
+		}
 		await load();
 		return result;
 	}
@@ -73,6 +80,14 @@ export function createCache(deps: Deps) {
 		},
 		get offline(): boolean {
 			return offline;
+		},
+		/** Ids of due items already logged on the server, still in a cached list that has not refreshed. */
+		get logged(): readonly string[] {
+			return logged;
+		},
+		/** Notes that the server logged this due item. */
+		markLogged(id: string): void {
+			logged = [...logged, id];
 		},
 		/** Why the last refresh failed, or null. */
 		get lastError(): ApiError | null {

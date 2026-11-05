@@ -13,6 +13,9 @@ type PendingStore = {
 	clearPending(): Promise<void>;
 };
 
+/** What the log POSTs tell the cache store: the server has this item, hide it until a refresh. */
+type LoggedStore = { markLogged(id: string): void };
+
 /** A due item that has a WhatsApp link, so "Enviar" can run on it. */
 export type Sendable = DueItem & { wa_link: string };
 
@@ -50,58 +53,63 @@ export function pendingToAsk(p: PendingSend | null, due: DueItem[]): 'ask' | 'cl
 	return due.some((i) => i.id === p.item_id) ? 'ask' : 'clear';
 }
 
-/** "Sí": logs the item as sent with the exact text, then updates the badge and clears the
- *  confirmation. A failed POST changes nothing: the confirmation stays so she can tap "Sí" again
- *  (a repeated POST is safe on the server). `due` is the current list, for the badge. */
-export async function confirmSent(
-	p: PendingSend,
+type LogDeps = {
+	api: Pick<Api, 'recordReminder'>;
+	store: LoggedStore;
+	badge: Badge;
+	now: () => Date;
+	due: DueItem[];
+};
+
+/** The log POST both "Sí" and "Omitir" make. On the server's answer it hides the item from the
+ *  cached list until a refresh and updates the badge to the items that are left. A failed POST
+ *  changes nothing. */
+async function logItem(
 	item: DueItem,
-	deps: {
-		api: Pick<Api, 'recordReminder'>;
-		store: PendingStore;
-		badge: Badge;
-		now: () => Date;
-		due: DueItem[];
-	}
+	what: { action: 'sent'; body: string; phone_digits: string | null } | { action: 'skipped' },
+	deps: LogDeps
 ): Promise<Result<void>> {
 	const posted = await deps.api.recordReminder({
 		rule_id: item.rule_id,
 		appointment_id: item.appointment_id,
 		anchor_at: item.anchor_at,
-		action: 'sent',
-		body: item.text,
-		phone_digits: item.phone_digits,
+		...what,
 		acted_at: deps.now().toISOString()
 	});
 	if (!posted.ok) {
 		return posted;
 	}
-	await applyBadge(deps.badge, deps.due.filter((i) => i.id !== p.item_id).length);
-	await deps.store.clearPending();
+	deps.store.markLogged(item.id);
+	await applyBadge(deps.badge, deps.due.filter((i) => i.id !== item.id).length);
 	return { ok: true, data: undefined };
 }
 
-/** "Todavía no": the item stays in the list and the question is dropped. */
+/** "Sí": logs the item as sent with the exact text, then clears the confirmation. A failed POST
+ *  keeps the confirmation so she can tap "Sí" again (a repeated POST is safe on the server).
+ *  `due` is the current list, for the badge. */
+export async function confirmSent(
+	item: DueItem,
+	deps: LogDeps & { store: PendingStore }
+): Promise<Result<void>> {
+	const logged = await logItem(
+		item,
+		{ action: 'sent', body: item.text, phone_digits: item.phone_digits },
+		deps
+	);
+	if (logged.ok) {
+		await deps.store.clearPending();
+	}
+	return logged;
+}
+
+/** "Todavía no": the item stays in the list and the question is dropped. Only this, "Sí", logout
+ *  and an item gone from the due list clear the question: the sheet cannot be dismissed. */
 export async function notYet(store: PendingStore): Promise<void> {
 	await store.clearPending();
 }
 
-/** "Omitir" after its "Deshacer" window: logs the item as skipped, then updates the badge. The
- *  caller refreshes the cache after a success. `due` is the current list, for the badge. */
-export async function skipItem(
-	item: DueItem,
-	deps: { api: Pick<Api, 'recordReminder'>; badge: Badge; now: () => Date; due: DueItem[] }
-): Promise<Result<void>> {
-	const posted = await deps.api.recordReminder({
-		rule_id: item.rule_id,
-		appointment_id: item.appointment_id,
-		anchor_at: item.anchor_at,
-		action: 'skipped',
-		acted_at: deps.now().toISOString()
-	});
-	if (!posted.ok) {
-		return posted;
-	}
-	await applyBadge(deps.badge, deps.due.filter((i) => i.id !== item.id).length);
-	return { ok: true, data: undefined };
+/** "Omitir" after its "Deshacer" window: logs the item as skipped. The caller refreshes the cache
+ *  after a success. */
+export function skipItem(item: DueItem, deps: LogDeps): Promise<Result<void>> {
+	return logItem(item, { action: 'skipped' }, deps);
 }

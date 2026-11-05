@@ -560,7 +560,7 @@ sequenceDiagram
   P->>P: save items in Dexie
   P->>P: tap "Enviar" → store pending confirmation (item id)
   P->>W: open https://wa.me/<digits>?text=<encoded text>
-  W-->>P: she comes back (visibilitychange)
+  W-->>P: she comes back
   P->>P: sheet "¿Lo enviaste a Ana?"
   alt Sí
     P->>S: POST /reminders/log {rule, appointment, anchor_at, action: sent, body, acted_at}
@@ -570,7 +570,7 @@ sequenceDiagram
   end
 ```
 
-*   **If iOS closes the app while she is in WhatsApp**, the question is not lost. The tap on "Enviar" stores the pending confirmation in Dexie `meta` (`{item_id, client_name, started_at}`). On any app open, if one is stored, the app shows "¿Lo enviaste a …?" before anything else. "Sí", "Todavía no" and logout clear it. If the item is no longer in the due list (for example it was confirmed from another device), it is cleared without asking.
+*   **If iOS closes the app while she is in WhatsApp**, the question is not lost. The tap on "Enviar" stores the pending confirmation in Dexie `meta` (`{item_id, client_name, started_at}`). On any app open, if one is stored, the app shows "¿Lo enviaste a …?" before anything else. There is no return event to wait for: the sheet is open whenever a confirmation is stored and the cache is loaded, so it is already waiting when she comes back (and on a cold start it is the first thing shown). It cannot be dismissed with Escape, a tap outside or a swipe. "Sí", "Todavía no" and logout clear it. If the item is no longer in the due list (for example it was confirmed from another device), it is cleared without asking.
 *   "Omitir" writes `action: skipped`.
 *   A client without a phone shows "Agregar teléfono" instead of "Enviar".
 *   Nothing is queued while offline. If the `POST` fails, the sheet says "No se guardó. Ya lo enviaste: cuando haya conexión, toca Sí otra vez" and the item stays in the list, so she confirms it later instead of sending it again. A repeated `POST` is safe because of the `UNIQUE` key and `ON CONFLICT DO NOTHING`.
@@ -2254,7 +2254,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `DayView` and `WeekView`: time grids (both are `TimeGrid` with one column or seven; `lib/agenda.ts` `layoutDay` places each appointment in the day's grid and gives overlapping ones side-by-side columns, back-to-back ones the full width). The grid shows 08:00 to 19:00, wider when an appointment falls outside. The week starts on Monday and its column heads open that day. Cancelled appointments are hidden; "No vino" ones are shown greyed out. An appointment that crosses midnight is clipped to each day it touches.
     *   `DueCard`: the "Para enviar hoy" count. On compact a tinted card that links to `/enviar`; on wide a card with the heading, the count link and the first 5 items, each with an "Enviar" link. With no rules it is an `EmptyState` that leads to Ajustes.
     *   `ServicePicker`: tapping a picked service again adds a second line, shown as "×2".
-    *   `ConfirmSentSheet`: the "¿Lo enviaste a …?" sheet. It reads the pending confirmation from the cache store (Dexie `meta`) and clears it ("Sí", "Todavía no", Escape or a tap outside, an item gone from the due list), so `+layout.svelte` can open it on any app start. The rules are `lib/pending.ts` (`startSend`, `pendingToAsk`, `confirmSent`, `skipItem`, `notYet`), tested. A failed `POST` keeps the question and shows "No se guardó…".
+    *   `ConfirmSentSheet`: the "¿Lo enviaste a …?" sheet. It reads the pending confirmation from the cache store (Dexie `meta`) and clears it ("Sí" and "Todavía no", or when its item is gone from the due list), so `+layout.svelte` can open it on any app start. The rules are `lib/pending.ts` (`startSend`, `pendingToAsk`, `confirmSent`, `skipItem`, `notYet`), tested. The sheet has no dismiss: Escape, a tap outside and a swipe do nothing (`BottomSheet` `dismissable={false}`), so the question is only cleared by an explicit answer. A failed `POST` keeps the question and shows "No se guardó…".
     *   `DueItemRow` (a line of the list: a due item that selects, or a sent one with its time) and `DueItemDetail` (the client, the full message and the actions, or the booking prompt with its three actions; "Agregar teléfono" when she has no phone). `OverlapSheet` is the 409 sheet ("Se cruza con otra cita", "Agendar igual"). `NoRulesState` is the empty state of "no reminder rules yet", shared by `DueCard` and "Para enviar".
 
 ##### 71. `web/src/routes/+layout.ts`, `+layout.svelte`, `web/src/lib/guard.ts`, `session.ts`, `nav.ts` (Create)
@@ -2300,7 +2300,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   An "Enviados" section below: today's reminder-log rows with `action: sent` (`GET /reminders/log?date=<today>`; a skipped item is not listed), each with the client, the time and the exact text that was sent. Online only: the log is not cached, so offline the section shows "Necesitas conexión para ver los enviados".
     *   The send flow uses `ConfirmSentSheet` and then moves to the next item. After each successful log `POST` it updates the app badge.
     *   While offline, it shows the cached list read-only, with the actions disabled, and hides "before" items whose `anchor_at` (the appointment's start) is in the past.
-    *   **Layouts:** compact shows each item as a card with its full message and actions; wide shows the 420 px list and the selected item on the right (`DueItemRow`, `DueItemDetail`). After a send or skip the item that followed the chosen one takes the pane. "Enviar" opens the link in a new tab on wide and in the same window on compact; either way the confirmation is stored first. One "Omitir" waits for its "Deshacer" at a time (the others say why they are off). "Agregar a la cita" reads the future appointment from the cached window; one outside it shows "No encontrado".
+    *   **Layouts:** compact shows each item as a card with its full message and actions; wide shows the 420 px list and the selected item on the right (`DueItemRow`, `DueItemDetail`). After a send or skip the item that followed the chosen one takes the pane. "Enviar" opens the link in a new tab on wide and in the same window on compact; either way the confirmation is stored first. One "Omitir" waits for its "Deshacer" at a time (the others say why they are off). "Agregar a la cita" reads the appointment from the server (`GET /appointments/{id}`) and sends its current `service_ids` plus the return service, because the PATCH replaces the whole list. After a log `POST` the item is hidden locally until a refresh succeeds (the store's `logged` ids), so a failed refresh never shows a logged item with "Enviar" enabled. On compact, "Enviar" first sends a waiting "Omitir" (`delayed.flush`), because the link unloads the page.
 
 ##### 75. `web/src/routes/citas/nueva/+page.svelte`, `web/src/routes/citas/[id]/+page.svelte` (Create)
 

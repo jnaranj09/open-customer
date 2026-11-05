@@ -133,6 +133,11 @@ export function createApi(opts: ApiOptions) {
 			);
 			return got.ok ? { ok: true, data: got.data.items } : got;
 		},
+		/** The appointment as it is now on the server. */
+		getAppointment: (id: string) =>
+			read('/appointments/{id}', AppointmentSchema, () =>
+				client.GET('/appointments/{id}', { params: { path: { id } } })
+			),
 		/** Changes only the fields sent. A 409 comes back as the typed `overlap` error. */
 		updateAppointment: (id: string, body: Schemas['AppointmentPatch']) =>
 			read('/appointments/{id}', AppointmentSchema, () =>

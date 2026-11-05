@@ -7,8 +7,16 @@
 		open,
 		title,
 		onclose,
+		dismissable = true,
 		children
-	}: { open: boolean; title: string; onclose: () => void; children: Snippet } = $props();
+	}: {
+		open: boolean;
+		title: string;
+		onclose: () => void;
+		/** False for a question she must answer with a button: Escape, a tap outside and a swipe do nothing. */
+		dismissable?: boolean;
+		children: Snippet;
+	} = $props();
 
 	const titleId = $props.id();
 	const FOCUSABLE =
@@ -45,7 +53,9 @@
 		}
 		if (event.key === 'Escape') {
 			event.preventDefault();
-			onclose();
+			if (dismissable) {
+				onclose();
+			}
 			return;
 		}
 		if (event.key !== 'Tab') {
@@ -79,7 +89,7 @@
 			return;
 		}
 		// A swipe down past a quarter of the sheet's height closes it; less springs back.
-		const close = panel !== undefined && dragY > panel.offsetHeight / 4;
+		const close = dismissable && panel !== undefined && dragY > panel.offsetHeight / 4;
 		dragStart = null;
 		dragY = 0;
 		if (close) {
@@ -96,6 +106,7 @@
 			type="button"
 			tabindex="-1"
 			aria-label={t('sheet_close')}
+			disabled={!dismissable}
 			class="absolute inset-0 cursor-default bg-ink/30"
 			onclick={onclose}
 		></button>
@@ -110,7 +121,9 @@
 		>
 			<!-- The swipe handle is a touch affordance; the Escape key and the scrim close it too. -->
 			<div
-				class="flex h-6 w-full shrink-0 touch-none items-center justify-center lg:hidden"
+				class="flex h-6 w-full shrink-0 touch-none items-center justify-center lg:hidden {dismissable
+					? ''
+					: 'invisible'}"
 				onpointerdown={dragDown}
 				onpointermove={dragMove}
 				onpointerup={dragEnd}

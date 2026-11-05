@@ -11,7 +11,7 @@
 	import NoRulesState from '../../lib/components/NoRulesState.svelte';
 	import OverlapSheet from '../../lib/components/OverlapSheet.svelte';
 	import Toast from '../../lib/components/Toast.svelte';
-	import { addReturnService, groupDue, nextAfter, visibleDue } from '../../lib/due';
+	import { addToBooking, groupDue, nextAfter, visibleDue } from '../../lib/due';
 	import { t } from '../../lib/i18n';
 	import { layout } from '../../lib/layout';
 	import { skipItem, startSend, type Sendable } from '../../lib/pending';
@@ -28,12 +28,17 @@
 	);
 
 	// An "Omitir" waits UNDO_MS for "Deshacer" before its POST; the item is out of the list meanwhile.
-	let skipping = $state<{ id: string; name: string; undo: () => void } | null>(null);
+	let skipping = $state<{
+		id: string;
+		name: string;
+		undo: () => void;
+		flush: () => Promise<unknown>;
+	} | null>(null);
 
 	// The cached due list. The clock is read here, not in `visibleDue`, so the filter stays pure.
 	const items = $derived(
 		visibleDue(cache.snapshot?.due ?? [], systemNow(), cache.offline).filter(
-			(i) => i.id !== skipping?.id
+			(i) => i.id !== skipping?.id && !cache.logged.includes(i.id)
 		)
 	);
 	const groups = $derived(groupDue(items));
@@ -74,6 +79,9 @@
 	const send = submitOnce(async (item: Sendable) => {
 		actionError = null;
 		select(item.id);
+		// On a phone the link unloads this page, which would lose a skip still waiting for its
+		// "Deshacer": send it now and wait for it. Its failure shows through the skip's own handler.
+		await skipping?.flush().catch(() => undefined);
 		const started = await startSend(item, openLink, { store: cache, now: systemNow });
 		if (!started.ok) {
 			actionError = errorText(started.error);
@@ -88,6 +96,7 @@
 			const result = await skipItem(item, {
 				api,
 				badge: appBadge,
+				store: cache,
 				now: systemNow,
 				due: cache.snapshot?.due ?? []
 			});
@@ -102,7 +111,8 @@
 			name: item.client_name,
 			undo: () => {
 				pending.cancel();
-			}
+			},
+			flush: () => pending.flush()
 		};
 		pending.done.then(
 			() => {
@@ -128,16 +138,8 @@
 			return;
 		}
 		actionError = null;
-		const appointment = cache.snapshot?.appointments.find((a) => a.id === prompt.appointment_id);
-		if (appointment === undefined) {
-			actionError = t('error_not_found');
-			return;
-		}
 		select(item.id);
-		const result = await api.updateAppointment(appointment.id, {
-			service_ids: addReturnService(appointment, prompt.return_service_id),
-			...(allowOverlap ? { allow_overlap: true } : {})
-		});
+		const result = await addToBooking(api, prompt, allowOverlap);
 		if (result.ok) {
 			overlap = null;
 			await cache.refresh();

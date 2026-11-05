@@ -382,3 +382,20 @@ describe('updateAppointment', () => {
 		expect(result).toEqual({ ok: false, error: { kind: 'overlap', overlapping: [appointment] } });
 	});
 });
+
+describe('getAppointment', () => {
+	it('reads the appointment by id', async () => {
+		const { api, fetchFn } = setup(() => json(appointment));
+		const result = await api.getAppointment(USER_ID);
+		expect([result, (fetchFn.mock.calls[0]?.[0] as Request).url]).toEqual([
+			{ ok: true, data: appointment },
+			`${BASE}/appointments/${USER_ID}`
+		]);
+	});
+
+	it('types a 404 as a problem', async () => {
+		const { api } = setup(() => problem('not-found', 404));
+		const result = await api.getAppointment(USER_ID);
+		expect(result).toMatchObject({ ok: false, error: { kind: 'problem', type: 'not-found' } });
+	});
+});
