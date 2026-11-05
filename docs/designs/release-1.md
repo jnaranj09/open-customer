@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. P0–P4 are built; P5 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
+*   **Status:** Accepted. P0–P5 are built; P6 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
 
@@ -1343,7 +1343,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `node-check` | Fails unless `node --version` equals `engines.node` (with fnm: `fnm use` in `web/`). `web`, `test` and `lint` depend on it |
     | `web` | pnpm build into `web/build`, with `VERSION` exported |
     | `build` | `web`, then the Go binary at `bin/open-customer` |
-    | `test` | `web-stub`, then Go + web unit tests (`vitest run --passWithNoTests`, so P0–P4 pass with no web tests) |
+    | `test` | `web-stub`, then Go + web unit tests (`vitest run --passWithNoTests`, kept from P0, when there were no web tests) |
     | `test-db` | `web-stub`, then Go tests tagged `db` |
     | `vuln` | `web-stub`, then `govulncheck` on `$(GO_PKGS)` |
     | `e2e` | `build`; then drop and recreate the e2e database (`dropdb --if-exists` and `createdb` with `psql` tools against the maintenance database; locally through `docker exec` on the `dev` container); then Playwright (item 79). If `E2E_DATABASE_URL` is already set (CI sets it to its service container), that database is used and no container is started. Otherwise the target starts the `dev` Postgres container if needed and uses `open_customer_e2e` on it. |
