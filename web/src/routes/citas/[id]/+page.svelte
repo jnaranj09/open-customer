@@ -62,6 +62,9 @@
 		const want = id;
 		untrack(() => {
 			editing = false;
+			photos = null;
+			listError = null;
+			photosError = null;
 			void load(want);
 		});
 	});
@@ -171,6 +174,9 @@
 
 	// Photos
 	let photos = $state<Media[] | null>(null);
+	// The list's own failure (retried when the appointment changes) and the last upload's, apart:
+	// reloading the list must not wipe an upload error.
+	let listError = $state<string | null>(null);
 	let photosError = $state<string | null>(null);
 	let uploading = $state(false);
 
@@ -178,15 +184,15 @@
 		const result = await api.listClientMedia(clientId);
 		if (result.ok) {
 			photos = result.data.filter((m) => m.appointment_id === apptId);
-			photosError = null;
+			listError = null;
 		} else {
-			photosError = result.error.kind === 'offline' ? t('photos_offline') : errorText(result.error);
+			listError = result.error.kind === 'offline' ? t('photos_offline') : errorText(result.error);
 		}
 	}
 
 	$effect(() => {
 		const a = appt;
-		if (a !== null && (photos === null || photosError !== null)) {
+		if (a !== null && photos === null) {
 			untrack(() => {
 				void loadPhotos(a.client_id, a.id);
 			});
@@ -411,8 +417,8 @@
 						/>
 					</label>
 				</div>
-				{#if photosError !== null}
-					<p role="alert" class="text-sm text-error">{photosError}</p>
+				{#if photosError !== null || listError !== null}
+					<p role="alert" class="text-sm text-error">{photosError ?? listError}</p>
 				{:else if photos !== null && photos.length === 0}
 					<p class="text-sm text-ink-muted">{t('photos_empty')}</p>
 				{/if}

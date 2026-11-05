@@ -140,6 +140,10 @@ describe('endFor', () => {
 		expect(endFor('15:00', [{ service_id: PEDICURE, count: 2 }], SERVICES)).toBe('17:00');
 	});
 
+	it('gives nothing for an empty start', () => {
+		expect(endFor('', [{ service_id: PEDICURE, count: 1 }], SERVICES)).toBe('');
+	});
+
 	it('keeps the start with no services', () => {
 		expect(endFor('15:00', [], SERVICES)).toBe('15:00');
 	});
@@ -191,6 +195,18 @@ describe('returnTo', () => {
 		expect(returnTo('//evil.test/x')).toBe('/');
 	});
 
+	it('refuses a path with a tab that the URL parser strips', () => {
+		expect(returnTo('/\t/evil.test/x')).toBe('/');
+	});
+
+	it('refuses a path with a backslash', () => {
+		expect(returnTo('/\\evil.test')).toBe('/');
+	});
+
+	it('keeps the search of an app path', () => {
+		expect(returnTo('/clientas?q=ana')).toBe('/clientas?q=ana');
+	});
+
 	it('refuses an absolute URL', () => {
 		expect(returnTo('https://evil.test')).toBe('/');
 	});
@@ -227,6 +243,18 @@ describe('formErrors', () => {
 
 	it('asks for the time', () => {
 		expect(formErrors(form({ time: '' }), true)).toEqual({ time: 'appointment_time_needed' });
+	});
+
+	it('does not ask for an end time when editing an appointment that never had services', () => {
+		expect(formErrors(form({ lines: [] }), false, false)).toEqual({});
+	});
+
+	it('asks for an end time when an edit removes the last service', () => {
+		expect(formErrors(form({ lines: [] }), false, true)).toEqual({ end: 'appointment_end_needed' });
+	});
+
+	it('refuses a day that is not a date', () => {
+		expect(formErrors(form({ day: 'x' }), true)).toEqual({ day: 'appointment_day_needed' });
 	});
 
 	it('asks for an end time when there are no services', () => {
@@ -415,6 +443,14 @@ describe('endShown', () => {
 	it('adds up the durations once the services changed', () => {
 		const lines: Line[] = [{ service_id: PEDICURE, count: 1 }];
 		expect(endShown({ ...untouched(), lines }, booked, ZONE, quote)).toBe('16:00');
+	});
+
+	it('does not throw when the day was cleared on an edit', () => {
+		expect(endShown({ ...untouched(), day: '' }, booked, ZONE, quote)).toBe('16:30');
+	});
+
+	it('shows nothing for a cleared time', () => {
+		expect(endShown({ ...untouched(), time: '' }, booked, ZONE, quote)).toBe('');
 	});
 
 	it('adds up the durations for a new appointment', () => {

@@ -102,7 +102,8 @@
 	);
 
 	let attempted = $state(false);
-	const errors = $derived(attempted ? formErrors(form, creating) : {});
+	const hadServices = untrack(() => (appointment?.services.length ?? 0) > 0);
+	const errors = $derived(attempted ? formErrors(form, creating, hadServices) : {});
 	let failure = $state<ApiError | null>(null);
 	let overlapping = $state<Appointment[] | null>(null);
 	let busy = $state(false);
@@ -125,7 +126,7 @@
 		async (allowOverlap: boolean) => {
 			failure = null;
 			attempted = true;
-			if (Object.keys(formErrors(form, creating)).length > 0) {
+			if (Object.keys(formErrors(form, creating, hadServices)).length > 0) {
 				return;
 			}
 			const extra = allowOverlap ? { allow_overlap: true } : {};

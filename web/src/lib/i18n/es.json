@@ -215,5 +215,6 @@
 	"photos_empty": "Aún no hay fotos de esta cita",
 	"photo_unreadable": "No se pudo leer la foto. Prueba con otra",
 	"photo_added": "Foto agregada",
-	"photo_archived": "Foto archivada"
+	"photo_archived": "Foto archivada",
+	"attr_empty_choice": "Ninguna"
 }

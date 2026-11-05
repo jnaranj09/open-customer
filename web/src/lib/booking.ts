@@ -31,6 +31,9 @@ export function serviceIds(lines: Line[]): string[] {
 	return lines.flatMap((l) => Array.from({ length: l.count }, () => l.service_id));
 }
 
+const validTime = (time: string): boolean => /^\d{2}:\d{2}$/.test(time);
+const validDay = (day: string): boolean => z.iso.date().safeParse(day).success;
+
 const MINUTES_PER_DAY = 24 * 60;
 
 function minutesOf(time: string): number {
@@ -46,6 +49,9 @@ function timeOf(minutes: number): string {
 /** The end time (`HH:MM`) of a booking that starts at `startLocal`: the sum of the durations. A
  *  booking that runs past midnight shows the time on the next day. */
 export function endFor(startLocal: string, lines: Line[], services: Service[]): string {
+	if (!validTime(startLocal)) {
+		return '';
+	}
 	const total = lines.reduce(
 		(sum, l) => sum + l.count * (services.find((s) => s.id === l.service_id)?.duration_min ?? 0),
 		0
@@ -76,9 +82,20 @@ export function optionPath(options: AttrOption[], id: string | null): AttrOption
 /** Where "save" goes back to: an app path she came from, or Hoy. Only a path inside this app
  *  passes (one slash first, no host, no backslash). */
 export function returnTo(from: string | null): string {
-	return from !== null && from.startsWith('/') && !from.startsWith('//') && !from.includes('\\')
-		? from
-		: '/';
+	if (from === null) {
+		return '/';
+	}
+	// The URL parser drops tabs and newlines and reads a backslash as a slash, so the check runs on
+	// what it makes of the text, not on the text.
+	try {
+		const url = new URL(from, 'http://app.invalid');
+		return url.origin === 'http://app.invalid' && from.startsWith('/') && !from.startsWith('//')
+			? url.pathname + url.search
+			: '/';
+	} catch {
+		console.warn('code=return_path_invalid');
+		return '/';
+	}
 }
 
 /** The `dia` of the link that opened the form, or `today` when it is missing or not a real day. */
@@ -130,18 +147,20 @@ export type Form = z.infer<typeof FormSchema>;
 
 export type FormErrors = Partial<Record<'client' | 'day' | 'time' | 'end', MessageKey>>;
 
-/** The checks that need no server: who, when, and an end time that makes sense. */
-export function formErrors(form: Form, creating: boolean): FormErrors {
+/** The checks that need no server: who, when, and an end time that makes sense. With no services
+ *  the end time is needed on a new booking, or when an edit takes the last service away
+ *  (`hadServices`); a notes-only edit of a booking that never had services needs none. */
+export function formErrors(form: Form, creating: boolean, hadServices = false): FormErrors {
 	const errors: FormErrors = {};
 	if (creating && form.clientId === null) {
 		errors.client = 'appointment_client_needed';
 	}
-	if (form.day === '') {
+	if (!validDay(form.day)) {
 		errors.day = 'appointment_day_needed';
 	}
-	if (form.time === '') {
+	if (!validTime(form.time)) {
 		errors.time = 'appointment_time_needed';
-	} else if (form.end === null && form.lines.length === 0) {
+	} else if (form.end === null && form.lines.length === 0 && (creating || hadServices)) {
 		errors.end = 'appointment_end_needed';
 	} else if (form.end !== null && minutesOf(form.end) <= minutesOf(form.time)) {
 		errors.end = 'appointment_end_after';
@@ -308,7 +327,8 @@ export function endShown(
 	}
 	if (
 		before !== null &&
-		form.time !== '' &&
+		validDay(form.day) &&
+		validTime(form.time) &&
 		sameList(
 			serviceIds(form.lines),
 			before.services.map((s) => s.service_id)

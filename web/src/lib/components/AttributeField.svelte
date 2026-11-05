@@ -80,7 +80,7 @@
 	<SelectField
 		label={attr.label}
 		options={selectOptions}
-		{...attr.required ? {} : { clearLabel: t('attr_none') }}
+		{...attr.required ? {} : { clearLabel: t('attr_empty_choice') }}
 		bind:value={() => text, setText}
 		{error}
 	/>
