@@ -62,7 +62,12 @@ export function createApi(opts: ApiOptions) {
 		const problem = parsed.data;
 		const type = problem.type.slice(PROBLEM_PREFIX.length) as ProblemName;
 		if (type === 'unauthorized') {
-			await opts.onUnauthorized();
+			try {
+				await opts.onUnauthorized();
+			} catch {
+				// The caller still gets `unauthorized`; a hook that threw must not reject the call.
+				console.warn('code=on_unauthorized_failed');
+			}
 			return { kind: 'unauthorized' };
 		}
 		if (type === 'overlap') {

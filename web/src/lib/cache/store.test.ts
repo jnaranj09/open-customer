@@ -10,8 +10,12 @@ import { cache as appCache, createCache } from './store.svelte';
 
 const NOW = new Date('2026-11-04T12:00:00Z');
 
-function setup(answer: Result<Bootstrap>) {
+/** `answer` is what every call gets; `first` are answers for the first calls, in order. */
+function setup(answer: Result<Bootstrap>, ...first: Result<Bootstrap>[]) {
 	const bootstrapCall = vi.fn<Api['bootstrap']>(() => Promise.resolve(answer));
+	for (const one of first) {
+		bootstrapCall.mockResolvedValueOnce(one);
+	}
 	const cache = createCache({
 		api: { bootstrap: bootstrapCall } as unknown as Api,
 		now: () => NOW,
@@ -65,6 +69,27 @@ describe('the cache read model', () => {
 		await cache.refresh();
 		expect(cache.offline).toBe(true);
 		expect(cache.snapshot?.clients.map((c) => c.name)).toEqual(['Ana Rojas']);
+	});
+
+	it('a server error after being offline is not offline, and the error is visible', async () => {
+		const { cache } = setup(
+			{ ok: false, error: { kind: 'response_invalid', path: '/bootstrap' } },
+			{ ok: false, error: { kind: 'offline' } }
+		);
+		await cache.refresh();
+		await cache.refresh();
+		expect(cache.offline).toBe(false);
+		expect(cache.lastError).toEqual({ kind: 'response_invalid', path: '/bootstrap' });
+	});
+
+	it('clears the error after a refresh that works', async () => {
+		const { cache } = setup(
+			{ ok: true, data: bootstrap() },
+			{ ok: false, error: { kind: 'offline' } }
+		);
+		await cache.refresh();
+		await cache.refresh();
+		expect(cache.lastError).toBeNull();
 	});
 
 	it('is online again after a refresh that works', async () => {

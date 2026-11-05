@@ -139,6 +139,13 @@ describe('response schema', () => {
 });
 
 describe('unauthorized', () => {
+	it('returns unauthorized when onUnauthorized throws', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const { api, hooks } = setup(() => problem('unauthorized', 401));
+		hooks.onUnauthorized.mockImplementation(() => Promise.reject(new Error('hook failed')));
+		expect(await api.me()).toEqual({ ok: false, error: { kind: 'unauthorized' } });
+	});
+
 	it('calls onUnauthorized on a 401 unauthorized and returns unauthorized', async () => {
 		const { api, hooks } = setup(() => problem('unauthorized', 401));
 		const result = await api.me();

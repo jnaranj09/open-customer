@@ -14,7 +14,7 @@ const problem = (name: string, status: number): Response =>
 
 const notAProblem = (): Response => new Response('{"oops":true}', { status: 500, headers });
 
-function setup(answers: (() => Response)[]) {
+function setup(answers: (() => Response)[], clear: () => Promise<void> = () => Promise.resolve()) {
 	const fetchFn = vi.fn<typeof fetch>(() => Promise.reject(new TypeError('network down')));
 	for (const answer of answers) {
 		fetchFn.mockImplementationOnce(() => Promise.resolve(answer()));
@@ -26,7 +26,7 @@ function setup(answers: (() => Response)[]) {
 		baseUrl: 'http://app.test/api/v1',
 		clear: () => {
 			order.push('clear');
-			return Promise.resolve();
+			return clear();
 		},
 		toLogin: () => {
 			order.push('login');
@@ -52,6 +52,36 @@ describe('the wired API client', () => {
 		const { api, order } = setup([() => problem('unauthorized', 401)]);
 		await api.me();
 		expect(order).toEqual(['clear', 'login']);
+	});
+
+	it('a 401 still goes to the login screen when clearing the cache fails', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const { api, order } = setup([() => problem('unauthorized', 401)], () =>
+			Promise.reject(new Error('idb down'))
+		);
+		await api.me();
+		expect(order).toEqual(['clear', 'login']);
+	});
+
+	it('logs a failed cache clear by code only', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const { api } = setup([() => problem('unauthorized', 401)], () =>
+			Promise.reject(new Error('idb down'))
+		);
+		await api.me();
+		expect(warn).toHaveBeenCalledWith('code=cache_clear_failed');
+	});
+
+	it('a 401 answers unauthorized even when the login redirect fails', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const failing = createAppApi({
+			fetch: () => Promise.resolve(problem('unauthorized', 401)),
+			version: VERSION,
+			baseUrl: 'http://app.test/api/v1',
+			clear: () => Promise.resolve(),
+			toLogin: () => Promise.reject(new Error('nav'))
+		});
+		expect(await failing.me()).toEqual({ ok: false, error: { kind: 'unauthorized' } });
 	});
 
 	it('a different server version raises the update flag', async () => {

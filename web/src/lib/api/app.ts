@@ -28,7 +28,14 @@ export function createAppApi(env: AppApiEnv): Api {
 		version: env.version,
 		...(env.baseUrl === undefined ? {} : { baseUrl: env.baseUrl }),
 		onUnauthorized: async () => {
-			await env.clear();
+			// The login screen comes even when the cache cannot be cleared. The report is a console
+			// line, not a client-error POST: the session is already dead, so that POST would 401 and
+			// land here again.
+			try {
+				await env.clear();
+			} catch {
+				console.warn('code=cache_clear_failed');
+			}
 			await env.toLogin();
 		},
 		onNewVersion: () => {
