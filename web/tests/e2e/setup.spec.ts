@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { AUTH_FILE, OWNER, ZONE, appEnv } from './env';
+import { fill } from './steps';
 
 const BUSINESS = 'Estudio Prueba';
 /** The built-in preview client (internal/locale/es.go); it lives in Go, so the spec types it. */
@@ -21,17 +22,6 @@ const TEMPLATES = [
 	{ name: 'Recordatorio de cita', text: 'te esperamos mañana. ' },
 	{ name: 'Relleno', text: 'ya toca tu relleno. ' }
 ];
-
-/** An es.json text with its `{name}` placeholders filled; a missing value throws. */
-function fill(text: string, params: Record<string, string>): string {
-	return text.replace(/\{(\w+)\}/g, (_match, name: string) => {
-		const value = params[name];
-		if (value === undefined) {
-			throw new Error(`fill: no value for {${name}}`);
-		}
-		return value;
-	});
-}
 
 /** Ajustes → one section, through the tab bar and the section list. */
 async function openSettings(page: Page, section: string): Promise<void> {
