@@ -94,11 +94,10 @@
 				badge: appBadge,
 				store: cache,
 				now: systemNow,
-				due: cache.shownDue
+				due: cache.shownDue,
+				refresh: cache.refresh
 			});
-			if (result.ok) {
-				await cache.refresh();
-			} else {
+			if (!result.ok) {
 				failure = result.error;
 			}
 		}, UNDO_MS);

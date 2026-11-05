@@ -4,3 +4,6 @@ build
 pnpm-lock.yaml
 .eslintcache
 src/lib/api/schema.d.ts
+test-results/
+playwright-report/
+tests/e2e/.auth/

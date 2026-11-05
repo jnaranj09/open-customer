@@ -40,12 +40,12 @@ with fnm, `fnm use` in web/).
   `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
   app Docker image.
-- `make e2e`: build, fresh e2e database, Playwright WebKit (from P6).
+- `make e2e`: build, fresh e2e database, Playwright WebKit.
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
 `make check-pins lint test vuln build check-generated test-db cover`. CI
-(`.github/workflows/ci.yml`) also runs gitleaks and `pnpm audit --audit-level high`.
+(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e` (after `make build`).
 
 A check that could not run is reported as NOT RUN, never as passing.
 

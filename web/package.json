@@ -14,7 +14,8 @@
 		"lint": "eslint . && prettier --check . && knip && jscpd",
 		"gen:api": "openapi-typescript ../api/openapi.yaml -o src/lib/api/schema.d.ts",
 		"format": "prettier --write .",
-		"test": "vitest run --passWithNoTests"
+		"test": "vitest run --passWithNoTests",
+		"e2e": "playwright test"
 	},
 	"dependencies": {
 		"@fontsource-variable/nunito": "5.3.0",

@@ -23,7 +23,9 @@
 	let editingId = $state<string | null>(null);
 	const open = $derived(data?.attributes.find((a) => a.id === editingId));
 
+	// Closes whichever sheet is open: a new text, number or date attribute is done at creation.
 	function done(message: MessageKey): void {
+		creating = false;
 		editingId = null;
 		toaster.say(message);
 	}

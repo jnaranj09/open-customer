@@ -28,9 +28,10 @@ export function createCache(deps: Deps) {
 	let offline = $state(false);
 	let lastError = $state<ApiError | null>(null);
 	// Due items the server has logged (a 201 or 200) that the cached list may still hold: the refresh
-	// after the POST failed, or a refresh asked before the POST answered with the old list. A
-	// refresh that succeeds drops only the ids its list no longer holds. Not optimistic: it follows
-	// the answer.
+	// after the POST failed, or a refresh asked before the POST answered with the old list, or the
+	// app was closed before the refresh after the POST was written. The ids are also stored in meta
+	// (`load` reads them back), so a reload keeps them hidden. A refresh that succeeds drops only the
+	// ids its list no longer holds. Not optimistic: it follows the answer.
 	let logged = $state<string[]>([]);
 	// Whether a session is live (the app shell says so); a bad cached row then asks `/bootstrap`.
 	let syncing = false;
@@ -60,6 +61,9 @@ export function createCache(deps: Deps) {
 	async function load(): Promise<void> {
 		snapshot = await readAll();
 		meta = await readMeta();
+		// The stored ids come back after a reload; an id held only in memory (its write failed)
+		// stays too.
+		logged = [...meta.logged, ...logged.filter((id) => !meta.logged.includes(id))];
 	}
 
 	/** The refresh, with a failed cache write turned into a failed Result (code only in the log). */
@@ -116,9 +120,17 @@ export function createCache(deps: Deps) {
 		get shownDue(): DueItem[] {
 			return shownDue(snapshot?.due ?? [], { now: deps.now(), offline, logged });
 		},
-		/** Notes that the server logged this due item. */
-		markLogged(id: string): void {
-			logged = [...logged, id];
+		/** Notes that the server logged this due item: hidden at once in memory, then stored in meta
+		 *  so a reload keeps it hidden. `clearPending` ("Sí") clears the send confirmation in the
+		 *  same write, so the question and the hidden item change together. Rejects when the write
+		 *  fails; the item stays hidden until the app is closed. */
+		async markLogged(id: string, opts: { clearPending: boolean }): Promise<void> {
+			logged = logged.includes(id) ? logged : [...logged, id];
+			await writeMeta((current) => ({
+				logged: current.logged.includes(id) ? current.logged : [...current.logged, id],
+				...(opts.clearPending ? { pending: null } : {})
+			}));
+			meta = await readMeta();
 		},
 		/** Why the last refresh failed, or null. */
 		get lastError(): ApiError | null {

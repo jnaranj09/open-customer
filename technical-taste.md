@@ -95,9 +95,9 @@ Which tool is the sensor for each row in this repo (filled at setup; update when
 | `types` | `go build`, `go vet` | svelte-check with the strict TS flags |
 | `lint` | golangci-lint v2: `govet`, `staticcheck`, `errcheck`, `gosec`, `revive`, `depguard`, `exhaustive`, `wrapcheck`, `nilerr`, `nolintlint`, `unused`, `dupl` | eslint + typescript-eslint `strictTypeChecked`, eslint-plugin-svelte |
 | `format` | gofmt | prettier + prettier-plugin-svelte |
-| `tests` | `go test` (unit), `-tags db` with testcontainers | Vitest; Playwright WebKit (e2e, from P6) |
+| `tests` | `go test` (unit), `-tags db` with testcontainers | Vitest; Playwright WebKit (e2e) |
 | `test-lint` | `thelper`, `tparallel`; branching in tests is prose only | `@vitest/eslint-plugin`, `eslint-plugin-playwright` |
-| `forbid-only-skip` | guard `forbid-only` (`t.Skip`) | Vitest `allowOnly: false`, guard `forbid-only` (also Playwright `forbidOnly: true` once its config lands in P6) |
+| `forbid-only-skip` | guard `forbid-only` (`t.Skip`) | Vitest `allowOnly: false`, guard `forbid-only` (also Playwright `forbidOnly: true`) |
 | `dead-code` | `deadcode -test` (exact budget in the Makefile), `unused` | knip (reads `.svelte`) |
 | `duplication` | `dupl` (threshold 80) | jscpd (`**/*.test.ts` and `**/schema.d.ts` ignored; fails on a fully empty scan; `.svelte` coverage not yet shown) |
 | `boundary-schema` | typed structs + `DisallowUnknownFields` + module-side field validation | zod |

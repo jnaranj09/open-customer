@@ -105,7 +105,8 @@ describe('meta', () => {
 			me: null,
 			pending: null,
 			templateVars: [],
-			backupRed: false
+			backupRed: false,
+			logged: []
 		});
 	});
 
@@ -127,6 +128,21 @@ describe('meta', () => {
 				.modify({ value: { lastSyncAt: 5 } })
 		);
 		expect((await readMeta()).lastSyncAt).toBeNull();
+		expect(await raw((db) => db.table('clients').count())).toBe(0);
+	});
+	it('a stored logged row that is not a list of ids clears the cache', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		await writeSnapshot(bootstrap(1), SYNCED);
+		await writeMeta({ pending: PENDING });
+		await raw((db) =>
+			db
+				.table('meta')
+				.toCollection()
+				.modify((row: { value: Record<string, unknown> }) => {
+					row.value['logged'] = [5];
+				})
+		);
+		expect((await readMeta()).pending).toBeNull();
 		expect(await raw((db) => db.table('clients').count())).toBe(0);
 	});
 });

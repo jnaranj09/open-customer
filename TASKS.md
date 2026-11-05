@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit)
+## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit, P6 exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -130,6 +130,27 @@ once by breaking what they protect, then restored.
   Fraunces is removed) and the full-day grid; the gate exits 0 again with the same `make cover`
   numbers. CI green on main at 6df35a9 (the p5 merge), including gitleaks, `pnpm audit` and
   `make cover` (run 42078630269).
+- **P6 exit.** CI run 42104952848 on branch p6 at 4dadd29: every step green, including `make e2e`:
+  17 passed (Playwright WebKit, "iPhone 15" profile, against the built binary and a
+  `postgres:18.6-alpine` service container). The specs and the CUJs they cover: `setup.spec.ts`
+  (CUJ 1 and 2, plus "the setup link does not work after setup"), `booking.spec.ts` (CUJ 3: two
+  services and the summed end time, the overlap sheet with "Agendar igual", a photo with made-up
+  Exif GPS stored without Exif), `reminders.spec.ts` (CUJ 4: the wa.me link with the rendered
+  message, "Sí" → "Enviados" and still there after a reload; CUJ 5: due 21 days after the visit,
+  hidden by a later Relleno booking until it is cancelled, the booking prompt with "Agregar a la
+  cita", "No vino"), `offline.spec.ts` (CUJ 6: cached Hoy with the banner, the read-only due list,
+  a draft kept), `export.spec.ts` (CUJ 8: the ZIP with `clientas.csv`, `citas.csv`,
+  `servicios.csv`, `datos.json` and the attribute column named by label). App defects the e2e runs
+  found and fixed on this branch: 6100e2d (the new-attribute sheet stayed open after creating a
+  text attribute) and 2cb607d + 4dadd29 (a sent item came back with "Enviar" after a reload before
+  the refresh was stored; the hidden ids are now stored in the phone cache). Earlier red CI runs:
+  42097441087 (`offline.spec.ts` waited for a live answer, not the stored cache; fixed in the
+  test, 736e686) and 42099685797 (the sent-item defect above). Local runs use a git-ignored script
+  that runs the pinned `mcr.microsoft.com/playwright:v1.64.1-noble` image on its own Docker
+  network, because WebKit lacks system libraries on the author's host and host :8080 is taken.
+  NOT RUN: WebKit through `make e2e` on the author's host; real Safari on an iPhone; the install
+  step and push notifications; the cold open with the server off through the service worker
+  (manual check in the Verification Plan); CUJ 7 (P7).
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 

@@ -1,8 +1,9 @@
 // The phone cache: the one module that touches Dexie (guard `layers`). It is a read-only copy of
-// what `/bootstrap` last said, plus drafts and the pending send confirmation. Every row read back
-// is parsed once with its zod schema, so a bad cached row never reaches a screen
-// (rules/boundaries.md). A bad snapshot or meta row clears the whole cache and reads as empty; a
-// bad draft is deleted alone, because it is the app's own local value, not a copy of the server.
+// what `/bootstrap` last said, plus drafts, the pending send confirmation and the ids of logged due
+// items the cached list may still hold. Every row read back is parsed once with its zod schema, so
+// a bad cached row never reaches a screen (rules/boundaries.md). A bad snapshot or meta row clears
+// the whole cache and reads as empty; a bad draft is deleted alone, because it is the app's own
+// local value, not a copy of the server.
 import Dexie, { type Table } from 'dexie';
 import { z } from 'zod';
 import { byPosition } from '../order';
@@ -37,7 +38,11 @@ const MetaSchema = z.object({
 	me: z.nullable(MeSchema),
 	pending: z.nullable(PendingSendSchema),
 	templateVars: z.array(TemplateVarSchema),
-	backupRed: z.boolean()
+	backupRed: z.boolean(),
+	// Due items the server has logged (a 201 or 200) that the cached `due` table may still hold.
+	// Stored, so a reload before the refresh after the POST is written cannot bring an item back
+	// with "Enviar" enabled. A row stored before this field existed reads as none logged.
+	logged: z.array(z.string()).default([])
 });
 export type Meta = z.infer<typeof MetaSchema>;
 /** The send confirmation stored when she taps "Enviar" (design doc "Sending flow"). */
@@ -49,7 +54,8 @@ export const EMPTY_META: Meta = {
 	me: null,
 	pending: null,
 	templateVars: [],
-	backupRed: false
+	backupRed: false,
+	logged: []
 };
 
 /** What a refresh replaces: every table of `/bootstrap` that a screen reads. */
@@ -98,9 +104,9 @@ const ALL_TABLES: Table[] = Object.values(t);
 
 const SINGLE = 'only';
 
-/** Deletes the whole database (cached data, due items, drafts, the pending confirmation) and
- *  opens an empty one. The 401 handler (`lib/api/app.ts`), the bad-row path below and
- *  logout (`lib/logout.ts`) call it (design doc item 67). */
+/** Deletes the whole database (cached data, due items, drafts, the pending confirmation, the
+ *  logged ids) and opens an empty one. The 401 handler (`lib/api/app.ts`), the bad-row path below
+ *  and logout (`lib/logout.ts`) call it (design doc item 67). */
 export async function clearCache(): Promise<void> {
 	try {
 		await db.delete();
@@ -212,11 +218,15 @@ export function readMeta(): Promise<Meta> {
 	}, EMPTY_META);
 }
 
-/** Merges `patch` into the stored meta. */
-export async function writeMeta(patch: Partial<Meta>): Promise<void> {
+/** Merges `patch` into the stored meta. A function patch is given the stored meta inside the
+ *  same transaction, for a change that builds on it (adding a logged id). */
+export async function writeMeta(
+	patch: Partial<Meta> | ((current: Meta) => Partial<Meta>)
+): Promise<void> {
 	await db.transaction('rw', t.meta, async () => {
 		const current = await readMetaRaw();
-		await t.meta.put({ key: SINGLE, value: { ...current, ...patch } });
+		const change = typeof patch === 'function' ? patch(current) : patch;
+		await t.meta.put({ key: SINGLE, value: { ...current, ...change } });
 	});
 }
 
@@ -228,7 +238,9 @@ async function readMetaRaw(): Promise<Meta> {
 
 /** Replaces every table with `data` and stores `syncedAt`, the template variables and the backup
  *  flag, all in one transaction: a failure leaves the old data in place. The pending
- *  confirmation and the last `Me` in meta are kept. */
+ *  confirmation and the last `Me` in meta are kept. The logged ids keep only those `data.due`
+ *  still holds: a logged item never comes back on the server, so an id the new list still holds
+ *  is from a refresh asked before its log POST, and it stays hidden. */
 export async function writeSnapshot(data: Bootstrap, syncedAt: string): Promise<void> {
 	await db.transaction('rw', ALL_TABLES, async () => {
 		const current = await readMetaRaw();
@@ -248,7 +260,8 @@ export async function writeSnapshot(data: Bootstrap, syncedAt: string): Promise<
 			...current,
 			lastSyncAt: syncedAt,
 			templateVars: data.template_vars,
-			backupRed: data.backup_red
+			backupRed: data.backup_red,
+			logged: current.logged.filter((id) => data.due.some((i) => i.id === id))
 		};
 		await t.meta.put({ key: SINGLE, value: meta });
 	});
