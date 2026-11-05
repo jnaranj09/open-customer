@@ -164,6 +164,10 @@ export const SetupStatusSchema = z.object({
 	needs_setup: z.boolean()
 }) satisfies z.ZodType<Schemas['SetupStatus']>;
 
+export const SetupOptionsSchema = z.object({
+	countries: z.array(z.string())
+}) satisfies z.ZodType<Schemas['SetupOptions']>;
+
 /** The prefix of every problem `type`; errors.ts strips it to get the short name. */
 export const PROBLEM_PREFIX = 'urn:open-customer:problem:';
 

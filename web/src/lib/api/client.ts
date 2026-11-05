@@ -11,6 +11,7 @@ import {
 	ProblemSchema,
 	PushKeySchema,
 	PushSubscriptionIdSchema,
+	SetupOptionsSchema,
 	SetupStatusSchema
 } from './schemas';
 
@@ -118,8 +119,27 @@ export function createApi(opts: ApiOptions) {
 			),
 		me: () => read('/me', MeSchema, () => client.GET('/me')),
 		setupStatus: () => read('/setup/status', SetupStatusSchema, () => client.GET('/setup/status')),
+		setupOptions: () =>
+			read('/setup/options', SetupOptionsSchema, () => client.GET('/setup/options')),
+		setup: (body: Schemas['SetupInput']) =>
+			read('/setup', MeSchema, () => client.POST('/setup', { body })),
 		login: (body: Schemas['LoginInput']) =>
 			read('/auth/login', MeSchema, () => client.POST('/auth/login', { body })),
+		changePassword: (body: Schemas['PasswordChange']) =>
+			readEmpty('/auth/password', () => client.POST('/auth/password', { body })),
+		uploadIcon: (icons: { big: Blob; small: Blob }) =>
+			readEmpty('/settings/icon', () =>
+				client.POST('/settings/icon', {
+					// The generated type calls a binary part a string; the form carries the real blobs.
+					body: { icon512: '', icon180: '' },
+					bodySerializer: () => {
+						const form = new FormData();
+						form.append('icon512', icons.big, 'icon512.png');
+						form.append('icon180', icons.small, 'icon180.png');
+						return form;
+					}
+				})
+			),
 		logout: () => readEmpty('/auth/logout', () => client.POST('/auth/logout')),
 		pushKey: () => read('/push/key', PushKeySchema, () => client.GET('/push/key')),
 		subscribePush: (body: Schemas['PushSubscriptionInput']) =>

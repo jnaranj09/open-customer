@@ -43,6 +43,22 @@ describe('resolveSession', () => {
 		});
 	});
 
+	it('is online with her when /setup/status answers must-change-password', async () => {
+		const forced: ApiError = {
+			kind: 'problem',
+			status: 403,
+			type: 'must-change-password',
+			fields: {},
+			problem: { type: 'urn:open-customer:problem:must-change-password', title: 'x', status: 403 }
+		};
+		const { api: a } = api(fail(forced), { ok: true, data: { ...ME, must_change_password: true } });
+		expect(await resolveSession(a, null)).toEqual({
+			kind: 'online',
+			setupNeeded: false,
+			me: { ...ME, must_change_password: true }
+		});
+	});
+
 	it('is offline with the cached user when the server does not answer', async () => {
 		const { api: a } = api(fail({ kind: 'offline' }));
 		expect(await resolveSession(a, CACHED)).toEqual({ kind: 'offline', cachedMe: CACHED });

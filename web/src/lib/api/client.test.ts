@@ -30,7 +30,7 @@ function setup(answer: () => Response | Promise<Response>) {
 		reportInvalid: vi.fn()
 	};
 	const api = createApi({ fetch: fetchFn, version: VERSION, baseUrl: BASE, ...hooks });
-	return { api, hooks };
+	return { api, hooks, fetchFn };
 }
 
 const appointment = {
@@ -206,6 +206,87 @@ describe('push', () => {
 		expect(result).toEqual({
 			ok: false,
 			error: { kind: 'response_invalid', path: '/push/subscriptions' }
+		});
+	});
+});
+
+describe('setup, icon and password', () => {
+	const SETTINGS = {
+		name: 'Estudio Luna',
+		timezone: 'America/Costa_Rica',
+		locale: 'es',
+		currency: 'CRC',
+		country_code: 'CR',
+		accent_color: '#c76b85'
+	};
+
+	it('reads the country list of /setup/options', async () => {
+		const { api } = setup(() => json({ countries: ['CR', 'ES'] }));
+		expect(await api.setupOptions()).toEqual({ ok: true, data: { countries: ['CR', 'ES'] } });
+	});
+
+	it('posts the setup body and parses the new user', async () => {
+		const { api } = setup(() => json(ME, 201));
+		const result = await api.setup({
+			token: 'tok',
+			username: 'luna',
+			password: 'a-long-password',
+			settings: SETTINGS
+		});
+		expect(result).toEqual({ ok: true, data: ME });
+	});
+
+	it('maps a closed setup to its problem name', async () => {
+		const { api } = setup(() => problem('setup-token-invalid', 410));
+		const result = await api.setup({
+			token: 'old',
+			username: 'luna',
+			password: 'a-long-password',
+			settings: SETTINGS
+		});
+		expect(result).toMatchObject({
+			ok: false,
+			error: { kind: 'problem', type: 'setup-token-invalid' }
+		});
+	});
+
+	it('uploads both icon parts as multipart with the browser-made content type', async () => {
+		const { api, fetchFn } = setup(
+			() => new Response(null, { status: 204, headers: appHeaders() })
+		);
+		const result = await api.uploadIcon({
+			big: new Blob(['a'], { type: 'image/png' }),
+			small: new Blob(['b'], { type: 'image/png' })
+		});
+		const sent = fetchFn.mock.calls[0]?.[0] as Request;
+		const form = await sent.formData();
+		expect(result).toEqual({ ok: true, data: undefined });
+		expect([...form.keys()]).toEqual(['icon512', 'icon180']);
+	});
+
+	it('changes the password with a 204', async () => {
+		const { api } = setup(() => new Response(null, { status: 204, headers: appHeaders() }));
+		expect(
+			await api.changePassword({ current_password: 'old-password', new_password: 'new-password' })
+		).toEqual({
+			ok: true,
+			data: undefined
+		});
+	});
+
+	it('keeps a wrong current password as a validation problem on its field', async () => {
+		const { api } = setup(() =>
+			problem('validation', 422, {
+				errors: [{ field: 'current_password', message: 'Clave incorrecta' }]
+			})
+		);
+		const result = await api.changePassword({
+			current_password: 'x',
+			new_password: 'new-password'
+		});
+		expect(result).toMatchObject({
+			ok: false,
+			error: { fields: { current_password: 'Clave incorrecta' } }
 		});
 	});
 });
