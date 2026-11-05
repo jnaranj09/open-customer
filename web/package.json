@@ -10,13 +10,14 @@
 	"scripts": {
 		"build": "vite build",
 		"dev": "vite dev",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.service-worker.json",
 		"lint": "eslint . && prettier --check . && knip && jscpd",
 		"gen:api": "openapi-typescript ../api/openapi.yaml -o src/lib/api/schema.d.ts",
 		"format": "prettier --write .",
 		"test": "vitest run --passWithNoTests"
 	},
 	"dependencies": {
+		"@fontsource-variable/nunito": "5.3.0",
 		"dexie": "4.4.7",
 		"openapi-fetch": "0.17.0",
 		"zod": "4.6.7"

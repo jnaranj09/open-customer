@@ -1584,6 +1584,11 @@ components:
       properties:
         needs_setup:
           type: boolean
+        accent_color:
+          type: string
+          description: >-
+            The business color, once setup is done (absent before). Public like the manifest's
+            theme_color: the login screen uses it on a device with no cached settings.
     Service:
       type: object
       required: [id, name, duration_min, price_cents, color, position, archived]

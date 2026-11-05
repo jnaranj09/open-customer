@@ -197,6 +197,14 @@ func TestIconDefaultWhenNone(t *testing.T) {
 		if !updated.IsZero() {
 			t.Errorf("Icon(%d) time = %v, want zero for the default", size, updated)
 		}
+		img, err := png.Decode(bytes.NewReader(b))
+		if err != nil {
+			t.Fatalf("decode Icon(%d): %v", size, err)
+		}
+		// validInput's accent is #aa3366: the default follows the business color.
+		if got := color.RGBAModel.Convert(img.At(0, 0)); got != (color.RGBA{0xaa, 0x33, 0x66, 0xff}) {
+			t.Errorf("Icon(%d) corner = %v, want the accent color", size, got)
+		}
 	}
 	if logs.Len() != 0 {
 		t.Errorf("log = %q, want nothing when no custom icon was set", logs.String())

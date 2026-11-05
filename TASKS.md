@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit)
+## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -92,6 +92,39 @@ once by breaking what they protect, then restored.
   with `Retry-After`, 401 without a cookie, and `docker logs` has no line matching "Ana Rojas", "Marta", "Lucía" or `wa.me`.
   All matched. CI green on main at e6c19ff (the p4 merge), including gitleaks, `pnpm audit` and
   `make cover` (run 41953355128). NOT RUN: the plain-host :8080 variant.
+- **P5 exit.** `make check-pins lint test vuln build check-generated test-db cover` exits 0, run as
+  one command from a fresh `git clone` of branch p5 at e24db48. `make cover`: internal/auth 96.3%,
+  internal/attributes 93.5%, internal/appointments 98.4%, internal/templates 98.1%,
+  internal/reminders 98.5% (floor 90.0%). The image built from that clone (`open-customer:e24db48`)
+  ran with `postgres:18.6-alpine` on a private network, published on `127.0.0.1:18080` with
+  `PUBLIC_URL=http://localhost:18080` (host :8080 belongs to an unrelated container). Browser:
+  Playwright Chromium (pinned `@playwright/test`) with the "iPhone 15" device profile at 390 x 844
+  and a desktop profile at 1440 x 900, from a scratch script that is not committed. WebKit was
+  installed but cannot start on this host (the browser process exits 127, probably missing system libraries),
+  so WebKit is NOT RUN. Made-up data: Ana Rojas, Marta Solano, Lucía Rojas, Ána López; services
+  Acrílico, Relleno, Pedicure. Results, compact (390 x 844) and wide (1440 x 900):
+  CUJ 1 setup wizard (9 steps, install steps shown for an iPhone user agent, icon skipped) and
+  login: PASS compact; the wide size ran login and the setup card only. CUJ 2 services, a client
+  and an appointment attribute (with options), two templates written with chips (live preview),
+  a before rule and a come-back rule: PASS compact (wide shows the same screens, checked as
+  screenshots). CUJ 3 booking Acrílico and Pedicure with Forma, end time 16:30, overlap sheet with
+  "Cancelar" and "Agendar igual", a photo on the appointment and in the client gallery: PASS
+  compact; wide form checked as a screenshot. CUJ 4 "Enviar", the wa.me link with the rendered
+  text, "¿Lo enviaste a …?" and "Sí, lo envié" (Ana, then Marta after the BottomSheet portal
+  change; the dialog is a child of `body`): PASS compact; PASS wide (new-tab link, then the
+  question, then "Sí"). CUJ 5 a later "Pedicure" booking gives the booking prompt, "Agregar a la
+  cita" adds "Relleno" (price 45,00 € = 25 + 20) and the item goes; a cancelled later booking
+  brings the message back: PASS compact; the wide pane shows the prompt with its three actions.
+  CUJ 6 server stopped, reload: banner "Sin conexión con el sistema. Datos de las HH:MM.", cached
+  Hoy, "+" faded with its reason, the draft restored, "Enviar", "Omitir" and "Agregar a la cita"
+  disabled with the reason, after start and a focus event the banner is gone and the buttons work:
+  PASS at both sizes. Screenshots of Hoy, Para enviar, Nueva cita, Cita, Clientas, Clienta,
+  Ajustes, Plantillas, Recordatorios, Estado, Login and Setup were compared with the mockup frames
+  (compact) and D2 (wide): no gap. At 1440 the back chevron is absent on `clientas/nueva`;
+  `h1` computes to "Fraunces Variable" and the body to "Nunito Variable", both loaded. `docker logs`
+  has no client name, phone or `wa.me` line and no ERROR line. NOT RUN: real Safari on an iPhone
+  (install, "Activar notificaciones" and the push prompt, the real WhatsApp hand-off), WebKit (see
+  above), the plain-host :8080 variant, CI (pending the push of branch p5).
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 

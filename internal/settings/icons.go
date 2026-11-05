@@ -66,9 +66,9 @@ func (m *Module) SetIcons(ctx context.Context, q db.DBTX, icon512, icon180 []byt
 	return nil
 }
 
-// Icon returns the PNG for size 512 or 180 and the time it was uploaded. Without an upload (or
-// before setup, or when the uploaded file is gone) it returns the built-in default with a zero
-// time. Any other size is problem.NotFound.
+// Icon returns the PNG for size 512 or 180 and the time it was uploaded. Without an upload, or
+// when the uploaded file is gone, it returns the built-in icon drawn in the accent color, with a
+// zero time; before setup it returns the embedded default. Any other size is problem.NotFound.
 func (m *Module) Icon(ctx context.Context, q db.DBTX, size int) ([]byte, time.Time, error) {
 	var fallback []byte
 	switch size {
@@ -87,12 +87,12 @@ func (m *Module) Icon(ctx context.Context, q db.DBTX, size int) ([]byte, time.Ti
 		return nil, time.Time{}, fmt.Errorf("get icon settings: %w", err)
 	}
 	if row.IconUpdatedAt == nil {
-		return fallback, time.Time{}, nil
+		return accentDefaultIcon(ctx, size, row.AccentColor, fallback), time.Time{}, nil
 	}
 	b, err := os.ReadFile(filepath.Join(m.mediaDir, brandingDir, iconFile(size)))
 	if errors.Is(err, os.ErrNotExist) {
 		slog.ErrorContext(ctx, "custom icon file is missing; serving the default", "code", "icon_file_missing", "size", size)
-		return fallback, time.Time{}, nil
+		return accentDefaultIcon(ctx, size, row.AccentColor, fallback), time.Time{}, nil
 	}
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("read icon: %w", err)

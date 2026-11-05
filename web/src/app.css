@@ -1,0 +1,134 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/nunito';
+
+/* Tokens from the mockup (design/soft-glass.pen "variables"). `--accent` is the one runtime value:
+   applyAccent (lib/color.ts) sets it from settings; the shades below follow it. */
+:root {
+	--bg-100: #fbf5f2;
+	--bg-200: #f6ece8;
+	--glow-peach: #fbe1cf;
+	--glow-lilac: #e7dcf3;
+	--glass: #ffffff8c;
+	--glass-strong: #ffffffc7;
+	--glass-edge: #ffffffd9;
+	--ink: #4a3438;
+	--ink-muted: #7d5f64;
+	--sage-200: #dfe8da;
+	--on-strong: #ffffff;
+	--success: #4d7a5a;
+	--warning: #8f611a;
+	--error: #b3433f;
+
+	--accent: #c76b85;
+	--on-accent: var(--on-strong);
+	--accent-100: color-mix(in oklab, var(--accent) 15%, white);
+	--accent-300: color-mix(in oklab, var(--accent) 45%, white);
+	--accent-700: color-mix(in oklab, var(--accent) 80%, black);
+	--glass-tint: color-mix(in oklab, var(--accent-300) 35%, transparent);
+	/* The blush glow and the shadows were the mockup's rose; they follow the accent, so a teal
+	   business gets no pink cast. With the default accent they stay close to the mockup. */
+	--glow-blush: color-mix(in oklab, var(--accent) 25%, white);
+
+	--shadow-glass:
+		0 8px 32px color-mix(in oklab, var(--accent-700) 12%, transparent), inset 0 1px #ffffffe6;
+	--shadow-raised:
+		0 4px 14px color-mix(in oklab, var(--accent-700) 20%, transparent), inset 0 1px #ffffff99;
+	--shadow-sheet:
+		0 16px 64px color-mix(in oklab, var(--accent-700) 18%, transparent), inset 0 1px #ffffffe6;
+}
+
+@theme inline {
+	--color-bg-100: var(--bg-100);
+	--color-bg-200: var(--bg-200);
+	--color-glow-blush: var(--glow-blush);
+	--color-glow-peach: var(--glow-peach);
+	--color-glow-lilac: var(--glow-lilac);
+	--color-glass: var(--glass);
+	--color-glass-strong: var(--glass-strong);
+	--color-glass-edge: var(--glass-edge);
+	--color-glass-tint: var(--glass-tint);
+	--color-ink: var(--ink);
+	--color-ink-muted: var(--ink-muted);
+	--color-accent: var(--accent);
+	--color-accent-100: var(--accent-100);
+	--color-accent-300: var(--accent-300);
+	--color-accent-700: var(--accent-700);
+	--color-on-accent: var(--on-accent);
+	--color-sage-200: var(--sage-200);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-error: var(--error);
+	--color-on-strong: var(--on-strong);
+
+	--radius-sm: 10px;
+	--radius-md: 16px;
+	--radius-lg: 24px;
+	--radius-xl: 32px;
+	--radius-pill: 999px;
+
+	--font-sans: 'Nunito Variable', sans-serif;
+}
+
+html {
+	background: var(--bg-100);
+	color: var(--ink);
+	font-family: var(--font-sans);
+}
+
+/* The soft glows sit behind every screen and stay put while the content scrolls. */
+body {
+	min-height: 100dvh;
+	background:
+		radial-gradient(60rem 40rem at 0% 0%, var(--glow-blush), transparent 70%),
+		radial-gradient(50rem 40rem at 100% 20%, var(--glow-peach), transparent 70%),
+		radial-gradient(60rem 50rem at 40% 100%, var(--glow-lilac), transparent 70%), var(--bg-100);
+	background-attachment: fixed;
+}
+
+@utility glass-card {
+	background: var(--glass);
+	border: 1px solid var(--glass-edge);
+	backdrop-filter: blur(24px);
+	box-shadow: var(--shadow-glass);
+}
+
+@utility glass-panel {
+	background: var(--glass-strong);
+	border: 1px solid var(--glass-edge);
+	backdrop-filter: blur(24px);
+	box-shadow: var(--shadow-glass);
+}
+
+@utility shadow-raised {
+	box-shadow: var(--shadow-raised);
+}
+
+@utility shadow-sheet {
+	box-shadow: var(--shadow-sheet);
+}
+
+/* One visible keyboard ring for every control. */
+:focus-visible {
+	outline: 2px solid var(--accent-700);
+	outline-offset: 2px;
+}
+
+@utility min-h-tap {
+	min-height: 44px;
+}
+
+@utility pt-safe {
+	padding-top: env(safe-area-inset-top);
+}
+
+@utility pb-safe {
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pl-safe {
+	padding-left: env(safe-area-inset-left);
+}
+
+@utility pr-safe {
+	padding-right: env(safe-area-inset-right);
+}
