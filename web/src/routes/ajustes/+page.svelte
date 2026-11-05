@@ -1,1 +1,7 @@
-<!-- Placeholder: gives the shell's links and redirects a typed route. The task that builds this screen replaces this file. -->
+<script lang="ts">
+	import BusinessSettings from '../../lib/components/BusinessSettings.svelte';
+
+	// Wide only: the layout hides this page on compact, where `/ajustes` is the section list.
+</script>
+
+<BusinessSettings />

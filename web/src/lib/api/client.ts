@@ -7,6 +7,7 @@ import type { components, paths } from './schema';
 import {
 	AppointmentListSchema,
 	AppointmentSchema,
+	AttributeSchema,
 	BootstrapSchema,
 	ClientListSchema,
 	ClientSchema,
@@ -15,10 +16,13 @@ import {
 	MediaListSchema,
 	MediaSchema,
 	MeSchema,
+	OptionSchema,
 	PROBLEM_PREFIX,
 	ProblemSchema,
 	PushKeySchema,
 	PushSubscriptionIdSchema,
+	ServiceSchema,
+	SettingsSchema,
 	SetupOptionsSchema,
 	SetupStatusSchema,
 	TemplatePreviewSchema,
@@ -246,6 +250,38 @@ export function createApi(opts: ApiOptions) {
 		previewTemplate: (body: Schemas['TemplatePreviewInput']) =>
 			read('/templates/preview', TemplatePreviewSchema, () =>
 				client.POST('/templates/preview', { body })
+			),
+		/** Changes only the fields sent (name, timezone, accent_color, push_hour). */
+		updateSettings: (body: Schemas['SettingsPatch']) =>
+			read('/settings', SettingsSchema, () => client.PATCH('/settings', { body })),
+		/** Adds a service; it goes last. */
+		createService: (body: Schemas['ServiceInput']) =>
+			read('/services', ServiceSchema, () => client.POST('/services', { body })),
+		/** Changes only the fields sent; `archived` archives or restores. */
+		updateService: (id: string, body: Schemas['ServicePatch']) =>
+			read('/services/{id}', ServiceSchema, () =>
+				client.PATCH('/services/{id}', { params: { path: { id } }, body })
+			),
+		/** Adds an attribute; it goes last in its scope. The key is made from the label. */
+		createAttribute: (body: Schemas['AttributeInput']) =>
+			read('/attributes', AttributeSchema, () => client.POST('/attributes', { body })),
+		/** Changes only the fields sent; `archived` archives or restores. */
+		updateAttribute: (id: string, body: Schemas['AttributePatch']) =>
+			read('/attributes/{id}', AttributeSchema, () =>
+				client.PATCH('/attributes/{id}', { params: { path: { id } }, body })
+			),
+		/** Adds an option to a select attribute, under `parent_id` or at the top; it goes last. */
+		createOption: (attributeId: string, body: Schemas['OptionInput']) =>
+			read('/attributes/{id}/options', OptionSchema, () =>
+				client.POST('/attributes/{id}/options', { params: { path: { id: attributeId } }, body })
+			),
+		/** Changes only the fields sent (label, position, archived). */
+		updateOption: (attributeId: string, optionId: string, body: Schemas['OptionPatch']) =>
+			read('/attributes/{id}/options/{optionId}', OptionSchema, () =>
+				client.PATCH('/attributes/{id}/options/{optionId}', {
+					params: { path: { id: attributeId, optionId } },
+					body
+				})
 			),
 		me: () => read('/me', MeSchema, () => client.GET('/me')),
 		setupStatus: () => read('/setup/status', SetupStatusSchema, () => client.GET('/setup/status')),

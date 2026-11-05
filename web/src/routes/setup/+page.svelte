@@ -8,6 +8,7 @@
 	import AuthCard from '../../lib/components/AuthCard.svelte';
 	import Button from '../../lib/components/Button.svelte';
 	import ColorPicker from '../../lib/components/ColorPicker.svelte';
+	import IconFileInput from '../../lib/components/IconFileInput.svelte';
 	import InstallGuide from '../../lib/components/InstallGuide.svelte';
 	import SelectField from '../../lib/components/SelectField.svelte';
 	import TextField from '../../lib/components/TextField.svelte';
@@ -207,17 +208,11 @@
 		>
 			<h2 class="text-xl font-bold text-ink">{t('setup_icon_title')}</h2>
 			<p class="text-base text-ink-muted">{t('setup_icon_hint')}</p>
-			<label class="flex flex-col gap-1.5 text-sm font-bold text-ink">
-				{t('setup_icon_label')}
-				<input
-					type="file"
-					accept="image/*"
-					onchange={(e) => {
-						iconFile = e.currentTarget.files?.[0] ?? null;
-					}}
-					class="min-h-tap w-full rounded-sm border border-glass-edge bg-glass-strong p-2 text-base font-normal"
-				/>
-			</label>
+			<IconFileInput
+				onpick={(file: File | null) => {
+					iconFile = file;
+				}}
+			/>
 			{#if stepError !== null}
 				<p role="alert" class="text-sm text-error">{stepError}</p>
 			{/if}

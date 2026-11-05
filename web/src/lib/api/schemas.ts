@@ -22,7 +22,7 @@ export const SettingsSchema = z.object({
 	has_custom_icon: z.boolean()
 }) satisfies z.ZodType<Schemas['Settings']>;
 
-const OptionSchema = z.object({
+export const OptionSchema = z.object({
 	id,
 	attribute_id: id,
 	parent_id: z.nullable(id),

@@ -699,3 +699,125 @@ describe('the template calls', () => {
 		});
 	});
 });
+
+describe('the settings calls', () => {
+	const PINK = ['#', 'c76b85'].join('');
+	const OPTION_ID = '7a1c9e20-2b3d-4f5a-8b6c-0d9e8f7a6b5c';
+	const settings = {
+		name: 'Estudio Ana',
+		timezone: 'America/Costa_Rica',
+		locale: 'es',
+		currency: 'CRC',
+		country_code: 'CR',
+		accent_color: PINK,
+		push_hour: 9,
+		has_custom_icon: false
+	};
+	const service = {
+		id: USER_ID,
+		name: 'Acrílico',
+		duration_min: 90,
+		price_cents: null,
+		color: PINK,
+		position: 0,
+		archived: false
+	};
+	const option = {
+		id: OPTION_ID,
+		attribute_id: USER_ID,
+		parent_id: null,
+		label: 'Almendra',
+		position: 0,
+		archived: false
+	};
+	const attribute = {
+		id: USER_ID,
+		key: 'forma',
+		label: 'Forma',
+		scope: 'appointment',
+		type: 'select',
+		required: false,
+		position: 0,
+		archived: false,
+		options: [option]
+	};
+
+	const sent = async (fetchFn: ReturnType<typeof setup>['fetchFn']): Promise<unknown[]> => {
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		return [request.method, request.url, (await request.json()) as unknown];
+	};
+
+	it('updateSettings patches only what is sent', async () => {
+		const { api, fetchFn } = setup(() => json(settings));
+		const result = await api.updateSettings({ push_hour: 9 });
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: settings },
+			['PATCH', `${BASE}/settings`, { push_hour: 9 }]
+		]);
+	});
+
+	it('createService posts the service and returns it', async () => {
+		const { api, fetchFn } = setup(() => json(service, 201));
+		const body = { name: 'Acrílico', duration_min: 90, price_cents: null, color: PINK };
+		const result = await api.createService(body);
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: service },
+			['POST', `${BASE}/services`, body]
+		]);
+	});
+
+	it('updateService patches the service by id', async () => {
+		const { api, fetchFn } = setup(() => json({ ...service, archived: true }));
+		const result = await api.updateService(USER_ID, { archived: true });
+		expect([result.ok, await sent(fetchFn)]).toEqual([
+			true,
+			['PATCH', `${BASE}/services/${USER_ID}`, { archived: true }]
+		]);
+	});
+
+	it('createAttribute posts the label, scope and type', async () => {
+		const { api, fetchFn } = setup(() => json(attribute, 201));
+		const body = { label: 'Forma', scope: 'appointment', type: 'select', required: false } as const;
+		const result = await api.createAttribute(body);
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: attribute },
+			['POST', `${BASE}/attributes`, body]
+		]);
+	});
+
+	it('updateAttribute patches the attribute by id', async () => {
+		const { api, fetchFn } = setup(() => json(attribute));
+		const result = await api.updateAttribute(USER_ID, { label: 'Forma' });
+		expect([result.ok, await sent(fetchFn)]).toEqual([
+			true,
+			['PATCH', `${BASE}/attributes/${USER_ID}`, { label: 'Forma' }]
+		]);
+	});
+
+	it('createOption posts under the attribute, with the parent when given', async () => {
+		const { api, fetchFn } = setup(() => json({ ...option, parent_id: USER_ID }, 201));
+		const result = await api.createOption(USER_ID, { label: 'Corta', parent_id: USER_ID });
+		expect([result.ok, await sent(fetchFn)]).toEqual([
+			true,
+			['POST', `${BASE}/attributes/${USER_ID}/options`, { label: 'Corta', parent_id: USER_ID }]
+		]);
+	});
+
+	it('updateOption patches the option of the attribute', async () => {
+		const { api, fetchFn } = setup(() => json({ ...option, position: 2 }));
+		const result = await api.updateOption(USER_ID, OPTION_ID, { position: 2 });
+		expect([result.ok, await sent(fetchFn)]).toEqual([
+			true,
+			['PATCH', `${BASE}/attributes/${USER_ID}/options/${OPTION_ID}`, { position: 2 }]
+		]);
+	});
+
+	it('updateOption reports an answer without an id as invalid', async () => {
+		const { api, hooks } = setup(() => json({ label: 'x' }));
+		const result = await api.updateOption(USER_ID, OPTION_ID, { label: 'x' });
+		expect([result.ok, hooks.reportInvalid.mock.calls]).toEqual([
+			false,
+			[['/attributes/{id}/options/{optionId}']]
+		]);
+	});
+});
