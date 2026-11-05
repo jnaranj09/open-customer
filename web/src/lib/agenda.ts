@@ -101,3 +101,9 @@ export function hourSpan(placed: Placed[]): { from: number; to: number } {
 		to: Math.max(DEFAULT_TO_HOUR, ...ends)
 	};
 }
+
+/** What to remember of a day she picked: nothing (`null`, follow the business day) when it is
+ *  today, so a resume after midnight moves to the new day; any other day as she chose it. */
+export function pickedValue(picked: string, today: string): string | null {
+	return picked === today ? null : picked;
+}

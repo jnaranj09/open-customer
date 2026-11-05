@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hourSpan, inWindow, layoutDay, viewRange, type AgendaItem } from './agenda';
+import { hourSpan, inWindow, layoutDay, pickedValue, viewRange, type AgendaItem } from './agenda';
 
 const ZONE = 'America/Costa_Rica';
 const DAY = '2026-11-04';
@@ -145,5 +145,15 @@ describe('hourSpan', () => {
 			{ id: 'b', col: 0, cols: 1, startMin: 20 * 60, endMin: 21 * 60 + 15 }
 		];
 		expect(hourSpan(placed)).toEqual({ from: 6, to: 22 });
+	});
+});
+
+describe('pickedValue', () => {
+	it('stores no day when she picks today, so Hoy follows midnight', () => {
+		expect(pickedValue('2026-11-04', '2026-11-04')).toBeNull();
+	});
+
+	it('keeps another picked day as she chose it', () => {
+		expect(pickedValue('2026-11-07', '2026-11-04')).toBe('2026-11-07');
 	});
 });

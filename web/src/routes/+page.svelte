@@ -4,7 +4,7 @@
 	import { api } from '../lib/api/app';
 	import { errorText, type ApiError } from '../lib/api/errors';
 	import type { Appointment } from '../lib/api/schemas';
-	import { inWindow, viewRange, type AgendaView } from '../lib/agenda';
+	import { inWindow, pickedValue, viewRange, type AgendaView } from '../lib/agenda';
 	import { clock } from '../lib/clock.svelte';
 	import { cache } from '../lib/cache/store.svelte';
 	import { bootstrapWindow } from '../lib/cache/refresh';
@@ -25,7 +25,7 @@
 
 	// Read the clock again when the app comes back and after each refresh, so Hoy follows midnight.
 	$effect(() => {
-		if (String(cache.meta.lastSyncAt) !== '') {
+		if (cache.meta.lastSyncAt !== null) {
 			clock.tick();
 		}
 	});
@@ -60,34 +60,33 @@
 	// Days outside the window come from the server, online only.
 	let remote = $state<{ key: string; items: Appointment[] } | null>(null);
 	let remoteError = $state<ApiError | null>(null);
-	// Bumped by "Reintentar" to ask again for the same days.
-	let retries = $state(0);
 	const key = $derived(`${range.from}|${range.to}`);
 	let askRun = 0;
 
-	// The key of one ask: the days, and how many times she retried them.
-	const askKey = $derived(`${key}#${String(retries)}`);
+	function load(ask: { from: string; to: string }): void {
+		const asked = `${ask.from}|${ask.to}`;
+		const run = ++askRun;
+		remoteError = null;
+		void api.listAppointments(ask).then((result) => {
+			if (run !== askRun) {
+				return;
+			}
+			if (result.ok) {
+				remote = { key: asked, items: result.data };
+			} else {
+				remote = null;
+				remoteError = result.error;
+			}
+		});
+	}
 
 	$effect(() => {
-		if (cached || cache.offline || askKey === '') {
+		if (cached || cache.offline) {
 			return;
 		}
-		const asked = key;
 		const ask = { from: range.from, to: range.to };
 		untrack(() => {
-			const run = ++askRun;
-			remoteError = null;
-			void api.listAppointments(ask).then((result) => {
-				if (run !== askRun) {
-					return;
-				}
-				if (result.ok) {
-					remote = { key: asked, items: result.data };
-				} else {
-					remote = null;
-					remoteError = result.error;
-				}
-			});
+			load(ask);
 		});
 	});
 
@@ -127,18 +126,22 @@
 			: `${formatWeekdayShort(day)} ${formatDayShort(day)}`;
 	});
 
+	function pickDay(picked: string): void {
+		pickedDay = pickedValue(picked, today);
+	}
+
 	function move(by: number): void {
-		pickedDay = addDays(day, by * step);
+		pickDay(addDays(day, by * step));
 	}
 
 	function openDay(picked: string): void {
-		pickedDay = picked;
+		pickDay(picked);
 		pickedView = 'day';
 	}
 
 	function onDateInput(e: Event & { currentTarget: HTMLInputElement }): void {
 		if (e.currentTarget.value !== '') {
-			pickedDay = e.currentTarget.value;
+			pickDay(e.currentTarget.value);
 		}
 	}
 
@@ -247,7 +250,7 @@
 				<Button
 					variant="ghost"
 					onclick={() => {
-						retries += 1;
+						load(range);
 					}}
 				>
 					{t('agenda_retry')}
