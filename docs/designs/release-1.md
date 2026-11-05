@@ -2217,7 +2217,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   `db.ts`: a Dexie schema (settings, attributes, services, templates, rules, clients, appointments, due items, drafts, meta) with a version number, and `clearCache()`, which deletes the database. Logout and the 401 handler call it. `meta` holds `lastSyncAt`, the last `Me` (for the offline layout, item 71), the pending send confirmation (see "Sending flow"), and `templateVars` and `backupRed` from the last `/bootstrap`. Every row read from Dexie (drafts included) is parsed once with its zod schema. A row that fails the parse (an old schema, a broken write) calls `clearCache()` and then a refresh from `/bootstrap`, so a bad cached row never reaches a screen.
     *   `refresh.ts`: calls `/bootstrap` on open and focus, replaces the cached tables in one transaction, stores `lastSyncAt`, and updates the app badge (see "Daily push").
-    *   `store.svelte.ts`: the reactive read model screens use (`cache.snapshot`, `cache.meta`, `cache.offline`, `cache.lastError`, `reload()`, `refresh()`). `reload()` reads Dexie and, when there is no snapshot (first open, or a bad row just cleared the cache), runs a refresh. `offline` is true only when the last refresh got no answer from the server; `lastError` holds any failure of the last refresh (the server's error, or `cache_write_failed` when the phone could not store the answer, in which case the old data stays) and is null after a success.
+    *   `store.svelte.ts`: the reactive read model screens use (`cache.snapshot`, `cache.meta`, `cache.offline`, `cache.lastError`, `load()`, `rememberMe()`, `reload()`, `refresh()`). `load()` reads Dexie only; `rememberMe(me)` stores the user the server named in `meta.me`, which the shell reads for an offline open. Refreshes never overlap (`lib/serial.ts` `serialLatest`): a call made while one runs waits for it and then refreshes once more, shared by every call made meanwhile, so an older answer never overwrites a newer one. `reload()` reads Dexie and, when there is no snapshot (first open, or a bad row just cleared the cache), runs a refresh. `offline` is true only when the last refresh got no answer from the server; `lastError` holds any failure of the last refresh (the server's error, or `cache_write_failed` when the phone could not store the answer, in which case the old data stays) and is null after a success.
     *   `refresh.ts` takes the window from the business day: `todayIn(settings.timezone, now)` from the cached settings, or the browser zone before the first refresh.
     *   `drafts.ts`: only the new-appointment and new-client forms. The key is `<form>:<record id or "new">`. A draft is saved 500 ms after the last input and cleared after a successful save.
 
@@ -2226,22 +2226,23 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: UI strings.
 *   **Proposed Changes**: Every UI string is in `es.json`, and `t(key, params)` looks it up. No inline Spanish text in components. This is a review check; there is no lint rule in release 1.
 
-##### 69. `web/src/lib/search.ts`, `web/src/lib/photos.ts`, `web/src/lib/push.ts`, `web/src/lib/install.ts` (Create)
+##### 69. `web/src/lib/search.ts`, `web/src/lib/photos.ts`, `web/src/lib/push.ts`, `web/src/lib/push-browser.ts`, `web/src/lib/install.ts` (Create)
 
 *   **Type / Scope**: Utilities.
 *   **Proposed Changes**:
     *   `search.ts`: the only client search, with the rules from "Clients and search": NFD normalization, accent removal, name substring, phone substring for 3 or more digits, word-start first, top 20.
     *   `photos.ts`: `createImageBitmap` with `imageOrientation: 'from-image'` (with an `<img>` + canvas fallback if the call or the option is not supported), a canvas resize so the long edge is 2048 px and 400 px, JPEG 0.8 output, and a square icon crop to 512 and 180 PNG.
-    *   `push.ts`: permission request (in the installed app only, from the "Activar notificaciones" tap), subscription, and the check on each open that sets "needs activation" when permission is not granted or no subscription exists (see "Daily push"). `checkPush` returns `unsupported`, `not_installed` (checked first: iOS Safari tabs have no push), `needs_activation` or `active`; a failed re-post (offline) stays `active` and the next open retries. `activatePush` asks for permission before any request, so it stays inside the tap, then reads the key (`GET /push/key`), subscribes, and posts the subscription; any browser-side failure is the `push_unavailable` error.
+    *   `push-browser.ts` builds the real `PushDeps` from the page (`navigator`, `Notification`, the display mode); tests pass a fake environment. `push.ts`: permission request (in the installed app only, from the "Activar notificaciones" tap), subscription, and the check on each open that sets "needs activation" when permission is not granted or no subscription exists (see "Daily push"). `checkPush` returns `unsupported`, `not_installed` (checked first: iOS Safari tabs have no push), `needs_activation` or `active`; a failed re-post (offline) stays `active` and the next open retries. `activatePush` asks for permission before any request, so it stays inside the tap, then reads the key (`GET /push/key`), subscribes, and posts the subscription; any browser-side failure is the `push_unavailable` error.
     *   `install.ts`: detects iOS + not standalone, for the install guide.
 
-##### 70. `web/src/lib/components/` — `BottomSheet.svelte`, `ListRow.svelte`, `EmptyState.svelte`, `OfflineBanner.svelte`, `UpdatePrompt.svelte`, `ColorPicker.svelte`, `ChipEditor.svelte`, `AttributeField.svelte`, `ClientPicker.svelte`, `ServicePicker.svelte`, `DayView.svelte`, `WeekView.svelte`, `ConfirmSentSheet.svelte`, `InstallGuide.svelte`, `StatusRow.svelte`, `Button.svelte`, `TextField.svelte`, `Toast.svelte`, `buttonStyle.ts`, `icons/Icon.svelte` (Create)
+##### 70. `web/src/lib/components/` — `BottomSheet.svelte`, `ListRow.svelte`, `EmptyState.svelte`, `OfflineBanner.svelte`, `UpdatePrompt.svelte`, `ColorPicker.svelte`, `ChipEditor.svelte`, `AttributeField.svelte`, `ClientPicker.svelte`, `ServicePicker.svelte`, `DayView.svelte`, `WeekView.svelte`, `ConfirmSentSheet.svelte`, `InstallGuide.svelte`, `StatusRow.svelte`, `Button.svelte`, `TextField.svelte`, `Toast.svelte`, `Sidebar.svelte`, `TabBar.svelte`, `navItems.ts`, `buttonStyle.ts`, `icons/Icon.svelte` (Create)
 
 *   **Type / Scope**: Own UI components (Tailwind).
 *   **Proposed Changes**:
     *   `BottomSheet`: a focus trap, swipe down to close, and the safe area.
-    *   `Button` (variants primary, secondary, ghost, danger; a busy state; a visible reason when disabled) and `TextField` (label, error, hint); `buttonStyle.ts` holds the button classes that links styled as buttons share. `Toast`: a short message with an optional action ("Deshacer"), gone after `ms` (default 5000, the delay of `lib/undo.ts` `delayed`). `icons/Icon.svelte`: the Lucide icons the mockup uses, drawn inline (no icon package). `ColorPicker` offers `swatches()` from `lib/color.ts` plus a native color input.
-    *   The focus trap's wrap rule is `nextFocus` in `lib/focus.ts`, tested; components import `lib/` with relative paths (SvelteKit 3 writes no `$lib` alias here).
+    *   `Button` (variants primary, secondary, ghost, danger; a busy state; `disabled` is typed to come with a `disabledReason`, shown under the button, so a disabled button always says why; `busy` needs none, its spinner is the reason) and `TextField` (label, error, hint); `buttonStyle.ts` holds the button classes that links styled as buttons share. `Toast`: a short message with an optional action ("Deshacer"), gone after `ms` (default 5000, the delay of `lib/undo.ts` `delayed`). `icons/Icon.svelte`: the Lucide icons the mockup uses, drawn inline (no icon package). `ColorPicker` offers `swatches()` from `lib/color.ts` plus a native color input.
+    *   The focus trap's wrap rule is `nextFocus` in `lib/focus.ts`, tested; components and routes import `lib/` with relative paths: SvelteKit 3.1.1 replaced the `$lib` alias with `#lib`, and the app uses neither.
+    *   `Sidebar` (wide) and `TabBar` (compact) are the two shells of "Screen layouts": the same four places (`navItems.ts`, with `isActivePath` and `syncLine` in `lib/nav.ts`), the sidebar with the business icon and name, "Nueva cita", the due count, the sync line and "Activar notificaciones"; the tab bar the mockup's floating pill (Hoy, Enviar, Clientas, Ajustes).
     *   `ChipEditor`:
         *   A `contenteditable` field that shows tokens as chips.
         *   A row of chips to insert variables.
@@ -2253,18 +2254,20 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `ServicePicker`: tapping a picked service again adds a second line, shown as "×2".
     *   `ConfirmSentSheet`: the "¿Lo enviaste a …?" sheet. It reads and clears the pending confirmation in Dexie `meta`, so `+layout.svelte` can open it on any app start.
 
-##### 71. `web/src/routes/+layout.ts`, `+layout.svelte` (Create)
+##### 71. `web/src/routes/+layout.ts`, `+layout.svelte`, `web/src/lib/guard.ts`, `session.ts`, `nav.ts` (Create)
 
 *   **Type / Scope**: App shell.
 *   **Proposed Changes**:
     *   `+layout.ts`: `ssr = false`, `prerender = false`.
     *   `+layout.svelte`:
-        *   Loads the cache and starts the refresh.
+        *   Loads the cache and starts the refresh on open and again on focus (`shouldRefreshOnFocus`); the store orders the two so they never overlap. A failed refresh shows `cache.lastError` through `errorText` as a line at the top (the offline case has its banner instead).
         *   Sets `--accent`.
         *   Shows the offline banner and the update prompt.
+        *   Runs `checkPush` (with `browserPushDeps`) on open; the sidebar shows "Activar notificaciones" when it returns `needs_activation` and calls `activatePush` on the tap (the compact layout gets the button on Hoy and the status screen).
         *   Opens `ConfirmSentSheet` first when a pending send confirmation is stored.
-        *   Bottom navigation: Hoy, Enviar, Clientas, Ajustes.
+        *   Bottom navigation (`TabBar`) on compact: Hoy, Enviar, Clientas, Ajustes; `Sidebar` on wide.
         *   Redirects to `/login` when the server says there is no session, and to `/setup` when setup is pending. While offline it never redirects: with a cached `Me` it shows the cached app; without one it shows "Sin conexión con el sistema".
+        *   The redirect rules are `guard(path, session)` in `lib/guard.ts` (pure, tested); `lib/session.ts` `resolveSession` builds the `Session` from `GET /setup/status` and `GET /me`, and any answer it cannot read counts as offline, so a hiccup never redirects. `/login`, `/setup` and `/cambiar-clave` show without the navigation. The layout asks the server again after a page change when the answer can have changed (no session, setup open, a forced password change, or a stand-alone page).
         *   `/setup` opened without a token in the link shows "Usa el enlace de configuración".
 
 ##### 72. `web/src/routes/+page.svelte` (Create)

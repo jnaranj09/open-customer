@@ -213,3 +213,4 @@ export type Settings = z.infer<typeof SettingsSchema>;
 export type DueItem = z.infer<typeof DueItemSchema>;
 export type Bootstrap = z.infer<typeof BootstrapSchema>;
 export type Problem = z.infer<typeof ProblemSchema>;
+export type Me = z.infer<typeof MeSchema>;

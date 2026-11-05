@@ -3,8 +3,10 @@
 import { api } from '../api/app';
 import type { Api } from '../api/client';
 import type { ApiError, Result } from '../api/errors';
-import { EMPTY_META, readAll, readMeta, type CacheSnapshot, type Meta } from './db';
+import type { Me } from '../api/schemas';
+import { EMPTY_META, readAll, readMeta, writeMeta, type CacheSnapshot, type Meta } from './db';
 import { systemNow } from '../time';
+import { serialLatest } from '../serial';
 import { appBadge, refresh, type Badge } from './refresh';
 
 type Deps = { api: Api; now: () => Date; badge: Badge };
@@ -32,13 +34,17 @@ export function createCache(deps: Deps) {
 
 	/** Fetches `/bootstrap`, then reloads what changed. Every outcome is recorded: `offline` is true
 	 *  only when the server did not answer, and `lastError` holds any failure (null after success). */
-	async function run(): Promise<Result<void>> {
+	async function runOnce(): Promise<Result<void>> {
 		const result = await attempt();
 		offline = !result.ok && result.error.kind === 'offline';
 		lastError = result.ok ? null : result.error;
 		await load();
 		return result;
 	}
+
+	/** Two refreshes never overlap: a call made during one waits for it and then refreshes once more,
+	 *  so an older answer never overwrites a newer one. */
+	const run = serialLatest(runOnce);
 
 	return {
 		get snapshot(): CacheSnapshot | null {
@@ -54,6 +60,13 @@ export function createCache(deps: Deps) {
 		get lastError(): ApiError | null {
 			return lastError;
 		},
+		/** Keeps the user the server just named, so an offline open can show the cached app. */
+		async rememberMe(me: Me): Promise<void> {
+			await writeMeta({ me });
+			meta = await readMeta();
+		},
+		/** Reads the cache only, never the server. */
+		load,
 		/** Reads the cache; with none (first open, or a bad row just cleared it) asks for a refresh. */
 		async reload(): Promise<void> {
 			await load();

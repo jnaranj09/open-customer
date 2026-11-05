@@ -117,4 +117,64 @@ describe('the cache read model', () => {
 		await cache.refresh();
 		expect(cache.offline).toBe(false);
 	});
+
+	it('never runs two refreshes at once, and the later call sees the later answer', async () => {
+		const gates: Array<(r: Result<Bootstrap>) => void> = [];
+		let active = 0;
+		let overlapped = false;
+		const bootstrapCall = vi.fn<Api['bootstrap']>(() => {
+			active += 1;
+			overlapped ||= active > 1;
+			return new Promise<Result<Bootstrap>>((resolve) => {
+				gates.push((r) => {
+					active -= 1;
+					resolve(r);
+				});
+			});
+		});
+		const cache = createCache({
+			api: { bootstrap: bootstrapCall } as unknown as Api,
+			now: () => NOW,
+			badge: { set: () => Promise.resolve(), clear: () => Promise.resolve() }
+		});
+		const open = cache.refresh();
+		const focus = cache.refresh();
+		await vi.waitFor(() => {
+			expect(gates).toHaveLength(1);
+		});
+		gates[0]?.({ ok: true, data: bootstrap(0, 'Ana Rojas') });
+		await open;
+		await vi.waitFor(() => {
+			expect(gates).toHaveLength(2);
+		});
+		gates[1]?.({ ok: true, data: bootstrap(0, 'Marta Solano') });
+		await focus;
+		expect([overlapped, cache.snapshot?.clients.map((c) => c.name)]).toEqual([
+			false,
+			['Marta Solano']
+		]);
+	});
+
+	it('load reads the cache without calling the server', async () => {
+		await writeSnapshot(bootstrap(0, 'Lucía Rojas'), '2026-11-03T12:00:00Z');
+		const { cache, bootstrapCall } = setup({ ok: true, data: bootstrap() });
+		await cache.load();
+		expect([bootstrapCall.mock.calls.length, cache.meta.lastSyncAt]).toEqual([
+			0,
+			'2026-11-03T12:00:00Z'
+		]);
+	});
+
+	it('keeps the user it is told about, next to the synced data', async () => {
+		await writeSnapshot(bootstrap(0, 'Ana Rojas'), '2026-11-03T12:00:00Z');
+		const { cache } = setup({ ok: true, data: bootstrap() });
+		const me = {
+			id: '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f',
+			username: 'ana',
+			must_change_password: false
+		};
+		await cache.rememberMe(me);
+		await cache.load();
+		expect([cache.meta.me, cache.meta.lastSyncAt]).toEqual([me, '2026-11-03T12:00:00Z']);
+	});
 });

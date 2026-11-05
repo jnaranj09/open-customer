@@ -73,5 +73,10 @@
 	"install_title": "Instala la app en tu iPhone",
 	"install_step_share": "Toca el botón Compartir, abajo en Safari.",
 	"install_step_add": "Elige «Agregar a pantalla de inicio».",
-	"install_step_confirm": "Toca «Agregar». La app queda en tu pantalla de inicio."
+	"install_step_confirm": "Toca «Agregar». La app queda en tu pantalla de inicio.",
+	"tab_send": "Enviar",
+	"nav_label": "Navegación principal",
+	"sidebar_synced": "Datos de las {time}",
+	"sidebar_no_data": "Sin datos todavía",
+	"push_activate": "Activar notificaciones"
 }
