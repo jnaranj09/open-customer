@@ -79,7 +79,9 @@
 		actionError = null;
 		select(item.id);
 		// On a phone the link unloads this page, which would lose a skip still waiting for its
-		// "Deshacer": send it now and wait for it. Its failure shows through the skip's own handler.
+		// "Deshacer": send it now and wait for it. Its failure shows through the skip's own handler
+		// only while this page stays (wide); once the link unloads it, a failed skip is not shown,
+		// and the item comes back on the next refresh because the server never logged it.
 		await skipping?.flush().catch(() => undefined);
 		const started = await startSend(item, openLink, { store: cache, now: systemNow });
 		if (!started.ok) {
@@ -131,7 +133,8 @@
 	// (`beforeNavigate`, which also runs before a reload), `pagehide`, or the app sent to the
 	// background, which iOS may kill without a `pagehide`. Otherwise the toast said "Omitido" and
 	// nothing was sent. A reload or a closed tab can still cancel the request in flight (seen in
-	// WebKit). Its failure shows through the skip's own handler.
+	// WebKit). A failure after she has left is not shown (the page is gone); the item comes back
+	// on the next refresh because the server never logged it.
 	function flushSkip(): void {
 		void skipping?.flush().catch(() => undefined);
 	}

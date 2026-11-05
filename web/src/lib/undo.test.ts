@@ -55,6 +55,14 @@ describe('delayed', () => {
 		expect([outcome, action.mock.calls.length]).toEqual(['ran', 1]);
 	});
 
+	it('a second flush does not run the action again', async () => {
+		const action = vi.fn(() => Promise.resolve());
+		const pending = delayed(action, 5000);
+		await pending.flush();
+		await pending.flush();
+		expect(action).toHaveBeenCalledTimes(1);
+	});
+
 	it('flush after cancel does not run the action', async () => {
 		const action = vi.fn(() => Promise.resolve());
 		const pending = delayed(action, 5000);

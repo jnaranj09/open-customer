@@ -75,6 +75,8 @@ describe('retryWhileOffline', () => {
 		events.dispatchEvent(new Event('online'));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(tryRefresh).toHaveBeenCalledTimes(3);
+		// The old 8 s wait is gone: one timer, the new 2 s one.
+		expect(vi.getTimerCount()).toBe(1);
 		await vi.advanceTimersByTimeAsync(2_000);
 		expect(tryRefresh).toHaveBeenCalledTimes(4);
 	});
