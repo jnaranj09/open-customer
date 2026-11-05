@@ -1,12 +1,4 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"ignoreDependencies": [
-		"dexie",
-		"openapi-fetch",
-		"zod",
-		"fake-indexeddb",
-		"@playwright/test",
-		"pg",
-		"@types/pg"
-	]
+	"ignoreDependencies": ["dexie", "fake-indexeddb", "@playwright/test", "pg", "@types/pg"]
 }
