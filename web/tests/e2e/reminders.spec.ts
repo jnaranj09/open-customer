@@ -5,7 +5,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { at, businessDate, closePool, insertAppointment, insertClient, resetData } from './seed';
-import { fill } from './steps';
+import { dueItem, fill } from './steps';
 
 const WA_ME = 'https://wa.me/';
 
@@ -21,13 +21,6 @@ test.beforeEach(async () => {
 });
 
 test.afterAll(closePool);
-
-/** The due item of `name` on the phone layout: a list card headed by the client's name. */
-function dueItem(page: Page, name: string) {
-	return page
-		.getByRole('listitem')
-		.filter({ has: page.getByRole('heading', { name, exact: true, level: 2 }) });
-}
 
 test.describe('CUJ 4: morning sending', () => {
 	test.beforeEach(async ({ page }) => {
