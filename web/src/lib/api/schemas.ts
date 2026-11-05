@@ -60,6 +60,11 @@ export const TemplateSchema = z.object({
 	archived: z.boolean()
 }) satisfies z.ZodType<Schemas['Template']>;
 
+export const TemplatePreviewSchema = z.object({
+	text: z.string(),
+	unknown_vars: z.array(z.string())
+}) satisfies z.ZodType<Schemas['TemplatePreview']>;
+
 const RuleKindSchema = z.enum(['before_appointment', 'come_back']);
 
 export const RuleSchema = z.object({
@@ -257,6 +262,7 @@ export type Appointment = z.infer<typeof AppointmentSchema>;
 export type AttrOption = z.infer<typeof OptionSchema>;
 export type Attribute = z.infer<typeof AttributeSchema>;
 export type Service = z.infer<typeof ServiceSchema>;
+export type Template = z.infer<typeof TemplateSchema>;
 export type Client = z.infer<typeof ClientSchema>;
 export type Media = z.infer<typeof MediaSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;

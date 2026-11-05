@@ -1,0 +1,189 @@
+<script lang="ts">
+	import { untrack } from 'svelte';
+	import { api } from '../api/app';
+	import { errorText, type ApiError } from '../api/errors';
+	import type { Template } from '../api/schemas';
+	import type { CacheSnapshot } from '../cache/db';
+	import { cache } from '../cache/store.svelte';
+	import { t } from '../i18n';
+	import { submitOnce } from '../submit';
+	import ActionButton from './ActionButton.svelte';
+	import BottomSheet from './BottomSheet.svelte';
+	import Button from './Button.svelte';
+	import ChipEditor from './ChipEditor.svelte';
+	import FormCard from './FormCard.svelte';
+	import TextField from './TextField.svelte';
+
+	// One message template: its name and its text in the ChipEditor (design doc item 77). The
+	// server checks the body on save, and its answer is shown by field. The caller keys the form on
+	// the template, so another one starts with its own name and text.
+	let {
+		data,
+		template,
+		onsaved,
+		onarchived,
+		oncancel
+	}: {
+		data: CacheSnapshot;
+		/** The template being edited; none means a new one. */
+		template?: Template;
+		onsaved: (saved: Template) => void;
+		/** Told after the template was archived or restored. */
+		onarchived: (archived: boolean) => void;
+		oncancel?: () => void;
+	} = $props();
+
+	let name = $state(untrack(() => template?.name ?? ''));
+	let body = $state(untrack(() => template?.body ?? ''));
+	let attempted = $state(false);
+	let failure = $state<ApiError | null>(null);
+	let busy = $state(false);
+	let archiving = $state(false);
+	let toggling = $state(false);
+
+	const locked = $derived(template?.archived === true);
+	const fieldError = (field: string): string | undefined =>
+		failure?.kind === 'problem' ? failure.fields[field] : undefined;
+	const nameError = $derived(
+		attempted && name.trim() === '' ? t('template_name_required') : fieldError('name')
+	);
+	const bodyError = $derived(
+		attempted && body === '' ? t('template_message_required') : fieldError('body')
+	);
+
+	const submit = submitOnce(
+		async () => {
+			failure = null;
+			attempted = true;
+			if (name.trim() === '' || body === '') {
+				return;
+			}
+			const trimmed = name.trim();
+			if (template !== undefined && trimmed === template.name && body === template.body) {
+				onsaved(template);
+				return;
+			}
+			const result =
+				template === undefined
+					? await api.createTemplate({ name: trimmed, body })
+					: await api.updateTemplate(template.id, {
+							...(trimmed === template.name ? {} : { name: trimmed }),
+							...(body === template.body ? {} : { body })
+						});
+			if (!result.ok) {
+				failure = result.error;
+				return;
+			}
+			await cache.refresh();
+			onsaved(result.data);
+		},
+		(pending) => {
+			busy = pending;
+		}
+	);
+
+	const setArchived = submitOnce(
+		async (archived: boolean) => {
+			if (template === undefined) {
+				return;
+			}
+			failure = null;
+			const result = await api.updateTemplate(template.id, { archived });
+			if (!result.ok) {
+				failure = result.error;
+				archiving = false;
+				return;
+			}
+			await cache.refresh();
+			archiving = false;
+			onarchived(archived);
+		},
+		(pending) => {
+			toggling = pending;
+		}
+	);
+
+	const otherError = $derived(
+		failure === null || fieldError('name') !== undefined || fieldError('body') !== undefined
+			? null
+			: errorText(failure)
+	);
+</script>
+
+<FormCard
+	label={t('template_save')}
+	{busy}
+	onsubmit={() => {
+		void submit.run();
+	}}
+	{oncancel}
+>
+	{#if locked}
+		<p class="rounded-md bg-glass-tint px-4 py-3 text-sm text-ink">{t('template_archived_note')}</p>
+	{/if}
+	<TextField label={t('template_name')} autocomplete="off" bind:value={name} error={nameError} />
+	<ChipEditor
+		value={body}
+		vars={cache.meta.templateVars}
+		attributes={data.attributes}
+		label={t('template_message')}
+		error={bodyError}
+		onchange={(next: string) => {
+			body = next;
+		}}
+	/>
+	{#if otherError !== null}
+		<p role="alert" class="text-sm text-error">{otherError}</p>
+	{/if}
+	{#if template !== undefined}
+		<div class="flex lg:max-w-64">
+			{#if locked}
+				<ActionButton
+					variant="secondary"
+					busy={toggling}
+					onclick={() => {
+						void setArchived.run(false);
+					}}
+				>
+					{t('template_restore')}
+				</ActionButton>
+			{:else}
+				<ActionButton
+					variant="secondary"
+					onclick={() => {
+						archiving = true;
+					}}
+				>
+					{t('template_archive')}
+				</ActionButton>
+			{/if}
+		</div>
+	{/if}
+</FormCard>
+
+<BottomSheet
+	open={archiving}
+	title={t('template_archive')}
+	onclose={() => {
+		archiving = false;
+	}}
+>
+	<p class="text-base text-ink">{t('template_archive_body')}</p>
+	<Button
+		variant="danger"
+		busy={toggling}
+		onclick={() => {
+			void setArchived.run(true);
+		}}
+	>
+		{t('template_archive')}
+	</Button>
+	<Button
+		variant="secondary"
+		onclick={() => {
+			archiving = false;
+		}}
+	>
+		{t('cancel')}
+	</Button>
+</BottomSheet>

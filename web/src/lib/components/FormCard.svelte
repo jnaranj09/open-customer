@@ -8,7 +8,7 @@
 	// recovered draft with "Empezar de nuevo", the fields, and the save button with "Cancelar"
 	// beside it on wide. Saving needs the server, so offline the button says why it is off.
 	let {
-		restored,
+		restored = false,
 		label,
 		busy,
 		hideSave = false,
@@ -17,13 +17,14 @@
 		oncancel,
 		children
 	}: {
-		restored: boolean;
+		/** A draft was recovered: shows the notice with "Empezar de nuevo" (`onstartover`). */
+		restored?: boolean;
 		label: string;
 		busy: boolean;
 		/** The save button is off the card while another button answers a warning. */
 		hideSave?: boolean;
 		onsubmit: () => void;
-		onstartover: () => void;
+		onstartover?: () => void;
 		oncancel?: (() => void) | undefined;
 		children: Snippet;
 	} = $props();
@@ -36,7 +37,7 @@
 		onsubmit();
 	}}
 >
-	{#if restored}
+	{#if restored && onstartover !== undefined}
 		<div class="flex items-center gap-3 rounded-md bg-glass-tint py-1 pr-1 pl-4 text-sm text-ink">
 			<p class="flex-1">{t('draft_restored')}</p>
 			<button

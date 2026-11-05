@@ -641,3 +641,61 @@ describe('mediaThumbUrl', () => {
 		expect(api.mediaThumbUrl(USER_ID)).toBe(`${BASE}/media/${USER_ID}/thumb`);
 	});
 });
+
+describe('the template calls', () => {
+	const template = {
+		id: USER_ID,
+		name: 'Recordatorio',
+		body: 'Hola {{client.name}}',
+		archived: false
+	};
+	const sent = async (fetchFn: ReturnType<typeof setup>['fetchFn']): Promise<unknown[]> => {
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		return [request.method, request.url, (await request.json()) as unknown];
+	};
+
+	it('createTemplate posts the name and body and returns the template', async () => {
+		const { api, fetchFn } = setup(() => json(template, 201));
+		const result = await api.createTemplate({ name: template.name, body: template.body });
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: template },
+			['POST', `${BASE}/templates`, { name: template.name, body: template.body }]
+		]);
+	});
+
+	it('updateTemplate patches only what is sent', async () => {
+		const { api, fetchFn } = setup(() => json({ ...template, archived: true }));
+		const result = await api.updateTemplate(USER_ID, { archived: true });
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: { ...template, archived: true } },
+			['PATCH', `${BASE}/templates/${USER_ID}`, { archived: true }]
+		]);
+	});
+
+	it('previewTemplate posts the body and the client and returns the text', async () => {
+		const answer = { text: 'Hola Ana', unknown_vars: [] };
+		const { api, fetchFn } = setup(() => json(answer));
+		const result = await api.previewTemplate({ body: 'Hola', client_id: USER_ID });
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: answer },
+			['POST', `${BASE}/templates/preview`, { body: 'Hola', client_id: USER_ID }]
+		]);
+	});
+
+	it('previewTemplate reports an answer without text as invalid', async () => {
+		const { api, hooks } = setup(() => json({ unknown_vars: [] }));
+		const result = await api.previewTemplate({ body: 'Hola' });
+		expect([result.ok, hooks.reportInvalid.mock.calls]).toEqual([false, [['/templates/preview']]]);
+	});
+
+	it('createTemplate hands back the server messages of a 422 by field', async () => {
+		const { api } = setup(() =>
+			problem('validation', 422, { errors: [{ field: 'body', message: 'Hay un {{ sin cerrar' }] })
+		);
+		const result = await api.createTemplate({ name: 'x', body: '{{' });
+		expect(result).toMatchObject({
+			ok: false,
+			error: { kind: 'problem', fields: { body: 'Hay un {{ sin cerrar' } }
+		});
+	});
+});

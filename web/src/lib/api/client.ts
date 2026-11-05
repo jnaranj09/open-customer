@@ -21,6 +21,8 @@ import {
 	PushSubscriptionIdSchema,
 	SetupOptionsSchema,
 	SetupStatusSchema,
+	TemplatePreviewSchema,
+	TemplateSchema,
 	type Appointment,
 	type Client,
 	type LogItem,
@@ -232,6 +234,19 @@ export function createApi(opts: ApiOptions) {
 			);
 			return got.ok ? { ok: true, data: got.data.items } : got;
 		},
+		/** Adds a message template. A body the server refuses is a 422 on `body`. */
+		createTemplate: (body: Schemas['TemplateInput']) =>
+			read('/templates', TemplateSchema, () => client.POST('/templates', { body })),
+		/** Changes only the fields sent; `archived` archives or restores. */
+		updateTemplate: (id: string, body: Schemas['TemplatePatch']) =>
+			read('/templates/{id}', TemplateSchema, () =>
+				client.PATCH('/templates/{id}', { params: { path: { id } }, body })
+			),
+		/** The text of a body for the sample client, or for `client_id`. Never refuses a body. */
+		previewTemplate: (body: Schemas['TemplatePreviewInput']) =>
+			read('/templates/preview', TemplatePreviewSchema, () =>
+				client.POST('/templates/preview', { body })
+			),
 		me: () => read('/me', MeSchema, () => client.GET('/me')),
 		setupStatus: () => read('/setup/status', SetupStatusSchema, () => client.GET('/setup/status')),
 		setupOptions: () =>

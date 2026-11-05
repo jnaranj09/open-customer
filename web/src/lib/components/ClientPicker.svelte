@@ -18,11 +18,14 @@
 		clients,
 		value = $bindable(),
 		error,
+		allowAdd = true,
 		oncreated
 	}: {
 		clients: Client[];
 		value: string | null;
 		error?: string | undefined;
+		/** False where only an existing client makes sense (the template preview): no "Agregar clienta nueva". */
+		allowAdd?: boolean;
 		/** Told after a client is added, so the cache can refresh. */
 		oncreated?: (client: Client) => void;
 	} = $props();
@@ -119,13 +122,15 @@
 				{/each}
 			</ul>
 		{/if}
-		<button
-			type="button"
-			class="min-h-tap self-start rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
-			onclick={openAdd}
-		>
-			{t('client_add')}
-		</button>
+		{#if allowAdd}
+			<button
+				type="button"
+				class="min-h-tap self-start rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+				onclick={openAdd}
+			>
+				{t('client_add')}
+			</button>
+		{/if}
 	{/if}
 </div>
 
