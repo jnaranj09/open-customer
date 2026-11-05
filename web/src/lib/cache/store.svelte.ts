@@ -4,7 +4,15 @@ import { api } from '../api/app';
 import type { Api } from '../api/client';
 import type { ApiError, Result } from '../api/errors';
 import type { Me } from '../api/schemas';
-import { EMPTY_META, readAll, readMeta, writeMeta, type CacheSnapshot, type Meta } from './db';
+import {
+	EMPTY_META,
+	onCacheCleared,
+	readAll,
+	readMeta,
+	writeMeta,
+	type CacheSnapshot,
+	type Meta
+} from './db';
 import { systemNow } from '../time';
 import { serialLatest } from '../serial';
 import { appBadge, refresh, type Badge } from './refresh';
@@ -16,6 +24,15 @@ export function createCache(deps: Deps) {
 	let meta = $state<Meta>(EMPTY_META);
 	let offline = $state(false);
 	let lastError = $state<ApiError | null>(null);
+
+	// A cleared cache (401, bad row, logout) must not leave the old session's data on screen, nor
+	// its user for an offline open to reuse.
+	onCacheCleared(() => {
+		snapshot = null;
+		meta = EMPTY_META;
+		offline = false;
+		lastError = null;
+	});
 
 	async function load(): Promise<void> {
 		snapshot = await readAll();

@@ -15,7 +15,7 @@
 	import Sidebar from '../lib/components/Sidebar.svelte';
 	import TabBar from '../lib/components/TabBar.svelte';
 	import UpdatePrompt from '../lib/components/UpdatePrompt.svelte';
-	import { canSync, guard, hasShell, needsRecheck, type Session } from '../lib/guard';
+	import { canSync, hasShell, needsRecheck, verdictFor, type Session } from '../lib/guard';
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
 	import { syncLine } from '../lib/nav';
@@ -36,7 +36,7 @@
 	let cacheLoaded = false;
 	let settleRun = 0;
 
-	const verdict = $derived(session !== null && checkedFor === path ? guard(path, session) : null);
+	const verdict = $derived(verdictFor(session, checkedFor, path));
 
 	async function rememberMe(me: Me): Promise<void> {
 		try {

@@ -60,3 +60,18 @@ export function canSync(s: Session | null): boolean {
 	}
 	return !s.setupNeeded && s.me !== null && !s.me.must_change_password;
 }
+
+/** What the layout shows for `path`: the guard's answer, or null while the session is unknown or
+ *  has to be asked again for this path (`checkedFor` is the path the last answer was checked for).
+ *  A settled session answers every app page at once, so moving between app pages never blanks the
+ *  shell. */
+export function verdictFor(
+	s: Session | null,
+	checkedFor: string | null,
+	path: string
+): GuardResult | null {
+	if (s === null || (needsRecheck(s, path) && checkedFor !== path)) {
+		return null;
+	}
+	return guard(path, s);
+}

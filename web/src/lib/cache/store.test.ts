@@ -5,6 +5,8 @@ import type { Api } from '../api/client';
 import type { Bootstrap } from '../api/schemas';
 import type { Result } from '../api/errors';
 import { DB_NAME, clearCache, writeSnapshot } from './db';
+import { guard } from '../guard';
+import { resolveSession } from '../session';
 import { bootstrap } from './fixtures';
 import { cache as appCache, createCache } from './store.svelte';
 
@@ -176,5 +178,24 @@ describe('the cache read model', () => {
 		await cache.rememberMe(me);
 		await cache.load();
 		expect([cache.meta.me, cache.meta.lastSyncAt]).toEqual([me, '2026-11-03T12:00:00Z']);
+	});
+
+	it('after a clear, an offline session check finds no user and shows the offline text', async () => {
+		await writeSnapshot(bootstrap(0, 'Ana Rojas'), '2026-11-03T12:00:00Z');
+		const { cache } = setup({ ok: true, data: bootstrap() });
+		const me = {
+			id: '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f',
+			username: 'ana',
+			must_change_password: false
+		};
+		await cache.rememberMe(me);
+		await cache.load();
+		await clearCache();
+		const offline = { ok: false, error: { kind: 'offline' } } as const;
+		const session = await resolveSession(
+			{ me: () => Promise.resolve(offline), setupStatus: () => Promise.resolve(offline) },
+			cache.meta.me
+		);
+		expect([cache.snapshot, guard('/', session)]).toEqual([null, { kind: 'offline_blank' }]);
 	});
 });

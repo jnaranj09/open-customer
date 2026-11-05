@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { canSync, guard, hasShell, needsRecheck, PUBLIC_PATHS, type Session } from './guard';
+import {
+	canSync,
+	guard,
+	hasShell,
+	needsRecheck,
+	verdictFor,
+	PUBLIC_PATHS,
+	type Session
+} from './guard';
 
 const ME = {
 	id: '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f',
@@ -141,5 +149,30 @@ describe('canSync', () => {
 
 	it('is true offline with a cached user', () => {
 		expect(canSync({ kind: 'offline', cachedMe: ME })).toBe(true);
+	});
+});
+
+describe('verdictFor', () => {
+	it('is null before the first answer', () => {
+		expect(verdictFor(null, null, '/')).toBeNull();
+	});
+
+	it('answers a second app page at once for a settled session: the shell stays mounted', () => {
+		expect(verdictFor(online(), '/', '/clientas')).toEqual({ kind: 'stay' });
+	});
+
+	it('waits when the answer has to be asked again for this path', () => {
+		expect(verdictFor(online({ me: null }), '/login', '/clientas')).toBeNull();
+	});
+
+	it('answers once the path was checked', () => {
+		expect(verdictFor(online({ me: null }), '/clientas', '/clientas')).toEqual({
+			kind: 'redirect',
+			to: '/login'
+		});
+	});
+
+	it('waits on a stand-alone page until it was checked, whatever the old answer says', () => {
+		expect(verdictFor(online(), '/', '/login')).toBeNull();
 	});
 });

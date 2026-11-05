@@ -97,8 +97,22 @@ const SINGLE = 'only';
  *  opens an empty one. Today the 401 handler (`lib/api/app.ts`) and the bad-row path below call it;
  *  the logout screen will too (design doc item 67). */
 export async function clearCache(): Promise<void> {
-	await db.delete();
-	await db.open();
+	try {
+		await db.delete();
+		await db.open();
+	} finally {
+		// Whatever the database did, what is held in memory is from the old session: drop it too.
+		for (const listener of clearListeners) {
+			listener();
+		}
+	}
+}
+
+const clearListeners = new Set<() => void>();
+
+/** Runs `listener` each time the cache is cleared, so the in-memory read model drops its copy. */
+export function onCacheCleared(listener: () => void): void {
+	clearListeners.add(listener);
 }
 
 /** Thrown inside this module when a stored row fails its schema; `table` is only a table name. */
