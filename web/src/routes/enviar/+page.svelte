@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { page } from '$app/state';
 	import { api } from '../../lib/api/app';
 	import { errorText, type ApiError } from '../../lib/api/errors';
 	import type { Appointment, DueItem, LogItem } from '../../lib/api/schemas';
@@ -40,9 +41,10 @@
 	const groups = $derived(groupDue(items));
 	const ordered = $derived([...groups.late, ...groups.today]);
 
-	// Wide: the item on the right. After a send or skip the item leaves the list and the one that
-	// followed it takes the pane; with nothing chosen it is the first item.
-	let selectedId = $state<string | null>(null);
+	// Wide: the item on the right. It opens on `?item=<id>` (an "Enviar" on the Hoy rail), else on
+	// the first item; an id not in the list also falls back to the first. After a send or skip the
+	// item leaves the list and the one that followed it takes the pane.
+	let selectedId = $state<string | null>(page.url.searchParams.get('item'));
 	let successorId = $state<string | null>(null);
 	const selected = $derived(
 		ordered.find((i) => i.id === selectedId) ??

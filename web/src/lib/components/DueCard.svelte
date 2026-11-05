@@ -38,7 +38,10 @@
 				{#each items.slice(0, SHOWN) as item (item.id)}
 					<li class="flex items-center gap-3">
 						<p class="min-w-0 flex-1 truncate text-base text-ink">{item.client_name}</p>
-						<a href={resolve('/enviar')} class="{buttonClasses('ghost')} shrink-0">
+						<a
+							href={resolve(`/enviar?item=${item.id}` as const)}
+							class="{buttonClasses('ghost')} shrink-0"
+						>
 							{t('due_send')}
 						</a>
 					</li>

@@ -77,6 +77,22 @@ test.describe('CUJ 4: morning sending', () => {
 		await page.reload();
 		await expectSent();
 	});
+
+	test('wide: Enviar on the Hoy rail opens that item, not the first', async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/');
+		// The rail lists Ana first; Marta's "Enviar" must open Marta.
+		await page
+			.getByRole('listitem')
+			.filter({ hasText: 'Marta Solano' })
+			.getByRole('link', { name: es.due_send, exact: true })
+			.click();
+
+		await expect(page.getByRole('heading', { name: es.due_today_heading, level: 1 })).toBeVisible();
+		// On wide the only client heading is the selected item's pane.
+		await expect(page.getByRole('heading', { name: 'Marta Solano', level: 2 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Ana Rojas', level: 2 })).toHaveCount(0);
+	});
 });
 
 test.describe('CUJ 5: come-back reminder lifecycle', () => {
