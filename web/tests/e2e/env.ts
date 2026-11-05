@@ -12,7 +12,7 @@ export const OWNER = { username: 'duena', password: 'prueba-e2e-2026' };
 export const AUTH_FILE = 'tests/e2e/.auth/owner.json';
 
 /** `E2E_DATABASE_URL`, set by `make e2e` and by CI; throws when it is missing. */
-function databaseUrl(): string {
+export function databaseUrl(): string {
 	const url = process.env['E2E_DATABASE_URL'];
 	if (url === undefined || url === '') {
 		throw new Error('E2E_DATABASE_URL is not set');
