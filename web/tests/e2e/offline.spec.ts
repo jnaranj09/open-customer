@@ -22,6 +22,10 @@ test.beforeEach(async ({ page }) => {
 	// Online first: the app caches the bootstrap and the time of that refresh.
 	await page.goto('/');
 	await expect(page.getByRole('link', { name: /Ana Rojas/ })).toBeVisible();
+	// Until the first refresh is stored, Hoy asks the server for the day, so Ana's link alone does
+	// not prove the cache. The due summary reads only the stored snapshot, which is written with
+	// the refresh time in one transaction.
+	await expect(page.getByText(es.due_today_summary_one, { exact: true })).toBeVisible();
 });
 
 test.afterAll(closePool);
