@@ -76,7 +76,7 @@ case "$FILE" in
     [ -f "$PKG/package.json" ] || exit 0
     need pnpm
     [ -x "$PKG/node_modules/.bin/eslint" ] || missing "eslint not installed in $PKG (run pnpm install)"
-    (cd "$PKG" && ./node_modules/.bin/eslint --cache "$FILE") >&2 || FAIL=1
+    (cd "$PKG" && ./node_modules/.bin/eslint "$FILE") >&2 || FAIL=1
     (cd "$PKG" && pnpm run --silent check) >&2 || FAIL=1
     ;;
   # --- end web ---
