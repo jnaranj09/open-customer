@@ -42,6 +42,11 @@ async function badgeCall(call: () => Promise<void>): Promise<void> {
 	}
 }
 
+/** Shows `due` on the app icon, or clears it at 0 (after a refresh and after each log POST). */
+export async function applyBadge(badge: Badge, due: number): Promise<void> {
+	await (due > 0 ? badge.set(due) : badge.clear());
+}
+
 /** Fetches `/bootstrap`, replaces the cache and sets the badge to the due count. The window uses
  *  the business zone from the cached settings, or the browser zone before the first refresh. A
  *  failed call changes nothing. A failed write rejects: the old data is still in place. */
@@ -58,7 +63,6 @@ export async function refresh(deps: {
 		return answer;
 	}
 	await writeSnapshot(answer.data, now.toISOString());
-	const due = answer.data.due.length;
-	await (due > 0 ? deps.badge.set(due) : deps.badge.clear());
+	await applyBadge(deps.badge, answer.data.due.length);
 	return { ok: true, data: undefined };
 }

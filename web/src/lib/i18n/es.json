@@ -140,5 +140,18 @@
 	"status_confirmed": "Confirmada",
 	"status_no_show": "No vino",
 	"status_cancelled": "Cancelada",
-	"agenda_retry": "Reintentar"
+	"agenda_retry": "Reintentar",
+	"due_count_one": "1 mensaje",
+	"due_count_other": "{count} mensajes",
+	"due_confirm_failed": "No se guardó. Ya lo enviaste: cuando haya conexión, toca Sí otra vez",
+	"due_add_phone": "Agregar teléfono",
+	"due_skipped": "Omitido: {name}",
+	"due_undo": "Deshacer",
+	"due_skip_wait": "Espera a que pase el aviso anterior",
+	"due_sent_offline": "Necesitas conexión para ver los enviados",
+	"due_sent_empty": "Aún no has enviado nada hoy",
+	"due_prompt": "{name} tiene cita el {day} ({services}). ¿Agregar {service}?",
+	"overlap_title": "Se cruza con otra cita",
+	"overlap_confirm": "Agendar igual",
+	"cancel": "Cancelar"
 }

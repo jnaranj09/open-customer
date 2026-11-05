@@ -4,8 +4,8 @@
 	import { t } from '../i18n';
 	import { layout } from '../layout';
 	import { buttonClasses } from './buttonStyle';
-	import EmptyState from './EmptyState.svelte';
 	import Icon from './icons/Icon.svelte';
+	import NoRulesState from './NoRulesState.svelte';
 
 	let { items, hasRules }: { items: DueItem[]; hasRules: boolean } = $props();
 
@@ -22,14 +22,7 @@
 </script>
 
 {#if !hasRules}
-	<div class="glass-card rounded-lg">
-		<EmptyState
-			title={t('due_no_rules_title')}
-			body={t('due_no_rules_body')}
-			actionLabel={t('due_no_rules_action')}
-			href="/ajustes"
-		/>
-	</div>
+	<NoRulesState />
 {:else if layout.current === 'wide'}
 	<section class="glass-card flex flex-col gap-3 rounded-lg p-5">
 		<h2 class="font-display text-xl font-semibold text-ink">{t('due_today_heading')}</h2>

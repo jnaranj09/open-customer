@@ -310,3 +310,75 @@ describe('listAppointments', () => {
 		});
 	});
 });
+
+const logItem = {
+	rule_id: USER_ID,
+	appointment_id: USER_ID,
+	anchor_at: null,
+	action: 'sent',
+	body: 'Hola Ana',
+	phone_digits: '50688887777',
+	acted_at: '2026-11-04T15:00:00Z',
+	id: USER_ID,
+	kind: 'come_back',
+	client_id: USER_ID,
+	client_name: 'Ana Rojas'
+};
+
+describe('recordReminder', () => {
+	const entry = {
+		rule_id: USER_ID,
+		appointment_id: USER_ID,
+		action: 'sent',
+		acted_at: '2026-11-04T15:00:00Z'
+	} as const;
+
+	it('accepts the 201 row', async () => {
+		const { api } = setup(() => json(logItem, 201));
+		expect(await api.recordReminder(entry)).toEqual({ ok: true, data: logItem });
+	});
+
+	it('accepts the 200 row of an item that was already logged', async () => {
+		const { api } = setup(() => json(logItem, 200));
+		expect((await api.recordReminder(entry)).ok).toBe(true);
+	});
+
+	it('returns response_invalid for a row that fails its schema', async () => {
+		const { api } = setup(() => json({ ...logItem, action: 'later' }, 201));
+		expect(await api.recordReminder(entry)).toEqual({
+			ok: false,
+			error: { kind: 'response_invalid', path: '/reminders/log' }
+		});
+	});
+});
+
+describe('listReminderLog', () => {
+	it('asks for the day and returns the items', async () => {
+		const { api, fetchFn } = setup(() => json({ items: [logItem] }));
+		const result = await api.listReminderLog('2026-11-04');
+		expect(result).toEqual({ ok: true, data: [logItem] });
+		expect(fetchFn.mock.calls.map(([request]) => (request as Request).url)).toEqual([
+			`${BASE}/reminders/log?date=2026-11-04`
+		]);
+	});
+});
+
+describe('updateAppointment', () => {
+	it('sends the patch to the appointment and returns it', async () => {
+		const { api, fetchFn } = setup(() => json(appointment));
+		const result = await api.updateAppointment(USER_ID, { service_ids: ['s1'] });
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result.ok, request.method, request.url, await request.text()]).toEqual([
+			true,
+			'PATCH',
+			`${BASE}/appointments/${USER_ID}`,
+			'{"service_ids":["s1"]}'
+		]);
+	});
+
+	it('types a 409 as overlap', async () => {
+		const { api } = setup(() => problem('overlap', 409, { appointments: [appointment] }));
+		const result = await api.updateAppointment(USER_ID, { service_ids: ['s1'] });
+		expect(result).toEqual({ ok: false, error: { kind: 'overlap', overlapping: [appointment] } });
+	});
+});

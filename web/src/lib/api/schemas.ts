@@ -138,6 +138,24 @@ export const DueItemSchema = z.object({
 	prompt: z.nullable(BookingPromptSchema)
 }) satisfies z.ZodType<Schemas['DueItem']>;
 
+export const LogItemSchema = z.object({
+	rule_id: id,
+	appointment_id: id,
+	anchor_at: z.nullable(instant).exactOptional(),
+	action: z.enum(['sent', 'skipped']),
+	body: z.nullable(z.string()).exactOptional(),
+	phone_digits: z.nullable(z.string()).exactOptional(),
+	acted_at: instant,
+	id,
+	kind: RuleKindSchema,
+	client_id: id,
+	client_name: z.string()
+}) satisfies z.ZodType<Schemas['LogItem']>;
+
+export const LogListSchema = z.object({
+	items: z.array(LogItemSchema)
+}) satisfies z.ZodType<Schemas['LogList']>;
+
 export const TemplateVarSchema = z.object({
 	ns: z.string(),
 	key: z.string(),
@@ -219,6 +237,7 @@ export const PushSubscriptionInputSchema = z.object({
 export type Appointment = z.infer<typeof AppointmentSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 export type DueItem = z.infer<typeof DueItemSchema>;
+export type LogItem = z.infer<typeof LogItemSchema>;
 export type Bootstrap = z.infer<typeof BootstrapSchema>;
 export type Problem = z.infer<typeof ProblemSchema>;
 export type Me = z.infer<typeof MeSchema>;

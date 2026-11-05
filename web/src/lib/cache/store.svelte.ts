@@ -11,7 +11,8 @@ import {
 	readMeta,
 	writeMeta,
 	type CacheSnapshot,
-	type Meta
+	type Meta,
+	type PendingSend
 } from './db';
 import { systemNow } from '../time';
 import { serialLatest } from '../serial';
@@ -80,6 +81,17 @@ export function createCache(deps: Deps) {
 		/** Keeps the user the server just named, so an offline open can show the cached app. */
 		async rememberMe(me: Me): Promise<void> {
 			await writeMeta({ me });
+			meta = await readMeta();
+		},
+		/** Stores the send confirmation (it survives a reload and a closed app). Rejects when the
+		 *  write fails; the caller must not open WhatsApp then. */
+		async setPending(pending: PendingSend): Promise<void> {
+			await writeMeta({ pending });
+			meta = await readMeta();
+		},
+		/** Clears the send confirmation. */
+		async clearPending(): Promise<void> {
+			await writeMeta({ pending: null });
 			meta = await readMeta();
 		},
 		/** Reads the cache only, never the server. */

@@ -37,6 +37,8 @@ const MetaSchema = z.object({
 	backupRed: z.boolean()
 });
 export type Meta = z.infer<typeof MetaSchema>;
+/** The send confirmation stored when she taps "Enviar" (design doc "Sending flow"). */
+export type PendingSend = z.infer<typeof PendingSendSchema>;
 
 /** The meta of a phone that never synced. */
 export const EMPTY_META: Meta = {

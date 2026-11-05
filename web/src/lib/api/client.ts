@@ -6,7 +6,10 @@ import type { ApiError, ProblemName, Result } from './errors';
 import type { components, paths } from './schema';
 import {
 	AppointmentListSchema,
+	AppointmentSchema,
 	BootstrapSchema,
+	LogItemSchema,
+	LogListSchema,
 	MeSchema,
 	PROBLEM_PREFIX,
 	ProblemSchema,
@@ -14,7 +17,8 @@ import {
 	PushSubscriptionIdSchema,
 	SetupOptionsSchema,
 	SetupStatusSchema,
-	type Appointment
+	type Appointment,
+	type LogItem
 } from './schemas';
 
 export type ApiOptions = {
@@ -126,6 +130,21 @@ export function createApi(opts: ApiOptions) {
 		}): Promise<Result<Appointment[]>> => {
 			const got = await read('/appointments', AppointmentListSchema, () =>
 				client.GET('/appointments', { params: { query: range } })
+			);
+			return got.ok ? { ok: true, data: got.data.items } : got;
+		},
+		/** Changes only the fields sent. A 409 comes back as the typed `overlap` error. */
+		updateAppointment: (id: string, body: Schemas['AppointmentPatch']) =>
+			read('/appointments/{id}', AppointmentSchema, () =>
+				client.PATCH('/appointments/{id}', { params: { path: { id } }, body })
+			),
+		/** Records a due item as sent or skipped. A repeat of a logged item is safe (the server answers 200). */
+		recordReminder: (body: Schemas['LogEntry']) =>
+			read('/reminders/log', LogItemSchema, () => client.POST('/reminders/log', { body })),
+		/** The log rows of one local day, newest first. */
+		listReminderLog: async (date: string): Promise<Result<LogItem[]>> => {
+			const got = await read('/reminders/log', LogListSchema, () =>
+				client.GET('/reminders/log', { params: { query: { date } } })
 			);
 			return got.ok ? { ok: true, data: got.data.items } : got;
 		},

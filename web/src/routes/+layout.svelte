@@ -11,6 +11,7 @@
 	import { cache } from '../lib/cache/store.svelte';
 	import { shouldRefreshOnFocus } from '../lib/cache/refresh';
 	import { applyAccent } from '../lib/color';
+	import ConfirmSentSheet from '../lib/components/ConfirmSentSheet.svelte';
 	import OfflineBanner from '../lib/components/OfflineBanner.svelte';
 	import Sidebar from '../lib/components/Sidebar.svelte';
 	import TabBar from '../lib/components/TabBar.svelte';
@@ -183,4 +184,9 @@
 		</div>
 		<TabBar pathname={path} />
 	{/if}
+{/if}
+
+<!-- Opens first on any app start while a send confirmation is stored (design doc "Sending flow"). -->
+{#if verdict?.kind === 'stay' && hasShell(path)}
+	<ConfirmSentSheet />
 {/if}

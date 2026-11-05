@@ -4,13 +4,15 @@
 	import Icon from './icons/Icon.svelte';
 	import { buttonClasses } from './buttonStyle';
 
+	// A route without parameters: `resolve` needs the values of a dynamic one (`/clientas/[id]`).
+	type StaticRoute = Exclude<RouteIdWithSearchOrHash, `${string}[${string}`>;
+
 	let {
 		title,
 		body,
 		actionLabel,
 		href
-	}: { title: string; body: string; actionLabel?: string; href?: RouteIdWithSearchOrHash } =
-		$props();
+	}: { title: string; body: string; actionLabel?: string; href?: StaticRoute } = $props();
 </script>
 
 <div class="flex flex-col items-center gap-2 p-6 text-center">
