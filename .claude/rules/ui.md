@@ -11,8 +11,9 @@ paths:
   prose only until then.
 - **No raw values in components.** Colors, spacing and radii come from the Tailwind theme in
   `app.css` (the accent reads the runtime `--accent` variable). No hex colors or arbitrary pixel
-  values in a component. Sensor: a guard that fails on a raw color outside `app.css` (add when the
-  theme lands); prose only until then.
+  values in a component. Sensor: the web guard `raw-colors` (no hex, `rgb(`, `hsl(` or `oklch(` literal in `web/src`
+  outside `app.css`, except the `DEFAULT_ACCENT` line in `lib/color.ts` and the `theme-color` meta
+  tag in `app.html`; no `-[#` or `-[<n>px]` in a `.svelte` file).
 - **Every action ends in visible feedback.** A tap either changes what she sees or shows a success or
   error message. An async button shows a busy state and cannot double-submit. Prose only;
   per-feature tests.
@@ -30,7 +31,9 @@ paths:
   recommended config) catches the `$state` + `$effect` copy; other copies are prose only.
 - **Tests query like a user**: Playwright `getByRole` and `getByLabel`, then text; a test id last.
   Sensor: `eslint-plugin-playwright` `no-raw-locators` and `prefer-native-locators`.
-- **Visual changes are checked in the running app**, in Safari's iPhone view, with a screenshot, not
-  only by tests: tests cannot see CSS. Prose only.
+- **Two layouts.** Compact below 1024 px, wide from 1024 px; wide is never the phone layout
+  stretched (owner rule). Prose only; the exit pass checks both.
+- **Visual changes are checked in the running app**, in Safari's iPhone view and at 1440 × 900, with
+  a screenshot, not only by tests: tests cannot see CSS. Prose only.
 - **Accessibility and touch basics**: every control has an accessible name, tap targets are at least
   44 px, focus moves into an opened sheet and back on close. Prose only.

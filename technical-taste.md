@@ -120,6 +120,8 @@ strict-types setting; anything that can lose user data; changing what a status o
 
 ## Visual taste (owner fills)
 
+- 2026-11-04: "We didnt mockup desktop pages, my only rule is to avoid making a phone version on the web (same short width and same distribution as phone) it should look different and more desktop native but keeping the same app look"
+
 ## Reversals: old → current (do not revive the old side)
 
 ## Rejected — don't propose these again

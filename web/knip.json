@@ -4,7 +4,6 @@
 		"dexie",
 		"openapi-fetch",
 		"zod",
-		"tailwindcss",
 		"fake-indexeddb",
 		"@playwright/test",
 		"pg",
