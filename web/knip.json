@@ -1,4 +1,8 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"ignoreDependencies": ["@playwright/test", "pg", "@types/pg"]
+	"ignoreDependencies": ["pg", "@types/pg"],
+	"playwright": {
+		"config": [],
+		"entry": ["playwright.config.ts", "tests/e2e/**/*.spec.ts"]
+	}
 }
