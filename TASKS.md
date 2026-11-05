@@ -90,7 +90,8 @@ once by breaking what they protect, then restored.
   `GET /bootstrap` (every key, `due` = Marta's come-back; 422 on a range over the limit), `GET
   /export` (dated file name; the four files in the zip), `POST /client-errors` 204 x10 then 429
   with `Retry-After`, 401 without a cookie, and `docker logs` has no line matching "Ana Rojas", "Marta", "Lucía" or `wa.me`.
-  All matched. CI: NOT RUN (pending push). NOT RUN: the plain-host :8080 variant.
+  All matched. CI green on main at e6c19ff (the p4 merge), including gitleaks, `pnpm audit` and
+  `make cover` (run 41953355128). NOT RUN: the plain-host :8080 variant.
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
