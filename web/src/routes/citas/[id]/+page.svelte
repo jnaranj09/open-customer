@@ -297,7 +297,13 @@
 					</div>
 				</form>
 			</section>
+		</div>
+	{/if}
 
+	<!-- Outside the view and edit branches, so editing does not read the photos again or lose an
+	     upload error; hidden while the form shows. -->
+	{#if appt !== null && loadError === null}
+		<div class="lg:max-w-190 {editing ? 'hidden' : ''}">
 			{#key appt.id}
 				<PhotoSection clientId={appt.client_id} appointmentId={appt.id} empty="photos_empty" />
 			{/key}

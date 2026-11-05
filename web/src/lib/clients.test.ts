@@ -8,6 +8,7 @@ import {
 	clientPatchBody,
 	historySplit,
 	restoreClientForm,
+	savedDestination,
 	sharingNames,
 	visibleClients,
 	type ClientForm
@@ -217,5 +218,25 @@ describe('restoreClientForm', () => {
 	it('drops the attributes that no longer exist', () => {
 		const saved = form({ attrs: { alergias: 'látex', gone: 'x' } });
 		expect(restoreClientForm(saved, new Set(['alergias'])).attrs).toEqual({ alergias: 'látex' });
+	});
+});
+
+describe('savedDestination', () => {
+	it('goes back to where she came from on compact', () => {
+		expect(savedDestination('/citas/nueva?dia=2026-11-05', false, ID)).toBe(
+			'/citas/nueva?dia=2026-11-05'
+		);
+	});
+
+	it('goes to the list on compact when she came from nowhere in particular', () => {
+		expect(savedDestination(null, false, ID)).toBe('/clientas');
+	});
+
+	it('goes to the list on compact when the path is not inside the app', () => {
+		expect(savedDestination('//evil.test', false, ID)).toBe('/');
+	});
+
+	it('selects the new client in the list pane on wide', () => {
+		expect(savedDestination('/clientas', true, ID)).toBe(`/clientas/${ID}`);
 	});
 });

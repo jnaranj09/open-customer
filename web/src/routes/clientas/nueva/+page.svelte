@@ -5,23 +5,27 @@
 	import type { Path } from '$app/types';
 	import type { Client } from '../../../lib/api/schemas';
 	import { returnTo } from '../../../lib/booking';
+	import { savedDestination } from '../../../lib/clients';
+	import { layout } from '../../../lib/layout';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import ClientForm from '../../../lib/components/ClientForm.svelte';
 	import Icon from '../../../lib/components/icons/Icon.svelte';
 	import { t } from '../../../lib/i18n';
 
-	// "Nueva clienta" (design doc item 76). `volver` is the screen she came from; without it the new
-	// client's own page opens. `returnTo` checked the path is inside the app; `resolve` types a
+	// "Nueva clienta" (design doc item 76). `volver` is the screen she came from; `savedDestination`
+	// decides where saving goes. `returnTo` checked the path is inside the app; `resolve` types a
 	// path without its first slash.
 	const from = $derived(page.url.searchParams.get('volver'));
-	const back = $derived(resolve(returnTo(from).slice(1) as Path));
+	const wide = $derived(layout.current === 'wide');
+	const toPath = (id: string): Path => savedDestination(from, wide, id).slice(1) as Path;
 	const home = $derived(resolve('/clientas'));
+	const back = $derived(from === null ? home : resolve(returnTo(from).slice(1) as Path));
 </script>
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
 		<a
-			href={from === null ? home : back}
+			href={back}
 			title={t('client_back')}
 			aria-label={t('client_back')}
 			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100 lg:hidden"
@@ -37,10 +41,10 @@
 		<ClientForm
 			data={cache.snapshot}
 			onsaved={(saved: Client) => {
-				void goto(from === null ? resolve('/clientas/[id]', { id: saved.id }) : back);
+				void goto(resolve(toPath(saved.id)));
 			}}
 			oncancel={() => {
-				void goto(from === null ? home : back);
+				void goto(back);
 			}}
 		/>
 	{/if}

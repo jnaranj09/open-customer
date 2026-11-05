@@ -5,6 +5,7 @@
 	import { api } from '../../../lib/api/app';
 	import { errorText, type ApiError } from '../../../lib/api/errors';
 	import type { Appointment, Client, LogItem } from '../../../lib/api/schemas';
+	import { clock } from '../../../lib/clock.svelte';
 	import { business } from '../../../lib/business.svelte';
 	import { showThenFetch } from '../../../lib/cachedLoad';
 	import { attrDisplay, STATUS_NAME } from '../../../lib/booking';
@@ -25,7 +26,7 @@
 	import { formatMoney } from '../../../lib/money';
 	import { submitOnce } from '../../../lib/submit';
 	import { createToaster } from '../../../lib/toaster.svelte';
-	import { formatDayShort, formatTime, todayIn } from '../../../lib/time';
+	import { formatDayWithYear, formatTime, todayIn } from '../../../lib/time';
 
 	// One client (design doc item 76): her facts, the appointment history, the photo gallery, the
 	// reminders sent to her, edit mode and archive. The server holds the truth: every change waits
@@ -81,8 +82,11 @@
 			.filter((d): d is { label: string; text: string } => d.text !== null);
 	});
 
+	const dayLabel = (iso: string): string =>
+		formatDayWithYear(todayIn(zone, new Date(iso)), clock.today(zone));
+
 	// History: the cached window first; the rest from the server on request.
-	const window = $derived(
+	const cacheWindow = $derived(
 		bootstrapWindow(todayIn(zone, new Date(cache.meta.lastSyncAt ?? Date.now())))
 	);
 	const newestFirst = (a: Appointment, b: Appointment): number =>
@@ -94,7 +98,9 @@
 	let historyError = $state<string | null>(null);
 	let loadingAll = $state(false);
 	const others = $derived(
-		everything === null ? [] : historySplit(everything, window, zone).needsServer.sort(newestFirst)
+		everything === null
+			? []
+			: historySplit(everything, cacheWindow, zone).needsServer.sort(newestFirst)
 	);
 
 	const loadAll = submitOnce(
@@ -168,10 +174,7 @@
 	<li>
 		<ListRow
 			href={resolve('/citas/[id]', { id: a.id })}
-			title="{formatDayShort(todayIn(zone, new Date(a.starts_at)))} · {formatTime(
-				a.starts_at,
-				zone
-			)}"
+			title="{dayLabel(a.starts_at)} · {formatTime(a.starts_at, zone)}"
 			subtitle={[
 				a.services.map((s) => s.name).join(', '),
 				formatMoney(a.total_cents, business.currency, business.locale),
@@ -349,8 +352,8 @@
 						{#each reminders as row (row.id)}
 							<li class="flex flex-col gap-0.5 py-3">
 								<span class="text-sm font-bold text-ink">
-									{row.action === 'sent' ? t('reminder_sent') : t('reminder_skipped')} · {formatDayShort(
-										todayIn(zone, new Date(row.acted_at))
+									{row.action === 'sent' ? t('reminder_sent') : t('reminder_skipped')} · {dayLabel(
+										row.acted_at
 									)}
 									· {formatTime(row.acted_at, zone)}
 								</span>

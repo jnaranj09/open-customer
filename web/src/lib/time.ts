@@ -151,3 +151,10 @@ export function zonedToUtc(day: string, time: string, zone: string): string {
 	const second = wall - offsetMs(new Date(first), zone);
 	return new Date(second).toISOString().replace('.000Z', 'Z');
 }
+
+/** `10/3` for a day in the year of `today`, `10/3/2025` for any other year: a history that spans
+ *  years must not show two days that look the same. */
+export function formatDayWithYear(day: string, today: string): string {
+	const { y } = parseDay(day);
+	return y === parseDay(today).y ? formatDayShort(day) : `${formatDayShort(day)}/${String(y)}`;
+}

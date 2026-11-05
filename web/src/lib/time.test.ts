@@ -3,6 +3,7 @@ import {
 	addDays,
 	formatDayLong,
 	formatDayShort,
+	formatDayWithYear,
 	formatWeekdayShort,
 	formatTime,
 	todayIn,
@@ -115,5 +116,15 @@ describe('zonedToUtc', () => {
 
 	it('rejects a malformed time', () => {
 		expect(() => zonedToUtc('2026-11-04', '3pm', 'Europe/Madrid')).toThrow(RangeError);
+	});
+});
+
+describe('formatDayWithYear', () => {
+	it('leaves the year out for a day in the current year', () => {
+		expect(formatDayWithYear('2026-03-10', '2026-11-04')).toBe('10/3');
+	});
+
+	it('adds the year for a day in another year', () => {
+		expect(formatDayWithYear('2025-03-10', '2026-11-04')).toBe('10/3/2025');
 	});
 });

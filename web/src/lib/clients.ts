@@ -6,7 +6,7 @@ import { inWindow } from './agenda';
 import type { ApiError } from './api/errors';
 import type { components } from './api/schema';
 import type { Appointment, Attribute, Client } from './api/schemas';
-import { attrChanges, attrFormValues, attrsToSend } from './booking';
+import { attrChanges, attrFormValues, attrsToSend, returnTo } from './booking';
 import type { MessageKey } from './i18n';
 import { search, sortByName } from './search';
 import { todayIn } from './time';
@@ -117,4 +117,14 @@ export function restoreClientForm(saved: ClientForm, attrKeys: Set<string>): Cli
 		...saved,
 		attrs: Object.fromEntries(Object.entries(saved.attrs).filter(([key]) => attrKeys.has(key)))
 	};
+}
+
+/** Where a saved new client goes (design doc item 76). On compact, back to the screen she came
+ *  from (`from` is the `volver` link value, checked by `returnTo`; the list when there is none).
+ *  On wide the screen she came from is the list pane, so the new client is selected in it. */
+export function savedDestination(from: string | null, wide: boolean, id: string): string {
+	if (wide) {
+		return `/clientas/${id}`;
+	}
+	return from === null ? '/clientas' : returnTo(from);
 }

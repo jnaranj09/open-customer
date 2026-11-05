@@ -69,7 +69,9 @@
 	const errors = $derived(attempted ? clientFormErrors(form) : {});
 	let failure = $state<ApiError | null>(null);
 	let busy = $state(false);
-	const sharing = $derived(sharingNames(failure));
+	// The warning belongs to the phone it was raised for: changing the phone takes it away.
+	let warnedPhone = $state('');
+	const sharing = $derived(form.phone === warnedPhone ? sharingNames(failure) : null);
 
 	const fieldError = (name: string): string | undefined =>
 		failure?.kind === 'problem' ? failure.fields[name] : undefined;
@@ -103,6 +105,7 @@
 			}
 			if (!result.ok) {
 				failure = result.error;
+				warnedPhone = form.phone;
 				return;
 			}
 			await draft.clear();
@@ -119,6 +122,7 @@
 	restored={draft.restored}
 	label={creating ? t('client_save') : t('client_save_changes')}
 	{busy}
+	hideSave={sharing !== null}
 	onsubmit={() => {
 		void submit.run(false);
 	}}
@@ -163,7 +167,7 @@
 				void submit.run(true);
 			}}
 		/>
-	{:else if failure !== null}
+	{:else if failure !== null && sharingNames(failure) === null}
 		<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
 	{/if}
 </FormCard>

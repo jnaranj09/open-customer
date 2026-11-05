@@ -11,6 +11,7 @@
 		restored,
 		label,
 		busy,
+		hideSave = false,
 		onsubmit,
 		onstartover,
 		oncancel,
@@ -19,6 +20,8 @@
 		restored: boolean;
 		label: string;
 		busy: boolean;
+		/** The save button is off the card while another button answers a warning. */
+		hideSave?: boolean;
 		onsubmit: () => void;
 		onstartover: () => void;
 		oncancel?: (() => void) | undefined;
@@ -49,18 +52,20 @@
 	{@render children()}
 
 	<div class="flex flex-col gap-3 lg:flex-row-reverse lg:justify-start">
-		<div class="lg:w-56">
-			<Button
-				variant="primary"
-				type="submit"
-				{busy}
-				{...cache.offline
-					? { disabled: true as const, disabledReason: t('offline_cannot_save') }
-					: {}}
-			>
-				{label}
-			</Button>
-		</div>
+		{#if !hideSave}
+			<div class="lg:w-56">
+				<Button
+					variant="primary"
+					type="submit"
+					{busy}
+					{...cache.offline
+						? { disabled: true as const, disabledReason: t('offline_cannot_save') }
+						: {}}
+				>
+					{label}
+				</Button>
+			</div>
+		{/if}
 		{#if oncancel !== undefined}
 			<div class="lg:w-40">
 				<Button variant="secondary" onclick={oncancel}>{t('cancel')}</Button>
