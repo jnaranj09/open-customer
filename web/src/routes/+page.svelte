@@ -2,10 +2,13 @@
 	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
 	import { api } from '../lib/api/app';
+	import { errorText, type ApiError } from '../lib/api/errors';
 	import type { Appointment } from '../lib/api/schemas';
 	import { inWindow, viewRange, type AgendaView } from '../lib/agenda';
+	import { clock } from '../lib/clock.svelte';
 	import { cache } from '../lib/cache/store.svelte';
 	import { bootstrapWindow } from '../lib/cache/refresh';
+	import Button from '../lib/components/Button.svelte';
 	import DayView from '../lib/components/DayView.svelte';
 	import DueCard from '../lib/components/DueCard.svelte';
 	import Icon from '../lib/components/icons/Icon.svelte';
@@ -13,19 +16,32 @@
 	import WeekView from '../lib/components/WeekView.svelte';
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
-	import {
-		addDays,
-		formatDayLong,
-		formatDayShort,
-		formatWeekdayShort,
-		systemNow,
-		todayIn
-	} from '../lib/time';
+	import { addDays, formatDayLong, formatDayShort, formatWeekdayShort, todayIn } from '../lib/time';
 
 	const zone = $derived(
 		cache.snapshot?.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 	);
-	const today = $derived(todayIn(zone, systemNow()));
+	const today = $derived(clock.today(zone));
+
+	// Read the clock again when the app comes back and after each refresh, so Hoy follows midnight.
+	$effect(() => {
+		if (String(cache.meta.lastSyncAt) !== '') {
+			clock.tick();
+		}
+	});
+	$effect(() => {
+		const handler = (): void => {
+			if (document.visibilityState === 'visible') {
+				clock.tick();
+			}
+		};
+		window.addEventListener('focus', handler);
+		document.addEventListener('visibilitychange', handler);
+		return () => {
+			window.removeEventListener('focus', handler);
+			document.removeEventListener('visibilitychange', handler);
+		};
+	});
 
 	// What she picked; until she picks, the business day and the layout's usual view.
 	let pickedDay = $state<string | null>(null);
@@ -43,19 +59,24 @@
 
 	// Days outside the window come from the server, online only.
 	let remote = $state<{ key: string; items: Appointment[] } | null>(null);
-	let remoteOffline = $state(false);
+	let remoteError = $state<ApiError | null>(null);
+	// Bumped by "Reintentar" to ask again for the same days.
+	let retries = $state(0);
 	const key = $derived(`${range.from}|${range.to}`);
 	let askRun = 0;
 
+	// The key of one ask: the days, and how many times she retried them.
+	const askKey = $derived(`${key}#${String(retries)}`);
+
 	$effect(() => {
-		if (cached || cache.offline) {
+		if (cached || cache.offline || askKey === '') {
 			return;
 		}
 		const asked = key;
 		const ask = { from: range.from, to: range.to };
 		untrack(() => {
 			const run = ++askRun;
-			remoteOffline = false;
+			remoteError = null;
 			void api.listAppointments(ask).then((result) => {
 				if (run !== askRun) {
 					return;
@@ -64,7 +85,7 @@
 					remote = { key: asked, items: result.data };
 				} else {
 					remote = null;
-					remoteOffline = true;
+					remoteError = result.error;
 				}
 			});
 		});
@@ -76,7 +97,12 @@
 		}
 		return remote?.key === key ? remote.items : null;
 	});
-	const needsConnection = $derived(!cached && (cache.offline || remoteOffline));
+	const needsConnection = $derived(!cached && (cache.offline || remoteError?.kind === 'offline'));
+	const loadFailure = $derived(
+		!cached && remoteError !== null && remoteError.kind !== 'offline'
+			? errorText(remoteError)
+			: null
+	);
 
 	const dueItems = $derived(cache.snapshot?.due ?? []);
 	const hasRules = $derived(
@@ -215,6 +241,18 @@
 			<p role="status" class="glass-card rounded-lg px-5 py-3 text-base text-ink">
 				{t('agenda_needs_connection')}
 			</p>
+		{:else if loadFailure !== null}
+			<div role="alert" class="glass-card flex flex-col gap-3 rounded-lg px-5 py-3">
+				<p class="text-base text-error">{loadFailure}</p>
+				<Button
+					variant="ghost"
+					onclick={() => {
+						retries += 1;
+					}}
+				>
+					{t('agenda_retry')}
+				</Button>
+			</div>
 		{:else if appointments === null}
 			<p role="status" class="px-2 text-base text-ink-muted">{t('agenda_loading')}</p>
 		{:else if view === 'week'}

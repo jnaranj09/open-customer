@@ -139,5 +139,6 @@
 	"status_scheduled": "Agendada",
 	"status_confirmed": "Confirmada",
 	"status_no_show": "No vino",
-	"status_cancelled": "Cancelada"
+	"status_cancelled": "Cancelada",
+	"agenda_retry": "Reintentar"
 }
