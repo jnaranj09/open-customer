@@ -153,6 +153,13 @@ describe('unauthorized', () => {
 		expect(hooks.onUnauthorized).toHaveBeenCalledTimes(1);
 	});
 
+	it('does not call onUnauthorized for a 401 on the error report itself', async () => {
+		const { api, hooks } = setup(() => problem('unauthorized', 401));
+		const result = await api.logClientError({ message: 'X', route: '/', app_version: VERSION });
+		expect(result).toEqual({ ok: false, error: { kind: 'unauthorized' } });
+		expect(hooks.onUnauthorized).not.toHaveBeenCalled();
+	});
+
 	it('does not call onUnauthorized for invalid-credentials on login', async () => {
 		const { api, hooks } = setup(() => problem('invalid-credentials', 401));
 		const result = await api.login({ username: 'ana', password: 'wrong-password' });

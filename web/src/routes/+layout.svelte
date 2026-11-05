@@ -169,6 +169,10 @@
 	const report = createReporter(sendErrorReport, () => systemNow().getTime());
 	$effect(() => {
 		const send = (e: unknown): void => {
+			// Only with a session: the endpoint needs one, and setup and login have none.
+			if (!canSync(session)) {
+				return;
+			}
 			report(e, page.route.id ?? '/', version);
 		};
 		const onError = (ev: ErrorEvent): void => {
@@ -199,6 +203,7 @@
 
 {#snippet content()}
 	<div class="mx-auto flex w-full max-w-360 flex-col gap-4">
+		<UpdatePrompt />
 		{#if cache.offline}
 			<OfflineBanner lastSyncAt={cache.meta.lastSyncAt} {zone} />
 		{/if}
@@ -209,8 +214,6 @@
 	</div>
 {/snippet}
 
-<UpdatePrompt />
-
 {#if verdict?.kind === 'offline_blank'}
 	<main class="grid min-h-dvh place-items-center p-8">
 		<p role="status" class="glass-card rounded-lg px-6 py-4 text-base text-ink">
@@ -219,6 +222,7 @@
 	</main>
 {:else if verdict?.kind === 'stay'}
 	{#if !hasShell(path)}
+		<UpdatePrompt standalone />
 		{@render children()}
 	{:else if layout.current === 'wide'}
 		<Sidebar

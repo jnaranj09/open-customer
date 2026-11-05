@@ -171,6 +171,11 @@
 			toaster.say('option_archived', {
 				label: 'due_undo',
 				run: () => {
+					// The toast can outlive the connection: undoing writes, so offline it says why.
+					if (cache.offline) {
+						optionError = t('offline_cannot_save');
+						return;
+					}
 					void api.updateOption(attributeId, id, { archived: false }).then(async (back) => {
 						optionError = back.ok ? null : errorText(back.error);
 						if (back.ok) {

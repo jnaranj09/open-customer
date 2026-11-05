@@ -11,7 +11,7 @@
 	import { cache } from '../../../lib/cache/store.svelte';
 	import ActionButton from '../../../lib/components/ActionButton.svelte';
 	import AppointmentForm from '../../../lib/components/AppointmentForm.svelte';
-	import Button from '../../../lib/components/Button.svelte';
+	import WriteButton from '../../../lib/components/WriteButton.svelte';
 	import Icon from '../../../lib/components/icons/Icon.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import OverlapSheet from '../../../lib/components/OverlapSheet.svelte';
@@ -70,10 +70,6 @@
 			.map((d) => ({ label: d.label, text: attrDisplay(d, a.attrs[d.key]) }))
 			.filter((d): d is { label: string; text: string } => d.text !== null);
 	});
-
-	const offlineOff = $derived(
-		cache.offline ? { disabled: true as const, disabledReason: t('offline_cannot_save') } : {}
-	);
 
 	// Status
 	const STATUS_LABEL: Record<Appointment['status'], MessageKey> = {
@@ -291,9 +287,9 @@
 						/>
 					</div>
 					<div class="mt-7 w-40 shrink-0">
-						<Button variant="secondary" type="submit" busy={paying} {...offlineOff}>
+						<WriteButton variant="secondary" type="submit" busy={paying}>
 							{t('appointment_paid_save')}
-						</Button>
+						</WriteButton>
 					</div>
 				</form>
 			</section>

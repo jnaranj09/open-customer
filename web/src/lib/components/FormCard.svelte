@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { cache } from '../cache/store.svelte';
 	import { t } from '../i18n';
 	import Button from './Button.svelte';
+	import WriteButton from './WriteButton.svelte';
 
 	// The card both record forms sit in (D2: one glass card, up to 760 px on wide): the notice of a
 	// recovered draft with "Empezar de nuevo", the fields, and the save button with "Cancelar"
@@ -55,16 +55,7 @@
 	<div class="flex flex-col gap-3 lg:flex-row-reverse lg:justify-start">
 		{#if !hideSave}
 			<div class="lg:w-56">
-				<Button
-					variant="primary"
-					type="submit"
-					{busy}
-					{...cache.offline
-						? { disabled: true as const, disabledReason: t('offline_cannot_save') }
-						: {}}
-				>
-					{label}
-				</Button>
+				<WriteButton variant="primary" type="submit" {busy}>{label}</WriteButton>
 			</div>
 		{/if}
 		{#if oncancel !== undefined}

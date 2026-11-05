@@ -22,6 +22,15 @@ function cut(text: string, max: number): string {
 	return text.length <= max ? text : Array.from(text).slice(0, max).join('');
 }
 
+/** The stack from its first frame on. Chrome starts a stack with a header (the name and the
+ *  message, which can run over several lines and hold a name or a phone); Safari and Firefox write
+ *  frames only. Cutting at the first "    at" line drops the header, whatever the message became. */
+function withoutHeader(stack: string): string {
+	const lines = stack.split('\n');
+	const first = lines.findIndex((line) => /^\s+at /.test(line));
+	return first <= 0 ? stack : lines.slice(first).join('\n');
+}
+
 function codeOf(e: Error): string | null {
 	const code: unknown = (e as { code?: unknown }).code;
 	return typeof code === 'string' && code !== '' ? code : null;
@@ -33,10 +42,11 @@ export function errorReport(e: unknown, route: string, version: string): ErrorRe
 	let stack: string | null = null;
 	if (e instanceof Error) {
 		const code = codeOf(e);
-		message = code === null ? e.name : `${e.name} ${code}`;
-		// The stack's first line repeats the error text; the text stays out.
+		const name = e.name === '' ? 'Error' : e.name;
+		message = code === null ? name : `${name} ${code}`;
+		// The header repeats the error text; the text stays out.
 		if (e.stack !== undefined && e.stack !== '') {
-			stack = e.message === '' ? e.stack : e.stack.split(e.message).join('');
+			stack = withoutHeader(e.stack);
 		}
 	}
 	return {
@@ -47,7 +57,7 @@ export function errorReport(e: unknown, route: string, version: string): ErrorRe
 	};
 }
 
-/** A reporter that cannot spam: one report per distinct message per page load, and at most 10 a
+/** A reporter that cannot spam: one report per distinct message and first frame per page load, and at most 10 a
  *  minute. A burst of window errors (or an error inside the report itself) sends a few lines. */
 export function createReporter(
 	send: (report: ErrorReport) => void,
@@ -59,10 +69,11 @@ export function createReporter(
 		const report = errorReport(e, route, version);
 		const at = now();
 		sentAt = sentAt.filter((t) => at - t < WINDOW_MS);
-		if (seen.has(report.message) || sentAt.length >= SEND_LIMIT) {
+		const key = `${report.message}\n${(report.stack ?? '').split('\n', 1)[0] ?? ''}`;
+		if (seen.has(key) || sentAt.length >= SEND_LIMIT) {
 			return;
 		}
-		seen.add(report.message);
+		seen.add(key);
 		sentAt.push(at);
 		send(report);
 	};

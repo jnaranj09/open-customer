@@ -86,11 +86,15 @@ export function createApi(opts: ApiOptions) {
 		const problem = parsed.data;
 		const type = problem.type.slice(PROBLEM_PREFIX.length) as ProblemName;
 		if (type === 'unauthorized') {
-			try {
-				await opts.onUnauthorized();
-			} catch {
-				// The caller still gets `unauthorized`; a hook that threw must not reject the call.
-				console.warn('code=on_unauthorized_failed');
+			// The error report is best effort: a page with no session (the setup wizard, the login
+			// screen) can raise one, and its 401 must not send her away from that page.
+			if (path !== '/client-errors') {
+				try {
+					await opts.onUnauthorized();
+				} catch {
+					// The caller still gets `unauthorized`; a hook that threw must not reject the call.
+					console.warn('code=on_unauthorized_failed');
+				}
 			}
 			return { kind: 'unauthorized' };
 		}

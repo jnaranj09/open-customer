@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { AttrOption } from '../api/schemas';
+	import { cache } from '../cache/store.svelte';
 	import { indexAtY, levelOf, reorder, type Positioned } from '../attributes';
 	import { t } from '../i18n';
 	import Button from './Button.svelte';
@@ -37,6 +38,10 @@
 	let working = $state(false);
 	let drag = $state<{ id: string; over: number } | null>(null);
 	let root: HTMLElement | undefined = $state();
+
+	// Every move and archive writes to the server, so they are off while it is (the form buttons
+	// are `WriteButton`s). The reason shows once above the tree.
+	const off = $derived(working || cache.offline);
 
 	const hasChildren = (id: string): boolean => levelOf(options, id).length > 0;
 	const adding = (parent: string | null): boolean => form?.kind === 'add' && form.parent === parent;
@@ -178,7 +183,7 @@
 							data-handle={option.id}
 							title={t('option_drag', { label: option.label })}
 							aria-label={t('option_drag', { label: option.label })}
-							disabled={working}
+							disabled={off}
 							class="grid size-11 shrink-0 cursor-grab touch-none place-items-center rounded-md text-ink-muted hover:bg-accent-100"
 							onpointerdown={(e) => {
 								dragStart(e, option.id);
@@ -215,7 +220,7 @@
 						<div role="group" aria-label={option.label} class="mt-1 flex flex-wrap gap-1 pl-2">
 							<button
 								type="button"
-								disabled={working || i === 0}
+								disabled={off || i === 0}
 								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100 disabled:opacity-40"
 								onclick={() => {
 									void move(parent, option.id, i - 1);
@@ -223,7 +228,7 @@
 							>
 							<button
 								type="button"
-								disabled={working || i === siblings.length - 1}
+								disabled={off || i === siblings.length - 1}
 								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100 disabled:opacity-40"
 								onclick={() => {
 									void move(parent, option.id, i + 1);
@@ -245,7 +250,7 @@
 							>
 							<button
 								type="button"
-								disabled={working}
+								disabled={off}
 								class="min-h-tap rounded-pill px-4 text-sm font-bold text-error hover:bg-accent-100"
 								onclick={() => {
 									menu = null;
@@ -281,5 +286,8 @@
 {/snippet}
 
 <div bind:this={root} class="flex flex-col gap-1">
+	{#if cache.offline}
+		<p class="text-sm text-ink-muted">{t('offline_cannot_save')}</p>
+	{/if}
 	{@render level(null)}
 </div>

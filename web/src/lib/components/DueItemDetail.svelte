@@ -5,6 +5,7 @@
 	import { canSend, type Sendable } from '../pending';
 	import { formatDayShort, todayIn } from '../time';
 	import Button from './Button.svelte';
+	import WriteButton from './WriteButton.svelte';
 	import { buttonClasses } from './buttonStyle';
 
 	// A due item with its actions: the client, the full message and Enviar / Omitir, or the booking
@@ -43,13 +44,11 @@
 				})
 	);
 
-	// A button she must not use says why (ui.md): offline first, then a skip still undoable.
-	const offlineOff = $derived(
-		offline ? { disabled: true as const, disabledReason: t('offline_cannot_save') } : {}
-	);
+	// A button she must not use says why (ui.md): offline first, then a skip still undoable. Enviar
+	// and the booking button are `WriteButton`s, which say the offline reason themselves.
 	const skipOff = $derived(
 		offline
-			? offlineOff
+			? { disabled: true as const, disabledReason: t('offline_cannot_save') }
 			: skipBlocked
 				? { disabled: true as const, disabledReason: t('due_skip_wait') }
 				: {}
@@ -65,30 +64,28 @@
 	<div class="flex flex-wrap items-start gap-3">
 		{#if prompt !== null}
 			<div class="min-w-40 flex-1">
-				<Button
+				<WriteButton
 					variant="primary"
 					{busy}
-					{...offlineOff}
 					onclick={() => {
 						onadd(item);
 					}}
 				>
 					{t('appointment_add_service')}
-				</Button>
+				</WriteButton>
 			</div>
 		{/if}
 		<div class="min-w-40 flex-1">
 			{#if canSend(item)}
-				<Button
+				<WriteButton
 					variant={prompt === null ? 'primary' : 'secondary'}
 					{busy}
-					{...offlineOff}
 					onclick={() => {
 						onsend(item);
 					}}
 				>
 					{prompt === null ? t('due_send') : t('due_send_message')}
-				</Button>
+				</WriteButton>
 			{:else}
 				<a
 					href={resolve('/clientas/[id]', { id: item.client_id })}
