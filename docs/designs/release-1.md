@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. P0–P5 are built; P6 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
+*   **Status:** Accepted. P0–P6 are built; P7 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
 
@@ -1424,7 +1424,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `make test-db` (Docker is available on GitHub runners) | P1 |
     | `make cover` | P2 (the first gated package) |
     | `make build` | P0 (runs after every check above, so they run with only the stub; see "Clean checkout" in the Verification Plan) |
-    | `psql --version` (shows the runner has the client `make e2e` needs), `pnpm exec playwright install --with-deps webkit`, then `make e2e` against the built binary + a `postgres:18.<minor>-alpine` service container (the pinned tag, user, password and database `open_customer`/`e2e`/`open_customer`, `pg_isready` health check), with `E2E_DATABASE_URL=postgres://open_customer:e2e@localhost:5432/open_customer_e2e`. On failure `web/test-results/` is uploaded as an artifact | P6 |
+    | `pnpm exec playwright install --with-deps webkit`, then `make e2e` against the built binary + a `postgres:18.<minor>-alpine` service container (the pinned tag, user, password and database `open_customer`/`e2e`/`open_customer`, `pg_isready` health check), with `E2E_DATABASE_URL=postgres://open_customer:e2e@localhost:5432/open_customer_e2e`. `make e2e` uses the runner's preinstalled `psql` client (seen in run 42097441087). On failure `web/test-results/` is uploaded as an artifact | P6 |
 
 ##### 9. `.github/workflows/release.yml` (Create)
 
