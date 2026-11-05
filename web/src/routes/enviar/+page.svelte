@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '../../lib/api/app';
 	import { errorText, type ApiError } from '../../lib/api/errors';
@@ -18,7 +19,7 @@
 	import { skipItem, startSend, type Sendable } from '../../lib/pending';
 	import { submitOnce } from '../../lib/submit';
 	import { formatTime, systemNow } from '../../lib/time';
-	import { UNDO_MS, delayed } from '../../lib/undo';
+	import { UNDO_MS, delayed, onPageLeave } from '../../lib/undo';
 
 	const zone = $derived(
 		cache.snapshot?.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -125,6 +126,17 @@
 			}
 		);
 	}
+
+	// A skip still waiting for "Deshacer" is sent now when she leaves: another page
+	// (`beforeNavigate`, which also runs before a reload), `pagehide`, or the app sent to the
+	// background, which iOS may kill without a `pagehide`. Otherwise the toast said "Omitido" and
+	// nothing was sent. A reload or a closed tab can still cancel the request in flight (seen in
+	// WebKit). Its failure shows through the skip's own handler.
+	function flushSkip(): void {
+		void skipping?.flush().catch(() => undefined);
+	}
+	beforeNavigate(flushSkip);
+	$effect(() => onPageLeave(flushSkip, window, document));
 
 	// "Agregar a la cita": the future appointment gets the return service; a 409 asks first.
 	let overlap = $state<{ item: DueItem; appointments: Appointment[] } | null>(null);

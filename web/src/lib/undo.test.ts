@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { delayed } from './undo';
+import { delayed, onPageLeave } from './undo';
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -65,5 +65,49 @@ describe('delayed', () => {
 	it('flush rejects when the action fails', async () => {
 		const pending = delayed(() => Promise.reject(new Error('boom')), 5000);
 		await expect(pending.flush()).rejects.toEqual(new Error('boom'));
+	});
+});
+
+/** A document whose visibility the test sets. */
+function fakeDocument(): EventTarget & { visibilityState: DocumentVisibilityState } {
+	const state: { visibilityState: DocumentVisibilityState } = { visibilityState: 'visible' };
+	return Object.assign(new EventTarget(), state);
+}
+
+describe('onPageLeave', () => {
+	it('calls leave on pagehide', () => {
+		const leave = vi.fn();
+		const win = new EventTarget();
+		onPageLeave(leave, win, fakeDocument());
+		win.dispatchEvent(new Event('pagehide'));
+		expect(leave).toHaveBeenCalledTimes(1);
+	});
+
+	it('calls leave when the page becomes hidden', () => {
+		const leave = vi.fn();
+		const doc = fakeDocument();
+		onPageLeave(leave, new EventTarget(), doc);
+		doc.visibilityState = 'hidden';
+		doc.dispatchEvent(new Event('visibilitychange'));
+		expect(leave).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not call leave when the page becomes visible', () => {
+		const leave = vi.fn();
+		const doc = fakeDocument();
+		onPageLeave(leave, new EventTarget(), doc);
+		doc.dispatchEvent(new Event('visibilitychange'));
+		expect(leave).not.toHaveBeenCalled();
+	});
+
+	it('stops listening once removed', () => {
+		const leave = vi.fn();
+		const win = new EventTarget();
+		const doc = fakeDocument();
+		onPageLeave(leave, win, doc)();
+		doc.visibilityState = 'hidden';
+		win.dispatchEvent(new Event('pagehide'));
+		doc.dispatchEvent(new Event('visibilitychange'));
+		expect(leave).not.toHaveBeenCalled();
 	});
 });

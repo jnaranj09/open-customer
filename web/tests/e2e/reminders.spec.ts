@@ -93,6 +93,31 @@ test.describe('CUJ 4: morning sending', () => {
 		await expect(page.getByRole('heading', { name: 'Marta Solano', level: 2 })).toBeVisible();
 		await expect(page.getByRole('heading', { name: 'Ana Rojas', level: 2 })).toHaveCount(0);
 	});
+
+	test('Omitir is sent at once when the app goes to the background', async ({ page }) => {
+		await page.goto('/enviar');
+		await dueItem(page, 'Ana Rojas')
+			.getByRole('button', { name: es.due_skip, exact: true })
+			.click();
+		await expect(page.getByText(fill(es.due_skipped, { name: 'Ana Rojas' }))).toBeVisible();
+
+		// Without the flush the POST waits for the end of the 5 s "Deshacer"; iOS may kill a
+		// backgrounded app before then. Playwright cannot background a page: the test sets the
+		// visibility the browser would report and sends its event.
+		const posted = page.waitForResponse(
+			(r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/reminders/log'),
+			{ timeout: 2_000 }
+		);
+		await page.evaluate(() => {
+			Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+			document.dispatchEvent(new Event('visibilitychange'));
+		});
+		expect((await posted).ok()).toBe(true);
+
+		await page.reload();
+		await expect(dueItem(page, 'Marta Solano')).toBeVisible();
+		await expect(dueItem(page, 'Ana Rojas')).toHaveCount(0);
+	});
 });
 
 test.describe('CUJ 5: come-back reminder lifecycle', () => {
