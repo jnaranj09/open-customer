@@ -19,8 +19,8 @@
 	const list = $derived(resolve('/ajustes/plantillas'));
 </script>
 
-{#if missing || cache.snapshot === null}
-	<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-4">
+	<header class="flex min-h-12 items-center gap-2">
 		<a
 			href={list}
 			title={t('template_back')}
@@ -29,25 +29,17 @@
 		>
 			<Icon name="chevron-left" class="size-5.5" />
 		</a>
-		<div class="glass-card rounded-lg">
-			<EmptyState title={t('templates_pick_title')} body={t('templates_pick_body')} />
-		</div>
-	</div>
-{:else}
-	<div class="flex flex-col gap-4">
-		<header class="flex min-h-12 items-center gap-2">
-			<a
-				href={list}
-				title={t('template_back')}
-				aria-label={t('template_back')}
-				class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100 @3xl:hidden"
-			>
-				<Icon name="chevron-left" class="size-5.5" />
-			</a>
+		{#if template !== undefined || (!missing && cache.snapshot !== null)}
 			<h2 class="font-display text-3xl font-semibold text-ink">
 				{template?.name ?? t('templates_new_title')}
 			</h2>
-		</header>
+		{/if}
+	</header>
+	{#if missing || cache.snapshot === null}
+		<div class="glass-card rounded-lg">
+			<EmptyState title={t('templates_pick_title')} body={t('templates_pick_body')} />
+		</div>
+	{:else}
 		<TemplateForm
 			data={cache.snapshot}
 			{...template === undefined ? {} : { template }}
@@ -67,5 +59,5 @@
 				void goto(list);
 			}}
 		/>
-	</div>
-{/if}
+	{/if}
+</div>

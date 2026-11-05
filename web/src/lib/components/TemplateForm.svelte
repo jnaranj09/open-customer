@@ -10,7 +10,7 @@
 	import { cache } from '../cache/store.svelte';
 	import type { BodyProblem } from '../chips';
 	import { t } from '../i18n';
-	import { templateDirty } from '../templateEdit';
+	import { navigationAllowed, templateDirty, type Exemption } from '../templateEdit';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
 	import BottomSheet from './BottomSheet.svelte';
@@ -42,19 +42,15 @@
 	let body = $state(untrack(() => template?.body ?? ''));
 	let problems = $state<BodyProblem[]>([]);
 	let attempted = $state(false);
-	// Leaving with unsaved changes asks first. `leaving` lets a navigation the form itself starts
-	// (after a save or an archive) and the one she confirmed go through.
-	let leaving = false;
+	// Leaving with unsaved changes asks first, unless `navigationAllowed` says the form itself is
+	// about to navigate (a create, an archive) or she chose to discard. An update or a restore stays
+	// on the page and sets no exemption.
+	let exemption: Exemption | null = null;
 	let discardTo = $state<URL | null>(null);
-	// A new edit ends the exemption: a save that stays on this page (an update, a restore) must not
-	// leave the guard off for what she types next.
-	const edited = (): void => {
-		leaving = false;
-	};
 	const dirty = $derived(templateDirty(template, name, body));
 
 	beforeNavigate((nav) => {
-		if (leaving || !dirty) {
+		if (navigationAllowed(exemption, dirty, name, body)) {
 			return;
 		}
 		nav.cancel();
@@ -86,6 +82,7 @@
 				return;
 			}
 			const trimmed = name.trim();
+			const sent = body;
 			if (template !== undefined && trimmed === template.name && body === template.body) {
 				onsaved(template);
 				return;
@@ -102,7 +99,9 @@
 				return;
 			}
 			await cache.refresh();
-			leaving = true;
+			if (template === undefined) {
+				exemption = { kind: 'saved', name: trimmed, body: sent };
+			}
 			onsaved(result.data);
 		},
 		(pending) => {
@@ -116,6 +115,7 @@
 				return;
 			}
 			failure = null;
+			const sent = { name: name.trim(), body };
 			const result = await api.updateTemplate(template.id, { archived });
 			if (!result.ok) {
 				failure = result.error;
@@ -124,7 +124,9 @@
 			}
 			await cache.refresh();
 			archiving = false;
-			leaving = true;
+			if (archived) {
+				exemption = { kind: 'saved', ...sent };
+			}
 			onarchived(archived);
 		},
 		(pending) => {
@@ -135,7 +137,7 @@
 	function discard(): void {
 		const to = discardTo;
 		discardTo = null;
-		leaving = true;
+		exemption = { kind: 'discard' };
 		if (to !== null) {
 			// The app's own address, as a typed path: `resolve` adds the base path to it.
 			void goto(resolve((to.pathname + to.search) as Path));
@@ -160,18 +162,7 @@
 	{#if locked}
 		<p class="rounded-md bg-glass-tint px-4 py-3 text-sm text-ink">{t('template_archived_note')}</p>
 	{/if}
-	<TextField
-		label={t('template_name')}
-		autocomplete="off"
-		bind:value={
-			() => name,
-			(v: string) => {
-				name = v;
-				edited();
-			}
-		}
-		error={nameError}
-	/>
+	<TextField label={t('template_name')} autocomplete="off" bind:value={name} error={nameError} />
 	<ChipEditor
 		value={body}
 		vars={cache.meta.templateVars}
@@ -181,7 +172,6 @@
 		onchange={(next: string, found: BodyProblem[]) => {
 			body = next;
 			problems = found;
-			edited();
 		}}
 	/>
 	{#if otherError !== null}
