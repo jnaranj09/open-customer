@@ -105,6 +105,13 @@ describe('the cache read model', () => {
 		expect(reopened.shownDue.map((i) => i.id)).toEqual([SECOND]);
 	});
 
+	it('an item logged twice is held once', async () => {
+		const { cache } = setup({ ok: false, error: { kind: 'offline' } });
+		await cache.markLogged(FIRST, { clearPending: false });
+		await cache.markLogged(FIRST, { clearPending: false });
+		expect(cache.logged).toEqual([FIRST]);
+	});
+
 	it('a refresh that no longer lists a logged item drops its stored id', async () => {
 		await writeSnapshot(bootstrap(2), '2026-11-03T12:00:00Z');
 		const { cache } = setup({ ok: true, data: bootstrap(1) });

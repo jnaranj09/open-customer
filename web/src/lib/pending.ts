@@ -100,8 +100,23 @@ export async function notYet(store: PendingStore): Promise<void> {
 	await store.clearPending();
 }
 
-/** "Omitir" after its "Deshacer" window: logs the item as skipped. The caller refreshes the cache
- *  after a success. */
-export function skipItem(item: DueItem, deps: LogDeps): Promise<Result<void>> {
-	return logItem(item, { action: 'skipped' }, deps);
+/** "Omitir" after its "Deshacer" window: logs the item as skipped, then refreshes the cache. When
+ *  the phone cannot store the hide, the server has still logged the skip: the refresh still runs
+ *  and the result is `cache_write_failed`, so she reads that the phone did not save, not a generic
+ *  error. A failed POST changes nothing and does not refresh. */
+export async function skipItem(
+	item: DueItem,
+	deps: LogDeps & { refresh: () => Promise<unknown> }
+): Promise<Result<void>> {
+	let result: Result<void>;
+	try {
+		result = await logItem(item, { action: 'skipped' }, deps);
+	} catch {
+		console.warn('code=cache_write_failed');
+		result = { ok: false, error: { kind: 'cache_write_failed' } };
+	}
+	if (result.ok || result.error.kind === 'cache_write_failed') {
+		await deps.refresh();
+	}
+	return result;
 }

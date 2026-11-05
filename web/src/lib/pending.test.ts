@@ -45,8 +45,9 @@ function setup(answer: Result<LogItem> = logged) {
 		set: vi.fn<Badge['set']>(() => Promise.resolve()),
 		clear: vi.fn<Badge['clear']>(() => Promise.resolve())
 	};
-	const deps = { api: { recordReminder }, store: cache, badge, now: () => NOW };
-	return { cache, deps, recordReminder, badge };
+	const refresh = vi.fn(() => Promise.resolve());
+	const deps = { api: { recordReminder }, store: cache, badge, now: () => NOW, refresh };
+	return { cache, deps, recordReminder, badge, refresh };
 }
 
 const PENDING = { item_id: 'a', client_name: 'Ana Rojas', started_at: NOW.toISOString() };
@@ -223,6 +224,43 @@ describe('skipItem', () => {
 		const { deps, badge } = setup();
 		await skipItem(item('a'), { ...deps, due: [item('a'), item('b')] });
 		expect(badge.set).toHaveBeenCalledWith(1);
+	});
+
+	it('refreshes the cache once the server logged it', async () => {
+		const { deps, refresh } = setup();
+		await skipItem(item('a'), { ...deps, due: [item('a')] });
+		expect(refresh).toHaveBeenCalledOnce();
+	});
+
+	it('does not refresh when the POST fails', async () => {
+		const { deps, refresh } = setup({ ok: false, error: { kind: 'offline' } });
+		await skipItem(item('a'), { ...deps, due: [item('a')] });
+		expect(refresh).not.toHaveBeenCalled();
+	});
+
+	it('says the phone could not save when the hide cannot be stored, and still refreshes', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const { deps, refresh } = setup();
+		const result = await skipItem(item('a'), {
+			...deps,
+			store: { markLogged: () => Promise.reject(new Error('x')) },
+			due: [item('a')]
+		});
+		expect([result, refresh.mock.calls.length]).toEqual([
+			{ ok: false, error: { kind: 'cache_write_failed' } },
+			1
+		]);
+	});
+
+	it('logs a failed store of the hide by code only', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const { deps } = setup();
+		await skipItem(item('a'), {
+			...deps,
+			store: { markLogged: () => Promise.reject(new Error('x')) },
+			due: [item('a')]
+		});
+		expect(warn).toHaveBeenCalledWith('code=cache_write_failed');
 	});
 
 	it('returns the error and leaves the badge when the POST fails', async () => {

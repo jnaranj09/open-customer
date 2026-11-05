@@ -1,8 +1,9 @@
 // The phone cache: the one module that touches Dexie (guard `layers`). It is a read-only copy of
 // what `/bootstrap` last said, plus drafts, the pending send confirmation and the ids of logged due
 // items the cached list may still hold. Every row read back is parsed once with its zod schema, so
-// a bad cached row never reaches a screen (rules/boundaries.md). A bad snapshot or meta row clears the whole cache and reads as empty; a
-// bad draft is deleted alone, because it is the app's own local value, not a copy of the server.
+// a bad cached row never reaches a screen (rules/boundaries.md). A bad snapshot or meta row clears
+// the whole cache and reads as empty; a bad draft is deleted alone, because it is the app's own
+// local value, not a copy of the server.
 import Dexie, { type Table } from 'dexie';
 import { z } from 'zod';
 import { byPosition } from '../order';

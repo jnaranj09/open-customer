@@ -125,7 +125,7 @@ export function createCache(deps: Deps) {
 		 *  same write, so the question and the hidden item change together. Rejects when the write
 		 *  fails; the item stays hidden until the app is closed. */
 		async markLogged(id: string, opts: { clearPending: boolean }): Promise<void> {
-			logged = [...logged, id];
+			logged = logged.includes(id) ? logged : [...logged, id];
 			await writeMeta((current) => ({
 				logged: current.logged.includes(id) ? current.logged : [...current.logged, id],
 				...(opts.clearPending ? { pending: null } : {})
