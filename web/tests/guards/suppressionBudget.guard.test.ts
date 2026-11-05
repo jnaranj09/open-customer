@@ -10,10 +10,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SRC, TESTS, WEB, comments, markupComments, scriptText, walk } from './sourceScan';
 
-/** Measured when each strict rule landed (TASKS.md T4; better-tailwindcss/no-restricted-classes
- *  at 69: the radius and surface classes routes and feature components had when "only primitives
- *  style" landed, ui.md stage 4). Only ever lowered. */
-const PINNED_BULK_TOTAL = 69;
+/** Measured when each strict rule landed (TASKS.md T4; better-tailwindcss/no-restricted-classes:
+ *  69 radius and surface classes in routes and feature components when "only primitives style"
+ *  landed (ui.md stage 4), 35 after TextButton, Callout, SelectField and fieldStyle took the
+ *  patterns with 3 or more copies). Only ever lowered. */
+const PINNED_BULK_TOTAL = 35;
 const PINNED_INLINE_TOTAL = 0;
 
 /** Sum of every `count` in an ESLint bulk-suppressions file; throws on any other shape. */

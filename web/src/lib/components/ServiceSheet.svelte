@@ -171,7 +171,7 @@
 		{#if service.archived}
 			<div class="flex">
 				<ActionButton
-					variant="secondary"
+					variant="glass"
 					busy={toggling}
 					onclick={() => {
 						void setArchived.run(false);
@@ -184,7 +184,7 @@
 			<p class="text-sm text-ink-muted">{t('service_archive_body')}</p>
 			<div class="flex">
 				<ActionButton
-					variant="secondary"
+					variant="glass"
 					busy={toggling}
 					onclick={() => {
 						void setArchived.run(true);

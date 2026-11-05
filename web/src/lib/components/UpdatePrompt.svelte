@@ -33,7 +33,7 @@
 		<p class="flex-1 text-base text-ink">{t('update_available')}</p>
 		<div class="w-32 shrink-0">
 			<Button
-				variant="primary"
+				variant="strong"
 				{busy}
 				onclick={() => {
 					void update.run();

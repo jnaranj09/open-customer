@@ -21,7 +21,7 @@
 	import BottomSheet from './ui/BottomSheet.svelte';
 	import Button from './ui/Button.svelte';
 	import SaveButton from './SaveButton.svelte';
-	import SelectField from './SelectField.svelte';
+	import SelectField from './ui/SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
@@ -245,7 +245,7 @@
 				{#if rule.archived}
 					<div class="flex">
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							{busy}
 							onclick={() => {
 								go({ update: { archived: false }, message: 'rule_restored' });
@@ -258,7 +258,7 @@
 					<p class="text-sm text-ink-muted">{t('rule_archive_body')}</p>
 					<div class="flex">
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							{busy}
 							onclick={() => {
 								go({ update: { archived: true }, message: 'rule_archived' });
@@ -275,7 +275,7 @@
 		<div class="flex flex-col gap-3" {@attach focusFirst}>
 			<p class="text-base text-ink-muted">{t('overdue_body')}</p>
 			<WriteButton
-				variant="primary"
+				variant="strong"
 				{busy}
 				onclick={() => {
 					if (asking !== null) {
@@ -284,7 +284,7 @@
 				}}>{t('overdue_from_today')}</WriteButton
 			>
 			<WriteButton
-				variant="secondary"
+				variant="glass"
 				{busy}
 				onclick={() => {
 					if (asking !== null) {

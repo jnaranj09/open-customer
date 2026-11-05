@@ -60,6 +60,6 @@
 		{#if error !== null}
 			<p role="alert" class="text-sm text-error">{error}</p>
 		{/if}
-		<Button variant="primary" type="submit" {busy}>{t('login_submit')}</Button>
+		<Button variant="strong" type="submit" {busy}>{t('login_submit')}</Button>
 	</form>
 </AuthCard>

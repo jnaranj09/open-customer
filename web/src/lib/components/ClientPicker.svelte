@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TextButton from './ui/TextButton.svelte';
 	import Card from './ui/Card.svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
@@ -82,15 +83,12 @@
 		<span class="text-sm font-bold text-ink">{t('appointment_client')}</span>
 		<Card radius="sm" pad="field" class="flex min-h-tap items-center gap-3 text-base text-ink">
 			<span class="min-w-0 flex-1 truncate font-bold">{selected.name}</span>
-			<button
-				type="button"
-				class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+			<TextButton
+				variant="accent"
 				onclick={() => {
 					value = null;
-				}}
+				}}>{t('client_change')}</TextButton
 			>
-				{t('client_change')}
-			</button>
 		</Card>
 	{:else}
 		<TextField
@@ -122,13 +120,9 @@
 			</Card>
 		{/if}
 		{#if allowAdd}
-			<button
-				type="button"
-				class="min-h-tap self-start rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
-				onclick={openAdd}
+			<TextButton variant="accent" onclick={openAdd} class="self-start"
+				>{t('client_add')}</TextButton
 			>
-				{t('client_add')}
-			</button>
 		{/if}
 	{/if}
 </div>
@@ -156,7 +150,7 @@
 			<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
 		{/if}
 		<WriteButton
-			variant="primary"
+			variant="strong"
 			{busy}
 			onclick={() => {
 				void save.run(false);

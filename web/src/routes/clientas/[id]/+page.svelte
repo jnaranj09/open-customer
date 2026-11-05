@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Callout from '../../../lib/components/ui/Callout.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -228,9 +229,9 @@
 		<div class="flex flex-col gap-4 lg:max-w-190">
 			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-4">
 				{#if client.archived}
-					<p class="rounded-md bg-glass-tint px-4 py-3 text-sm font-bold text-ink">
+					<Callout as="p" class="text-sm font-bold">
 						{t('client_archived_note')}
-					</p>
+					</Callout>
 				{/if}
 				<dl class="flex flex-col gap-1 text-base">
 					{#if client.phone_e164 !== null}
@@ -264,7 +265,7 @@
 					</ActionButton>
 					{#if client.archived}
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							{busy}
 							onclick={() => {
 								void setArchived.run(false, false);
@@ -274,7 +275,7 @@
 						</ActionButton>
 					{:else}
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							onclick={() => {
 								actionError = null;
 								asking = true;
@@ -324,7 +325,7 @@
 				{/if}
 				{#if everything === null}
 					<Button
-						variant="secondary"
+						variant="glass"
 						busy={loadingAll}
 						{...cache.offline
 							? { disabled: true as const, disabledReason: t('client_history_more_offline') }
@@ -391,7 +392,7 @@
 		{t('client_archive')}
 	</WriteButton>
 	<Button
-		variant="secondary"
+		variant="glass"
 		onclick={() => {
 			asking = false;
 		}}

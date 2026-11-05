@@ -21,11 +21,11 @@
 		<p class="text-base text-ink-muted">{t('export_body')}</p>
 		<div class="sm:w-64">
 			{#if cache.offline}
-				<Button variant="primary" disabled disabledReason={t('export_offline')}>
+				<Button variant="strong" disabled disabledReason={t('export_offline')}>
 					{t('export_button')}
 				</Button>
 			{:else}
-				<a href={api.exportUrl()} download rel="external" class="{buttonClasses('primary')} w-full">
+				<a href={api.exportUrl()} download rel="external" class="{buttonClasses('strong')} w-full">
 					{t('export_button')}
 				</a>
 			{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Callout from './Callout.svelte';
 	import { resolve } from '$app/paths';
 	import type { DueItem } from '../../api/schemas';
 	import { t } from '../../i18n';
@@ -58,14 +59,14 @@
 <article class="flex flex-col gap-4">
 	<h2 class="text-xl font-bold text-ink">{item.client_name}</h2>
 	{#if promptText !== null}
-		<p class="rounded-md bg-glass-tint px-4 py-3 text-base font-bold text-ink">{promptText}</p>
+		<Callout as="p" class="text-base font-bold">{promptText}</Callout>
 	{/if}
 	<p class="text-base whitespace-pre-wrap text-ink">{item.text}</p>
 	<div class="flex flex-wrap items-start gap-3">
 		{#if prompt !== null}
 			<div class="min-w-40 flex-1">
 				<WriteButton
-					variant="primary"
+					variant="strong"
 					{busy}
 					onclick={() => {
 						onadd(item);
@@ -78,7 +79,7 @@
 		<div class="min-w-40 flex-1">
 			{#if canSend(item)}
 				<WriteButton
-					variant={prompt === null ? 'primary' : 'secondary'}
+					variant={prompt === null ? 'strong' : 'glass'}
 					{busy}
 					onclick={() => {
 						onsend(item);
@@ -89,7 +90,7 @@
 			{:else}
 				<a
 					href={resolve('/clientas/[id]', { id: item.client_id })}
-					class="{buttonClasses('secondary')} w-full"
+					class="{buttonClasses('glass')} w-full"
 				>
 					{t('due_add_phone')}
 				</a>

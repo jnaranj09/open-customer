@@ -34,6 +34,6 @@
 			</li>
 		{/each}
 	</ul>
-	<WriteButton variant="primary" {busy} onclick={onconfirm}>{t('overlap_confirm')}</WriteButton>
-	<Button variant="secondary" onclick={onclose}>{t('cancel')}</Button>
+	<WriteButton variant="strong" {busy} onclick={onconfirm}>{t('overlap_confirm')}</WriteButton>
+	<Button variant="glass" onclick={onclose}>{t('cancel')}</Button>
 </BottomSheet>

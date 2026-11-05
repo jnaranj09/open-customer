@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { t } from '../i18n';
-	import type { Option } from '../setup';
+	import { fieldClasses } from './fieldStyle';
+	import { t } from '../../i18n';
+	import type { Option } from '../../setup';
 
 	let {
 		label,
@@ -28,10 +29,7 @@
 		bind:value
 		aria-invalid={error !== undefined}
 		aria-describedby={error === undefined ? undefined : noteId}
-		class="h-12 w-full rounded-sm border bg-glass-strong px-4 text-base text-ink {error ===
-		undefined
-			? 'border-accent'
-			: 'border-error'}"
+		class="{fieldClasses(error !== undefined)} h-12 w-full px-4 text-ink"
 	>
 		<option value="" disabled={clearLabel === undefined}>
 			{clearLabel ?? t('select_placeholder')}

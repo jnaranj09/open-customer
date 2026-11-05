@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TextButton from './ui/TextButton.svelte';
 	import Card from './ui/Card.svelte';
 	import { UNDO_MS } from '../undo';
 
@@ -45,13 +46,7 @@
 		>
 			<p class="text-sm">{message}</p>
 			{#if actionLabel !== undefined}
-				<button
-					type="button"
-					onclick={act}
-					class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
-				>
-					{actionLabel}
-				</button>
+				<TextButton variant="accent" onclick={act}>{actionLabel}</TextButton>
 			{/if}
 		</Card>
 	</div>

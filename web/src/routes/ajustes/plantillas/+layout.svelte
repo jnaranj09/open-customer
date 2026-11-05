@@ -51,7 +51,7 @@
 		>
 			<header class="flex min-h-12 items-center justify-between gap-3">
 				<h1 class="text-3xl font-extrabold text-ink">{t('templates_title')}</h1>
-				<WriteLink href={resolve('/ajustes/plantillas/nueva')} variant="primary" width="w-44">
+				<WriteLink href={resolve('/ajustes/plantillas/nueva')} variant="strong" width="w-44">
 					{t('templates_new')}
 				</WriteLink>
 			</header>

@@ -110,7 +110,7 @@
 		{t('photo_archive')}
 	</WriteButton>
 	<Button
-		variant="secondary"
+		variant="glass"
 		onclick={() => {
 			asking = null;
 		}}

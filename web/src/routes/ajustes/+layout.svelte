@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { setContext, type Snippet } from 'svelte';
-	import Icon from '../../lib/components/icons/Icon.svelte';
+	import TextButton from '../../lib/components/ui/TextButton.svelte';
 	import SettingsList from '../../lib/components/SettingsList.svelte';
 	import Toast from '../../lib/components/Toast.svelte';
 	import { t } from '../../lib/i18n';
@@ -45,13 +45,9 @@
 {:else}
 	<div class="flex flex-col gap-2">
 		{#if showSettingsBack(page.url.pathname)}
-			<a
-				href={resolve('/ajustes')}
-				class="inline-flex min-h-tap items-center gap-1 self-start rounded-pill pr-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
-			>
-				<Icon name="chevron-left" class="size-5" />
+			<TextButton variant="back" href={resolve('/ajustes')} class="self-start">
 				{t('settings_back')}
-			</a>
+			</TextButton>
 		{/if}
 		{@render children()}
 	</div>

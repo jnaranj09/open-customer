@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Card from './ui/Card.svelte';
+	import { buttonClasses } from './ui/buttonStyle';
 	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText } from '../api/errors';
@@ -107,8 +108,7 @@
 	<div class="flex items-center gap-3">
 		<h2 class="flex-1 text-xl font-bold text-ink">{t('photos_title')}</h2>
 		<label
-			class="relative inline-flex min-h-tap items-center justify-center gap-2 rounded-pill border border-accent-300 bg-accent-100 px-6 py-3 text-sm font-bold text-accent-700 focus-within:outline-2 hover:bg-accent-300 {cache.offline ||
-			uploading
+			class="{buttonClasses('ghost')} relative focus-within:outline-2 {cache.offline || uploading
 				? 'pointer-events-none opacity-60'
 				: ''}"
 		>

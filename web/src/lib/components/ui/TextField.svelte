@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fieldClasses } from './fieldStyle';
 	import type { HTMLInputAttributes } from 'svelte/elements';
 
 	let {
@@ -43,10 +44,7 @@
 		bind:value
 		aria-invalid={error !== undefined}
 		aria-describedby={note === undefined ? undefined : noteId}
-		class="h-12 w-full rounded-sm border bg-glass-strong px-4 text-base text-ink placeholder:text-ink-muted {error ===
-		undefined
-			? 'border-accent'
-			: 'border-error'}"
+		class="{fieldClasses(error !== undefined)} h-12 w-full px-4 text-ink placeholder:text-ink-muted"
 	/>
 	{#if note !== undefined}
 		<p id={noteId} class="text-sm {error === undefined ? 'text-ink-muted' : 'text-error'}">

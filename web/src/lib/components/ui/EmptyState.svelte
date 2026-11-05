@@ -28,10 +28,10 @@
 	{#if actionLabel !== undefined && href !== undefined}
 		{#if creates}
 			<div class="mt-2 w-full max-w-64">
-				<WriteLink {href} variant="primary">{actionLabel}</WriteLink>
+				<WriteLink {href} variant="strong">{actionLabel}</WriteLink>
 			</div>
 		{:else}
-			<a {href} class="{buttonClasses('primary')} mt-2">{actionLabel}</a>
+			<a {href} class="{buttonClasses('strong')} mt-2">{actionLabel}</a>
 		{/if}
 	{/if}
 </div>

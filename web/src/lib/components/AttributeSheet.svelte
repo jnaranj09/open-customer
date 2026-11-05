@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Callout from './ui/Callout.svelte';
 	import { getContext, untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError, type Result } from '../api/errors';
@@ -19,7 +20,7 @@
 	import Button from './ui/Button.svelte';
 	import OptionTree from './OptionTree.svelte';
 	import SaveButton from './SaveButton.svelte';
-	import SelectField from './SelectField.svelte';
+	import SelectField from './ui/SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
@@ -226,14 +227,14 @@
 	{#if confirming && attribute !== undefined}
 		<p class="text-base text-ink">{t('attribute_archive_body')}</p>
 		{#if templates.length > 0}
-			<div class="rounded-md bg-glass-tint px-4 py-3 text-sm text-ink">
+			<Callout class="text-sm">
 				<p class="font-bold">{t('attribute_archive_templates')}</p>
 				<ul class="mt-1 list-disc pl-5">
 					{#each templates as name (name)}
 						<li>{name}</li>
 					{/each}
 				</ul>
-			</div>
+			</Callout>
 		{/if}
 		{#if failure !== null}
 			<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
@@ -248,7 +249,7 @@
 			{t('attribute_archive')}
 		</WriteButton>
 		<Button
-			variant="secondary"
+			variant="glass"
 			onclick={() => {
 				confirming = false;
 			}}
@@ -328,7 +329,7 @@
 			<div class="flex">
 				{#if attribute.archived}
 					<ActionButton
-						variant="secondary"
+						variant="glass"
 						busy={toggling}
 						onclick={() => {
 							void setArchived.run(false);
@@ -338,7 +339,7 @@
 					</ActionButton>
 				{:else}
 					<ActionButton
-						variant="secondary"
+						variant="glass"
 						onclick={() => {
 							confirming = true;
 						}}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Callout from './ui/Callout.svelte';
 	import { untrack } from 'svelte';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -161,7 +162,7 @@
 	{oncancel}
 >
 	{#if locked}
-		<p class="rounded-md bg-glass-tint px-4 py-3 text-sm text-ink">{t('template_archived_note')}</p>
+		<Callout as="p" class="text-sm">{t('template_archived_note')}</Callout>
 	{/if}
 	<TextField label={t('template_name')} autocomplete="off" bind:value={name} error={nameError} />
 	<ChipEditor
@@ -182,7 +183,7 @@
 		<div class="flex lg:max-w-64">
 			{#if locked}
 				<ActionButton
-					variant="secondary"
+					variant="glass"
 					busy={toggling}
 					onclick={() => {
 						void setArchived.run(false);
@@ -192,7 +193,7 @@
 				</ActionButton>
 			{:else}
 				<ActionButton
-					variant="secondary"
+					variant="glass"
 					onclick={() => {
 						archiving = true;
 					}}
@@ -222,7 +223,7 @@
 		{t('template_archive')}
 	</WriteButton>
 	<Button
-		variant="secondary"
+		variant="glass"
 		onclick={() => {
 			archiving = false;
 		}}
@@ -241,7 +242,7 @@
 	<p class="text-base text-ink">{t('template_discard_body')}</p>
 	<Button variant="danger" onclick={discard}>{t('template_discard')}</Button>
 	<Button
-		variant="secondary"
+		variant="glass"
 		onclick={() => {
 			discardTo = null;
 		}}

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Callout from './ui/Callout.svelte';
+	import TextButton from './ui/TextButton.svelte';
 	import Card from './ui/Card.svelte';
 	import type { Snippet } from 'svelte';
 	import { t } from '../i18n';
@@ -42,16 +44,10 @@
 	}}
 >
 	{#if restored && onstartover !== undefined}
-		<div class="flex items-center gap-3 rounded-md bg-glass-tint py-1 pr-1 pl-4 text-sm text-ink">
+		<Callout pad="trail" class="flex items-center gap-3 text-sm">
 			<p class="flex-1">{t('draft_restored')}</p>
-			<button
-				type="button"
-				class="min-h-tap rounded-pill px-4 font-bold text-accent-700 hover:bg-accent-100"
-				onclick={onstartover}
-			>
-				{t('draft_discard')}
-			</button>
-		</div>
+			<TextButton variant="accent" onclick={onstartover}>{t('draft_discard')}</TextButton>
+		</Callout>
 	{/if}
 
 	{@render children()}
@@ -59,12 +55,12 @@
 	<div class="flex flex-col gap-3 lg:flex-row-reverse lg:justify-start">
 		{#if !hideSave}
 			<div class="lg:w-56">
-				<WriteButton variant="primary" type="submit" {busy}>{label}</WriteButton>
+				<WriteButton variant="strong" type="submit" {busy}>{label}</WriteButton>
 			</div>
 		{/if}
 		{#if oncancel !== undefined}
 			<div class="lg:w-40">
-				<Button variant="secondary" onclick={oncancel}>{t('cancel')}</Button>
+				<Button variant="glass" onclick={oncancel}>{t('cancel')}</Button>
 			</div>
 		{/if}
 	</div>

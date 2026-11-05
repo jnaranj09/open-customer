@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fieldClasses } from './ui/fieldStyle';
 	import { untrack } from 'svelte';
 	import type { Attribute } from '../api/schemas';
 	import {
@@ -206,10 +207,9 @@
 			contenteditable="true"
 			spellcheck="true"
 			data-placeholder={t('template_message_placeholder')}
-			class="min-h-40 w-full rounded-sm border bg-glass-strong px-4 py-3 text-base leading-loose wrap-break-word whitespace-pre-wrap text-ink empty:before:text-ink-muted empty:before:content-placeholder {error ===
-				undefined && problems.length === 0
-				? 'border-accent'
-				: 'border-error'}"
+			class="{fieldClasses(
+				error !== undefined || problems.length > 0
+			)} min-h-40 w-full px-4 py-3 leading-loose wrap-break-word whitespace-pre-wrap text-ink empty:before:text-ink-muted empty:before:content-placeholder"
 			{onbeforeinput}
 			{onpaste}
 			oninput={changed}
@@ -284,6 +284,6 @@
 		error={draftError === null ? undefined : t('template_fallback_quote')}
 		bind:value={draft}
 	/>
-	<Button variant="primary" onclick={saveFallback}>{t('template_fallback_done')}</Button>
+	<Button variant="strong" onclick={saveFallback}>{t('template_fallback_done')}</Button>
 	<Button variant="ghost" onclick={dropChip}>{t('template_chip_remove')}</Button>
 </BottomSheet>

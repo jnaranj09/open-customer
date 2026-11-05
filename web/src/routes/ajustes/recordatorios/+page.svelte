@@ -37,7 +37,7 @@
 		{#if data !== null && hasTemplate}
 			<div class="w-44 shrink-0">
 				<WriteButton
-					variant="primary"
+					variant="strong"
 					onclick={() => {
 						editing = 'new';
 					}}>{t('rules_new')}</WriteButton

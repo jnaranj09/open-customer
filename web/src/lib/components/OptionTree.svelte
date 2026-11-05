@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Callout from './ui/Callout.svelte';
+	import TextButton from './ui/TextButton.svelte';
 	import { tick } from 'svelte';
 	import type { AttrOption } from '../api/schemas';
 	import { cache } from '../cache/store.svelte';
@@ -144,24 +146,25 @@
 </script>
 
 {#snippet inlineForm(label: string, confirm: string)}
-	<form
-		class="flex flex-col gap-2 rounded-md bg-glass-tint p-3"
-		onsubmit={(e) => {
+	<Callout
+		as="form"
+		class="flex flex-col gap-2"
+		onsubmit={(e: SubmitEvent) => {
 			e.preventDefault();
 			void submit();
 		}}
 	>
 		<TextField {label} bind:value={text} autocomplete="off" error={formError} />
 		<div class="grid grid-cols-2 gap-2">
-			<WriteButton variant="primary" type="submit" busy={working}>{confirm}</WriteButton>
+			<WriteButton variant="strong" type="submit" busy={working}>{confirm}</WriteButton>
 			<Button
-				variant="secondary"
+				variant="glass"
 				onclick={() => {
 					form = null;
 				}}>{t('cancel')}</Button
 			>
 		</div>
-	</form>
+	</Callout>
 {/snippet}
 
 {#snippet level(parent: string | null)}
@@ -218,44 +221,39 @@
 					</div>
 					{#if menu === option.id}
 						<div role="group" aria-label={option.label} class="mt-1 flex flex-wrap gap-1 pl-2">
-							<button
-								type="button"
+							<TextButton
+								variant="accent"
 								disabled={off || i === 0}
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100 disabled:opacity-40"
 								onclick={() => {
 									void move(parent, option.id, i - 1);
-								}}>{t('option_up')}</button
+								}}>{t('option_up')}</TextButton
 							>
-							<button
-								type="button"
+							<TextButton
+								variant="accent"
 								disabled={off || i === siblings.length - 1}
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100 disabled:opacity-40"
 								onclick={() => {
 									void move(parent, option.id, i + 1);
-								}}>{t('option_down')}</button
+								}}>{t('option_down')}</TextButton
 							>
-							<button
-								type="button"
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+							<TextButton
+								variant="accent"
 								onclick={() => {
 									openForm({ kind: 'rename', id: option.id }, option.label);
-								}}>{t('option_rename')}</button
+								}}>{t('option_rename')}</TextButton
 							>
-							<button
-								type="button"
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+							<TextButton
+								variant="accent"
 								onclick={() => {
 									openForm({ kind: 'add', parent: option.id }, '');
-								}}>{t('option_add_inside')}</button
+								}}>{t('option_add_inside')}</TextButton
 							>
-							<button
-								type="button"
+							<TextButton
+								variant="danger"
 								disabled={off}
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-error hover:bg-accent-100"
 								onclick={() => {
 									menu = null;
 									void work(() => onarchive(option.id));
-								}}>{t('option_archive')}</button
+								}}>{t('option_archive')}</TextButton
 							>
 						</div>
 					{/if}
@@ -275,12 +273,12 @@
 	{#if adding(parent)}
 		{@render inlineForm(t('option_label'), t('option_add_confirm'))}
 	{:else}
-		<button
-			type="button"
-			class="mt-1 min-h-tap self-start rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+		<TextButton
+			variant="accent"
 			onclick={() => {
 				openForm({ kind: 'add', parent }, '');
-			}}>{t('option_add')}</button
+			}}
+			class="mt-1 self-start">{t('option_add')}</TextButton
 		>
 	{/if}
 {/snippet}

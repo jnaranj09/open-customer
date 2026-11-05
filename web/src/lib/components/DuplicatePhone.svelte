@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Callout from './ui/Callout.svelte';
 	import { t } from '../i18n';
 	import WriteButton from './WriteButton.svelte';
 
@@ -12,7 +13,7 @@
 	}: { names: string[]; busy: boolean; label: string; onconfirm: () => void } = $props();
 </script>
 
-<p role="alert" class="rounded-md bg-glass-tint px-4 py-3 text-sm font-bold text-ink">
+<Callout as="p" role="alert" class="text-sm font-bold">
 	{t('client_phone_taken', { names: names.join(', ') })}
-</p>
-<WriteButton variant="primary" {busy} onclick={onconfirm}>{label}</WriteButton>
+</Callout>
+<WriteButton variant="strong" {busy} onclick={onconfirm}>{label}</WriteButton>

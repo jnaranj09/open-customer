@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fieldClasses } from './ui/fieldStyle';
 	import { t } from '../i18n';
 
 	// The file box of the app icon (setup, Ajustes → Negocio). It reports the chosen file, or null.
@@ -13,6 +14,6 @@
 		onchange={(e) => {
 			onpick(e.currentTarget.files?.[0] ?? null);
 		}}
-		class="min-h-tap w-full rounded-sm border border-accent bg-glass-strong p-2 text-base font-normal"
+		class="{fieldClasses(false)} min-h-tap w-full p-2 font-normal"
 	/>
 </label>

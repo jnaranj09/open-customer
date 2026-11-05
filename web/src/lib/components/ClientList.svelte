@@ -121,7 +121,7 @@
 		<p role="alert" class="text-sm text-error">{failure}</p>
 	{/if}
 	<Button
-		variant="secondary"
+		variant="glass"
 		busy={loading}
 		{...cache.offline && !showArchived
 			? { disabled: true as const, disabledReason: t('clients_archived_offline') }

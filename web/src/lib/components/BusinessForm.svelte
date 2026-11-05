@@ -17,7 +17,7 @@
 	import ColorPicker from './ColorPicker.svelte';
 	import FormCard from './FormCard.svelte';
 	import IconFileInput from './IconFileInput.svelte';
-	import SelectField from './SelectField.svelte';
+	import SelectField from './ui/SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
 
 	// The Negocio form: name, time zone, color and the hour of the daily notice, saved together.
@@ -189,15 +189,15 @@
 	{/if}
 	<div class="lg:w-56">
 		{#if iconFile === null}
-			<Button variant="primary" type="submit" disabled disabledReason={t('setup_icon_none')}>
+			<Button variant="strong" type="submit" disabled disabledReason={t('setup_icon_none')}>
 				{t('business_icon_upload')}
 			</Button>
 		{:else if cache.offline}
-			<Button variant="primary" type="submit" disabled disabledReason={t('offline_cannot_save')}>
+			<Button variant="strong" type="submit" disabled disabledReason={t('offline_cannot_save')}>
 				{t('business_icon_upload')}
 			</Button>
 		{:else}
-			<Button variant="primary" type="submit" busy={iconBusy}>{t('business_icon_upload')}</Button>
+			<Button variant="strong" type="submit" busy={iconBusy}>{t('business_icon_upload')}</Button>
 		{/if}
 	</div>
 </Card>

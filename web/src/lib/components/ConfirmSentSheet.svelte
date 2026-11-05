@@ -102,8 +102,7 @@
 	{#if error !== null}
 		<p role="alert" class="text-sm text-error">{error}</p>
 	{/if}
-	<Button variant="primary" {busy} onclick={() => void yes.run()}>{t('due_confirm_yes')}</Button>
-	<Button variant="secondary" {busy} onclick={() => void later.run()}
-		>{t('due_confirm_not_yet')}</Button
+	<Button variant="strong" {busy} onclick={() => void yes.run()}>{t('due_confirm_yes')}</Button>
+	<Button variant="glass" {busy} onclick={() => void later.run()}>{t('due_confirm_not_yet')}</Button
 	>
 </BottomSheet>

@@ -73,9 +73,9 @@
 		{#if error !== null}
 			<p role="alert" class="text-sm text-error">{error}</p>
 		{/if}
-		<Button variant="primary" type="submit" {busy}>{t('password_save')}</Button>
+		<Button variant="strong" type="submit" {busy}>{t('password_save')}</Button>
 		{#if !forced}
-			<a href={resolve('/ajustes')} class={buttonClasses('secondary')}>{t('password_back')}</a>
+			<a href={resolve('/ajustes')} class={buttonClasses('glass')}>{t('password_back')}</a>
 		{/if}
 	</form>
 </AuthCard>

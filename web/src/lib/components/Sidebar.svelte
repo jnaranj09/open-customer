@@ -43,7 +43,7 @@
 		<p class="min-w-0 text-xl font-extrabold wrap-break-word text-ink">{name}</p>
 	</div>
 
-	<WriteLink href={resolve(`/citas/nueva?dia=${newDay}` as const)} variant="primary">
+	<WriteLink href={resolve(`/citas/nueva?dia=${newDay}` as const)} variant="strong">
 		<Icon name="plus" />
 		{t('appointment_new')}
 	</WriteLink>

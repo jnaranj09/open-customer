@@ -59,7 +59,7 @@
 		{#if data !== null}
 			<div class="w-44 shrink-0">
 				<WriteButton
-					variant="primary"
+					variant="strong"
 					onclick={() => {
 						editing = 'new';
 					}}>{t('services_new')}</WriteButton

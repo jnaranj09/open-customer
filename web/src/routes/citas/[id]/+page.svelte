@@ -80,10 +80,10 @@
 		no_show: 'appointment_no_show'
 	};
 	const STATUS_VARIANT = {
-		scheduled: 'primary',
-		confirmed: 'primary',
+		scheduled: 'strong',
+		confirmed: 'strong',
 		cancelled: 'danger',
-		no_show: 'secondary'
+		no_show: 'glass'
 	} as const;
 	let actionError = $state<ApiError | null>(null);
 	let busy = $state(false);
@@ -286,7 +286,7 @@
 						/>
 					</div>
 					<div class="mt-7 w-40 shrink-0">
-						<WriteButton variant="secondary" type="submit" busy={paying}>
+						<WriteButton variant="glass" type="submit" busy={paying}>
 							{t('appointment_paid_save')}
 						</WriteButton>
 					</div>

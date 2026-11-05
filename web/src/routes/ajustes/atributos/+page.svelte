@@ -54,7 +54,7 @@
 		{#if data !== null}
 			<div class="w-44 shrink-0">
 				<WriteButton
-					variant="primary"
+					variant="strong"
 					onclick={() => {
 						creating = true;
 					}}>{t('attributes_new')}</WriteButton

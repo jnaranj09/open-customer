@@ -10,7 +10,7 @@
 	import ColorPicker from '../../lib/components/ColorPicker.svelte';
 	import IconFileInput from '../../lib/components/IconFileInput.svelte';
 	import InstallGuide from '../../lib/components/InstallGuide.svelte';
-	import SelectField from '../../lib/components/SelectField.svelte';
+	import SelectField from '../../lib/components/ui/SelectField.svelte';
 	import TextField from '../../lib/components/ui/TextField.svelte';
 	import { applyAccent, DEFAULT_ACCENT } from '../../lib/color';
 	import { t } from '../../lib/i18n';
@@ -186,7 +186,7 @@
 {#snippet back()}
 	{#if index > 0}
 		<Button
-			variant="secondary"
+			variant="glass"
 			onclick={() => {
 				go(STEPS[index - 1] ?? 'business');
 			}}>{t('form_back')}</Button
@@ -220,14 +220,14 @@
 				<p role="alert" class="text-sm text-error">{stepError}</p>
 			{/if}
 			{#if iconFile === null}
-				<Button variant="primary" type="submit" disabled disabledReason={t('setup_icon_none')}
+				<Button variant="strong" type="submit" disabled disabledReason={t('setup_icon_none')}
 					>{t('setup_icon_upload')}</Button
 				>
 			{:else}
-				<Button variant="primary" type="submit" {busy}>{t('setup_icon_upload')}</Button>
+				<Button variant="strong" type="submit" {busy}>{t('setup_icon_upload')}</Button>
 			{/if}
 			<Button
-				variant="secondary"
+				variant="glass"
 				onclick={() => {
 					go('install');
 				}}>{t('setup_icon_skip')}</Button
@@ -241,7 +241,7 @@
 				<h2 class="text-xl font-bold text-ink">{t('setup_done_title')}</h2>
 				<p class="text-base text-ink-muted">{t('setup_done_body')}</p>
 			{/if}
-			<Button variant="primary" onclick={finish}>{t('setup_enter')}</Button>
+			<Button variant="strong" onclick={finish}>{t('setup_enter')}</Button>
 		</div>
 	{:else}
 		<form
@@ -324,7 +324,7 @@
 					error={stepError ?? undefined}
 				/>
 			{/if}
-			<Button variant="primary" type="submit" {busy}>
+			<Button variant="strong" type="submit" {busy}>
 				{creating ? t('setup_create') : t('form_next')}
 			</Button>
 			{@render back()}
