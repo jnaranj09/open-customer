@@ -11,7 +11,7 @@ const id = z.uuid();
 const instant = z.iso.datetime({ offset: true });
 const day = z.iso.date();
 
-const SettingsSchema = z.object({
+export const SettingsSchema = z.object({
 	name: z.string(),
 	timezone: z.string(),
 	locale: z.string(),
@@ -31,7 +31,7 @@ const OptionSchema = z.object({
 	archived: z.boolean()
 }) satisfies z.ZodType<Schemas['Option']>;
 
-const AttributeSchema = z.object({
+export const AttributeSchema = z.object({
 	id,
 	key: z.string(),
 	label: z.string(),
@@ -43,7 +43,7 @@ const AttributeSchema = z.object({
 	options: z.array(OptionSchema)
 }) satisfies z.ZodType<Schemas['Attribute']>;
 
-const ServiceSchema = z.object({
+export const ServiceSchema = z.object({
 	id,
 	name: z.string(),
 	duration_min: z.number().int(),
@@ -53,7 +53,7 @@ const ServiceSchema = z.object({
 	archived: z.boolean()
 }) satisfies z.ZodType<Schemas['Service']>;
 
-const TemplateSchema = z.object({
+export const TemplateSchema = z.object({
 	id,
 	name: z.string(),
 	body: z.string(),
@@ -62,7 +62,7 @@ const TemplateSchema = z.object({
 
 const RuleKindSchema = z.enum(['before_appointment', 'come_back']);
 
-const RuleSchema = z.object({
+export const RuleSchema = z.object({
 	id,
 	kind: RuleKindSchema,
 	service_id: z.nullable(id),
@@ -73,7 +73,7 @@ const RuleSchema = z.object({
 	archived: z.boolean()
 }) satisfies z.ZodType<Schemas['Rule']>;
 
-const ClientSchema = z.object({
+export const ClientSchema = z.object({
 	id,
 	name: z.string(),
 	phone_e164: z.nullable(z.string()),
@@ -92,7 +92,7 @@ const AppointmentServiceSchema = z.object({
 	duration_min: z.number().int()
 }) satisfies z.ZodType<Schemas['AppointmentService']>;
 
-const AppointmentSchema = z.object({
+export const AppointmentSchema = z.object({
 	id,
 	client_id: id,
 	client_name: z.string(),
@@ -117,7 +117,7 @@ const BookingPromptSchema = z.object({
 	return_service_name: z.string()
 }) satisfies z.ZodType<Schemas['BookingPrompt']>;
 
-const DueItemSchema = z.object({
+export const DueItemSchema = z.object({
 	id: z.string(),
 	rule_id: id,
 	appointment_id: id,
@@ -134,7 +134,7 @@ const DueItemSchema = z.object({
 	prompt: z.nullable(BookingPromptSchema)
 }) satisfies z.ZodType<Schemas['DueItem']>;
 
-const TemplateVarSchema = z.object({
+export const TemplateVarSchema = z.object({
 	ns: z.string(),
 	key: z.string(),
 	label: z.string()
@@ -194,4 +194,7 @@ export const ProblemSchema = z.object({
 }) satisfies z.ZodType<Schemas['Problem']>;
 
 export type Appointment = z.infer<typeof AppointmentSchema>;
+export type Settings = z.infer<typeof SettingsSchema>;
+export type DueItem = z.infer<typeof DueItemSchema>;
+export type Bootstrap = z.infer<typeof BootstrapSchema>;
 export type Problem = z.infer<typeof ProblemSchema>;

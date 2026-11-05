@@ -61,6 +61,9 @@ function offsetMs(instant: Date, zone: string): number {
 	return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
 }
 
+/** The real clock; the one place `new Date()` is read, so everything else takes `now` as an argument. */
+export const systemNow = (): Date => new Date();
+
 /** The business day (`YYYY-MM-DD`) in `zone` at `now`. */
 export function todayIn(zone: string, now: Date): string {
 	const w = wallParts(now, zone);

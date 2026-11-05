@@ -118,3 +118,5 @@ export function createApi(opts: ApiOptions) {
 			readEmpty('/client-errors', () => client.POST('/client-errors', { body }))
 	};
 }
+
+export type Api = ReturnType<typeof createApi>;

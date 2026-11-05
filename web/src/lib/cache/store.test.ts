@@ -1,0 +1,75 @@
+import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Api } from '../api/client';
+import type { Bootstrap } from '../api/schemas';
+import type { Result } from '../api/errors';
+import { DB_NAME, clearCache, writeSnapshot } from './db';
+import { bootstrap } from './fixtures';
+import { cache as appCache, createCache } from './store.svelte';
+
+const NOW = new Date('2026-11-04T12:00:00Z');
+
+function setup(answer: Result<Bootstrap>) {
+	const bootstrapCall = vi.fn<Api['bootstrap']>(() => Promise.resolve(answer));
+	const cache = createCache({
+		api: { bootstrap: bootstrapCall } as unknown as Api,
+		now: () => NOW,
+		badge: { set: () => Promise.resolve(), clear: () => Promise.resolve() }
+	});
+	return { cache, bootstrapCall };
+}
+
+beforeEach(async () => {
+	await clearCache();
+});
+
+describe('the cache read model', () => {
+	it('starts empty and online in the app instance', () => {
+		expect([appCache.snapshot, appCache.offline]).toEqual([null, false]);
+	});
+
+	it('asks for a refresh when nothing is cached yet', async () => {
+		const { cache, bootstrapCall } = setup({ ok: true, data: bootstrap(1, 'Ana Rojas') });
+		await cache.reload();
+		expect(bootstrapCall).toHaveBeenCalledOnce();
+		expect(cache.snapshot?.clients.map((c) => c.name)).toEqual(['Ana Rojas']);
+		expect(cache.meta.lastSyncAt).toBe('2026-11-04T12:00:00.000Z');
+	});
+
+	it('reads what is cached without calling the server', async () => {
+		await writeSnapshot(bootstrap(0, 'Lucía Rojas'), '2026-11-03T12:00:00Z');
+		const { cache, bootstrapCall } = setup({ ok: true, data: bootstrap() });
+		await cache.reload();
+		expect(bootstrapCall).not.toHaveBeenCalled();
+		expect(cache.snapshot?.clients.map((c) => c.name)).toEqual(['Lucía Rojas']);
+	});
+
+	it('a cached row that fails its schema clears the cache and asks for a refresh', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		await writeSnapshot(bootstrap(0, 'Ana Rojas'), '2026-11-03T12:00:00Z');
+		const raw = new Dexie(DB_NAME);
+		await raw.open();
+		await raw.table('clients').toCollection().modify({ name: 42 });
+		raw.close();
+		const { cache, bootstrapCall } = setup({ ok: true, data: bootstrap(0, 'Marta Solano') });
+		await cache.reload();
+		expect(bootstrapCall).toHaveBeenCalledOnce();
+		expect(cache.snapshot?.clients.map((c) => c.name)).toEqual(['Marta Solano']);
+	});
+
+	it('is offline after a refresh the server did not answer, and keeps the cached data', async () => {
+		await writeSnapshot(bootstrap(0, 'Ana Rojas'), '2026-11-03T12:00:00Z');
+		const { cache } = setup({ ok: false, error: { kind: 'offline' } });
+		await cache.reload();
+		await cache.refresh();
+		expect(cache.offline).toBe(true);
+		expect(cache.snapshot?.clients.map((c) => c.name)).toEqual(['Ana Rojas']);
+	});
+
+	it('is online again after a refresh that works', async () => {
+		const { cache } = setup({ ok: true, data: bootstrap() });
+		await cache.refresh();
+		expect(cache.offline).toBe(false);
+	});
+});

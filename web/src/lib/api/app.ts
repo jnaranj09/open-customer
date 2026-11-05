@@ -1,0 +1,57 @@
+// The wired API client the screens use (design doc item 66): the real `fetch`, the build version
+// from SvelteKit, and the reactions to a 401, a new server version and an invalid answer.
+import { version } from '$app/env';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import { writable } from 'svelte/store';
+import { clearCache } from '../cache/db';
+import { createApi, type Api } from './client';
+
+/** True once the server reported a build version other than this app's; the update prompt reads it. */
+export const newVersion = writable(false);
+
+export type AppApiEnv = {
+	fetch: typeof fetch;
+	version: string;
+	/** Drops every cached record (the 401 path). */
+	clear: () => Promise<void>;
+	/** Shows the login screen. */
+	toLogin: () => Promise<void>;
+	/** The API root; absolute in tests, the app uses the default. */
+	baseUrl?: string;
+};
+
+/** Builds the app's client from its outside edges; tests pass fakes. */
+export function createAppApi(env: AppApiEnv): Api {
+	const api: Api = createApi({
+		fetch: env.fetch,
+		version: env.version,
+		...(env.baseUrl === undefined ? {} : { baseUrl: env.baseUrl }),
+		onUnauthorized: async () => {
+			await env.clear();
+			await env.toLogin();
+		},
+		onNewVersion: () => {
+			newVersion.set(true);
+		},
+		reportInvalid: (path) => {
+			// The report is itself a request: an invalid answer to it must not report again.
+			if (path === '/client-errors') {
+				return;
+			}
+			void api.logClientError({
+				message: 'response_invalid',
+				route: path,
+				app_version: env.version
+			});
+		}
+	});
+	return api;
+}
+
+export const api = createAppApi({
+	fetch: (input, init) => fetch(input, init),
+	version,
+	clear: clearCache,
+	toLogin: () => goto(resolve('/login'))
+});
