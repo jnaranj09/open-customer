@@ -74,6 +74,23 @@ test('offline shows the cached day with the banner', async ({ page }) => {
 	await expect(page.getByRole('link', { name: /Ana Rojas/ })).toBeVisible();
 });
 
+test('the banner clears when the connection comes back, with the app left open', async ({
+	page,
+	context
+}) => {
+	await serverOff(page);
+	await page.reload();
+	const banner = page.getByRole('status').getByText(BANNER);
+	await expect(banner).toBeVisible();
+
+	await page.unroute('**/api/**');
+	// The phone loses and regains its network: the page gets the `online` event, and no focus.
+	await context.setOffline(true);
+	await context.setOffline(false);
+
+	await expect(banner).toBeHidden();
+});
+
 test('offline keeps the cached due list read-only', async ({ page }) => {
 	await page.goto('/enviar');
 	await expect(dueItem(page, 'Ana Rojas')).toBeVisible();

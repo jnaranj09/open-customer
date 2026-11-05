@@ -11,6 +11,7 @@
 	import { errorText } from '../lib/api/errors';
 	import { cache } from '../lib/cache/store.svelte';
 	import { shouldRefreshOnFocus } from '../lib/cache/refresh';
+	import { retryWhileOffline } from '../lib/cache/retry';
 	import { applyAccent } from '../lib/color';
 	import ConfirmSentSheet from '../lib/components/ConfirmSentSheet.svelte';
 	import OfflineBanner from '../lib/components/OfflineBanner.svelte';
@@ -164,6 +165,18 @@
 			window.removeEventListener('focus', handler);
 			document.removeEventListener('visibilitychange', handler);
 		};
+	});
+
+	// While the server does not answer: try again after a growing wait (2 s up to 60 s) and at once
+	// when the phone gets a connection back, so the banner clears with the app left open.
+	$effect(() => {
+		if (!syncing || !cache.offline) {
+			return;
+		}
+		return retryWhileOffline(async () => {
+			await recover((await cache.refresh()).ok);
+			return !cache.offline;
+		}, window);
 	});
 
 	// Any uncaught error or rejection goes to the server log, route and stack only (item 66).
