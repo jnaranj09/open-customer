@@ -47,7 +47,7 @@
 
 <div class="flex max-w-190 flex-col gap-4">
 	<header class="flex min-h-12 items-center justify-between gap-3">
-		<h1 class="font-display text-3xl font-semibold text-ink">{t('attributes_title')}</h1>
+		<h1 class="text-3xl font-extrabold text-ink">{t('attributes_title')}</h1>
 		{#if data !== null}
 			<div class="w-44 shrink-0">
 				<WriteButton

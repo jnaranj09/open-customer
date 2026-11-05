@@ -68,7 +68,7 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-3">
-		<h1 class="flex-1 font-display text-3xl font-semibold text-ink">{t('nav_clients')}</h1>
+		<h1 class="flex-1 text-3xl font-extrabold text-ink">{t('nav_clients')}</h1>
 		<WriteLink href={resolve('/clientas/nueva')} variant="ghost" width="w-44">
 			{t('clients_new')}
 		</WriteLink>

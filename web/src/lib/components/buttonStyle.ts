@@ -5,7 +5,7 @@ const BASE =
 
 const VARIANTS: Record<ButtonVariant, string> = {
 	primary: 'bg-accent text-on-accent shadow-raised hover:bg-accent-700 hover:text-on-strong',
-	secondary: 'glass-card text-ink hover:bg-glass-strong',
+	secondary: 'glass-card text-ink hover:bg-accent-100',
 	ghost: 'border border-accent-300 bg-accent-100 text-accent-700 hover:bg-accent-300',
 	danger: 'bg-error text-on-strong shadow-raised hover:opacity-90'
 };

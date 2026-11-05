@@ -197,7 +197,7 @@
 		>
 			<Icon name="chevron-left" class="size-5.5" />
 		</a>
-		<h1 class="font-display text-3xl font-semibold text-ink">
+		<h1 class="text-3xl font-extrabold text-ink">
 			{editing ? t('client_edit_title') : (client?.name ?? '')}
 		</h1>
 	</header>

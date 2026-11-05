@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -8,18 +9,34 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/settings"
 )
 
 // GetSetupStatus has no session on purpose: the setup wizard asks before any user exists (see the
-// spec description). It is a GET, so it reads through the pool.
+// spec description). It is a GET, so it reads through the pool. After setup it adds the accent
+// color, which is public anyway (the manifest's theme_color), for the login screen.
 func (s *Server) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 	needed, err := s.auth.SetupNeeded(r.Context(), s.pool)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, gen.SetupStatus{NeedsSetup: needed})
+	status := gen.SetupStatus{NeedsSetup: needed}
+	if !needed {
+		set, err := s.settings.Get(r.Context(), s.pool)
+		switch {
+		case err == nil:
+			status.AccentColor = &set.AccentColor
+		case errors.As(err, &problem.NotFound{}):
+			// A user with no settings row: setup writes both in one transaction, so only a test
+			// fixture gets here. The answer simply has no color.
+		default:
+			writeError(w, r, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 // GetSetupOptions has no session on purpose: the setup wizard needs the country list before any

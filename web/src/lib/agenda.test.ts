@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hourSpan, inWindow, layoutDay, pickedValue, viewRange, type AgendaItem } from './agenda';
+import { inWindow, layoutDay, pickedValue, scrollHour, viewRange, type AgendaItem } from './agenda';
 
 const ZONE = 'America/Costa_Rica';
 const DAY = '2026-11-04';
@@ -134,17 +134,17 @@ describe('viewRange', () => {
 	});
 });
 
-describe('hourSpan', () => {
-	it('is 08:00 to 19:00 for an empty day', () => {
-		expect(hourSpan([])).toEqual({ from: 8, to: 19 });
+describe('scrollHour', () => {
+	it('is 08:00 for an empty day', () => {
+		expect(scrollHour([])).toBe(8);
 	});
 
-	it('widens to an early start and a late end', () => {
-		const placed = [
-			{ id: 'a', col: 0, cols: 1, startMin: 6 * 60 + 30, endMin: 7 * 60 },
-			{ id: 'b', col: 0, cols: 1, startMin: 20 * 60, endMin: 21 * 60 + 15 }
-		];
-		expect(hourSpan(placed)).toEqual({ from: 6, to: 22 });
+	it('is the hour of the earliest start, early or late', () => {
+		const late = { id: 'b', col: 0, cols: 1, startMin: 20 * 60, endMin: 21 * 60 + 15 };
+		expect(scrollHour([late])).toBe(20);
+		expect(
+			scrollHour([late, { id: 'a', col: 0, cols: 1, startMin: 6 * 60 + 30, endMin: 7 * 60 }])
+		).toBe(6);
 	});
 });
 

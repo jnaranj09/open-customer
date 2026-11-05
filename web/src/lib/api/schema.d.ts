@@ -910,6 +910,8 @@ export interface components {
         };
         SetupStatus: {
             needs_setup: boolean;
+            /** @description The business color, once setup is done (absent before). Public like the manifest's theme_color: the login screen uses it on a device with no cached settings. */
+            accent_color?: string;
         };
         Service: {
             /** Format: uuid */

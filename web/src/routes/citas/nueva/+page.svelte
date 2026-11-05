@@ -30,7 +30,7 @@
 		>
 			<Icon name="chevron-left" class="size-5.5" />
 		</a>
-		<h1 class="font-display text-3xl font-semibold text-ink">{t('appointment_new')}</h1>
+		<h1 class="text-3xl font-extrabold text-ink">{t('appointment_new')}</h1>
 	</header>
 
 	{#if cache.snapshot === null}

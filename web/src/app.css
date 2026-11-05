@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/fraunces';
 @import '@fontsource-variable/nunito';
 
 /* Tokens from the mockup (design/soft-glass.pen "variables"). `--accent` is the one runtime value:
@@ -7,7 +6,6 @@
 :root {
 	--bg-100: #fbf5f2;
 	--bg-200: #f6ece8;
-	--glow-blush: #f6d6d6;
 	--glow-peach: #fbe1cf;
 	--glow-lilac: #e7dcf3;
 	--glass: #ffffff8c;
@@ -27,10 +25,16 @@
 	--accent-300: color-mix(in oklab, var(--accent) 45%, white);
 	--accent-700: color-mix(in oklab, var(--accent) 80%, black);
 	--glass-tint: color-mix(in oklab, var(--accent-300) 35%, transparent);
+	/* The blush glow and the shadows were the mockup's rose; they follow the accent, so a teal
+	   business gets no pink cast. With the default accent they stay close to the mockup. */
+	--glow-blush: color-mix(in oklab, var(--accent) 25%, white);
 
-	--shadow-glass: 0 8px 32px #a14d641f, inset 0 1px #ffffffe6;
-	--shadow-raised: 0 4px 14px #a14d6433, inset 0 1px #ffffff99;
-	--shadow-sheet: 0 16px 64px #a14d642e, inset 0 1px #ffffffe6;
+	--shadow-glass:
+		0 8px 32px color-mix(in oklab, var(--accent-700) 12%, transparent), inset 0 1px #ffffffe6;
+	--shadow-raised:
+		0 4px 14px color-mix(in oklab, var(--accent-700) 20%, transparent), inset 0 1px #ffffff99;
+	--shadow-sheet:
+		0 16px 64px color-mix(in oklab, var(--accent-700) 18%, transparent), inset 0 1px #ffffffe6;
 }
 
 @theme inline {
@@ -62,7 +66,6 @@
 	--radius-xl: 32px;
 	--radius-pill: 999px;
 
-	--font-display: 'Fraunces Variable', serif;
 	--font-sans: 'Nunito Variable', sans-serif;
 }
 

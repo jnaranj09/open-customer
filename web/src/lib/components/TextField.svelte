@@ -43,9 +43,9 @@
 		bind:value
 		aria-invalid={error !== undefined}
 		aria-describedby={note === undefined ? undefined : noteId}
-		class="h-12 w-full rounded-sm border bg-glass-strong px-4 text-base text-ink placeholder:text-ink-muted focus:border-accent {error ===
+		class="h-12 w-full rounded-sm border bg-glass-strong px-4 text-base text-ink placeholder:text-ink-muted {error ===
 		undefined
-			? 'border-glass-edge'
+			? 'border-accent'
 			: 'border-error'}"
 	/>
 	{#if note !== undefined}

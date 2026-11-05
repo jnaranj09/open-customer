@@ -76,3 +76,13 @@ func TestReadyzDBDownIs503(t *testing.T) {
 		t.Fatalf("got %d %q, want 503 not ready", rec.Code, rec.Body.String())
 	}
 }
+
+func TestGetSetupStatusAfterSetupHasAccent(t *testing.T) {
+	app, _, _ := signedInOwner(t)
+	// No cookie: the login screen asks before she is signed in.
+	rec := serve(app.handler, http.MethodGet, "/api/v1/setup/status")
+	if rec.Code != http.StatusOK ||
+		strings.TrimSpace(rec.Body.String()) != `{"accent_color":"#aa3366","needs_setup":false}` {
+		t.Fatalf("got %d %q, want 200 with the accent color", rec.Code, rec.Body.String())
+	}
+}

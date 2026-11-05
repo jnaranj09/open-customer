@@ -5,7 +5,8 @@
 	import { applyUpdate } from '../update';
 	import Button from './Button.svelte';
 
-	// `standalone`: a page with no shell (login, setup) gives it its own margins.
+	// `standalone`: a page with no shell (login, setup) floats it at the top, so it does not push
+	// the centered card down; those pages have no offline banner for it to cover.
 	let { standalone = false }: { standalone?: boolean } = $props();
 	let busy = $state(false);
 
@@ -26,13 +27,10 @@
 	);
 </script>
 
-<!-- In the page's flow, above the offline banner (the layout places it), so neither covers the other. -->
-{#if $newVersion}
+{#snippet prompt()}
 	<div
 		role="status"
-		class="glass-card flex items-center gap-3 rounded-lg bg-glass-tint py-3 pr-3 pl-5 lg:ml-auto lg:w-96 {standalone
-			? 'm-4'
-			: ''}"
+		class="glass-card flex items-center gap-3 rounded-lg bg-glass-tint py-3 pr-3 pl-5 lg:ml-auto lg:w-96"
 	>
 		<p class="flex-1 text-base text-ink">{t('update_available')}</p>
 		<div class="w-32 shrink-0">
@@ -47,4 +45,16 @@
 			</Button>
 		</div>
 	</div>
+{/snippet}
+
+<!-- With the shell: in the page's flow, above the offline banner (the layout places it), so neither
+     covers the other. -->
+{#if $newVersion}
+	{#if standalone}
+		<div class="fixed inset-x-0 top-0 z-10 px-4 pt-safe">
+			<div class="mt-4">{@render prompt()}</div>
+		</div>
+	{:else}
+		{@render prompt()}
+	{/if}
 {/if}

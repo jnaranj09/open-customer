@@ -163,7 +163,7 @@
 		>
 			<Icon name="chevron-left" class="size-5.5" />
 		</a>
-		<h1 class="font-display text-3xl font-semibold text-ink">
+		<h1 class="text-3xl font-extrabold text-ink">
 			{editing ? t('appointment_edit_title') : t('appointment_title')}
 		</h1>
 	</header>

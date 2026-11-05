@@ -5,6 +5,7 @@
 	import type { Settings } from '../api/schemas';
 	import { cache } from '../cache/store.svelte';
 	import { applyAccent } from '../color';
+	import { iconVersion } from '../iconVersion';
 	import { t } from '../i18n';
 	import { toIconPngs } from '../photos';
 	import { timeZoneOptions } from '../setup';
@@ -108,6 +109,7 @@
 				return;
 			}
 			iconFile = null;
+			iconVersion.update((v) => v + 1);
 			await cache.refresh();
 			toaster.say('business_icon_saved');
 		},

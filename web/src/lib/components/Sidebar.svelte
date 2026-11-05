@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { t } from '../i18n';
 	import { isActivePath } from '../nav';
+	import BusinessIcon from './BusinessIcon.svelte';
 	import Icon from './icons/Icon.svelte';
 	import { NAV_ITEMS } from './navItems';
 	import PushActivate from './PushActivate.svelte';
@@ -9,12 +10,15 @@
 
 	let {
 		name,
+		customIcon,
 		pathname,
 		dueCount,
 		newDay,
 		sync
 	}: {
 		name: string;
+		/** Whether an icon was uploaded; undefined before the cache loads (see BusinessIcon). */
+		customIcon: boolean | undefined;
 		pathname: string;
 		dueCount: number;
 		/** The day "Nueva cita" opens on: the day Hoy shows, or today. */
@@ -22,10 +26,6 @@
 		/** The sync line: when the data is from, or that the system is off. */
 		sync: string;
 	} = $props();
-
-	// The icon is never cached (the manifest rules): offline it cannot load, and a broken image
-	// box is worse than none.
-	let iconFailed = $state(false);
 </script>
 
 <!-- The wide layout's shell (design doc "Screen layouts"): fixed, 256 px, no bottom bar. -->
@@ -33,17 +33,8 @@
 	class="glass-panel fixed inset-y-0 left-0 z-30 flex w-64 flex-col gap-6 rounded-none border-y-0 border-l-0 p-6"
 >
 	<div class="flex items-center gap-3">
-		{#if !iconFailed}
-			<img
-				src="/icons/512.png"
-				alt=""
-				class="size-10 shrink-0 rounded-md"
-				onerror={() => {
-					iconFailed = true;
-				}}
-			/>
-		{/if}
-		<p class="min-w-0 font-display text-xl font-semibold wrap-break-word text-ink">{name}</p>
+		<BusinessIcon custom={customIcon} class="size-10 shrink-0 rounded-md" />
+		<p class="min-w-0 text-xl font-extrabold wrap-break-word text-ink">{name}</p>
 	</div>
 
 	<WriteLink href={resolve(`/citas/nueva?dia=${newDay}` as const)} variant="primary">

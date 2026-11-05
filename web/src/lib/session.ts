@@ -20,13 +20,15 @@ export async function resolveSession(
 		return offline;
 	}
 	if (status.ok && status.data.needs_setup) {
-		return { kind: 'online', setupNeeded: true, me: null };
+		return { kind: 'online', setupNeeded: true, me: null, accent: null };
 	}
+	// A forced password change has no status answer, so no color; her cache has it.
+	const accent = status.ok ? (status.data.accent_color ?? null) : null;
 	const me = await api.me();
 	if (me.ok) {
-		return { kind: 'online', setupNeeded: false, me: me.data };
+		return { kind: 'online', setupNeeded: false, me: me.data, accent };
 	}
 	return me.error.kind === 'unauthorized'
-		? { kind: 'online', setupNeeded: false, me: null }
+		? { kind: 'online', setupNeeded: false, me: null, accent }
 		: offline;
 }

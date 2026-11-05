@@ -190,8 +190,11 @@
 		};
 	});
 
+	// The cached settings own the color; before any cache (login on a new device) the color comes
+	// from the setup status answer.
 	$effect(() => {
-		applyAccent(document.documentElement, cache.snapshot?.settings.accent_color ?? null);
+		const publicAccent = session?.kind === 'online' ? session.accent : null;
+		applyAccent(document.documentElement, cache.snapshot?.settings.accent_color ?? publicAccent);
 	});
 
 	const zone = $derived(
@@ -228,6 +231,7 @@
 	{:else if layout.current === 'wide'}
 		<Sidebar
 			name={cache.snapshot?.settings.name ?? ''}
+			customIcon={cache.snapshot?.settings.has_custom_icon}
 			pathname={path}
 			dueCount={cache.shownDue.length}
 			newDay={shownDay.current ?? clock.today(zone)}

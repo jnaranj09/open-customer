@@ -28,9 +28,9 @@
 		bind:value
 		aria-invalid={error !== undefined}
 		aria-describedby={error === undefined ? undefined : noteId}
-		class="h-12 w-full rounded-sm border bg-glass-strong px-4 text-base text-ink focus:border-accent {error ===
+		class="h-12 w-full rounded-sm border bg-glass-strong px-4 text-base text-ink {error ===
 		undefined
-			? 'border-glass-edge'
+			? 'border-accent'
 			: 'border-error'}"
 	>
 		<option value="" disabled={clearLabel === undefined}>

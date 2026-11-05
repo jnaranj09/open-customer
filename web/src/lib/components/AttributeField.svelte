@@ -93,7 +93,7 @@
 			aria-label="{attr.label}: {summary === '' ? t('attr_choose') : summary}"
 			class="flex h-12 w-full items-center gap-2 rounded-sm border bg-glass-strong px-4 text-left text-base hover:bg-accent-100 {error ===
 			undefined
-				? 'border-glass-edge'
+				? 'border-accent'
 				: 'border-error'}"
 			onclick={openSheet}
 		>

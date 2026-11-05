@@ -3,7 +3,9 @@
 import type { Me } from './api/schemas';
 
 export type Session =
-	| { kind: 'online'; setupNeeded: boolean; me: Me | null }
+	// `accent`: the business color from GET /setup/status, for the login screen on a device with
+	// no cached settings (null before setup).
+	| { kind: 'online'; setupNeeded: boolean; me: Me | null; accent: string | null }
 	| { kind: 'offline'; cachedMe: Me | null };
 
 export type GuardResult =

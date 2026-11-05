@@ -164,7 +164,7 @@
 	{#if cache.meta.backupRed}
 		<a
 			href={resolve('/ajustes/estado')}
-			class="flex min-h-tap items-center gap-2 rounded-md border border-error px-4 text-sm font-bold text-error hover:bg-glass-strong"
+			class="flex min-h-tap items-center gap-2 rounded-md border border-error px-4 text-sm font-bold text-error hover:bg-accent-100"
 		>
 			{t('backup_red')}
 			<Icon name="chevron-right" class="ml-auto size-4.5" />
@@ -179,7 +179,7 @@
 		{/if}
 
 		<header class="flex flex-col gap-0.5">
-			<h1 class="font-display text-3xl font-semibold text-ink">{title}</h1>
+			<h1 class="text-3xl font-extrabold text-ink">{title}</h1>
 			{#if caption !== null}
 				<p class="text-sm text-ink-muted">{caption}</p>
 			{/if}

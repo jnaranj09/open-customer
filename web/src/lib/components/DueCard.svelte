@@ -25,7 +25,7 @@
 	<NoRulesState />
 {:else if layout.current === 'wide'}
 	<section class="glass-card flex flex-col gap-3 rounded-lg p-5">
-		<h2 class="font-display text-xl font-semibold text-ink">{t('due_today_heading')}</h2>
+		<h2 class="text-xl font-bold text-ink">{t('due_today_heading')}</h2>
 		<a
 			href={resolve('/enviar')}
 			class="flex min-h-tap items-center gap-2 text-base font-bold text-accent-700 hover:underline"
@@ -49,7 +49,7 @@
 {:else}
 	<a
 		href={resolve('/enviar')}
-		class="glass-card flex items-center gap-4 rounded-lg bg-glass-tint p-5 text-ink hover:bg-glass-strong"
+		class="glass-card flex items-center gap-4 rounded-lg bg-glass-tint p-5 text-ink hover:bg-accent-100"
 	>
 		<Icon name="send" class="size-7 shrink-0 text-accent-700" />
 		<span class="flex min-w-0 flex-1 flex-col gap-1">

@@ -40,7 +40,7 @@
 		type="button"
 		onclick={onselect}
 		aria-current={selected ? 'true' : undefined}
-		class="{ROW} hover:bg-glass-strong {selected ? 'outline-2 outline-accent' : ''}"
+		class="{ROW} hover:bg-accent-100 {selected ? 'outline-2 outline-accent' : ''}"
 	>
 		{@render content()}
 	</button>

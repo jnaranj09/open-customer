@@ -40,7 +40,7 @@
 
 <div class="flex max-w-190 flex-col gap-4">
 	<header class="flex min-h-12 items-center">
-		<h1 class="font-display text-3xl font-semibold text-ink">{t('status_title')}</h1>
+		<h1 class="text-3xl font-extrabold text-ink">{t('status_title')}</h1>
 	</header>
 
 	{#if failure !== null}

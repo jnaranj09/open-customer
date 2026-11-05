@@ -19,6 +19,7 @@ const online = (over: Partial<Extract<Session, { kind: 'online' }>> = {}): Sessi
 	kind: 'online',
 	setupNeeded: false,
 	me: ME,
+	accent: null,
 	...over
 });
 

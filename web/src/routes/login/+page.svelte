@@ -32,7 +32,11 @@
 	);
 </script>
 
-<AuthCard title={cache.snapshot?.settings.name ?? t('login_heading')} caption={t('login_caption')}>
+<AuthCard
+	customIcon={cache.snapshot?.settings.has_custom_icon}
+	title={cache.snapshot?.settings.name ?? t('login_heading')}
+	caption={t('login_caption')}
+>
 	<form
 		class="flex flex-col gap-4"
 		onsubmit={(e) => {

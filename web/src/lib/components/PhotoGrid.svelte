@@ -77,7 +77,7 @@
 					type="button"
 					title={t('photo_menu')}
 					aria-label={t('photo_archive')}
-					class="glass-card absolute top-1 right-1 grid size-11 place-items-center rounded-pill text-ink hover:bg-glass-strong"
+					class="glass-card absolute top-1 right-1 grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
 					onclick={() => {
 						ask(photo);
 					}}

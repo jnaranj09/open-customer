@@ -13,7 +13,10 @@ const CACHED = { ...ME, username: 'cached' };
 const fail = (error: ApiError): Result<never> => ({ ok: false, error });
 const problem: ApiError = { kind: 'response_invalid', path: '/me' };
 
-function api(status: Result<{ needs_setup: boolean }>, me?: Result<typeof ME>) {
+function api(
+	status: Result<{ needs_setup: boolean; accent_color?: string }>,
+	me?: Result<typeof ME>
+) {
 	const meCall = vi.fn<Api['me']>(() => Promise.resolve(me ?? { ok: true, data: ME }));
 	const setupStatus = vi.fn<Api['setupStatus']>(() => Promise.resolve(status));
 	return { api: { me: meCall, setupStatus }, meCall };
@@ -22,12 +25,35 @@ function api(status: Result<{ needs_setup: boolean }>, me?: Result<typeof ME>) {
 describe('resolveSession', () => {
 	it('is online with the user when the server knows her', async () => {
 		const { api: a } = api({ ok: true, data: { needs_setup: false } });
-		expect(await resolveSession(a, null)).toEqual({ kind: 'online', setupNeeded: false, me: ME });
+		expect(await resolveSession(a, null)).toEqual({
+			kind: 'online',
+			setupNeeded: false,
+			me: ME,
+			accent: null
+		});
+	});
+
+	it('carries the business color from the status answer, for the login screen', async () => {
+		const { api: a } = api(
+			{ ok: true, data: { needs_setup: false, accent_color: '#72c2ca' } },
+			fail({ kind: 'unauthorized' })
+		);
+		expect(await resolveSession(a, null)).toEqual({
+			kind: 'online',
+			setupNeeded: false,
+			me: null,
+			accent: '#72c2ca'
+		});
 	});
 
 	it('is online with setup needed, without asking for her', async () => {
 		const { api: a, meCall } = api({ ok: true, data: { needs_setup: true } });
-		expect(await resolveSession(a, null)).toEqual({ kind: 'online', setupNeeded: true, me: null });
+		expect(await resolveSession(a, null)).toEqual({
+			kind: 'online',
+			setupNeeded: true,
+			me: null,
+			accent: null
+		});
 		expect(meCall).not.toHaveBeenCalled();
 	});
 
@@ -39,7 +65,8 @@ describe('resolveSession', () => {
 		expect(await resolveSession(a, CACHED)).toEqual({
 			kind: 'online',
 			setupNeeded: false,
-			me: null
+			me: null,
+			accent: null
 		});
 	});
 
@@ -55,7 +82,8 @@ describe('resolveSession', () => {
 		expect(await resolveSession(a, null)).toEqual({
 			kind: 'online',
 			setupNeeded: false,
-			me: { ...ME, must_change_password: true }
+			me: { ...ME, must_change_password: true },
+			accent: null
 		});
 	});
 

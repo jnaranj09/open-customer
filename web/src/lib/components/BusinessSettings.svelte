@@ -9,7 +9,7 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex min-h-12 items-center">
-		<h1 class="font-display text-3xl font-semibold text-ink">{t('business_title')}</h1>
+		<h1 class="text-3xl font-extrabold text-ink">{t('business_title')}</h1>
 	</header>
 	{#if cache.snapshot === null}
 		<p role="status" class="px-2 text-base text-ink-muted">{t('business_loading')}</p>

@@ -46,6 +46,7 @@
 	let username = $state('');
 	let password = $state('');
 	let iconFile = $state<File | null>(null);
+	let iconUploaded = $state(false);
 
 	let stepError = $state<string | null>(null);
 	let busy = $state(false);
@@ -155,6 +156,7 @@
 			}
 			const result = await api.uploadIcon(icons);
 			if (result.ok) {
+				iconUploaded = true;
 				go('install');
 			} else {
 				stepError = errorText(result.error);
@@ -193,6 +195,7 @@
 {/snippet}
 
 <AuthCard
+	customIcon={iconUploaded}
 	title={t('setup_title')}
 	caption={t('setup_progress', { n: index + 1, total: STEPS.length })}
 >

@@ -206,9 +206,9 @@
 			contenteditable="true"
 			spellcheck="true"
 			data-placeholder={t('template_message_placeholder')}
-			class="min-h-40 w-full rounded-sm border bg-glass-strong px-4 py-3 text-base leading-loose wrap-break-word whitespace-pre-wrap text-ink empty:before:text-ink-muted empty:before:content-[attr(data-placeholder)] focus:border-accent {error ===
+			class="min-h-40 w-full rounded-sm border bg-glass-strong px-4 py-3 text-base leading-loose wrap-break-word whitespace-pre-wrap text-ink empty:before:text-ink-muted empty:before:content-[attr(data-placeholder)] {error ===
 				undefined && problems.length === 0
-				? 'border-glass-edge'
+				? 'border-accent'
 				: 'border-error'}"
 			{onbeforeinput}
 			{onpaste}

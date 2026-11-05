@@ -13,6 +13,6 @@
 		onchange={(e) => {
 			onpick(e.currentTarget.files?.[0] ?? null);
 		}}
-		class="min-h-tap w-full rounded-sm border border-glass-edge bg-glass-strong p-2 text-base font-normal"
+		class="min-h-tap w-full rounded-sm border border-accent bg-glass-strong p-2 text-base font-normal"
 	/>
 </label>

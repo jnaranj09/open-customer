@@ -14,7 +14,7 @@
 
 <div class="flex max-w-190 flex-col gap-4">
 	<header class="flex min-h-12 items-center">
-		<h1 class="font-display text-3xl font-semibold text-ink">{t('export_title')}</h1>
+		<h1 class="text-3xl font-extrabold text-ink">{t('export_title')}</h1>
 	</header>
 	<div class="glass-card flex flex-col gap-4 rounded-lg p-5">
 		<p class="text-base text-ink-muted">{t('export_body')}</p>

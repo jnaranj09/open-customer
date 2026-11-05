@@ -30,7 +30,7 @@
 			<Icon name="chevron-left" class="size-5.5" />
 		</a>
 		{#if template !== undefined || (!missing && cache.snapshot !== null)}
-			<h2 class="font-display text-3xl font-semibold text-ink">
+			<h2 class="text-3xl font-extrabold text-ink">
 				{template?.name ?? t('templates_new_title')}
 			</h2>
 		{/if}

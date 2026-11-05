@@ -88,18 +88,14 @@ export function viewRange(view: AgendaView, day: string): { from: string; to: st
 	return { from, to: addDays(from, 6) };
 }
 
-const DEFAULT_FROM_HOUR = 8;
-const DEFAULT_TO_HOUR = 19;
+const DEFAULT_SCROLL_HOUR = 8;
 
-/** The hours a grid shows: 08:00 to 19:00, widened to the hour that holds the earliest start and
- *  the latest end. */
-export function hourSpan(placed: Placed[]): { from: number; to: number } {
-	const starts = placed.map((p) => Math.floor(p.startMin / 60));
-	const ends = placed.map((p) => Math.ceil(p.endMin / 60));
-	return {
-		from: Math.min(DEFAULT_FROM_HOUR, ...starts),
-		to: Math.max(DEFAULT_TO_HOUR, ...ends)
-	};
+/** The hour a grid scrolls to when it opens: the one that holds the earliest start, or 08:00 on
+ *  an empty day. The grid always holds the whole day; this is only where it starts. */
+export function scrollHour(placed: Placed[]): number {
+	return placed.length === 0
+		? DEFAULT_SCROLL_HOUR
+		: Math.min(...placed.map((p) => Math.floor(p.startMin / 60)));
 }
 
 /** What to remember of a day she picked: nothing (`null`, follow the business day) when it is

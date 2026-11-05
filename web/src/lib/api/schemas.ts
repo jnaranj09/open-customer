@@ -213,7 +213,8 @@ export const MeSchema = z.object({
 }) satisfies z.ZodType<Schemas['Me']>;
 
 export const SetupStatusSchema = z.object({
-	needs_setup: z.boolean()
+	needs_setup: z.boolean(),
+	accent_color: z.string().exactOptional()
 }) satisfies z.ZodType<Schemas['SetupStatus']>;
 
 export const SetupOptionsSchema = z.object({

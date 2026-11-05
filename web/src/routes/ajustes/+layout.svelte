@@ -24,7 +24,7 @@
 </script>
 
 {#snippet title()}
-	<svelte:element this={wide ? 'p' : 'h1'} class="font-display text-3xl font-semibold text-ink">
+	<svelte:element this={wide ? 'p' : 'h1'} class="text-3xl font-extrabold text-ink">
 		{t('settings_title')}
 	</svelte:element>
 {/snippet}
