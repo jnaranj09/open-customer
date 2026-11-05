@@ -124,7 +124,12 @@ once by breaking what they protect, then restored.
   `h1` computes to "Fraunces Variable" and the body to "Nunito Variable", both loaded. `docker logs`
   has no client name, phone or `wa.me` line and no ERROR line. NOT RUN: real Safari on an iPhone
   (install, "Activar notificaciones" and the push prompt, the real WhatsApp hand-off), WebKit (see
-  above), the plain-host :8080 variant, CI (pending the push of branch p5).
+  above), the plain-host :8080 variant. After the owner's walk through the running app, 35c8980
+  fixed field borders, hover tints, the update prompt on the auth screens, the accent on the icon,
+  shadows, glow and the login screen, one font (Nunito: `h1` now computes to "Nunito Variable";
+  Fraunces is removed) and the full-day grid; the gate exits 0 again with the same `make cover`
+  numbers. CI green on main at 6df35a9 (the p5 merge), including gitleaks, `pnpm audit` and
+  `make cover` (run 42078630269).
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
