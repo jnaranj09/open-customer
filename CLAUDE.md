@@ -92,7 +92,11 @@ A check that could not run is reported as NOT RUN, never as passing.
   forbid-only) and `web/tests/guards` (Vitest: layers, catch-blocks, test-hygiene, forbid-only,
   raw-colors, design-tokens, design-parity, eslint suppression budget, bulk file and inline
   comments). Allow-lists only shrink.
-- Lint suppressions: a pinned total that only falls (guard `suppression-budget`).
+- Lint suppressions: a pinned total that only falls (guard `suppression-budget`, `svelte-ignore`
+  included).
+- UI pipeline (`rules/ui.md`): tokens and components follow `design/soft-glass.pen` (guards
+  `design-tokens`, `design-parity`); only `web/src/lib/components/ui/` may use surface and radius
+  classes, and no file may use an arbitrary `-[…]` value (eslint `better-tailwindcss`).
 - Coverage: `make cover` keeps a 90% floor on the gated packages (owner decision). Never write a
   test only to raise the number; mutation testing in the clean-up pass checks the tests are real.
 - `code-reviewer` subagent: a fresh reviewer re-runs the gate and fault-injects every guard.

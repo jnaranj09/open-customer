@@ -67,6 +67,12 @@ match).
     `make check-pins` is green.
 15. **Public repo.** No home paths, emails, employer or internal names in code, tests, fixtures or
     commits. No real client data in tests or fixtures.
+16. **UI pipeline** (`.claude/rules/ui.md`). A visual fix changes the token or the primitive in
+    `web/src/lib/components/ui/` that causes the problem, never a one-off class or override in the
+    screen where it was seen; the change says which token or primitive and how many screens use
+    it. A new token or reusable component starts in `design/soft-glass.pen`. No new entry in
+    `eslint-suppressions.json`, no allow-list growth in `design-tokens` / `design-parity`. Ask for
+    the 393 × 852 and 1440 × 900 screenshots of the changed screens.
 
 ## Output
 

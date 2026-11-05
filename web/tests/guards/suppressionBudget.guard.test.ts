@@ -1,15 +1,19 @@
 // suppression-budget (principle P19). Two totals are pinned and matched EXACTLY, so they can only
 // fall, and a fix lowers the pin in the same commit:
 // - the ESLint bulk suppressions file (eslint-suppressions.json), which `--suppress-all` could grow;
-// - inline suppression comments (eslint-disable*, @ts-ignore, @ts-expect-error, @ts-nocheck) in
-//   source, tests and config, counted with the TS scanner so a string that mentions one does not count.
+// - inline suppression comments (eslint-disable*, @ts-ignore, @ts-expect-error, @ts-nocheck and
+//   Svelte's svelte-ignore) in source, tests and config, counted with the TS scanner (and the Svelte parser
+//   for markup) so a string that mentions one does not count. A silenced a11y warning or a styling
+//   class let into a route raises a total.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SRC, TESTS, WEB, comments, markupComments, scriptText, walk } from './sourceScan';
 
-/** Measured when the strict rules landed (TASKS.md T4). Only ever lowered. */
-const PINNED_BULK_TOTAL = 0;
+/** Measured when each strict rule landed (TASKS.md T4; better-tailwindcss/no-restricted-classes
+ *  at 69: the radius and surface classes routes and feature components had when "only primitives
+ *  style" landed, ui.md stage 4). Only ever lowered. */
+const PINNED_BULK_TOTAL = 69;
 const PINNED_INLINE_TOTAL = 0;
 
 /** Sum of every `count` in an ESLint bulk-suppressions file; throws on any other shape. */
@@ -35,7 +39,7 @@ export function suppressionTotal(json: unknown): number {
 // A directive starts the comment; a comment that only mentions one (like this file's header) is not
 // one.
 const SUPPRESSION =
-	/^(?:\/\/|\/\*)?[\s*]*(?:eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck)/;
+	/^(?:\/\/|\/\*)?[\s*]*(?:eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|svelte-ignore)/;
 
 /** Inline suppression comments in one file. */
 export function inlineSuppressions(file: string, text: string): number {
@@ -70,6 +74,14 @@ describe('inlineSuppressions', () => {
 			inlineSuppressions(
 				'A.svelte',
 				'<script>\n// @ts-ignore\nlet x = 1;\n</script>\n<!-- eslint-disable-next-line -->\n<p>{x}</p>\n'
+			)
+		).toBe(2);
+	});
+	it('counts a svelte-ignore in markup and script, not a comment that only mentions one', () => {
+		expect(
+			inlineSuppressions(
+				'A.svelte',
+				'<script>\n// svelte-ignore state_referenced_locally\nlet x = 1;\n</script>\n<!-- svelte-ignore a11y_autofocus -->\n<!-- see the svelte-ignore docs -->\n<p>{x}</p>\n'
 			)
 		).toBe(2);
 	});

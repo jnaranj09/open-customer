@@ -72,4 +72,5 @@ its sensor, or says "prose only".
 - **The suppression list only shrinks.** It holds the violations that existed when the strict rules
   landed. Fixed one? Remove it from the list and lower the pin in the same commit. Never re-suppress a
   new violation, and never run a "suppress everything" command on the whole repo. Sensor: guard
-  `suppression-budget` (Go `//nolint` count; web `eslint-suppressions.json` total).
+  `suppression-budget` (Go `//nolint` count; web `eslint-suppressions.json` total and inline
+  `eslint-disable` / `@ts-*` / `svelte-ignore` count).

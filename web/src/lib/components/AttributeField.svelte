@@ -5,6 +5,7 @@
 	import BottomSheet from './ui/BottomSheet.svelte';
 	import Button from './ui/Button.svelte';
 	import Icon from './icons/Icon.svelte';
+	import IconButton from './ui/IconButton.svelte';
 	import SelectField from './SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
 
@@ -144,17 +145,14 @@
 						{/if}
 					</button>
 					{#if hasChildren(option.id)}
-						<button
-							type="button"
-							title={t('attr_open_level', { label: option.label })}
-							aria-label={t('attr_open_level', { label: option.label })}
-							class="grid size-11 place-items-center rounded-pill text-ink-muted hover:bg-accent-100"
+						<IconButton
+							variant="muted"
+							icon="chevron-right"
+							label={t('attr_open_level', { label: option.label })}
 							onclick={() => {
 								at = option.id;
 							}}
-						>
-							<Icon name="chevron-right" class="size-4.5" />
-						</button>
+						/>
 					{/if}
 				</li>
 			{:else}

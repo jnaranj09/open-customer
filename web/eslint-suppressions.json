@@ -1,1 +1,142 @@
-{}
+{
+	"src/lib/components/AppointmentForm.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/lib/components/AttributeField.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 4
+		}
+	},
+	"src/lib/components/AttributeSheet.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/AuthCard.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 4
+		}
+	},
+	"src/lib/components/BusinessIcon.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/lib/components/ChipEditor.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 3
+		}
+	},
+	"src/lib/components/ClientList.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/ClientPicker.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/ColorPicker.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 3
+		}
+	},
+	"src/lib/components/DuplicatePhone.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/FormCard.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 3
+		}
+	},
+	"src/lib/components/IconFileInput.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/InstallGuide.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/lib/components/OptionTree.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 12
+		}
+	},
+	"src/lib/components/PhotoGrid.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/lib/components/PhotoSection.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/lib/components/SelectField.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/ServicePicker.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 4
+		}
+	},
+	"src/lib/components/Sidebar.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/lib/components/TemplateForm.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/TemplatePreview.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/TimeGrid.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/lib/components/Toast.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/routes/+page.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 5
+		}
+	},
+	"src/routes/ajustes/+layout.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/routes/ajustes/servicios/+page.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
+		}
+	},
+	"src/routes/citas/[id]/+page.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	},
+	"src/routes/clientas/[id]/+page.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 2
+		}
+	}
+}
