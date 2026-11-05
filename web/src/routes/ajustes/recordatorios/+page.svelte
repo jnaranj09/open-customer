@@ -3,13 +3,13 @@
 	import { getContext } from 'svelte';
 	import type { Rule } from '../../../lib/api/schemas';
 	import { cache } from '../../../lib/cache/store.svelte';
-	import Button from '../../../lib/components/Button.svelte';
 	import EmptyState from '../../../lib/components/EmptyState.svelte';
 	import RuleSentence from '../../../lib/components/RuleSentence.svelte';
 	import RuleSheet from '../../../lib/components/RuleSheet.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { sortRules } from '../../../lib/rules';
 	import type { createToaster } from '../../../lib/toaster.svelte';
+	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Recordatorios (design doc item 77, CUJ 2 steps 3 and 4): the rules as sentences, with
 	// a sheet to add one or edit the one she taps. Archived rules are listed apart, so she can
@@ -35,11 +35,11 @@
 		<h1 class="font-display text-3xl font-semibold text-ink">{t('rules_title')}</h1>
 		{#if data !== null && hasTemplate}
 			<div class="w-44 shrink-0">
-				<Button
+				<WriteButton
 					variant="primary"
 					onclick={() => {
 						editing = 'new';
-					}}>{t('rules_new')}</Button
+					}}>{t('rules_new')}</WriteButton
 				>
 			</div>
 		{/if}

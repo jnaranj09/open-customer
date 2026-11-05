@@ -23,6 +23,7 @@
 	import SaveButton from './SaveButton.svelte';
 	import SelectField from './SelectField.svelte';
 	import TextField from './TextField.svelte';
+	import WriteButton from './WriteButton.svelte';
 
 	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A change
 	// that can add items first asks "¿Incluir recordatorios atrasados?": the question replaces the
@@ -273,23 +274,23 @@
 	{:else}
 		<div class="flex flex-col gap-3" {@attach focusFirst}>
 			<p class="text-base text-ink-muted">{t('overdue_body')}</p>
-			<Button
+			<WriteButton
 				variant="primary"
 				{busy}
 				onclick={() => {
 					if (asking !== null) {
 						void send.run(asking, false);
 					}
-				}}>{t('overdue_from_today')}</Button
+				}}>{t('overdue_from_today')}</WriteButton
 			>
-			<Button
+			<WriteButton
 				variant="secondary"
 				{busy}
 				onclick={() => {
 					if (asking !== null) {
 						void send.run(asking, true);
 					}
-				}}>{t('overdue_include')}</Button
+				}}>{t('overdue_include')}</WriteButton
 			>
 			<Button
 				variant="ghost"

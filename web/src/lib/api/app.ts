@@ -5,6 +5,7 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { writable } from 'svelte/store';
 import { clearCache } from '../cache/db';
+import type { ErrorReport } from '../report';
 import { createApi, type Api } from './client';
 
 /** True once the server reported a build version other than this app's; the update prompt reads it. */
@@ -20,6 +21,16 @@ export type AppApiEnv = {
 	/** The API root; absolute in tests, the app uses the default. */
 	baseUrl?: string;
 };
+
+/** The one poster of client errors (design doc item 66): an invalid answer and the global error
+ *  handlers both send through it. A failed post is dropped: nothing waits on it. */
+function postErrorReport(
+	client: Pick<Api, 'logClientError'>,
+	report: ErrorReport
+): Promise<unknown> {
+	const { stack, ...rest } = report;
+	return client.logClientError(stack === null ? rest : { ...rest, stack });
+}
 
 /** Builds the app's client from its outside edges; tests pass fakes. */
 export function createAppApi(env: AppApiEnv): Api {
@@ -46,8 +57,9 @@ export function createAppApi(env: AppApiEnv): Api {
 			if (path === '/client-errors') {
 				return;
 			}
-			void api.logClientError({
+			void postErrorReport(api, {
 				message: 'response_invalid',
+				stack: null,
 				route: path,
 				app_version: env.version
 			});
@@ -62,3 +74,8 @@ export const api = createAppApi({
 	clear: clearCache,
 	toLogin: () => goto(resolve('/login'))
 });
+
+/** Sends a report of an uncaught error with the app's client. */
+export function sendErrorReport(report: ErrorReport): void {
+	void postErrorReport(api, report);
+}

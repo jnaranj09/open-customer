@@ -2,7 +2,6 @@
 	import { getContext } from 'svelte';
 	import type { Service } from '../../../lib/api/schemas';
 	import { cache } from '../../../lib/cache/store.svelte';
-	import Button from '../../../lib/components/Button.svelte';
 	import EmptyState from '../../../lib/components/EmptyState.svelte';
 	import ListRow from '../../../lib/components/ListRow.svelte';
 	import ServiceSheet from '../../../lib/components/ServiceSheet.svelte';
@@ -10,6 +9,7 @@
 	import { formatMoney } from '../../../lib/money';
 	import { serviceSubtitle } from '../../../lib/services';
 	import type { createToaster } from '../../../lib/toaster.svelte';
+	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Servicios (design doc item 77, CUJ 2 step 1): the list, with a sheet to add one or
 	// edit the one she taps. Archived services are listed apart, so she can restore one.
@@ -57,11 +57,11 @@
 		<h1 class="font-display text-3xl font-semibold text-ink">{t('services_title')}</h1>
 		{#if data !== null}
 			<div class="w-44 shrink-0">
-				<Button
+				<WriteButton
 					variant="primary"
 					onclick={() => {
 						editing = 'new';
-					}}>{t('services_new')}</Button
+					}}>{t('services_new')}</WriteButton
 				>
 			</div>
 		{/if}

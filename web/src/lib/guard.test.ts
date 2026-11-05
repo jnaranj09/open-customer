@@ -4,6 +4,7 @@ import {
 	guard,
 	hasShell,
 	needsRecheck,
+	recoversSession,
 	verdictFor,
 	PUBLIC_PATHS,
 	type Session
@@ -174,5 +175,23 @@ describe('verdictFor', () => {
 
 	it('waits on a stand-alone page until it was checked, whatever the old answer says', () => {
 		expect(verdictFor(online(), '/', '/login')).toBeNull();
+	});
+});
+
+describe('recoversSession', () => {
+	it('is true when a refresh worked while the session is offline', () => {
+		expect(recoversSession({ kind: 'offline', cachedMe: ME }, true)).toBe(true);
+	});
+
+	it('is false when the refresh failed', () => {
+		expect(recoversSession({ kind: 'offline', cachedMe: ME }, false)).toBe(false);
+	});
+
+	it('is false for a session the server already answered', () => {
+		expect(recoversSession(online(), true)).toBe(false);
+	});
+
+	it('is false before the first answer', () => {
+		expect(recoversSession(null, true)).toBe(false);
 	});
 });

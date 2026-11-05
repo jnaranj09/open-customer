@@ -8,10 +8,10 @@
 	import { t } from '../i18n';
 	import { submitOnce } from '../submit';
 	import Button from './Button.svelte';
-	import { buttonClasses } from './buttonStyle';
 	import EmptyState from './EmptyState.svelte';
 	import ListRow from './ListRow.svelte';
 	import TextField from './TextField.svelte';
+	import WriteLink from './WriteLink.svelte';
 
 	// The client list (design doc item 76): the search box over the cached clients, online and
 	// offline, and "Ver archivadas", which loads the archived ones (online only) and searches them
@@ -69,7 +69,9 @@
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-3">
 		<h1 class="flex-1 font-display text-3xl font-semibold text-ink">{t('nav_clients')}</h1>
-		<a href={resolve('/clientas/nueva')} class={buttonClasses('ghost')}>{t('clients_new')}</a>
+		<WriteLink href={resolve('/clientas/nueva')} variant="ghost" width="w-44">
+			{t('clients_new')}
+		</WriteLink>
 	</header>
 
 	<TextField
@@ -89,6 +91,7 @@
 				body={t('clients_empty_body')}
 				actionLabel={t('clients_new')}
 				href={resolve('/clientas/nueva')}
+				creates
 			/>
 		</div>
 	{:else}

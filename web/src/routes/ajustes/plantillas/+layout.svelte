@@ -7,9 +7,9 @@
 	import EmptyState from '../../../lib/components/EmptyState.svelte';
 	import ListRow from '../../../lib/components/ListRow.svelte';
 	import Toast from '../../../lib/components/Toast.svelte';
-	import { buttonClasses } from '../../../lib/components/buttonStyle';
 	import { t } from '../../../lib/i18n';
 	import { createToaster } from '../../../lib/toaster.svelte';
+	import WriteLink from '../../../lib/components/WriteLink.svelte';
 
 	// Ajustes → Plantillas (design doc item 77): the list of message templates, with the open
 	// template or the new-template form beside it. The two panes follow the width this page is
@@ -50,9 +50,9 @@
 		>
 			<header class="flex min-h-12 items-center justify-between gap-3">
 				<h1 class="font-display text-3xl font-semibold text-ink">{t('templates_title')}</h1>
-				<a href={resolve('/ajustes/plantillas/nueva')} class="{buttonClasses('primary')} px-5">
+				<WriteLink href={resolve('/ajustes/plantillas/nueva')} variant="primary" width="w-44">
 					{t('templates_new')}
-				</a>
+				</WriteLink>
 			</header>
 
 			{#if cache.snapshot === null}

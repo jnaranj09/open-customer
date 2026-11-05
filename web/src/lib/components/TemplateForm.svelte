@@ -18,6 +18,7 @@
 	import ChipEditor from './ChipEditor.svelte';
 	import FormCard from './FormCard.svelte';
 	import TextField from './TextField.svelte';
+	import WriteButton from './WriteButton.svelte';
 
 	// One message template: its name and its text in the ChipEditor (design doc item 77). The
 	// server checks the body on save, and its answer is shown by field. The caller keys the form on
@@ -211,7 +212,7 @@
 	}}
 >
 	<p class="text-base text-ink">{t('template_archive_body')}</p>
-	<Button
+	<WriteButton
 		variant="danger"
 		busy={toggling}
 		onclick={() => {
@@ -219,7 +220,7 @@
 		}}
 	>
 		{t('template_archive')}
-	</Button>
+	</WriteButton>
 	<Button
 		variant="secondary"
 		onclick={() => {

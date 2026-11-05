@@ -21,6 +21,7 @@
 	import SaveButton from './SaveButton.svelte';
 	import SelectField from './SelectField.svelte';
 	import TextField from './TextField.svelte';
+	import WriteButton from './WriteButton.svelte';
 
 	// Add or edit one attribute in a sheet (design doc item 77, CUJ 2 step 2). A new one asks for
 	// its name, the plain scope question and its type; once it exists the sheet shows the same
@@ -232,7 +233,7 @@
 		{#if failure !== null}
 			<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
 		{/if}
-		<Button
+		<WriteButton
 			variant="danger"
 			busy={toggling}
 			onclick={() => {
@@ -240,7 +241,7 @@
 			}}
 		>
 			{t('attribute_archive')}
-		</Button>
+		</WriteButton>
 		<Button
 			variant="secondary"
 			onclick={() => {

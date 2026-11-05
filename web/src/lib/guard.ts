@@ -75,3 +75,9 @@ export function verdictFor(
 	}
 	return guard(path, s);
 }
+
+/** True when a refresh just worked while the session is still `offline`: the server is back, so the
+ *  layout asks it who she is again and the shell leaves the offline state. */
+export function recoversSession(s: Session | null, refreshOk: boolean): boolean {
+	return refreshOk && s?.kind === 'offline';
+}

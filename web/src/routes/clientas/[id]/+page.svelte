@@ -27,6 +27,7 @@
 	import { submitOnce } from '../../../lib/submit';
 	import { createToaster } from '../../../lib/toaster.svelte';
 	import { formatDayWithYear, formatTime, todayIn } from '../../../lib/time';
+	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// One client (design doc item 76): her facts, the appointment history, the photo gallery, the
 	// reminders sent to her, edit mode and archive. The server holds the truth: every change waits
@@ -380,7 +381,7 @@
 	{#if actionError !== null}
 		<p role="alert" class="text-sm text-error">{errorText(actionError)}</p>
 	{/if}
-	<Button
+	<WriteButton
 		variant="danger"
 		{busy}
 		onclick={() => {
@@ -388,7 +389,7 @@
 		}}
 	>
 		{t('client_archive')}
-	</Button>
+	</WriteButton>
 	<Button
 		variant="secondary"
 		onclick={() => {

@@ -7,6 +7,7 @@
 	import BottomSheet from './BottomSheet.svelte';
 	import Button from './Button.svelte';
 	import Icon from './icons/Icon.svelte';
+	import WriteButton from './WriteButton.svelte';
 
 	// A grid of photo thumbnails: 3 columns on compact, 5 on wide. "Archivar foto" comes from a
 	// long-press on compact and from the tile's menu button on wide, and always asks first. The
@@ -99,7 +100,7 @@
 	{#if failure !== null}
 		<p role="alert" class="text-sm text-error">{failure}</p>
 	{/if}
-	<Button
+	<WriteButton
 		variant="danger"
 		{busy}
 		onclick={() => {
@@ -109,7 +110,7 @@
 		}}
 	>
 		{t('photo_archive')}
-	</Button>
+	</WriteButton>
 	<Button
 		variant="secondary"
 		onclick={() => {

@@ -4,11 +4,11 @@
 	import { inScope, SCOPE_LABELS, TYPE_LABELS } from '../../../lib/attributes';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import AttributeSheet from '../../../lib/components/AttributeSheet.svelte';
-	import Button from '../../../lib/components/Button.svelte';
 	import EmptyState from '../../../lib/components/EmptyState.svelte';
 	import ListRow from '../../../lib/components/ListRow.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import type { createToaster } from '../../../lib/toaster.svelte';
+	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Atributos (design doc item 77, CUJ 2 step 2): the attributes grouped by what they
 	// belong to (the client or each appointment), and a sheet to add one or edit the one she taps.
@@ -50,11 +50,11 @@
 		<h1 class="font-display text-3xl font-semibold text-ink">{t('attributes_title')}</h1>
 		{#if data !== null}
 			<div class="w-44 shrink-0">
-				<Button
+				<WriteButton
 					variant="primary"
 					onclick={() => {
 						creating = true;
-					}}>{t('attributes_new')}</Button
+					}}>{t('attributes_new')}</WriteButton
 				>
 			</div>
 		{/if}

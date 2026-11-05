@@ -4,6 +4,7 @@
 	import { indexAtY, levelOf, reorder, type Positioned } from '../attributes';
 	import { t } from '../i18n';
 	import Button from './Button.svelte';
+	import WriteButton from './WriteButton.svelte';
 	import Icon from './icons/Icon.svelte';
 	import TextField from './TextField.svelte';
 
@@ -147,7 +148,7 @@
 	>
 		<TextField {label} bind:value={text} autocomplete="off" error={formError} />
 		<div class="grid grid-cols-2 gap-2">
-			<Button variant="primary" type="submit" busy={working}>{confirm}</Button>
+			<WriteButton variant="primary" type="submit" busy={working}>{confirm}</WriteButton>
 			<Button
 				variant="secondary"
 				onclick={() => {

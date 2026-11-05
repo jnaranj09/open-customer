@@ -3,9 +3,10 @@
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { version } from '$app/env';
 	import { page } from '$app/state';
 	import '../app.css';
-	import { api } from '../lib/api/app';
+	import { api, sendErrorReport } from '../lib/api/app';
 	import type { Me } from '../lib/api/schemas';
 	import { errorText } from '../lib/api/errors';
 	import { cache } from '../lib/cache/store.svelte';
@@ -16,11 +17,19 @@
 	import Sidebar from '../lib/components/Sidebar.svelte';
 	import TabBar from '../lib/components/TabBar.svelte';
 	import UpdatePrompt from '../lib/components/UpdatePrompt.svelte';
-	import { canSync, hasShell, needsRecheck, verdictFor, type Session } from '../lib/guard';
+	import {
+		canSync,
+		hasShell,
+		needsRecheck,
+		recoversSession,
+		verdictFor,
+		type Session
+	} from '../lib/guard';
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
 	import { syncLine } from '../lib/nav';
 	import { clock } from '../lib/clock.svelte';
+	import { createReporter } from '../lib/report';
 	import { pushControl } from '../lib/pushControl.svelte';
 	import { resolveSession } from '../lib/session';
 	import { shownDay } from '../lib/shownDay.svelte';
@@ -36,6 +45,7 @@
 	let checkedFor = $state<string | null>(null);
 	let cacheLoaded = false;
 	let settleRun = 0;
+	let recoverRun = 0;
 
 	const verdict = $derived(verdictFor(session, checkedFor, path));
 
@@ -70,6 +80,24 @@
 		checkedFor = forPath;
 	}
 
+	// The server answered after the session was offline: ask who she is again, so the shell leaves
+	// the offline state without a reload.
+	async function recover(refreshOk: boolean): Promise<void> {
+		if (!recoversSession(session, refreshOk)) {
+			return;
+		}
+		// Its own counter: bumping `settleRun` would strand a page check that is still running.
+		const run = ++recoverRun;
+		const next = await resolveSession(api, cache.meta.me);
+		if (run !== recoverRun) {
+			return;
+		}
+		session = next;
+		if (next.kind === 'online' && next.me !== null) {
+			await rememberMe(next.me);
+		}
+	}
+
 	// Syncs with the server: each page change asks the guard's question again where it can change.
 	$effect(() => {
 		const forPath = path;
@@ -99,7 +127,7 @@
 			return;
 		}
 		opened = true;
-		void cache.refresh();
+		void cache.refresh().then((r) => recover(r.ok));
 		void pushControl.check();
 	});
 
@@ -116,7 +144,7 @@
 		}
 		focusBusy = true;
 		try {
-			await cache.refresh();
+			await recover((await cache.refresh()).ok);
 		} finally {
 			focusBusy = false;
 		}
@@ -134,6 +162,26 @@
 		return () => {
 			window.removeEventListener('focus', handler);
 			document.removeEventListener('visibilitychange', handler);
+		};
+	});
+
+	// Any uncaught error or rejection goes to the server log, route and stack only (item 66).
+	const report = createReporter(sendErrorReport, () => systemNow().getTime());
+	$effect(() => {
+		const send = (e: unknown): void => {
+			report(e, page.route.id ?? '/', version);
+		};
+		const onError = (ev: ErrorEvent): void => {
+			send(ev.error);
+		};
+		const onRejection = (ev: PromiseRejectionEvent): void => {
+			send(ev.reason);
+		};
+		window.addEventListener('error', onError);
+		window.addEventListener('unhandledrejection', onRejection);
+		return () => {
+			window.removeEventListener('error', onError);
+			window.removeEventListener('unhandledrejection', onRejection);
 		};
 	});
 

@@ -4,6 +4,7 @@
 	import { formatTime } from '../time';
 	import BottomSheet from './BottomSheet.svelte';
 	import Button from './Button.svelte';
+	import WriteButton from './WriteButton.svelte';
 
 	// The 409 `overlap` answer (CUJ 3): the appointments in the way, and "Agendar igual" to save
 	// anyway (the caller sends the same change again with `allow_overlap`).
@@ -33,6 +34,6 @@
 			</li>
 		{/each}
 	</ul>
-	<Button variant="primary" {busy} onclick={onconfirm}>{t('overlap_confirm')}</Button>
+	<WriteButton variant="primary" {busy} onclick={onconfirm}>{t('overlap_confirm')}</WriteButton>
 	<Button variant="secondary" onclick={onclose}>{t('cancel')}</Button>
 </BottomSheet>

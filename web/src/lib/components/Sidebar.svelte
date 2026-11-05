@@ -2,10 +2,10 @@
 	import { resolve } from '$app/paths';
 	import { t } from '../i18n';
 	import { isActivePath } from '../nav';
-	import { buttonClasses } from './buttonStyle';
 	import Icon from './icons/Icon.svelte';
 	import { NAV_ITEMS } from './navItems';
 	import PushActivate from './PushActivate.svelte';
+	import WriteLink from './WriteLink.svelte';
 
 	let {
 		name,
@@ -46,13 +46,10 @@
 		<p class="min-w-0 font-display text-xl font-semibold wrap-break-word text-ink">{name}</p>
 	</div>
 
-	<a
-		href={resolve(`/citas/nueva?dia=${newDay}` as const)}
-		class="{buttonClasses('primary')} w-full"
-	>
+	<WriteLink href={resolve(`/citas/nueva?dia=${newDay}` as const)} variant="primary">
 		<Icon name="plus" />
 		{t('appointment_new')}
-	</a>
+	</WriteLink>
 
 	<nav aria-label={t('nav_label')} class="flex flex-col gap-1">
 		{#each NAV_ITEMS as item (item.href)}

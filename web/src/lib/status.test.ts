@@ -70,6 +70,22 @@ describe('statusLines', () => {
 	it('writes the last backup copy in the business zone', () => {
 		expect(value(statusLines(status(), ZONE, NOW), 'status_backup')).toBe('5/11 15:30');
 	});
+	it('writes the year of a backup copy from another year', () => {
+		const lines = statusLines(
+			status({
+				backup: {
+					checked_at: '2026-11-05T22:00:00Z',
+					last_dump_at: '2025-12-30T21:00:00Z',
+					last_copy_at: '2025-12-30T21:30:00Z',
+					last_error: null,
+					red: false
+				}
+			}),
+			ZONE,
+			NOW
+		);
+		expect(value(lines, 'status_backup')).toBe('30/12/2025 15:30');
+	});
 	it('says desconocido, in red, when there is no status file', () => {
 		const lines = statusLines(
 			status({

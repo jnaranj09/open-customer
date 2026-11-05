@@ -7,9 +7,9 @@
 	import { search } from '../search';
 	import { submitOnce } from '../submit';
 	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
 	import DuplicatePhone from './DuplicatePhone.svelte';
 	import TextField from './TextField.svelte';
+	import WriteButton from './WriteButton.svelte';
 
 	// Picks the client of a booking (CUJ 3 step 2): type to search the cached clients (the one
 	// search, `lib/search.ts`), or add a new one from the same screen. A client added here is kept
@@ -156,7 +156,7 @@
 		{#if failure !== null}
 			<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
 		{/if}
-		<Button
+		<WriteButton
 			variant="primary"
 			{busy}
 			onclick={() => {
@@ -164,6 +164,6 @@
 			}}
 		>
 			{t('client_save')}
-		</Button>
+		</WriteButton>
 	{/if}
 </BottomSheet>
