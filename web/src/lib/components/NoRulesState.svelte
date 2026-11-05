@@ -10,6 +10,6 @@
 		title={t('due_no_rules_title')}
 		body={t('due_no_rules_body')}
 		actionLabel={t('due_no_rules_action')}
-		href={resolve('/ajustes')}
+		href={resolve('/ajustes/recordatorios')}
 	/>
 </div>

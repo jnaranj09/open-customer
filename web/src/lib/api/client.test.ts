@@ -742,6 +742,31 @@ describe('the settings calls', () => {
 		options: [option]
 	};
 
+	const rule = {
+		id: USER_ID,
+		kind: 'before_appointment',
+		service_id: null,
+		return_service_id: null,
+		offset_days: 1,
+		template_id: USER_ID,
+		applies_from: null,
+		archived: false
+	};
+	const statusReport = {
+		version: 'v1.2.0',
+		migration_version: 12,
+		heartbeat_age_s: null,
+		backup: {
+			checked_at: null,
+			last_dump_at: null,
+			last_copy_at: null,
+			last_error: null,
+			red: true
+		},
+		media_free_bytes: null,
+		push: { subscriptions: 0, last_push: null, red: true }
+	};
+
 	const sent = async (fetchFn: ReturnType<typeof setup>['fetchFn']): Promise<unknown[]> => {
 		const request = fetchFn.mock.calls[0]?.[0] as Request;
 		return [request.method, request.url, (await request.json()) as unknown];
@@ -773,6 +798,54 @@ describe('the settings calls', () => {
 			true,
 			['PATCH', `${BASE}/services/${USER_ID}`, { archived: true }]
 		]);
+	});
+
+	it('createRule posts the rule with include_overdue and returns it', async () => {
+		const { api, fetchFn } = setup(() => json(rule, 201));
+		const body = {
+			kind: 'before_appointment',
+			template_id: USER_ID,
+			offset_days: 1,
+			include_overdue: false
+		} as const;
+		const result = await api.createRule(body);
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: rule },
+			['POST', `${BASE}/reminder-rules`, body]
+		]);
+	});
+
+	it('updateRule patches the rule by id', async () => {
+		const { api, fetchFn } = setup(() => json({ ...rule, archived: true }));
+		const result = await api.updateRule(USER_ID, { archived: true });
+		expect([result.ok, await sent(fetchFn)]).toEqual([
+			true,
+			['PATCH', `${BASE}/reminder-rules/${USER_ID}`, { archived: true }]
+		]);
+	});
+
+	it('getStatus returns the report', async () => {
+		const { api, fetchFn } = setup(() => json(statusReport));
+		const result = await api.getStatus();
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result, request.method, request.url]).toEqual([
+			{ ok: true, data: statusReport },
+			'GET',
+			`${BASE}/status`
+		]);
+	});
+
+	it('getStatus refuses a report that fails its schema', async () => {
+		const { api } = setup(() => json({ ...statusReport, version: 3 }));
+		expect(await api.getStatus()).toEqual({
+			ok: false,
+			error: { kind: 'response_invalid', path: '/status' }
+		});
+	});
+
+	it('exportUrl is the export endpoint, for a download link', () => {
+		const { api } = setup(() => json({}));
+		expect(api.exportUrl()).toBe(`${BASE}/export`);
 	});
 
 	it('createAttribute posts the label, scope and type', async () => {

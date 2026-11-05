@@ -185,6 +185,27 @@ export const BootstrapSchema = z.object({
 	backup_red: z.boolean()
 }) satisfies z.ZodType<Schemas['Bootstrap']>;
 
+export const StatusSchema = z.object({
+	version: z.string(),
+	migration_version: z.number().int(),
+	heartbeat_age_s: z.nullable(z.number().int()),
+	backup: z.object({
+		checked_at: z.nullable(instant),
+		last_dump_at: z.nullable(instant),
+		last_copy_at: z.nullable(instant),
+		last_error: z.nullable(z.string()),
+		red: z.boolean()
+	}),
+	media_free_bytes: z.nullable(z.number().int()),
+	push: z.object({
+		subscriptions: z.number().int(),
+		last_push: z.nullable(
+			z.object({ date: z.string(), attempted: z.number().int(), delivered: z.number().int() })
+		),
+		red: z.boolean()
+	})
+}) satisfies z.ZodType<Schemas['Status']>;
+
 export const MeSchema = z.object({
 	id,
 	username: z.string(),
@@ -262,6 +283,8 @@ export type Appointment = z.infer<typeof AppointmentSchema>;
 export type AttrOption = z.infer<typeof OptionSchema>;
 export type Attribute = z.infer<typeof AttributeSchema>;
 export type Service = z.infer<typeof ServiceSchema>;
+export type Rule = z.infer<typeof RuleSchema>;
+export type Status = z.infer<typeof StatusSchema>;
 export type Template = z.infer<typeof TemplateSchema>;
 export type Client = z.infer<typeof ClientSchema>;
 export type Media = z.infer<typeof MediaSchema>;

@@ -21,10 +21,12 @@ import {
 	ProblemSchema,
 	PushKeySchema,
 	PushSubscriptionIdSchema,
+	RuleSchema,
 	ServiceSchema,
 	SettingsSchema,
 	SetupOptionsSchema,
 	SetupStatusSchema,
+	StatusSchema,
 	TemplatePreviewSchema,
 	TemplateSchema,
 	type Appointment,
@@ -251,6 +253,18 @@ export function createApi(opts: ApiOptions) {
 			read('/templates/preview', TemplatePreviewSchema, () =>
 				client.POST('/templates/preview', { body })
 			),
+		/** Adds a reminder rule. `include_overdue` says whether items already past their moment count. */
+		createRule: (body: Schemas['RuleInput']) =>
+			read('/reminder-rules', RuleSchema, () => client.POST('/reminder-rules', { body })),
+		/** Changes only the fields sent; `archived` archives or restores. */
+		updateRule: (id: string, body: Schemas['RulePatch']) =>
+			read('/reminder-rules/{id}', RuleSchema, () =>
+				client.PATCH('/reminder-rules/{id}', { params: { path: { id } }, body })
+			),
+		/** The "Estado del sistema" report. */
+		getStatus: () => read('/status', StatusSchema, () => client.GET('/status')),
+		/** The address of the data export, for a download link. */
+		exportUrl: (): string => `${baseUrl}/export`,
 		/** Changes only the fields sent (name, timezone, accent_color, push_hour). */
 		updateSettings: (body: Schemas['SettingsPatch']) =>
 			read('/settings', SettingsSchema, () => client.PATCH('/settings', { body })),

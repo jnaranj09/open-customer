@@ -10,6 +10,7 @@
 		onclick,
 		title,
 		subtitle,
+		warning,
 		trailing,
 		selected = false
 	}: {
@@ -17,6 +18,8 @@
 		onclick?: () => void;
 		title: string;
 		subtitle?: string;
+		/** A problem with the row, in the error color under the subtitle. */
+		warning?: string;
 		trailing?: Snippet;
 		selected?: boolean;
 	} = $props();
@@ -33,6 +36,9 @@
 		<span class="text-base font-bold text-ink">{title}</span>
 		{#if subtitle !== undefined}
 			<span class="text-sm text-ink-muted">{subtitle}</span>
+		{/if}
+		{#if warning !== undefined}
+			<span class="text-sm font-bold text-error">{warning}</span>
 		{/if}
 	</span>
 	{#if trailing}
