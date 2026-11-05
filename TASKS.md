@@ -89,7 +89,7 @@ once by breaking what they protect, then restored.
   /status` (`migration_version` 2, `backup.red` true, 1 subscription, heartbeat age under 120 s),
   `GET /bootstrap` (every key, `due` = Marta's come-back; 422 on a range over the limit), `GET
   /export` (dated file name; the four files in the zip), `POST /client-errors` 204 x10 then 429
-  with `Retry-After`, 401 without a cookie, and `docker logs` has no client name or `wa.me` link.
+  with `Retry-After`, 401 without a cookie, and `docker logs` has no line matching "Ana Rojas", "Marta", "Lucía" or `wa.me`.
   All matched. CI: NOT RUN (pending push). NOT RUN: the plain-host :8080 variant.
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
@@ -118,9 +118,6 @@ own change.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.
 - Owner exception recorded: the design doc keeps the 90% `make cover` floor, which the bootstrap
   skill would not use. Kept by owner decision.
-- Public repo: the old review reports in `docs/designs/history/review-release-1/round-1/` and the
-  root goldfish_brainstorm_findings.md name a home folder path (line 3 / lines 6–7). Strip it
-  before the first push.
 - `make vuln` lists 3 known vulnerabilities in kin-openapi and golang.org/x/crypto that our code
   does not call (govulncheck passes).
 - Design doc item 87's root-file deletions (design_draft.md and the others) are still pending.
