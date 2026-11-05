@@ -4,57 +4,51 @@
 	import { untrack } from 'svelte';
 	import { api } from '../../../lib/api/app';
 	import { errorText, type ApiError } from '../../../lib/api/errors';
-	import type { Appointment, Media } from '../../../lib/api/schemas';
-	import { attrDisplay, statusActions } from '../../../lib/booking';
+	import type { Appointment } from '../../../lib/api/schemas';
+	import { business } from '../../../lib/business.svelte';
+	import { showThenFetch } from '../../../lib/cachedLoad';
+	import { attrDisplay, STATUS_NAME, statusActions } from '../../../lib/booking';
 	import { cache } from '../../../lib/cache/store.svelte';
+	import ActionButton from '../../../lib/components/ActionButton.svelte';
 	import AppointmentForm from '../../../lib/components/AppointmentForm.svelte';
 	import Button from '../../../lib/components/Button.svelte';
 	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import OverlapSheet from '../../../lib/components/OverlapSheet.svelte';
-	import PhotoGrid from '../../../lib/components/PhotoGrid.svelte';
+	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
 	import TextField from '../../../lib/components/TextField.svelte';
 	import Toast from '../../../lib/components/Toast.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { amountText, exponentOf, formatMoney, parseAmount } from '../../../lib/money';
-	import { toJpegs } from '../../../lib/photos';
 	import { submitOnce } from '../../../lib/submit';
+	import { createToaster } from '../../../lib/toaster.svelte';
 	import { formatDayLong, formatTime, todayIn } from '../../../lib/time';
 
 	// One appointment (CUJ 3 step 5): its facts, the status buttons, the amount paid, edit mode and
 	// the photos taken at it. The server holds the truth: every change waits for its answer.
 	const id = $derived(page.params.id ?? '');
 	const data = $derived(cache.snapshot);
-	const zone = $derived(
-		data?.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-	);
-	const currency = $derived(data?.settings.currency ?? '');
-	const locale = $derived(data?.settings.locale ?? 'es');
-	const money = (minor: number): string => formatMoney(minor, currency, locale);
+	const zone = $derived(business.zone);
+	const money = (minor: number): string => formatMoney(minor, business.currency, business.locale);
 
 	let appt = $state<Appointment | null>(null);
 	let loadError = $state<ApiError | null>(null);
 	let editing = $state(false);
-	let toast = $state<{ n: number; message: string } | null>(null);
-	let toasts = 0;
-
-	function say(message: MessageKey): void {
-		toasts += 1;
-		toast = { n: toasts, message: t(message) };
-	}
+	const toaster = createToaster();
 
 	// The cached copy shows at once (and is all there is offline); the server's answer replaces it.
 	async function load(want: string): Promise<void> {
 		loadError = null;
-		const cached = untrack(() => cache.snapshot?.appointments.find((a) => a.id === want));
-		appt = cached ?? null;
-		const result = await api.getAppointment(want);
-		if (want !== id) {
-			return;
-		}
-		if (result.ok) {
-			appt = result.data;
-		} else if (result.error.kind !== 'offline' || cached === undefined) {
-			loadError = result.error;
+		const failure = await showThenFetch(
+			untrack(() => cache.snapshot?.appointments.find((a) => a.id === want)),
+			() => api.getAppointment(want),
+			() => want === id,
+			(value) => {
+				appt = value;
+			}
+		);
+		if (failure !== undefined) {
+			loadError = failure;
 		}
 	}
 
@@ -62,9 +56,6 @@
 		const want = id;
 		untrack(() => {
 			editing = false;
-			photos = null;
-			listError = null;
-			photosError = null;
 			void load(want);
 		});
 	});
@@ -97,13 +88,6 @@
 		cancelled: 'danger',
 		no_show: 'secondary'
 	} as const;
-	const STATUS_NAME: Record<Appointment['status'], MessageKey> = {
-		scheduled: 'status_scheduled',
-		confirmed: 'status_confirmed',
-		cancelled: 'status_cancelled',
-		no_show: 'status_no_show'
-	};
-
 	let actionError = $state<ApiError | null>(null);
 	let busy = $state(false);
 	let overlapping = $state<{ to: Appointment['status']; items: Appointment[] } | null>(null);
@@ -121,7 +105,7 @@
 			if (result.ok) {
 				overlapping = null;
 				appt = result.data;
-				say('appointment_updated');
+				toaster.say('appointment_updated');
 				void cache.refresh();
 			} else if (result.error.kind === 'overlap') {
 				overlapping = { to, items: result.error.overlapping };
@@ -136,7 +120,7 @@
 	);
 
 	// Amount paid
-	const exponent = $derived(exponentOf(currency || 'USD', locale));
+	const exponent = $derived(exponentOf(business.currency || 'USD', business.locale));
 	let paid = $state('');
 	let paidError = $state<string | null>(null);
 	let paying = $state(false);
@@ -161,7 +145,7 @@
 			const result = await api.updateAppointment(appt.id, { paid_cents: minor });
 			if (result.ok) {
 				appt = result.data;
-				say('appointment_updated');
+				toaster.say('appointment_updated');
 				void cache.refresh();
 			} else {
 				paidError = errorText(result.error);
@@ -171,78 +155,6 @@
 			paying = pending;
 		}
 	);
-
-	// Photos
-	let photos = $state<Media[] | null>(null);
-	// The list's own failure (retried when the appointment changes) and the last upload's, apart:
-	// reloading the list must not wipe an upload error.
-	let listError = $state<string | null>(null);
-	let photosError = $state<string | null>(null);
-	let uploading = $state(false);
-
-	async function loadPhotos(clientId: string, apptId: string): Promise<void> {
-		const result = await api.listClientMedia(clientId);
-		if (result.ok) {
-			photos = result.data.filter((m) => m.appointment_id === apptId);
-			listError = null;
-		} else {
-			listError = result.error.kind === 'offline' ? t('photos_offline') : errorText(result.error);
-		}
-	}
-
-	$effect(() => {
-		const a = appt;
-		if (a !== null && photos === null) {
-			untrack(() => {
-				void loadPhotos(a.client_id, a.id);
-			});
-		}
-	});
-
-	const upload = submitOnce(
-		async (file: File) => {
-			if (appt === null) {
-				return;
-			}
-			photosError = null;
-			let jpegs;
-			try {
-				jpegs = await toJpegs(file);
-			} catch {
-				console.warn('code=photo_decode_failed');
-				photosError = t('photo_unreadable');
-				return;
-			}
-			const result = await api.uploadMedia({ ...jpegs, appointment_id: appt.id });
-			if (!result.ok) {
-				photosError = errorText(result.error);
-				return;
-			}
-			await loadPhotos(appt.client_id, appt.id);
-			say('photo_added');
-		},
-		(pending) => {
-			uploading = pending;
-		}
-	);
-
-	function picked(e: Event & { currentTarget: HTMLInputElement }): void {
-		const file = e.currentTarget.files?.[0];
-		e.currentTarget.value = '';
-		if (file !== undefined) {
-			void upload.run(file);
-		}
-	}
-
-	async function archive(photo: Media): Promise<string | null> {
-		const result = await api.archiveMedia(photo.id);
-		if (!result.ok) {
-			return errorText(result.error);
-		}
-		photos = (photos ?? []).filter((m) => m.id !== photo.id);
-		say('photo_archived');
-		return null;
-	}
 </script>
 
 <div class="flex flex-col gap-4">
@@ -261,17 +173,12 @@
 	</header>
 
 	{#if loadError !== null}
-		<div role="alert" class="glass-card flex flex-col gap-3 rounded-lg px-5 py-3">
-			<p class="text-base text-error">{errorText(loadError)}</p>
-			<Button
-				variant="ghost"
-				onclick={() => {
-					void load(id);
-				}}
-			>
-				{t('agenda_retry')}
-			</Button>
-		</div>
+		<LoadFailure
+			error={loadError}
+			onretry={() => {
+				void load(id);
+			}}
+		/>
 	{:else if appt === null || data === null}
 		<p role="status" class="px-2 text-base text-ink-muted">{t('appointment_loading')}</p>
 	{:else if editing}
@@ -281,7 +188,7 @@
 			onsaved={(saved: Appointment) => {
 				appt = saved;
 				editing = false;
-				say('appointment_updated');
+				toaster.say('appointment_updated');
 			}}
 			oncancel={() => {
 				editing = false;
@@ -343,30 +250,24 @@
 
 				<div class="flex flex-wrap items-start gap-3">
 					{#each statusActions(appt.status) as to (to)}
-						<div class="min-w-36 flex-1">
-							<Button
-								variant={STATUS_VARIANT[to]}
-								{busy}
-								{...offlineOff}
-								onclick={() => {
-									void move.run(to, false);
-								}}
-							>
-								{t(STATUS_LABEL[to])}
-							</Button>
-						</div>
-					{/each}
-					<div class="min-w-36 flex-1">
-						<Button
-							variant="ghost"
-							{...offlineOff}
+						<ActionButton
+							variant={STATUS_VARIANT[to]}
+							{busy}
 							onclick={() => {
-								editing = true;
+								void move.run(to, false);
 							}}
 						>
-							{t('appointment_edit')}
-						</Button>
-					</div>
+							{t(STATUS_LABEL[to])}
+						</ActionButton>
+					{/each}
+					<ActionButton
+						variant="ghost"
+						onclick={() => {
+							editing = true;
+						}}
+					>
+						{t('appointment_edit')}
+					</ActionButton>
 				</div>
 				{#if actionError !== null}
 					<p role="alert" class="text-sm text-error">{errorText(actionError)}</p>
@@ -397,42 +298,16 @@
 				</form>
 			</section>
 
-			<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
-				<div class="flex items-center gap-3">
-					<h2 class="flex-1 text-xl font-bold text-ink">{t('photos_title')}</h2>
-					<label
-						class="relative inline-flex min-h-tap items-center justify-center gap-2 rounded-pill border border-accent-300 bg-accent-100 px-6 py-3 text-sm font-bold text-accent-700 focus-within:outline-2 hover:bg-accent-300 {cache.offline ||
-						uploading
-							? 'pointer-events-none opacity-60'
-							: ''}"
-					>
-						<Icon name="plus" />
-						{uploading ? t('photo_adding') : t('photo_add')}
-						<input
-							type="file"
-							accept="image/*"
-							disabled={cache.offline || uploading}
-							onchange={picked}
-							class="absolute inset-0 size-full cursor-pointer opacity-0"
-						/>
-					</label>
-				</div>
-				{#if photosError !== null || listError !== null}
-					<p role="alert" class="text-sm text-error">{photosError ?? listError}</p>
-				{:else if photos !== null && photos.length === 0}
-					<p class="text-sm text-ink-muted">{t('photos_empty')}</p>
-				{/if}
-				{#if photos !== null && photos.length > 0}
-					<PhotoGrid {photos} onarchive={archive} />
-				{/if}
-			</section>
+			{#key appt.id}
+				<PhotoSection clientId={appt.client_id} appointmentId={appt.id} empty="photos_empty" />
+			{/key}
 		</div>
 	{/if}
 </div>
 
-{#if toast !== null}
-	{#key toast.n}
-		<Toast message={toast.message} />
+{#if toaster.current !== null}
+	{#key toaster.current.n}
+		<Toast message={toaster.current.message} />
 	{/key}
 {/if}
 

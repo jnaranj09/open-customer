@@ -8,6 +8,7 @@ import {
 	AppointmentListSchema,
 	AppointmentSchema,
 	BootstrapSchema,
+	ClientListSchema,
 	ClientSchema,
 	LogItemSchema,
 	LogListSchema,
@@ -21,6 +22,7 @@ import {
 	SetupOptionsSchema,
 	SetupStatusSchema,
 	type Appointment,
+	type Client,
 	type LogItem,
 	type Media
 } from './schemas';
@@ -159,6 +161,30 @@ export function createApi(opts: ApiOptions) {
 		/** Adds a client. A shared phone is a `duplicate-phone` problem carrying those clients. */
 		createClient: (body: Schemas['ClientInput']) =>
 			read('/clients', ClientSchema, () => client.POST('/clients', { body })),
+		/** The active clients, or the archived ones with `archived: true`. */
+		listClients: async (query: { archived: boolean }): Promise<Result<Client[]>> => {
+			const got = await read('/clients', ClientListSchema, () =>
+				client.GET('/clients', { params: { query } })
+			);
+			return got.ok ? { ok: true, data: got.data.items } : got;
+		},
+		/** One client; an archived one too. */
+		getClient: (id: string) =>
+			read('/clients/{id}', ClientSchema, () =>
+				client.GET('/clients/{id}', { params: { path: { id } } })
+			),
+		/** Changes only the fields sent. A shared phone is a `duplicate-phone` problem (409). */
+		updateClient: (id: string, body: Schemas['ClientPatch']) =>
+			read('/clients/{id}', ClientSchema, () =>
+				client.PATCH('/clients/{id}', { params: { path: { id } }, body })
+			),
+		/** Every appointment of a client, newest first. */
+		listClientAppointments: async (id: string): Promise<Result<Appointment[]>> => {
+			const got = await read('/clients/{id}/appointments', AppointmentListSchema, () =>
+				client.GET('/clients/{id}/appointments', { params: { path: { id } } })
+			);
+			return got.ok ? { ok: true, data: got.data.items } : got;
+		},
 		/** The active photos of a client, newest first. */
 		listClientMedia: async (id: string): Promise<Result<Media[]>> => {
 			const got = await read('/clients/{id}/media', MediaListSchema, () =>
@@ -166,8 +192,10 @@ export function createApi(opts: ApiOptions) {
 			);
 			return got.ok ? { ok: true, data: got.data.items } : got;
 		},
-		/** Uploads a photo (the full JPEG and its thumbnail) for an appointment. */
-		uploadMedia: (photo: { full: Blob; thumb: Blob; appointment_id: string }) =>
+		/** Uploads a photo (the full JPEG and its thumbnail) for an appointment, or for a client. */
+		uploadMedia: (
+			photo: { full: Blob; thumb: Blob } & ({ appointment_id: string } | { client_id: string })
+		) =>
 			read('/media', MediaSchema, () =>
 				client.POST('/media', {
 					// The generated type calls a binary part a string; the form carries the real blobs.
@@ -176,7 +204,11 @@ export function createApi(opts: ApiOptions) {
 						const form = new FormData();
 						form.append('full', photo.full, 'full.jpg');
 						form.append('thumb', photo.thumb, 'thumb.jpg');
-						form.append('appointment_id', photo.appointment_id);
+						if ('appointment_id' in photo) {
+							form.append('appointment_id', photo.appointment_id);
+						} else {
+							form.append('client_id', photo.client_id);
+						}
 						return form;
 					}
 				})
@@ -191,10 +223,12 @@ export function createApi(opts: ApiOptions) {
 		/** Records a due item as sent or skipped. A repeat of a logged item is safe (the server answers 200). */
 		recordReminder: (body: Schemas['LogEntry']) =>
 			read('/reminders/log', LogItemSchema, () => client.POST('/reminders/log', { body })),
-		/** The log rows of one local day, newest first. */
-		listReminderLog: async (date: string): Promise<Result<LogItem[]>> => {
+		/** The log rows of one local day or of one client, newest first. */
+		listReminderLog: async (
+			query: { date: string } | { client_id: string }
+		): Promise<Result<LogItem[]>> => {
 			const got = await read('/reminders/log', LogListSchema, () =>
-				client.GET('/reminders/log', { params: { query: { date } } })
+				client.GET('/reminders/log', { params: { query } })
 			);
 			return got.ok ? { ok: true, data: got.data.items } : got;
 		},

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { t } from '../i18n';
 	import EmptyState from './EmptyState.svelte';
 </script>
@@ -9,6 +10,6 @@
 		title={t('due_no_rules_title')}
 		body={t('due_no_rules_body')}
 		actionLabel={t('due_no_rules_action')}
-		href="/ajustes"
+		href={resolve('/ajustes')}
 	/>
 </div>

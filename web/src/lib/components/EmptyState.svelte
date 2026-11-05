@@ -1,18 +1,15 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
-	import type { RouteIdWithSearchOrHash } from '$app/types';
+	import type { ResolvedPathname } from '$app/types';
 	import Icon from './icons/Icon.svelte';
 	import { buttonClasses } from './buttonStyle';
 
-	// A route without parameters: `resolve` needs the values of a dynamic one (`/clientas/[id]`).
-	type StaticRoute = Exclude<RouteIdWithSearchOrHash, `${string}[${string}`>;
-
+	// `href` is already resolved by the caller (`resolve`).
 	let {
 		title,
 		body,
 		actionLabel,
 		href
-	}: { title: string; body: string; actionLabel?: string; href?: StaticRoute } = $props();
+	}: { title: string; body: string; actionLabel?: string; href?: ResolvedPathname } = $props();
 </script>
 
 <div class="flex flex-col items-center gap-2 p-6 text-center">
@@ -20,6 +17,6 @@
 	<h2 class="text-xl font-bold text-ink">{title}</h2>
 	<p class="text-sm text-ink-muted">{body}</p>
 	{#if actionLabel !== undefined && href !== undefined}
-		<a href={resolve(href)} class="{buttonClasses('primary')} mt-2">{actionLabel}</a>
+		<a {href} class="{buttonClasses('primary')} mt-2">{actionLabel}</a>
 	{/if}
 </div>

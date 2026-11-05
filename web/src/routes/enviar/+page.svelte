@@ -158,7 +158,7 @@
 
 	function loadSent(day: string): void {
 		const run = ++sentRun;
-		void api.listReminderLog(day).then((result) => {
+		void api.listReminderLog({ date: day }).then((result) => {
 			if (run !== sentRun) {
 				return;
 			}

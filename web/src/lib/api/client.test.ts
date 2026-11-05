@@ -355,10 +355,18 @@ describe('recordReminder', () => {
 describe('listReminderLog', () => {
 	it('asks for the day and returns the items', async () => {
 		const { api, fetchFn } = setup(() => json({ items: [logItem] }));
-		const result = await api.listReminderLog('2026-11-04');
+		const result = await api.listReminderLog({ date: '2026-11-04' });
 		expect(result).toEqual({ ok: true, data: [logItem] });
 		expect(fetchFn.mock.calls.map(([request]) => (request as Request).url)).toEqual([
 			`${BASE}/reminders/log?date=2026-11-04`
+		]);
+	});
+
+	it('asks for one client', async () => {
+		const { api, fetchFn } = setup(() => json({ items: [logItem] }));
+		await api.listReminderLog({ client_id: USER_ID });
+		expect(fetchFn.mock.calls.map(([request]) => (request as Request).url)).toEqual([
+			`${BASE}/reminders/log?client_id=${USER_ID}`
 		]);
 	});
 });
@@ -492,6 +500,68 @@ describe('createClient', () => {
 	});
 });
 
+describe('the client reads and changes', () => {
+	const client = {
+		id: USER_ID,
+		name: 'Ana Rojas',
+		phone_e164: null,
+		phone_digits: null,
+		notes: null,
+		attrs: {},
+		archived: false,
+		created_at: '2026-11-01T10:00:00Z',
+		updated_at: '2026-11-01T10:00:00Z'
+	};
+
+	it('listClients asks for the archived ones and returns the items', async () => {
+		const { api, fetchFn } = setup(() => json({ items: [client] }));
+		const result = await api.listClients({ archived: true });
+		expect([result, (fetchFn.mock.calls[0]?.[0] as Request).url]).toEqual([
+			{ ok: true, data: [client] },
+			`${BASE}/clients?archived=true`
+		]);
+	});
+
+	it('getClient asks for the client', async () => {
+		const { api, fetchFn } = setup(() => json(client));
+		const result = await api.getClient(USER_ID);
+		expect([result, (fetchFn.mock.calls[0]?.[0] as Request).url]).toEqual([
+			{ ok: true, data: client },
+			`${BASE}/clients/${USER_ID}`
+		]);
+	});
+
+	it('updateClient patches only the fields sent', async () => {
+		const { api, fetchFn } = setup(() => json(client));
+		const result = await api.updateClient(USER_ID, { phone: null });
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result.ok, request.method, request.url, await request.text()]).toEqual([
+			true,
+			'PATCH',
+			`${BASE}/clients/${USER_ID}`,
+			'{"phone":null}'
+		]);
+	});
+
+	it('updateClient hands back the clients that share the phone on a 409', async () => {
+		const { api } = setup(() => problem('duplicate-phone', 409, { clients: [client] }));
+		const result = await api.updateClient(USER_ID, { phone: '8888-7777' });
+		expect(result).toMatchObject({
+			ok: false,
+			error: { kind: 'problem', type: 'duplicate-phone', problem: { clients: [client] } }
+		});
+	});
+
+	it('listClientAppointments returns the items of that client', async () => {
+		const { api, fetchFn } = setup(() => json({ items: [appointment] }));
+		const result = await api.listClientAppointments(USER_ID);
+		expect([result, (fetchFn.mock.calls[0]?.[0] as Request).url]).toEqual([
+			{ ok: true, data: [appointment] },
+			`${BASE}/clients/${USER_ID}/appointments`
+		]);
+	});
+});
+
 describe('listClientMedia', () => {
 	it('asks for the client and returns the photos', async () => {
 		const { api, fetchFn } = setup(() => json({ items: [media] }));
@@ -527,6 +597,17 @@ describe('uploadMedia', () => {
 			[...form.keys()].sort(),
 			form.get('appointment_id')
 		]).toEqual([true, 'POST', `${BASE}/media`, ['appointment_id', 'full', 'thumb'], USER_ID]);
+	});
+
+	it('sends the client when the photo belongs to no appointment', async () => {
+		const { api, fetchFn } = setup(() => json(media, 201));
+		const blob = new Blob(['f'], { type: 'image/jpeg' });
+		await api.uploadMedia({ full: blob, thumb: blob, client_id: USER_ID });
+		const form = await (fetchFn.mock.calls[0]?.[0] as Request).formData();
+		expect([[...form.keys()].sort(), form.get('client_id')]).toEqual([
+			['client_id', 'full', 'thumb'],
+			USER_ID
+		]);
 	});
 
 	it('types a 415 as a problem', async () => {

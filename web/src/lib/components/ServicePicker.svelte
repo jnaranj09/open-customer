@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { Service } from '../api/schemas';
 	import { removeService, tapService, type Line } from '../booking';
 	import { t } from '../i18n';
@@ -23,7 +24,7 @@
 			title={t('appointment_services_empty_title')}
 			body={t('appointment_services_empty_body')}
 			actionLabel={t('appointment_services_empty_action')}
-			href="/ajustes"
+			href={resolve('/ajustes')}
 		/>
 	{:else}
 		<div role="group" aria-labelledby={labelId} class="flex flex-wrap gap-2">

@@ -183,10 +183,14 @@ function sendable(def: Attribute, v: AttrValue): unknown {
 	return def.type === 'number' && NUMBER.test(text) ? Number(text.replace(',', '.')) : text;
 }
 
-function attrsToSend(form: Form, defs: Attribute[]): Record<string, unknown> {
+/** The attribute values to send for a new record: the filled ones, each as the API takes it. */
+export function attrsToSend(
+	values: Record<string, AttrValue>,
+	defs: Attribute[]
+): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const def of defs) {
-		const v = form.attrs[def.key];
+		const v = values[def.key];
 		if (v !== undefined && !isEmpty(v)) {
 			out[def.key] = sendable(def, v);
 		}
@@ -201,7 +205,7 @@ export function createBody(
 	zone: string,
 	defs: Attribute[]
 ): Schemas['AppointmentInput'] {
-	const attrs = attrsToSend(form, defs);
+	const attrs = attrsToSend(form.attrs, defs);
 	const notes = form.notes.trim();
 	return {
 		client_id: form.clientId ?? '',
@@ -236,13 +240,6 @@ export function formFrom(a: Appointment, zone: string, defs: Attribute[]): Form 
 			at.count += 1;
 		}
 	}
-	const attrs: Record<string, AttrValue> = {};
-	for (const def of defs) {
-		const v = textOf(a.attrs[def.key]);
-		if (v !== undefined) {
-			attrs[def.key] = v;
-		}
-	}
 	return {
 		clientId: a.client_id,
 		lines,
@@ -250,19 +247,36 @@ export function formFrom(a: Appointment, zone: string, defs: Attribute[]): Form 
 		time: formatTime(a.starts_at, zone),
 		end: null,
 		notes: a.notes ?? '',
-		attrs
+		attrs: attrFormValues(a.attrs, defs)
 	};
 }
 
-function attrChanges(
-	before: Appointment,
-	form: Form,
+/** The form values of a record's stored attributes (only the defined ones that hold a value). */
+export function attrFormValues(
+	stored: Record<string, unknown>,
+	defs: Attribute[]
+): Record<string, AttrValue> {
+	const attrs: Record<string, AttrValue> = {};
+	for (const def of defs) {
+		const v = textOf(stored[def.key]);
+		if (v !== undefined) {
+			attrs[def.key] = v;
+		}
+	}
+	return attrs;
+}
+
+/** What changed in a record's attributes: the new or changed values, `null` for a cleared one;
+ *  null when nothing changed. */
+export function attrChanges(
+	before: Record<string, unknown>,
+	values: Record<string, AttrValue>,
 	defs: Attribute[]
 ): Record<string, unknown> | null {
 	const out: Record<string, unknown> = {};
 	for (const def of defs) {
-		const was = textOf(before.attrs[def.key]);
-		const now = form.attrs[def.key];
+		const was = textOf(before[def.key]);
+		const now = values[def.key];
 		if (isEmpty(now)) {
 			if (!isEmpty(was)) {
 				out[def.key] = null;
@@ -302,7 +316,7 @@ export function patchBody(
 	) {
 		body.service_ids = ids;
 	}
-	const attrs = attrChanges(before, form, defs);
+	const attrs = attrChanges(before.attrs, form.attrs, defs);
 	if (attrs !== null) {
 		body.attrs = attrs;
 	}
@@ -361,6 +375,14 @@ const STATUS_ACTIONS: Record<Appointment['status'], Appointment['status'][]> = {
 	confirmed: ['cancelled', 'no_show'],
 	cancelled: ['scheduled'],
 	no_show: ['scheduled']
+};
+
+/** The name of each status as the screens show it. */
+export const STATUS_NAME: Record<Appointment['status'], MessageKey> = {
+	scheduled: 'status_scheduled',
+	confirmed: 'status_confirmed',
+	cancelled: 'status_cancelled',
+	no_show: 'status_no_show'
 };
 
 /** The statuses she can move an appointment to (the table in "Appointments"): "Reactivar" is the

@@ -48,3 +48,16 @@ export function search<T extends Searchable>(items: readonly T[], query: string)
 	const rest = hits.filter((h) => !h.startsWord).sort(byKey);
 	return [...first, ...rest].slice(0, MAX_RESULTS).map((h) => h.item);
 }
+
+/** Every item ordered by the same name key the search uses (accents ignored, then the raw name). */
+export function sortByName<T extends Searchable>(items: readonly T[]): T[] {
+	return items
+		.map((item): Hit<T> => ({
+			item,
+			name: item.name,
+			key: normalize(item.name),
+			startsWord: false
+		}))
+		.sort(byKey)
+		.map((h) => h.item);
+}

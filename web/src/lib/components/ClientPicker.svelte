@@ -3,10 +3,12 @@
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Client } from '../api/schemas';
 	import { t } from '../i18n';
+	import { sharingNames } from '../clients';
 	import { search } from '../search';
 	import { submitOnce } from '../submit';
 	import BottomSheet from './BottomSheet.svelte';
 	import Button from './Button.svelte';
+	import DuplicatePhone from './DuplicatePhone.svelte';
 	import TextField from './TextField.svelte';
 
 	// Picks the client of a booking (CUJ 3 step 2): type to search the cached clients (the one
@@ -37,11 +39,7 @@
 	let failure = $state<ApiError | null>(null);
 	let busy = $state(false);
 
-	const sharing = $derived(
-		failure?.kind === 'problem' && failure.type === 'duplicate-phone'
-			? (failure.problem.clients ?? []).map((c) => c.name)
-			: null
-	);
+	const sharing = $derived(sharingNames(failure));
 
 	function openAdd(): void {
 		name = query.trim();
@@ -141,18 +139,14 @@
 	<TextField label={t('client_name')} autocomplete="off" bind:value={name} />
 	<TextField label={t('client_phone')} type="tel" autocomplete="off" bind:value={phone} />
 	{#if sharing !== null}
-		<p role="alert" class="rounded-md bg-glass-tint px-4 py-3 text-sm font-bold text-ink">
-			{t('client_phone_taken', { names: sharing.join(', ') })}
-		</p>
-		<Button
-			variant="primary"
+		<DuplicatePhone
+			names={sharing}
 			{busy}
-			onclick={() => {
+			label={t('client_save_anyway')}
+			onconfirm={() => {
 				void save.run(true);
 			}}
-		>
-			{t('client_save_anyway')}
-		</Button>
+		/>
 	{:else}
 		{#if failure !== null}
 			<p role="alert" class="text-sm text-error">{errorText(failure)}</p>

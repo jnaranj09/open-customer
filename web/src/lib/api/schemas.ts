@@ -85,6 +85,10 @@ export const ClientSchema = z.object({
 	updated_at: instant
 }) satisfies z.ZodType<Schemas['Client']>;
 
+export const ClientListSchema = z.object({
+	items: z.array(ClientSchema)
+}) satisfies z.ZodType<Schemas['ClientList']>;
+
 const AppointmentServiceSchema = z.object({
 	service_id: id,
 	name: z.string(),
