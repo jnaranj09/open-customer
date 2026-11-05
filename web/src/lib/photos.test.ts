@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
-import { DECODE_TIMEOUT_MS, fitLongEdge, squareCrop, withTimeout } from './photos';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DECODE_TIMEOUT_MS, fitLongEdge, squareCrop, toIconPngs, withTimeout } from './photos';
+
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
+});
 
 describe('fitLongEdge', () => {
 	it('scales 4032x3024 to 2048x1536', () => {
@@ -40,7 +45,6 @@ describe('withTimeout', () => {
 		const outcome = result.catch((e: unknown) => (e instanceof Error ? e.message : ''));
 		await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS);
 		expect(await outcome).toBe('timeout');
-		vi.useRealTimers();
 	});
 
 	it('gives the value when the work settles first', async () => {
@@ -51,5 +55,17 @@ describe('withTimeout', () => {
 		await expect(withTimeout(Promise.reject(new Error('bad')), DECODE_TIMEOUT_MS)).rejects.toThrow(
 			'bad'
 		);
+	});
+});
+
+describe('toIconPngs', () => {
+	it('rejects with the timeout when the browser never finishes decoding', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal('createImageBitmap', () => new Promise<never>(() => undefined));
+		const outcome = toIconPngs(new File(['x'], 'icon.png')).catch((e: unknown) =>
+			e instanceof Error ? e.message : ''
+		);
+		await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS);
+		expect(await outcome).toBe('timeout');
 	});
 });
