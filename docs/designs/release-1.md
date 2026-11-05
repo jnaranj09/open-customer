@@ -1423,7 +1423,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `make test-db` (Docker is available on GitHub runners) | P1 |
     | `make cover` | P2 (the first gated package) |
     | `make build` | P0 (runs after every check above, so they run with only the stub; see "Clean checkout" in the Verification Plan) |
-    | `pnpm exec playwright install --with-deps webkit`, then `make e2e` against the built binary + a `postgres:18.<minor>-alpine` service container (the pinned tag), with `E2E_DATABASE_URL` pointing at it | P6 |
+    | `psql --version` (shows the runner has the client `make e2e` needs), `pnpm exec playwright install --with-deps webkit`, then `make e2e` against the built binary + a `postgres:18.<minor>-alpine` service container (the pinned tag, user, password and database `open_customer`/`e2e`/`open_customer`, `pg_isready` health check), with `E2E_DATABASE_URL=postgres://open_customer:e2e@localhost:5432/open_customer_e2e`. On failure `web/test-results/` is uploaded as an artifact | P6 |
 
 ##### 9. `.github/workflows/release.yml` (Create)
 

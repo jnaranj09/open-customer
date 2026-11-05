@@ -34,8 +34,8 @@ run.
 | `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names), then Playwright WebKit against the binary. Needs the Playwright WebKit browser and its host libraries, and port 8080 free |
 
 The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover`.
-The gate leaves out `make e2e`. CI runs it once its P6 step lands (design doc item 8); until then
-it runs by hand.
+The gate leaves out `make e2e`. CI runs it after `make build` (design doc item 8); locally it runs
+by hand.
 
 The binary's own subcommands (`serve`, `reset-password <username>`, `setup-link`, `healthcheck`,
 `version`) are described in the design doc's "Process model" and item 19.

@@ -1,5 +1,5 @@
-# Design doc item 8. Runs the CLAUDE.md gate; each phase adds its steps (check-generated and
-# test-db from P1, cover from P2, e2e from P6).
+# Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
+# in P2, e2e in P6).
 name: ci
 
 on:
@@ -12,6 +12,20 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    services:
+      postgres: # the e2e database server; the tag is the PG_IMAGE pin
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: open_customer
+          POSTGRES_PASSWORD: e2e
+          POSTGRES_DB: open_customer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U open_customer -d open_customer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,3 +64,21 @@ jobs:
       - run: make cover
       # Last, so every check above ran with only the web stub (Verification Plan, "Clean checkout").
       - run: make build
+      # make e2e calls psql on the runner when E2E_DATABASE_URL is set. The runner image docs do not
+      # say whether psql is present, so this shows it in the first run; install postgresql-client
+      # here if it is missing.
+      - name: Check psql
+        run: psql --version
+      - name: Install Playwright WebKit
+        working-directory: web
+        run: pnpm exec playwright install --with-deps webkit
+      - run: make e2e
+        env:
+          E2E_DATABASE_URL: postgres://open_customer:e2e@localhost:5432/open_customer_e2e
+      - name: Upload e2e results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: web/test-results/
+          if-no-files-found: ignore
