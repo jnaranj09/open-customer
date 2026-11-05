@@ -3,6 +3,7 @@
 import type { AttrOption, Attribute, Template } from './api/schemas';
 import { templateUses } from './chips';
 import type { MessageKey } from './i18n';
+import { byPosition } from './order';
 
 /** The names of the active templates that use the attribute, in the order given. The warning is
  *  information only; the archive goes ahead (design doc "Attribute values"). */
@@ -81,7 +82,8 @@ export function inScope(
 	scope: Attribute['scope'],
 	archived: boolean
 ): Attribute[] {
-	return attributes
-		.filter((a) => a.scope === scope && a.archived === archived)
-		.sort((a, b) => a.position - b.position);
+	return byPosition(
+		attributes.filter((a) => a.scope === scope && a.archived === archived),
+		(a) => a.label
+	);
 }

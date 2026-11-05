@@ -345,7 +345,6 @@
 	"attributes_loading": "Cargando atributos…",
 	"attributes_empty_title": "Aún no tienes atributos",
 	"attributes_empty_body": "Guarda los datos que quieras recordar de cada clienta o de cada cita.",
-	"attributes_back": "Volver a los atributos",
 	"attribute_new_title": "Nuevo atributo",
 	"attribute_label": "Nombre",
 	"attribute_label_required": "Escribe un nombre",
@@ -373,9 +372,7 @@
 	"attribute_archived": "Atributo archivado",
 	"attribute_restore": "Restaurar atributo",
 	"attribute_restored": "Atributo restaurado",
-	"attribute_archived_note": "Este atributo está archivado.",
 	"options_title": "Opciones",
-	"options_empty": "Aún no hay opciones",
 	"option_add": "+ Agregar opción",
 	"option_add_inside": "Agregar opciones dentro",
 	"option_label": "Nombre de la opción",
@@ -393,5 +390,6 @@
 	"option_moved": "Orden guardado",
 	"option_drag": "Mover {label}. Con las flechas de arriba y abajo cambia su lugar",
 	"option_level": "Opciones dentro de {label}",
-	"business_loading": "Cargando tu negocio…"
+	"business_loading": "Cargando tu negocio…",
+	"archived_heading_masculine": "Archivados"
 }

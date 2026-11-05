@@ -59,6 +59,11 @@
 
 {#if toaster.current !== null}
 	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
+		<Toast
+			message={toaster.current.message}
+			{...toaster.current.action === undefined
+				? {}
+				: { actionLabel: toaster.current.action.label, onaction: toaster.current.action.run }}
+		/>
 	{/key}
 {/if}

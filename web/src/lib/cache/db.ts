@@ -4,6 +4,7 @@
 // so a bad cached row never reaches a screen (rules/boundaries.md).
 import Dexie, { type Table } from 'dexie';
 import { z } from 'zod';
+import { byPosition } from '../order';
 import {
 	AppointmentSchema,
 	AttributeSchema,
@@ -180,8 +181,8 @@ export function readAll(): Promise<CacheSnapshot | null> {
 			);
 		return {
 			settings,
-			attributes: parseRows('attributes', AttributeSchema, attributes),
-			services: parseRows('services', ServiceSchema, services),
+			attributes: byPosition(parseRows('attributes', AttributeSchema, attributes), (a) => a.label),
+			services: byPosition(parseRows('services', ServiceSchema, services), (x) => x.name),
 			templates: parseRows('templates', TemplateSchema, templates),
 			rules: parseRows('rules', RuleSchema, rules),
 			clients: parseRows('clients', ClientSchema, clients),

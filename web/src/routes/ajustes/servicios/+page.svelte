@@ -80,7 +80,7 @@
 		{:else}
 			{@render rows(active, data.settings.currency, data.settings.locale)}
 			{#if archived.length > 0}
-				<h2 class="px-2 text-sm font-bold text-ink-muted">{t('templates_archived_heading')}</h2>
+				<h2 class="px-2 text-sm font-bold text-ink-muted">{t('archived_heading_masculine')}</h2>
 				{@render rows(archived, data.settings.currency, data.settings.locale)}
 			{/if}
 		{/if}

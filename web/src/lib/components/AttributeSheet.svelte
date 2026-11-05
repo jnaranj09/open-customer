@@ -159,24 +159,52 @@
 			? false
 			: settled(await api.updateOption(attribute.id, id, { label: text }), 'option_saved');
 
-	const archiveOption = async (id: string): Promise<boolean> =>
-		attribute === undefined
-			? false
-			: settled(await api.updateOption(attribute.id, id, { archived: true }), 'option_archived');
+	/** Archives at once; the toast's "Deshacer" sends the option back (`archived: false`). */
+	async function archiveOption(id: string): Promise<boolean> {
+		if (attribute === undefined) {
+			return false;
+		}
+		const attributeId = attribute.id;
+		const ok = await settled(await api.updateOption(attributeId, id, { archived: true }));
+		if (ok) {
+			toaster.say('option_archived', {
+				label: 'due_undo',
+				run: () => {
+					void api.updateOption(attributeId, id, { archived: false }).then(async (back) => {
+						optionError = back.ok ? null : errorText(back.error);
+						if (back.ok) {
+							await cache.refresh();
+						}
+					});
+				}
+			});
+		}
+		return ok;
+	}
 
-	/** One `PATCH` per row that moved; the first failure stops the rest. */
+	/** One `PATCH` per row that moved; the first failure stops the rest. The cache is refreshed
+	 *  either way, so the tree shows the order the server has. */
 	async function moveOptions(moves: Positioned[]): Promise<boolean> {
 		if (attribute === undefined) {
 			return false;
 		}
+		let failed: ApiError | null = null;
 		for (const move of moves) {
 			const result = await api.updateOption(attribute.id, move.id, { position: move.position });
 			if (!result.ok) {
-				await settled(result);
-				return false;
+				failed = result.error;
+				break;
 			}
 		}
-		return settled({ ok: true, data: undefined }, 'option_moved');
+		// Rows are sent one by one, so a failure leaves the earlier ones saved: refresh either way.
+		await cache.refresh();
+		if (failed !== null) {
+			optionError = errorText(failed);
+			return false;
+		}
+		optionError = null;
+		toaster.say('option_moved');
+		return true;
 	}
 
 	const title = $derived(

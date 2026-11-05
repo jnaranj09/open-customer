@@ -79,7 +79,7 @@
 			{@const list = inScope(data.attributes, scope, true)}
 			{#if list.length > 0}
 				<h2 class="px-2 text-sm font-bold text-ink-muted">
-					{t('templates_archived_heading')} · {t(SCOPE_LABELS[scope])}
+					{t('archived_heading_masculine')} · {t(SCOPE_LABELS[scope])}
 				</h2>
 				{@render rows(list)}
 			{/if}
