@@ -20,10 +20,20 @@ export function createCache(deps: Deps) {
 		meta = await readMeta();
 	}
 
+	/** The refresh, with a failed cache write turned into a failed Result (code only in the log). */
+	async function attempt(): Promise<Result<void>> {
+		try {
+			return await refresh(deps);
+		} catch {
+			console.warn('code=cache_write_failed');
+			return { ok: false, error: { kind: 'cache_write_failed' } };
+		}
+	}
+
 	/** Fetches `/bootstrap`, then reloads what changed. Every outcome is recorded: `offline` is true
 	 *  only when the server did not answer, and `lastError` holds any failure (null after success). */
 	async function run(): Promise<Result<void>> {
-		const result = await refresh(deps);
+		const result = await attempt();
 		offline = !result.ok && result.error.kind === 'offline';
 		lastError = result.ok ? null : result.error;
 		await load();

@@ -94,7 +94,8 @@ const ALL_TABLES: Table[] = Object.values(t);
 const SINGLE = 'only';
 
 /** Deletes the whole database (cached data, due items, drafts, the pending confirmation) and
- *  opens an empty one. Logout and the 401 handler call it (design doc item 67). */
+ *  opens an empty one. Today the 401 handler (`lib/api/app.ts`) and the bad-row path below call it;
+ *  the logout screen will too (design doc item 67). */
 export async function clearCache(): Promise<void> {
 	await db.delete();
 	await db.open();

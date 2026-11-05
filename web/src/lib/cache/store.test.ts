@@ -82,6 +82,26 @@ describe('the cache read model', () => {
 		expect(cache.lastError).toEqual({ kind: 'response_invalid', path: '/bootstrap' });
 	});
 
+	it('a failed cache write is recorded as an error, not a rejection', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const broken = bootstrap();
+		broken.clients = broken.clients.map((c) => ({ ...c, attrs: { x: () => 1 } }));
+		const { cache } = setup({ ok: true, data: broken });
+		const result = await cache.refresh();
+		expect(result).toEqual({ ok: false, error: { kind: 'cache_write_failed' } });
+		expect(cache.lastError).toEqual({ kind: 'cache_write_failed' });
+		expect(cache.offline).toBe(false);
+	});
+
+	it('logs a failed cache write by code only', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const broken = bootstrap();
+		broken.clients = broken.clients.map((c) => ({ ...c, attrs: { x: () => 1 } }));
+		const { cache } = setup({ ok: true, data: broken });
+		await cache.refresh();
+		expect(warn).toHaveBeenCalledWith('code=cache_write_failed');
+	});
+
 	it('clears the error after a refresh that works', async () => {
 		const { cache } = setup(
 			{ ok: true, data: bootstrap() },
