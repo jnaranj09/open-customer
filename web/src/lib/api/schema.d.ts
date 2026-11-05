@@ -681,6 +681,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything the app caches, from one snapshot
+         * @description Settings, attributes, services, templates and rules (these four include archived rows), the active clients, the appointments of every status that start on the local days from to to, both inclusive, the due list and the template variables. All of it is read in one transaction. to must not be before from and at most 200 days after it; otherwise the answer is 422 on to.
+         */
+        get: operations["getBootstrap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/client-errors": {
         parameters: {
             query?: never;
@@ -1048,6 +1068,25 @@ export interface components {
             phone_digits?: string | null;
             /** Format: date-time */
             acted_at: string;
+        };
+        TemplateVar: {
+            ns: string;
+            key: string;
+            label: string;
+        };
+        Bootstrap: {
+            /** Format: date-time */
+            server_time: string;
+            settings: components["schemas"]["Settings"];
+            attributes: components["schemas"]["Attribute"][];
+            services: components["schemas"]["Service"][];
+            templates: components["schemas"]["Template"][];
+            rules: components["schemas"]["Rule"][];
+            clients: components["schemas"]["Client"][];
+            appointments: components["schemas"]["Appointment"][];
+            due: components["schemas"]["DueItem"][];
+            template_vars: components["schemas"]["TemplateVar"][];
+            backup_red: boolean;
         };
         Status: {
             version: string;
@@ -2368,6 +2407,32 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBootstrap: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bootstrap"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

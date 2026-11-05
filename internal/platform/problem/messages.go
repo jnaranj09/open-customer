@@ -82,6 +82,9 @@ const (
 	// MsgRangeInvalid is a list range whose "to" is before "from", or longer than the endpoint's
 	// 31-day limit.
 	MsgRangeInvalid = "Elige un rango válido de hasta 31 días"
+	// MsgBootstrapRangeInvalid is a bootstrap window whose "to" is before "from", or longer than
+	// 200 days.
+	MsgBootstrapRangeInvalid = "Elige un rango válido de hasta 200 días"
 )
 
 // Field messages for media (design doc "Photos").

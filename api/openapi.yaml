@@ -1156,6 +1156,42 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /bootstrap:
+    get:
+      operationId: getBootstrap
+      summary: Everything the app caches, from one snapshot
+      description: >-
+        Settings, attributes, services, templates and rules (these four include archived rows), the
+        active clients, the appointments of every status that start on the local days from to to,
+        both inclusive, the due list and the template variables. All of it is read in one
+        transaction. to must not be before from and at most 200 days after it; otherwise the answer
+        is 422 on to.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: The snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bootstrap"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /client-errors:
     post:
       operationId: logClientError
@@ -1829,6 +1865,59 @@ components:
         acted_at:
           type: string
           format: date-time
+    TemplateVar:
+      type: object
+      required: [ns, key, label]
+      properties:
+        ns:
+          type: string
+        key:
+          type: string
+        label:
+          type: string
+    Bootstrap:
+      type: object
+      required: [server_time, settings, attributes, services, templates, rules, clients, appointments, due, template_vars, backup_red]
+      properties:
+        server_time:
+          type: string
+          format: date-time
+        settings:
+          $ref: "#/components/schemas/Settings"
+        attributes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attribute"
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/Service"
+        templates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Template"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/Rule"
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+        appointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        due:
+          type: array
+          items:
+            $ref: "#/components/schemas/DueItem"
+        template_vars:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateVar"
+        backup_red:
+          type: boolean
     Status:
       type: object
       required: [version, migration_version, heartbeat_age_s, backup, media_free_bytes, push]
