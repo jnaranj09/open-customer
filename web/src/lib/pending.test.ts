@@ -178,6 +178,15 @@ describe('logged items', () => {
 		expect(cache.logged).toEqual(['a']);
 	});
 
+	it('confirmSent keeps the item hidden after a reload, with the confirmation cleared', async () => {
+		const { deps } = setup();
+		await startSend(item('a'), () => undefined, deps);
+		await confirmSent(item('a'), { ...deps, due: [item('a')] });
+		const reloaded = setup().cache;
+		await reloaded.load();
+		expect([reloaded.logged, reloaded.meta.pending]).toEqual([['a'], null]);
+	});
+
 	it('confirmSent does not hide the item when the POST fails', async () => {
 		const { deps, cache } = setup({ ok: false, error: { kind: 'offline' } });
 		await confirmSent(item('a'), { ...deps, due: [item('a')] });

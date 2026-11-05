@@ -13,8 +13,10 @@ type PendingStore = {
 	clearPending(): Promise<void>;
 };
 
-/** What the log POSTs tell the cache store: the server has this item, hide it until a refresh. */
-type LoggedStore = { markLogged(id: string): void };
+/** What the log POSTs tell the cache store: the server has this item, hide it (it is stored, so
+ *  a reload keeps it hidden) until a refresh no longer lists it. "Sí" also clears the confirmation
+ *  in the same write. */
+type LoggedStore = { markLogged(id: string, opts: { clearPending: boolean }): Promise<void> };
 
 /** A due item that has a WhatsApp link, so "Enviar" can run on it. */
 export type Sendable = DueItem & { wa_link: string };
@@ -62,8 +64,9 @@ type LogDeps = {
 };
 
 /** The log POST both "Sí" and "Omitir" make. On the server's answer it hides the item from the
- *  cached list until a refresh and updates the badge to the items that are left. A failed POST
- *  changes nothing. */
+ *  cached list until a refresh no longer lists it (and, for "Sí", clears the confirmation in the
+ *  same write), then updates the badge to the items that are left. A failed POST changes nothing.
+ *  Rejects when the phone cannot store the change. */
 async function logItem(
 	item: DueItem,
 	what: { action: 'sent'; body: string; phone_digits: string | null } | { action: 'skipped' },
@@ -79,27 +82,16 @@ async function logItem(
 	if (!posted.ok) {
 		return posted;
 	}
-	deps.store.markLogged(item.id);
+	await deps.store.markLogged(item.id, { clearPending: what.action === 'sent' });
 	await applyBadge(deps.badge, deps.due.filter((i) => i.id !== item.id).length);
 	return { ok: true, data: undefined };
 }
 
-/** "Sí": logs the item as sent with the exact text, then clears the confirmation. A failed POST
- *  keeps the confirmation so she can tap "Sí" again (a repeated POST is safe on the server).
- *  `due` is the shown list (`cache.shownDue`), for the badge. */
-export async function confirmSent(
-	item: DueItem,
-	deps: LogDeps & { store: PendingStore }
-): Promise<Result<void>> {
-	const logged = await logItem(
-		item,
-		{ action: 'sent', body: item.text, phone_digits: item.phone_digits },
-		deps
-	);
-	if (logged.ok) {
-		await deps.store.clearPending();
-	}
-	return logged;
+/** "Sí": logs the item as sent with the exact text; the stored hide and the cleared confirmation
+ *  are one write. A failed POST keeps the confirmation so she can tap "Sí" again (a repeated POST
+ *  is safe on the server). `due` is the shown list (`cache.shownDue`), for the badge. */
+export function confirmSent(item: DueItem, deps: LogDeps): Promise<Result<void>> {
+	return logItem(item, { action: 'sent', body: item.text, phone_digits: item.phone_digits }, deps);
 }
 
 /** "Todavía no": the item stays in the list and the question is dropped. Only this, "Sí", logout

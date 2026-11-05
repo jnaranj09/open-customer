@@ -82,7 +82,7 @@ describe('the cache read model', () => {
 		await writeSnapshot(bootstrap(1), '2026-11-03T12:00:00Z');
 		const { cache } = setup({ ok: false, error: { kind: 'offline' } });
 		await cache.load();
-		cache.markLogged('a');
+		await cache.markLogged('a', { clearPending: false });
 		await cache.refresh();
 		expect(cache.logged).toEqual(['a']);
 	});
@@ -91,8 +91,28 @@ describe('the cache read model', () => {
 		await writeSnapshot(bootstrap(2), '2026-11-03T12:00:00Z');
 		const { cache } = setup({ ok: false, error: { kind: 'offline' } });
 		await cache.load();
-		cache.markLogged(FIRST);
+		await cache.markLogged(FIRST, { clearPending: false });
 		expect(cache.shownDue.map((i) => i.id)).toEqual([SECOND]);
+	});
+
+	it('a logged item stays hidden after the store is reopened', async () => {
+		await writeSnapshot(bootstrap(2), '2026-11-03T12:00:00Z');
+		const { cache } = setup({ ok: false, error: { kind: 'offline' } });
+		await cache.load();
+		await cache.markLogged(FIRST, { clearPending: false });
+		const reopened = setup({ ok: false, error: { kind: 'offline' } }).cache;
+		await reopened.load();
+		expect(reopened.shownDue.map((i) => i.id)).toEqual([SECOND]);
+	});
+
+	it('a refresh that no longer lists a logged item drops its stored id', async () => {
+		await writeSnapshot(bootstrap(2), '2026-11-03T12:00:00Z');
+		const { cache } = setup({ ok: true, data: bootstrap(1) });
+		await cache.load();
+		await cache.markLogged(FIRST, { clearPending: false });
+		await cache.markLogged(SECOND, { clearPending: false });
+		await cache.refresh();
+		expect(cache.meta.logged).toEqual([FIRST]);
 	});
 
 	it('a refresh asked before "Sí" that answers with the old list keeps the item hidden', async () => {
@@ -112,7 +132,7 @@ describe('the cache read model', () => {
 		await vi.waitFor(() => {
 			expect(bootstrapCall).toHaveBeenCalledOnce();
 		});
-		cache.markLogged(FIRST);
+		await cache.markLogged(FIRST, { clearPending: false });
 		answer({ ok: true, data: bootstrap(2) });
 		await focus;
 		expect(cache.shownDue.map((i) => i.id)).toEqual([SECOND]);
@@ -136,7 +156,7 @@ describe('the cache read model', () => {
 		await vi.waitFor(() => {
 			expect(bootstrapCall).toHaveBeenCalledOnce();
 		});
-		cache.markLogged(FIRST);
+		await cache.markLogged(FIRST, { clearPending: false });
 		answer({ ok: true, data: bootstrap(2) });
 		await focus;
 		expect(set).toHaveBeenCalledWith(1);
@@ -151,14 +171,14 @@ describe('the cache read model', () => {
 			now: () => NOW,
 			badge: { set, clear: () => Promise.resolve() }
 		});
-		cache.markLogged(FIRST);
+		await cache.markLogged(FIRST, { clearPending: false });
 		await cache.refresh();
 		expect(set).toHaveBeenCalledWith(1);
 	});
 
 	it('forgets logged items once a refresh succeeds', async () => {
 		const { cache } = setup({ ok: true, data: bootstrap(0) });
-		cache.markLogged('a');
+		await cache.markLogged('a', { clearPending: false });
 		await cache.refresh();
 		expect(cache.logged).toEqual([]);
 	});

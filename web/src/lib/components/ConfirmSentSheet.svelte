@@ -60,8 +60,9 @@
 					return;
 				}
 			} catch {
-				// The log was saved but the phone could not clear the question: it asks again, and
-				// a second "Sí" is safe on the server.
+				// The log was saved but the phone could not store it with the cleared question: the
+				// item is hidden until the app closes, the question stays, and a second "Sí" is safe
+				// on the server.
 				console.warn('code=cache_write_failed');
 				error = errorText({ kind: 'cache_write_failed' });
 				return;
