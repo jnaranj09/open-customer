@@ -42,6 +42,7 @@
 		"knip": "^6.44.1",
 		"openapi-typescript": "7.13.0",
 		"pg": "8.23.1",
+		"postcss": "8.5.32",
 		"prettier": "3.9.10",
 		"prettier-plugin-svelte": "4.1.1",
 		"svelte": "5.57.3",

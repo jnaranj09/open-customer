@@ -90,7 +90,8 @@ A check that could not run is reported as NOT RUN, never as passing.
   `strictTypeChecked`. Never loosen a flag; fix the consumer.
 - Guard tests in `internal/guards` (Go: agent-context, nolint budget, catch-blocks, test-hygiene,
   forbid-only) and `web/tests/guards` (Vitest: layers, catch-blocks, test-hygiene, forbid-only,
-  eslint suppression budget, bulk file and inline comments). Allow-lists only shrink.
+  raw-colors, design-tokens, design-parity, eslint suppression budget, bulk file and inline
+  comments). Allow-lists only shrink.
 - Lint suppressions: a pinned total that only falls (guard `suppression-budget`).
 - Coverage: `make cover` keeps a 90% floor on the gated packages (owner decision). Never write a
   test only to raise the number; mutation testing in the clean-up pass checks the tests are real.
