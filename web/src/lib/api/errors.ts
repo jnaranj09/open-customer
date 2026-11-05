@@ -20,7 +20,10 @@ export type ApiError =
 	| { kind: 'overlap'; overlapping: Appointment[] }
 	| { kind: 'response_invalid'; path: string }
 	// The phone could not store the answer (Dexie write failed); the old cached data is still there.
-	| { kind: 'cache_write_failed' };
+	| { kind: 'cache_write_failed' }
+	// Notifications cannot be turned on here: not the installed app, no push support, permission
+	// denied, or the browser refused to subscribe.
+	| { kind: 'push_unavailable' };
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: ApiError };
 
@@ -57,6 +60,8 @@ export function errorText(e: ApiError): string {
 			return t('error_response_invalid');
 		case 'cache_write_failed':
 			return t('error_cache_write_failed');
+		case 'push_unavailable':
+			return t('error_push_unavailable');
 		case 'problem': {
 			const messages = Object.values(e.fields);
 			if (e.type === 'validation' && messages.length > 0) {

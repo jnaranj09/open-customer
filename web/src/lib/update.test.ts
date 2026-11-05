@@ -10,11 +10,11 @@ function fakeContainer() {
 	};
 }
 
-function fakeReg(waiting: { postMessage: () => void } | null) {
+function fakeReg(waiting: { postMessage: () => void } | null, installing: unknown = null) {
 	return {
 		update: vi.fn(() => Promise.resolve()),
 		waiting,
-		installing: null
+		installing
 	} as unknown as ServiceWorkerRegistration;
 }
 
@@ -49,5 +49,24 @@ describe('applyUpdate', () => {
 		await vi.advanceTimersByTimeAsync(20_000);
 		expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
 		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('removes its statechange listener once it has fired', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal('navigator', { serviceWorker: fakeContainer() });
+		const postMessage = vi.fn();
+		const installing = {
+			state: 'installed',
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn()
+		};
+		const reg = fakeReg(null, installing) as unknown as { waiting: unknown };
+		void applyUpdate(reg as unknown as ServiceWorkerRegistration, vi.fn());
+		await vi.advanceTimersByTimeAsync(0);
+		const handler = installing.addEventListener.mock.calls[0]?.[1] as () => void;
+		reg.waiting = { postMessage };
+		handler();
+		expect(postMessage).toHaveBeenCalledTimes(1);
+		expect(installing.removeEventListener).toHaveBeenCalledWith('statechange', handler);
 	});
 });

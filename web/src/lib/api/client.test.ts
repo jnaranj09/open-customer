@@ -183,3 +183,29 @@ describe('errorText', () => {
 		expect(errorText({ kind: 'offline' })).toBe('Sin conexión con el sistema');
 	});
 });
+
+describe('push', () => {
+	it('reads the VAPID key', async () => {
+		const { api } = setup(() => json({ public_key: 'AQIDBA' }));
+		expect(await api.pushKey()).toEqual({ ok: true, data: { public_key: 'AQIDBA' } });
+	});
+
+	it('stores a subscription and reads its id', async () => {
+		const { api } = setup(() => json({ id: USER_ID }, 201));
+		const result = await api.subscribePush({
+			endpoint: 'https://push.example.test/abc',
+			expirationTime: null,
+			keys: { p256dh: 'p', auth: 'a' }
+		});
+		expect(result).toEqual({ ok: true, data: { id: USER_ID } });
+	});
+
+	it('reports a subscription answer without an id as response_invalid', async () => {
+		const { api } = setup(() => json({}, 201));
+		const result = await api.subscribePush({ endpoint: 'x', keys: { p256dh: 'p', auth: 'a' } });
+		expect(result).toEqual({
+			ok: false,
+			error: { kind: 'response_invalid', path: '/push/subscriptions' }
+		});
+	});
+});

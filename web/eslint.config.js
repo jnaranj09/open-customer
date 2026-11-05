@@ -23,6 +23,13 @@ export default defineConfig(
 		}
 	},
 	{
+		// The worker has its own tsconfig (the webworker lib), outside the one the project service finds.
+		files: ['src/service-worker.ts', 'src/lib/sw-routes.ts'],
+		languageOptions: {
+			parserOptions: { projectService: false, project: './tsconfig.service-worker.json' }
+		}
+	},
+	{
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		languageOptions: {
 			parserOptions: { parser: ts.parser, svelteConfig: viteConfig }

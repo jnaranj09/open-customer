@@ -1,5 +1,5 @@
 // layers (principle P9): lib never imports routes, shipped code never imports test helpers, and the
-// service worker imports only $service-worker and lib modules.
+// service worker imports only the SvelteKit worker modules and lib modules.
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SRC, importSpecifiers, layerViolations, parseSource, sourceFiles } from './sourceScan';
@@ -33,11 +33,11 @@ describe('layer rules', () => {
 		]);
 	});
 
-	it('flags the service worker importing anything but $service-worker and lib', () => {
+	it('flags the service worker importing anything but the worker modules and lib', () => {
 		expect(
 			at(
 				'service-worker.ts',
-				"import { build } from '$service-worker';\nimport { t } from '$lib/i18n';\nimport { goto } from '$app/navigation';\nimport { x } from './routes/x';\n"
+				"import { assets } from '$app/manifest';\nimport { t } from '$lib/i18n';\nimport { goto } from '$app/navigation';\nimport { x } from './routes/x';\n"
 			)
 		).toEqual(['service-worker.ts → $app/navigation', 'service-worker.ts → ./routes/x']);
 	});

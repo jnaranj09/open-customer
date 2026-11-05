@@ -193,6 +193,21 @@ export const ProblemSchema = z.object({
 	appointments: z.array(AppointmentSchema).exactOptional()
 }) satisfies z.ZodType<Schemas['Problem']>;
 
+export const PushKeySchema = z.object({
+	public_key: z.string()
+}) satisfies z.ZodType<Schemas['PushKey']>;
+
+export const PushSubscriptionIdSchema = z.object({ id }) satisfies z.ZodType<
+	Schemas['PushSubscriptionId']
+>;
+
+/** The JSON of a browser `PushSubscription`: the one parse site for it before it is posted. */
+export const PushSubscriptionInputSchema = z.object({
+	endpoint: z.string(),
+	expirationTime: z.nullable(z.number()).exactOptional(),
+	keys: z.object({ p256dh: z.string(), auth: z.string() })
+}) satisfies z.ZodType<Schemas['PushSubscriptionInput']>;
+
 export type Appointment = z.infer<typeof AppointmentSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 export type DueItem = z.infer<typeof DueItemSchema>;

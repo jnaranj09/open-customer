@@ -9,6 +9,8 @@ import {
 	MeSchema,
 	PROBLEM_PREFIX,
 	ProblemSchema,
+	PushKeySchema,
+	PushSubscriptionIdSchema,
 	SetupStatusSchema
 } from './schemas';
 
@@ -119,6 +121,11 @@ export function createApi(opts: ApiOptions) {
 		login: (body: Schemas['LoginInput']) =>
 			read('/auth/login', MeSchema, () => client.POST('/auth/login', { body })),
 		logout: () => readEmpty('/auth/logout', () => client.POST('/auth/logout')),
+		pushKey: () => read('/push/key', PushKeySchema, () => client.GET('/push/key')),
+		subscribePush: (body: Schemas['PushSubscriptionInput']) =>
+			read('/push/subscriptions', PushSubscriptionIdSchema, () =>
+				client.POST('/push/subscriptions', { body })
+			),
 		logClientError: (body: Schemas['ClientErrorInput']) =>
 			readEmpty('/client-errors', () => client.POST('/client-errors', { body }))
 	};

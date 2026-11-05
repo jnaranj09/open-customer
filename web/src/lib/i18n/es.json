@@ -26,6 +26,7 @@
 	"offline_cannot_save": "Necesitas conexión con el sistema para guardar",
 	"error_offline": "Sin conexión con el sistema",
 	"error_response_invalid": "El sistema respondió algo que no se entiende. Intenta de nuevo",
+	"error_push_unavailable": "No se pudieron activar las notificaciones. Revisa el permiso en los ajustes del teléfono",
 	"error_cache_write_failed": "No se pudieron guardar los datos en el teléfono",
 	"error_unauthorized": "Inicia sesión de nuevo",
 	"error_validation": "Revisa los datos",

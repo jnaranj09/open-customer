@@ -29,11 +29,21 @@ export function applyUpdate(
 					return;
 				}
 				const installing = reg.installing;
-				installing?.addEventListener('statechange', () => {
+				if (!installing) {
+					return;
+				}
+				const onState = (): void => {
+					if (installing.state === 'installing') {
+						return;
+					}
+					// The install ended (installed or redundant): one answer per update, and a later
+					// state change during the reload must not post SKIP_WAITING again.
+					installing.removeEventListener('statechange', onState);
 					if (installing.state === 'installed' && reg.waiting) {
 						takeOver(reg.waiting);
 					}
-				});
+				};
+				installing.addEventListener('statechange', onState);
 			},
 			() => {
 				// A failed check changes nothing: the timeout above reloads the page.

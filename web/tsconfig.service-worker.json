@@ -1,0 +1,13 @@
+{
+	"extends": "$app/tsconfig/service-worker",
+	"include": ["src/service-worker.ts", "src/lib/sw-routes.ts"],
+	"compilerOptions": {
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"exactOptionalPropertyTypes": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true,
+		"noImplicitReturns": true,
+		"noEmit": true
+	}
+}

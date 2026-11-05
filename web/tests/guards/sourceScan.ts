@@ -120,13 +120,20 @@ function target(file: string, spec: string): string | null {
 	return null;
 }
 
+// SvelteKit 3 replaced `$service-worker` with these three.
+const WORKER_MODULES: ReadonlySet<string> = new Set([
+	'$app/env',
+	'$app/manifest',
+	'$app/service-worker'
+]);
+
 const isUnder = (path: string, dir: string): boolean => path === dir || path.startsWith(dir + sep);
 
 /** `<file> → <specifier>` for each import that breaks the web layer rules (design doc "Code layout";
  *  TASKS.md T6):
  *  - lib (components included) never imports routes;
  *  - shipped code never imports test helpers;
- *  - the service worker imports only `$service-worker` and lib modules. */
+ *  - the service worker imports only the SvelteKit worker modules (`WORKER_MODULES`) and lib modules. */
 export function layerViolations(file: string, specifiers: readonly string[]): string[] {
 	const from = srcRel(file);
 	const inLib = from.startsWith('lib/');
@@ -137,7 +144,7 @@ export function layerViolations(file: string, specifiers: readonly string[]): st
 		const bad =
 			(to !== null && isUnder(to, TESTS)) ||
 			(inLib && to !== null && isUnder(to, join(SRC, 'routes'))) ||
-			(isWorker && spec !== '$service-worker' && (to === null || !isUnder(to, join(SRC, 'lib'))));
+			(isWorker && !WORKER_MODULES.has(spec) && (to === null || !isUnder(to, join(SRC, 'lib'))));
 		if (bad) hits.push(`${from} → ${spec}`);
 	}
 	return hits;
