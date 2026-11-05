@@ -69,8 +69,14 @@ var errPanic = errors.New("handler panicked")
 func recoverPanic(cfg middlewareConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
-			if recover() == nil {
+			rec := recover()
+			if rec == nil {
 				return
+			}
+			if rec == http.ErrAbortHandler {
+				// A handler aborts a response it already started (GET /export, D19): net/http closes the
+				// connection, and a problem body here would be glued onto the half-written file.
+				panic(rec)
 			}
 			cfg.Log.ErrorContext(r.Context(), "panic",
 				"code", "panic", "request_id", logging.RequestID(r.Context()), "stack", string(debug.Stack()))

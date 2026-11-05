@@ -43,7 +43,10 @@ Every change keeps these rules. Each one names its sensor, or says "prose only".
 - **A contained error logs a stable `code=<token>`, never the value.** Never log a request body, a
   parsed value, a client's name or phone, a raw error message from outside input, a token or a file
   path, except the setup link `serve` and `setup-link` print by design (design doc 'Auth, sessions
-  and handover'): one plain stdout line, never a slog record. Prose only.
+  and handover'): one plain stdout line, never a slog record. A second named exception: the
+  `message` and `stack` of `POST /client-errors` are logged (`code=client_error`, with the route and
+  app version; a message over 2000 characters is rejected, a stack over 8000 is cut to 8000), because they come from our own PWA and are the
+  only way to debug it (design doc 'Observability'). Prose only.
 - **A guard that stays green when the code it protects is broken is not a guard.** Break the code,
   see it red, restore. Prose only (reviewer step 2).
 - **"Why" comments stay.** A comment that states a constraint or an incident is kept; a commit that

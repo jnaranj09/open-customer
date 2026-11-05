@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jnaranj09/open-customer/internal/appointments"
@@ -18,11 +19,15 @@ import (
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
+	"github.com/jnaranj09/open-customer/internal/exporter"
 	"github.com/jnaranj09/open-customer/internal/httpapi"
 	"github.com/jnaranj09/open-customer/internal/media"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/config"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
+	"github.com/jnaranj09/open-customer/internal/push"
+	"github.com/jnaranj09/open-customer/internal/reminders"
+	"github.com/jnaranj09/open-customer/internal/scheduler"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
@@ -37,10 +42,22 @@ const (
 	shutdownTimeout = 10 * time.Second
 	// readHeaderTimeout bounds a client that never finishes its request headers.
 	readHeaderTimeout = 10 * time.Second
+	// timerInterval is the daily timer's tick (design doc "Process model").
+	timerInterval = time.Minute
 )
 
-// serve runs the server (design doc item 18; P1 and P2 have steps 1, 2, 4, 5, 7 and 8) until ctx is
-// done.
+// serve runs the server until ctx is done. The steps (design doc item 18):
+//  1. load the config and open the pool;
+//  2. run db.Migrate behind the backup guard;
+//  3. ensure the VAPID keys exist;
+//  4. print the setup link while no user exists;
+//  5. build the modules and the HTTP server;
+//  6. start the daily timer (scheduler.Run, one tick a minute);
+//  7. serve on :8080;
+//  8. shut down gracefully on SIGTERM.
+//
+// The timer stops with ctx, and serve waits for it before it returns.
+//
 // It returns 0 after a graceful shutdown and 1 on a config, database, migration or listen error,
 // which it prints to stderr.
 func serve(ctx context.Context, getenv func(string) string, stdout, stderr io.Writer) int {
@@ -64,13 +81,28 @@ func serveOn(ctx context.Context, cfg config.Config, ln net.Listener, stdout, st
 	// Every slog.Default() line (problem.Write, decodeJSON, migrate, status) goes to the JSON log.
 	slog.SetDefault(log)
 
-	srv, pool, err := startup(ctx, cfg, log, stdout)
+	srv, timer, pool, err := startup(ctx, cfg, log, stdout)
 	if err != nil {
 		closeListener(ln)
 		printf(stderr, "%v\n", err)
 		return 1
 	}
 	defer pool.Close()
+
+	// Step 6. Deferred after pool.Close, so it runs first: the timer is stopped and has returned
+	// before the pool closes, and no goroutine outlives serve.
+	ticker := time.NewTicker(timerInterval)
+	timerCtx, stopTimer := context.WithCancel(ctx)
+	timerDone := make(chan struct{})
+	go func() {
+		defer close(timerDone)
+		timer.Run(timerCtx, ticker.C)
+	}()
+	defer func() {
+		stopTimer()
+		<-timerDone
+		ticker.Stop()
+	}()
 
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
@@ -99,12 +131,13 @@ func serveOn(ctx context.Context, cfg config.Config, ln net.Listener, stdout, st
 	return 0
 }
 
-// startup opens the pool, runs the migrations behind the backup guard, prints the setup link while
-// no user exists and builds the HTTP server. On an error the pool is already closed.
-func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io.Writer) (*http.Server, *pgxpool.Pool, error) {
+// startup opens the pool, runs the migrations behind the backup guard, ensures the VAPID keys,
+// prints the setup link while no user exists and builds the HTTP server and the daily timer. On an
+// error the pool is already closed.
+func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io.Writer) (*http.Server, *scheduler.Scheduler, *pgxpool.Pool, error) {
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	err = db.Migrate(ctx, pool, db.MigrateOptions{
 		AllowWithoutBackup: cfg.AllowMigrateWithoutBackup,
@@ -114,22 +147,34 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 	})
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	mods, err := newModules(cfg)
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
+	}
+	// EnsureKeys writes the two keys as two inserts, so it runs in its own write transaction: a
+	// half key pair never persists.
+	err = db.WithTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return mods.push.EnsureKeys(ctx, tx)
+	})
+	if err != nil {
+		pool.Close()
+		return nil, nil, nil, fmt.Errorf("serve: vapid keys: %w", err)
 	}
 	if err := printSetupLink(ctx, cfg, pool, mods.auth, stdout); err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	static, err := fs.Sub(web.Build, "build")
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: embedded web build: %w", err)
 	}
+	timer := scheduler.New(scheduler.Options{
+		Clock: clock.Real{}, Pool: pool, Settings: mods.settings, Reminders: mods.reminders, Push: mods.push,
+	})
 	handler, err := httpapi.New(httpapi.Options{
 		Pool:           pool,
 		Version:        version,
@@ -143,20 +188,27 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Clients:        mods.clients,
 		Media:          mods.media,
 		Templates:      mods.templates,
+		Reminders:      mods.reminders,
+		Push:           mods.push,
 		Appointments:   mods.appointments,
-		Status:         status.New(version),
-		Log:            log,
+		Exporter:       exporter.New(exporter.Options{Clock: clock.Real{}, Settings: mods.settings, Attributes: mods.attributes}),
+		Status: status.New(status.Options{
+			Version: version, Clock: clock.Real{}, MediaDir: cfg.MediaDir, BackupStatusFile: cfg.BackupStatusFile,
+			Push: mods.push, Scheduler: timer,
+		}),
+		Clock: clock.Real{},
+		Log:   log,
 	})
 	if err != nil {
 		pool.Close()
-		return nil, nil, fmt.Errorf("serve: %w", err)
+		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
 	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
 		// net/http's own errors (a bad TLS handshake, a broken connection) go to the JSON log too.
 		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelWarn),
-	}, pool, nil
+	}, timer, pool, nil
 }
 
 // modules are the domain modules serve and the admin subcommands build.
@@ -168,6 +220,8 @@ type modules struct {
 	appointments *appointments.Module
 	media        *media.Module
 	templates    *templates.Module
+	reminders    *reminders.Module
+	push         *push.Module
 	auth         *auth.Auth
 }
 
@@ -191,6 +245,8 @@ func newModules(cfg config.Config) (modules, error) {
 		appointments: appointments.New(appointments.Options{Clock: clock.Real{}, Services: servicesModule, Attributes: attributesModule}),
 		media:        media.New(media.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir}),
 		templates:    templates.New(templates.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		reminders:    reminders.New(reminders.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		push:         push.New(push.Options{Clock: clock.Real{}, Subject: cfg.VAPIDSubject}),
 		auth:         authModule,
 	}, nil
 }

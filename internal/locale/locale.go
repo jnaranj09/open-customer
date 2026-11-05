@@ -4,6 +4,8 @@ package locale
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +22,21 @@ type Locale struct {
 	decimalMark    string
 	listAnd        string
 	varLabels      map[string]string // "ns.key" to the label of a fixed template variable
+	sampleClient   string            // name of the sample client used in template previews
+	sampleServices []string          // service names of the sample appointment
+	pushOne        string            // daily push body for one due item
+	pushMany       string            // daily push body for n due items, %d the count
+	export         ExportText        // file names, column headers and fixed words of the export
+}
+
+// ExportText holds the texts of the export ZIP (design doc "Export"): the CSV file names, the
+// fixed column headers of each file, the estado word per appointment status ("scheduled",
+// "confirmed", "cancelled", "no_show", and "done" for a done one) and the word for true.
+type ExportText struct {
+	ClientsFile, AppointmentsFile, ServicesFile string
+	ClientCols, AppointmentCols, ServiceCols    []string
+	Status                                      map[string]string
+	Yes                                         string
 }
 
 // For returns the locale for lang. Only "es" exists; any other value is an error.
@@ -58,6 +75,24 @@ func (l Locale) Number(f float64) string {
 	return strings.Replace(strconv.FormatFloat(f, 'f', -1, 64), ".", l.decimalMark, 1)
 }
 
+// Money formats an amount in minor units with scale decimals and no currency symbol, for example
+// 1250000 with scale 2 as "12500,00" and 12500 with scale 0 as "12500".
+func (l Locale) Money(minor int64, scale int) string {
+	digits := strconv.FormatInt(minor, 10)
+	sign := ""
+	if minor < 0 {
+		sign, digits = "-", digits[1:]
+	}
+	if scale <= 0 {
+		return sign + digits
+	}
+	if len(digits) <= scale {
+		digits = strings.Repeat("0", scale-len(digits)+1) + digits
+	}
+	cut := len(digits) - scale
+	return sign + digits[:cut] + l.decimalMark + digits[cut:]
+}
+
 // JoinList joins items as "A", "A y B" or "A, B y C".
 func (l Locale) JoinList(items []string) string {
 	switch len(items) {
@@ -74,6 +109,32 @@ func (l Locale) JoinList(items []string) string {
 // VarLabel returns the label of a fixed template variable such as ("client", "first_name"), or ""
 // when the pair is not a fixed variable.
 func (l Locale) VarLabel(ns, key string) string { return l.varLabels[ns+"."+key] }
+
+// SampleClientName is the name of the sample client that template previews use.
+func (l Locale) SampleClientName() string { return l.sampleClient }
+
+// SampleServiceNames lists the service names of the sample appointment that template previews use.
+// The slice is a copy.
+func (l Locale) SampleServiceNames() []string { return slices.Clone(l.sampleServices) }
+
+// PushBody is the daily push text for n due items, for example "Tienes 3 mensajes para enviar
+// hoy". One item has its own singular text.
+func (l Locale) PushBody(n int) string {
+	if n == 1 {
+		return l.pushOne
+	}
+	return fmt.Sprintf(l.pushMany, n)
+}
+
+// ExportText returns the texts of the export ZIP. The slices and the map are copies.
+func (l Locale) ExportText() ExportText {
+	t := l.export
+	t.ClientCols = slices.Clone(t.ClientCols)
+	t.AppointmentCols = slices.Clone(t.AppointmentCols)
+	t.ServiceCols = slices.Clone(t.ServiceCols)
+	t.Status = maps.Clone(t.Status)
+	return t
+}
 
 // LocalDay returns midnight of t's calendar day in loc.
 func LocalDay(t time.Time, loc *time.Location) time.Time {

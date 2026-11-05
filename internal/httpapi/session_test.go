@@ -375,7 +375,7 @@ func requiredQuery(t *testing.T, op *openapi3.Operation) string {
 	return "?" + strings.Join(pairs, "&")
 }
 
-func TestPublicOperationsAreExactlyTheSetupAndLoginOnes(t *testing.T) {
+func TestPublicOperationsAreExactlyTheSetupLoginAndPushKeyOnes(t *testing.T) {
 	spec := embeddedSpec(t)
 	public, err := publicOperations(spec)
 	if err != nil {
@@ -392,7 +392,7 @@ func TestPublicOperationsAreExactlyTheSetupAndLoginOnes(t *testing.T) {
 	}
 	slices.Sort(ids)
 	// The embedded spec carries the operationIds as oapi-codegen spells them (upper-case first).
-	if want := []string{"CompleteSetup", "GetSetupOptions", "GetSetupStatus", "Login"}; !slices.Equal(ids, want) || len(public) != len(want) {
+	if want := []string{"CompleteSetup", "GetPushKey", "GetSetupOptions", "GetSetupStatus", "Login"}; !slices.Equal(ids, want) || len(public) != len(want) {
 		t.Fatalf("public operations = %v (%d patterns), want exactly %v", ids, len(public), want)
 	}
 }

@@ -291,3 +291,22 @@ func TestUnparsablePeerIsNotTrusted(t *testing.T) {
 		t.Errorf("no code=peer_ip_invalid log line in %q", buf.String())
 	}
 }
+
+func TestRecoverPanicLetsAbortHandlerThrough(t *testing.T) {
+	t.Parallel()
+	h, _ := testWrap(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) }))
+	rec := httptest.NewRecorder()
+
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+	}()
+
+	if recovered != http.ErrAbortHandler {
+		t.Errorf("panic value = %v, want http.ErrAbortHandler to reach net/http", recovered)
+	}
+	if rec.Body.Len() != 0 {
+		t.Errorf("body = %q, want none written after the abort", rec.Body.String())
+	}
+}

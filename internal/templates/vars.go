@@ -79,3 +79,15 @@ func known(ns, key string, attrs []attributes.Attribute) bool {
 	}
 	return false
 }
+
+// UnknownVars returns every variable of p that known rejects, one entry per occurrence, in body
+// order. The save check and the preview share it.
+func UnknownVars(p Parsed, attrs []attributes.Attribute) []VarRef {
+	var out []VarRef
+	for _, v := range p.Vars {
+		if !known(v.NS, v.Key, attrs) {
+			out = append(out, v)
+		}
+	}
+	return out
+}

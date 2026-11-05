@@ -93,6 +93,42 @@ func (e AttributeType) Valid() bool {
 	}
 }
 
+// Defines values for DueItemMode.
+const (
+	DueItemModeBookingPrompt DueItemMode = "booking_prompt"
+	DueItemModeMessage       DueItemMode = "message"
+)
+
+// Valid indicates whether the value is a known member of the DueItemMode enum.
+func (e DueItemMode) Valid() bool {
+	switch e {
+	case DueItemModeBookingPrompt:
+		return true
+	case DueItemModeMessage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LogAction.
+const (
+	LogActionSent    LogAction = "sent"
+	LogActionSkipped LogAction = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the LogAction enum.
+func (e LogAction) Valid() bool {
+	switch e {
+	case LogActionSent:
+		return true
+	case LogActionSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProblemType.
 const (
 	ProblemTypeUrnOpenCustomerProblemDuplicatePhone       ProblemType = "urn:open-customer:problem:duplicate-phone"
@@ -144,6 +180,24 @@ func (e ProblemType) Valid() bool {
 	case ProblemTypeUrnOpenCustomerProblemUnsupportedMediaType:
 		return true
 	case ProblemTypeUrnOpenCustomerProblemValidation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuleKind.
+const (
+	RuleKindBeforeAppointment RuleKind = "before_appointment"
+	RuleKindComeBack          RuleKind = "come_back"
+)
+
+// Valid indicates whether the value is a known member of the RuleKind enum.
+func (e RuleKind) Valid() bool {
+	switch e {
+	case RuleKindBeforeAppointment:
+		return true
+	case RuleKindComeBack:
 		return true
 	default:
 		return false
@@ -254,6 +308,39 @@ type AttributeScope string
 // AttributeType defines model for AttributeType.
 type AttributeType string
 
+// BackupStatus defines model for BackupStatus.
+type BackupStatus struct {
+	CheckedAt  nullable.Nullable[time.Time] `json:"checked_at"`
+	LastCopyAt nullable.Nullable[time.Time] `json:"last_copy_at"`
+	LastDumpAt nullable.Nullable[time.Time] `json:"last_dump_at"`
+	LastError  nullable.Nullable[string]    `json:"last_error"`
+	Red        bool                         `json:"red"`
+}
+
+// BookingPrompt The future booking a come-back item asks to extend with the return service.
+type BookingPrompt struct {
+	AppointmentId     openapi_types.UUID `json:"appointment_id"`
+	ReturnServiceId   openapi_types.UUID `json:"return_service_id"`
+	ReturnServiceName string             `json:"return_service_name"`
+	Services          []string           `json:"services"`
+	StartsAt          time.Time          `json:"starts_at"`
+}
+
+// Bootstrap defines model for Bootstrap.
+type Bootstrap struct {
+	Appointments []Appointment `json:"appointments"`
+	Attributes   []Attribute   `json:"attributes"`
+	BackupRed    bool          `json:"backup_red"`
+	Clients      []Client      `json:"clients"`
+	Due          []DueItem     `json:"due"`
+	Rules        []Rule        `json:"rules"`
+	ServerTime   time.Time     `json:"server_time"`
+	Services     []Service     `json:"services"`
+	Settings     Settings      `json:"settings"`
+	TemplateVars []TemplateVar `json:"template_vars"`
+	Templates    []Template    `json:"templates"`
+}
+
 // Client defines model for Client.
 type Client struct {
 	Archived bool `json:"archived"`
@@ -271,6 +358,14 @@ type Client struct {
 	// PhoneE164 The phone in E.164 form, for example +34612345678; null when there is none.
 	PhoneE164 nullable.Nullable[string] `json:"phone_e164"`
 	UpdatedAt time.Time                 `json:"updated_at"`
+}
+
+// ClientErrorInput defines model for ClientErrorInput.
+type ClientErrorInput struct {
+	AppVersion string  `json:"app_version"`
+	Message    string  `json:"message"`
+	Route      string  `json:"route"`
+	Stack      *string `json:"stack,omitempty"`
 }
 
 // ClientInput defines model for ClientInput.
@@ -297,6 +392,37 @@ type ClientPatch struct {
 	Phone               nullable.Nullable[string] `json:"phone,omitempty"`
 }
 
+// DueItem defines model for DueItem.
+type DueItem struct {
+	// AnchorAt The appointment start for a before_appointment item; null for come_back.
+	AnchorAt      nullable.Nullable[time.Time] `json:"anchor_at"`
+	AppointmentId openapi_types.UUID           `json:"appointment_id"`
+	ClientId      openapi_types.UUID           `json:"client_id"`
+	ClientName    string                       `json:"client_name"`
+	DueDate       openapi_types.Date           `json:"due_date"`
+	Id            string                       `json:"id"`
+	Kind          RuleKind                     `json:"kind"`
+	Late          bool                         `json:"late"`
+	Mode          DueItemMode                  `json:"mode"`
+	PhoneDigits   nullable.Nullable[string]    `json:"phone_digits"`
+
+	// Prompt Set only when mode is booking_prompt.
+	Prompt nullable.Nullable[BookingPrompt] `json:"prompt"`
+	RuleId openapi_types.UUID               `json:"rule_id"`
+	Text   string                           `json:"text"`
+
+	// WaLink Null when the client has no phone.
+	WaLink nullable.Nullable[string] `json:"wa_link"`
+}
+
+// DueItemMode defines model for DueItemMode.
+type DueItemMode string
+
+// DueList defines model for DueList.
+type DueList struct {
+	Items []DueItem `json:"items"`
+}
+
 // FieldError defines model for FieldError.
 type FieldError struct {
 	Field   string `json:"field"`
@@ -310,6 +436,44 @@ type IconUpload struct {
 
 	// Icon512 The 512 px PNG.
 	Icon512 openapi_types.File `json:"icon512"`
+}
+
+// LogAction defines model for LogAction.
+type LogAction string
+
+// LogEntry defines model for LogEntry.
+type LogEntry struct {
+	ActedAt time.Time `json:"acted_at"`
+	Action  LogAction `json:"action"`
+
+	// AnchorAt The appointment start for a before_appointment rule; null or left out for come_back.
+	AnchorAt      nullable.Nullable[time.Time] `json:"anchor_at,omitempty"`
+	AppointmentId openapi_types.UUID           `json:"appointment_id"`
+	Body          nullable.Nullable[string]    `json:"body,omitempty"`
+	PhoneDigits   nullable.Nullable[string]    `json:"phone_digits,omitempty"`
+	RuleId        openapi_types.UUID           `json:"rule_id"`
+}
+
+// LogItem defines model for LogItem.
+type LogItem struct {
+	ActedAt time.Time `json:"acted_at"`
+	Action  LogAction `json:"action"`
+
+	// AnchorAt The appointment start for a before_appointment rule; null or left out for come_back.
+	AnchorAt      nullable.Nullable[time.Time] `json:"anchor_at,omitempty"`
+	AppointmentId openapi_types.UUID           `json:"appointment_id"`
+	Body          nullable.Nullable[string]    `json:"body,omitempty"`
+	ClientId      openapi_types.UUID           `json:"client_id"`
+	ClientName    string                       `json:"client_name"`
+	Id            openapi_types.UUID           `json:"id"`
+	Kind          RuleKind                     `json:"kind"`
+	PhoneDigits   nullable.Nullable[string]    `json:"phone_digits,omitempty"`
+	RuleId        openapi_types.UUID           `json:"rule_id"`
+}
+
+// LogList defines model for LogList.
+type LogList struct {
+	Items []LogItem `json:"items"`
 }
 
 // LoginInput defines model for LoginInput.
@@ -413,6 +577,75 @@ type Problem struct {
 // ProblemType defines model for Problem.Type.
 type ProblemType string
 
+// PushKey defines model for PushKey.
+type PushKey struct {
+	// PublicKey The VAPID public key, base64url without padding.
+	PublicKey string `json:"public_key"`
+}
+
+// PushStatus defines model for PushStatus.
+type PushStatus struct {
+	LastPush nullable.Nullable[struct {
+		Attempted int                `json:"attempted"`
+		Date      openapi_types.Date `json:"date"`
+		Delivered int                `json:"delivered"`
+	}] `json:"last_push"`
+	Red           bool `json:"red"`
+	Subscriptions int  `json:"subscriptions"`
+}
+
+// PushSubscriptionId defines model for PushSubscriptionId.
+type PushSubscriptionId struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+// PushSubscriptionInput defines model for PushSubscriptionInput.
+type PushSubscriptionInput struct {
+	Endpoint string `json:"endpoint"`
+
+	// ExpirationTime Sent by every browser; accepted and ignored.
+	ExpirationTime nullable.Nullable[float32] `json:"expirationTime,omitempty"`
+	Keys           struct {
+		Auth   string `json:"auth"`
+		P256dh string `json:"p256dh"`
+	} `json:"keys"`
+}
+
+// Rule defines model for Rule.
+type Rule struct {
+	// AppliesFrom Items before this moment are not counted; null means overdue items are included.
+	AppliesFrom     nullable.Nullable[time.Time]          `json:"applies_from"`
+	Archived        bool                                  `json:"archived"`
+	Id              openapi_types.UUID                    `json:"id"`
+	Kind            RuleKind                              `json:"kind"`
+	OffsetDays      int                                   `json:"offset_days"`
+	ReturnServiceId nullable.Nullable[openapi_types.UUID] `json:"return_service_id"`
+	ServiceId       nullable.Nullable[openapi_types.UUID] `json:"service_id"`
+	TemplateId      openapi_types.UUID                    `json:"template_id"`
+}
+
+// RuleInput defines model for RuleInput.
+type RuleInput struct {
+	IncludeOverdue  *bool                                 `json:"include_overdue,omitempty"`
+	Kind            RuleKind                              `json:"kind"`
+	OffsetDays      int                                   `json:"offset_days"`
+	ReturnServiceId nullable.Nullable[openapi_types.UUID] `json:"return_service_id,omitempty"`
+	ServiceId       nullable.Nullable[openapi_types.UUID] `json:"service_id,omitempty"`
+	TemplateId      openapi_types.UUID                    `json:"template_id"`
+}
+
+// RuleKind defines model for RuleKind.
+type RuleKind string
+
+// RulePatch Every field is optional; a field left out is not changed. Only return_service_id may be null.
+type RulePatch struct {
+	Archived        *bool                                 `json:"archived,omitempty"`
+	IncludeOverdue  *bool                                 `json:"include_overdue,omitempty"`
+	OffsetDays      *int                                  `json:"offset_days,omitempty"`
+	ReturnServiceId nullable.Nullable[openapi_types.UUID] `json:"return_service_id,omitempty"`
+	TemplateId      *openapi_types.UUID                   `json:"template_id,omitempty"`
+}
+
 // Service defines model for Service.
 type Service struct {
 	Archived    bool               `json:"archived"`
@@ -496,6 +729,20 @@ type SetupStatus struct {
 	NeedsSetup bool `json:"needs_setup"`
 }
 
+// Status defines model for Status.
+type Status struct {
+	Backup BackupStatus `json:"backup"`
+
+	// HeartbeatAgeS Whole seconds since the timer's last heartbeat; null before its first tick.
+	HeartbeatAgeS nullable.Nullable[int64] `json:"heartbeat_age_s"`
+
+	// MediaFreeBytes Bytes available to the app on the media volume; null when it cannot be read.
+	MediaFreeBytes   nullable.Nullable[int64] `json:"media_free_bytes"`
+	MigrationVersion int64                    `json:"migration_version"`
+	Push             PushStatus               `json:"push"`
+	Version          string                   `json:"version"`
+}
+
 // Template defines model for Template.
 type Template struct {
 	Archived bool               `json:"archived"`
@@ -517,8 +764,33 @@ type TemplatePatch struct {
 	Name     *string `json:"name,omitempty"`
 }
 
+// TemplatePreview defines model for TemplatePreview.
+type TemplatePreview struct {
+	Text        string   `json:"text"`
+	UnknownVars []string `json:"unknown_vars"`
+}
+
+// TemplatePreviewInput defines model for TemplatePreviewInput.
+type TemplatePreviewInput struct {
+	Body     string              `json:"body"`
+	ClientId *openapi_types.UUID `json:"client_id,omitempty"`
+}
+
+// TemplateVar defines model for TemplateVar.
+type TemplateVar struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Ns    string `json:"ns"`
+}
+
 // ListAppointmentsParams defines parameters for ListAppointments.
 type ListAppointmentsParams struct {
+	From openapi_types.Date `form:"from" json:"from"`
+	To   openapi_types.Date `form:"to" json:"to"`
+}
+
+// GetBootstrapParams defines parameters for GetBootstrap.
+type GetBootstrapParams struct {
 	From openapi_types.Date `form:"from" json:"from"`
 	To   openapi_types.Date `form:"to" json:"to"`
 }
@@ -526,6 +798,12 @@ type ListAppointmentsParams struct {
 // ListClientsParams defines parameters for ListClients.
 type ListClientsParams struct {
 	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
+}
+
+// ListReminderLogParams defines parameters for ListReminderLog.
+type ListReminderLogParams struct {
+	ClientId *openapi_types.UUID `form:"client_id,omitempty" json:"client_id,omitempty"`
+	Date     *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
 }
 
 // CreateAppointmentJSONRequestBody defines body for CreateAppointment for application/json ContentType.
@@ -555,6 +833,9 @@ type LoginJSONRequestBody = LoginInput
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = PasswordChange
 
+// LogClientErrorJSONRequestBody defines body for LogClientError for application/json ContentType.
+type LogClientErrorJSONRequestBody = ClientErrorInput
+
 // CreateClientJSONRequestBody defines body for CreateClient for application/json ContentType.
 type CreateClientJSONRequestBody = ClientInput
 
@@ -566,6 +847,18 @@ type UploadMediaMultipartRequestBody = MediaUpload
 
 // UpdateMediaJSONRequestBody defines body for UpdateMedia for application/json ContentType.
 type UpdateMediaJSONRequestBody = MediaPatch
+
+// SubscribePushJSONRequestBody defines body for SubscribePush for application/json ContentType.
+type SubscribePushJSONRequestBody = PushSubscriptionInput
+
+// CreateReminderRuleJSONRequestBody defines body for CreateReminderRule for application/json ContentType.
+type CreateReminderRuleJSONRequestBody = RuleInput
+
+// UpdateReminderRuleJSONRequestBody defines body for UpdateReminderRule for application/json ContentType.
+type UpdateReminderRuleJSONRequestBody = RulePatch
+
+// RecordReminderJSONRequestBody defines body for RecordReminder for application/json ContentType.
+type RecordReminderJSONRequestBody = LogEntry
 
 // CreateServiceJSONRequestBody defines body for CreateService for application/json ContentType.
 type CreateServiceJSONRequestBody = ServiceInput
@@ -584,6 +877,9 @@ type CompleteSetupJSONRequestBody = SetupInput
 
 // CreateTemplateJSONRequestBody defines body for CreateTemplate for application/json ContentType.
 type CreateTemplateJSONRequestBody = TemplateInput
+
+// PreviewTemplateJSONRequestBody defines body for PreviewTemplate for application/json ContentType.
+type PreviewTemplateJSONRequestBody = TemplatePreviewInput
 
 // UpdateTemplateJSONRequestBody defines body for UpdateTemplate for application/json ContentType.
 type UpdateTemplateJSONRequestBody = TemplatePatch
@@ -626,6 +922,12 @@ type ServerInterface interface {
 	// ChangePassword Change the signed-in user's password
 	// (POST /auth/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request)
+	// GetBootstrap Everything the app caches, from one snapshot
+	// (GET /bootstrap)
+	GetBootstrap(w http.ResponseWriter, r *http.Request, params GetBootstrapParams)
+	// LogClientError Log an error from the app
+	// (POST /client-errors)
+	LogClientError(w http.ResponseWriter, r *http.Request)
 	// ListClients List the clients
 	// (GET /clients)
 	ListClients(w http.ResponseWriter, r *http.Request, params ListClientsParams)
@@ -644,6 +946,9 @@ type ServerInterface interface {
 	// ListClientMedia List one client's photos
 	// (GET /clients/{id}/media)
 	ListClientMedia(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ExportData Download every record as a ZIP
+	// (GET /export)
+	ExportData(w http.ResponseWriter, r *http.Request)
 	// GetMe The signed-in user
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -659,6 +964,27 @@ type ServerInterface interface {
 	// GetMediaThumb Get the thumbnail of a photo
 	// (GET /media/{id}/thumb)
 	GetMediaThumb(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// GetPushKey The VAPID public key
+	// (GET /push/key)
+	GetPushKey(w http.ResponseWriter, r *http.Request)
+	// SubscribePush Store this device's push subscription
+	// (POST /push/subscriptions)
+	SubscribePush(w http.ResponseWriter, r *http.Request)
+	// CreateReminderRule Add a reminder rule
+	// (POST /reminder-rules)
+	CreateReminderRule(w http.ResponseWriter, r *http.Request)
+	// UpdateReminderRule Change a reminder rule
+	// (PATCH /reminder-rules/{id})
+	UpdateReminderRule(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListDueReminders List the reminders to send today
+	// (GET /reminders/due)
+	ListDueReminders(w http.ResponseWriter, r *http.Request)
+	// ListReminderLog List the reminder log of one client or one day
+	// (GET /reminders/log)
+	ListReminderLog(w http.ResponseWriter, r *http.Request, params ListReminderLogParams)
+	// RecordReminder Record that a due item was sent or skipped
+	// (POST /reminders/log)
+	RecordReminder(w http.ResponseWriter, r *http.Request)
 	// CreateService Add a service
 	// (POST /services)
 	CreateService(w http.ResponseWriter, r *http.Request)
@@ -680,9 +1006,15 @@ type ServerInterface interface {
 	// GetSetupStatus Whether the first-run setup is still open
 	// (GET /setup/status)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
+	// GetStatus The status screen data
+	// (GET /status)
+	GetStatus(w http.ResponseWriter, r *http.Request)
 	// CreateTemplate Add a message template
 	// (POST /templates)
 	CreateTemplate(w http.ResponseWriter, r *http.Request)
+	// PreviewTemplate Render a template body for a client or the sample
+	// (POST /templates/preview)
+	PreviewTemplate(w http.ResponseWriter, r *http.Request)
 	// UpdateTemplate Change a message template
 	// (PATCH /templates/{id})
 	UpdateTemplate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -978,6 +1310,66 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetBootstrap operation middleware
+func (siw *ServerInterfaceWrapper) GetBootstrap(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBootstrapParams
+
+	// ------------- Required query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBootstrap(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LogClientError operation middleware
+func (siw *ServerInterfaceWrapper) LogClientError(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LogClientError(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListClients operation middleware
 func (siw *ServerInterfaceWrapper) ListClients(w http.ResponseWriter, r *http.Request) {
 
@@ -1129,6 +1521,20 @@ func (siw *ServerInterfaceWrapper) ListClientMedia(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ExportData operation middleware
+func (siw *ServerInterfaceWrapper) ExportData(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportData(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
 
@@ -1226,6 +1632,148 @@ func (siw *ServerInterfaceWrapper) GetMediaThumb(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMediaThumb(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPushKey operation middleware
+func (siw *ServerInterfaceWrapper) GetPushKey(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPushKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubscribePush operation middleware
+func (siw *ServerInterfaceWrapper) SubscribePush(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubscribePush(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateReminderRule operation middleware
+func (siw *ServerInterfaceWrapper) CreateReminderRule(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateReminderRule(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateReminderRule operation middleware
+func (siw *ServerInterfaceWrapper) UpdateReminderRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateReminderRule(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDueReminders operation middleware
+func (siw *ServerInterfaceWrapper) ListDueReminders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDueReminders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListReminderLog operation middleware
+func (siw *ServerInterfaceWrapper) ListReminderLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListReminderLogParams
+
+	// ------------- Optional query parameter "client_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "client_id", r.URL.Query(), &params.ClientId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "client_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "client_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReminderLog(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecordReminder operation middleware
+func (siw *ServerInterfaceWrapper) RecordReminder(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecordReminder(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1345,11 +1893,39 @@ func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateTemplate operation middleware
 func (siw *ServerInterfaceWrapper) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTemplate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewTemplate operation middleware
+func (siw *ServerInterfaceWrapper) PreviewTemplate(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewTemplate(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1532,7 +2108,19 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/appointments/{id}/status", wrapper.SetAppointmentStatus)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clients/{id}/media", wrapper.ListClientMedia)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/templates", wrapper.CreateTemplate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/templates/preview", wrapper.PreviewTemplate)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/templates/{id}", wrapper.UpdateTemplate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/reminder-rules", wrapper.CreateReminderRule)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/reminder-rules/{id}", wrapper.UpdateReminderRule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/reminders/due", wrapper.ListDueReminders)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/reminders/log", wrapper.ListReminderLog)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/reminders/log", wrapper.RecordReminder)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/push/key", wrapper.GetPushKey)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/push/subscriptions", wrapper.SubscribePush)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/export", wrapper.ExportData)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/status", wrapper.GetStatus)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/bootstrap", wrapper.GetBootstrap)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/client-errors", wrapper.LogClientError)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/media", wrapper.UploadMedia)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/media/{id}", wrapper.GetMedia)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/media/{id}", wrapper.UpdateMedia)
@@ -1546,107 +2134,162 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"7H15k9s2lvhXQWl/VbFrKPXhtjdpV/5wbE/GO3bS5U4mNTtxaSHytYhpCuACYMtKyt/9V+8B4CVQR18+",
+	"1v8kbZHE+e7zz1GqFqWSIK0Znf45yoFnoOnPl+9LoSE7B2OEks+VuhSAv2dgUi1KK5QcnY5+yYGpdGrc",
+	"Wyyl19hS2JxxyWBR2hW74kUFjMuMveHvx8/m8P1hwpa5SHOWQQEWDBN2MkpGJs1hwXESuyphdDoyVgs5",
+	"H334kIyus45T9jdry59lsUrYOV/AubDw/Wv+PmFn3ObfHyTsu0OW8ZVJaHXnkFYaWCULMIad/frD61fP",
+	"p7++fc2EYWXBhWS5teXmhX5IRhpMqaQBOsUzrWYFLPDPVEkL0uKfvCwLkXJc+0Hp3vjLvw1u5M/W2P9P",
+	"w8XodPQfB80dHbin5iCMSzN2j+KZZG//+px9d/L4P5kffEJH6L/FoZ+VpRLSLvx6Sq1K0Fa4NXNrHQjw",
+	"LBM4KC/OWi9YXUESOX7ejDk2qSqB4UBiVllwIGDYbNX67RJWeJb+BNXs35DaUTJ6P56rsf8Rz2Tyli/f",
+	"gDF8DqMPySgtBEg7FRku8ELpBbej01FViWyU9G+jflvyBURuKxmlGriFbMptZ7iMWxhbsYDYmJmSEQB8",
+	"rhZlZSFjSjINPEuYhCvQzFilIZuwZwyPP6sKfEWzVMkLoReQtY+N2ZxblnPDQGaQtU5nplQBXOL0IDOz",
+	"13p3PCqprLt+WRUFnxUQbnrtzZKLbJoGklEPLKR9cjJKhr4X0sIcNA5gQF+J1M0mLCzMNmhvgeu5+3b0",
+	"oR6Ya81XNKzl2u53NsZyW+01vfsAZ1eWFxuOYX3bVZntCWxETf63Qjo8Ov3XiC6uQYAueLf330BJvUUP",
+	"t911d+4y8YgfQKF1Tx1E6WzkXR+BPyRt4vJKllWMwhSFWk7VFeiCly3EbIH5TkToTmnH3ohWY9DaE3+Q",
+	"U5F1YX7rGm4M4j0IagNPM9aWS3wtTOQO603si8Hr++qDOQ24ZVFn3Kb5Ohl+eQV6xS4EFBmybVU60HnK",
+	"uP+xgAvLVGXxqVSWpTmXcyTQKCYwukISBhrEYAu+YjNgSNeQJH8SoHx94Lw38v5xoH0TzATesQbLWaVJ",
+	"GJsuhGzdYWtPgxJEqXGr9XGti0X0AktVKSBjyxwkszmwQkhgS26Y4VeQPSXgap76E2Q5z5hUEhDsbnQR",
+	"Oxx/Dwlb3/rdd/eadA9tC7ae13wWZLWg8YM0hMwlCEP4N5cpFO53qaYmV8vRu7XFRgZ/Toh8LV5zbSmg",
+	"f2bu5+hZBLE3skCd5uIKsvjadmRWl7CKgmfBZ1BEnzjSaIZIqHucsLA6piQYJmRaVBkCrFPtLpRmnOHY",
+	"pPMhXfXjIsjuxBl+dvNG0L9URrg1xTCyOfjolaICsvVGw6Wc09v1Enb86hd8OSqj4W2Esw9r8YO33m7t",
+	"MGmgoLmZjXA0IFkN33f7vDK44FVhR6cXvDCQfErnFz20jSexnyRAzF0qCW22vl08WOf7G7F2+BquD9Qf",
+	"Nh3CebivQF+dpIeA1ZK8ooS0cx2tESy8t8RmFjPQSO+5JS0DCiehLKrCCv+v2MA/8PSyKhvK3z2/NIf0",
+	"crMytFVSKbix01SVq5uPklWL8uajgNZK7yRkDd9xR1xvDqm3zt7mO/O70WM48wOaxeT8TKtFaePiykVl",
+	"Kw1s5t5knKVqAeMZTy8ZknPGzaVhVjF4b0FmztKHIosGW2kZJJcIvjRguKsC5oac7iXFrH01KLhFjRB3",
+	"roD1jqGrtLf07fW9x3c2cMvWWO2kncFbuCXdzak3RED2GDF8EhtvRnRjOsjaHWXbfbLn9H5spqyCnUd5",
+	"UcErC4vYMLoq9tj726qIbhuvFfSUoGh3+9W+lrRN5jOwVsj5DkP493AMWJQFtzC94nr3Rfziv/oH17GF",
+	"hEH3H3CraaF9yK0dd4C4g4fNWsI9NwCYdNHJwVP/TDrwHMNWD557qgXXtNG7pd+lef4aBvVdDdRDlHwP",
+	"00auJEwzMRdD2rrhC2DuhVqjQfb2l56KrsFJiIyGnOwiIbjJ4ejJSXxqes6EZC8nR09OULVaJPhfBu/5",
+	"oiyA/eXRyZOj40cnj5/857cDy9lxKbdjiQ5WgWZfvRNuLMnBstzScvaxKDsceam10kMW5bKcXoE2Xcm6",
+	"2fHCg2jsmVaVjT8xlqeXcX9k+zTC4ElnGWHg4Q1ttI5nlfMRwpTO9P5Mi9vxLA7a289pUGJxx3EbduYh",
+	"Zr+zidkNcDfWZYfhTgG1sJNheTcouDmruHUY2Y0c7vBmTO0Nwtg66sg0V9rTtY0uakaCtzdgzeBCaZi2",
+	"HyOEeCJ7Qf7aBUyRk3dMsXtpiNfQgG7X2Z1VMMUVr9H8Yaa8bmcUMttFwv07vkdqsR0A2oXKYEeh+w2+",
+	"GmHf22GsVnR5Ufx8MTr91+b5uvrxh3d9EeocLFOIycR3cQeI6F5XnrrZ1hmwVxF2vUayu8TOfsmnhZCX",
+	"66D9U8d54MCAwgj2kE9iDD6sOllXWxtE8zCxyTFdA56HhyTYlnrSQtigB476/t4Nk4A3KusYrRpW3L2V",
+	"qIXqRQW3wXMGVcOdmc5fkXm8DMaj7lqIsewp0/QmdkM0H8SW8CpV8teyUDyLHEeq5NG3h3GaevTtISvf",
+	"s7OffmQPMK4JxlZVaT7Gjx52qOVMSK5XUWKTKvn46Dg+weOjYz/BTqP1D90PndS7iO3+tZo/S4NZtnZR",
+	"OQOquRRl2VHemoW/VvOX0upVhBOl+6pBvF7AJmBrVvohuUV2h6ju2Z3SjRjz8VjfTGWra+l0Wz/YnRb3",
+	"QGkTOUyDGyfdoMa8VvMgtuzGj2rw+pCs2c9vVTTY1cu4F/ePesY284r1U3vnzu026HQ4/uvT6ddqLuSA",
+	"1lZyY5ZKx0l1ZUAPHH5v8vrNpBkxtpQ3EU/yjre4qNBzQJrJNLLqloy2+7Jpptbao3PE95EJvtFQPQDj",
+	"24nORq1otvKKSsQGJP4Api5ImLpAiigWfA6TaEzfnmh4DetYDmKeDxB492x9rWhFKsV7KEx81Tsudyky",
+	"m8dnpkf7TrwtnHGNrLoF1GcQbq1nPKovehC+boN60EA3oB30fW1X2N3W+2ForCFp7c71TLzuIedhUbD/",
+	"Onv5Y8K4ZQtlLDs6ZG9+2FEMtHm1mMVHpkeSi7Xhdx29LxLjHsKMsevyYSnXMMuT+XzXs9zxtQ3xBFw3",
+	"V7d+bs5ExWwuDFMSaZs1rJIZ6JZxgzOrynEBV1D4DzpHuivB3RTaEEP9zmG1d9KEzsQCZIZva++YmM7h",
+	"7ScMukGH1/LlRKXECNCZZ+lDQXdppelkNwpFEpabXujHQvSH7A0Qu4pW9s3WHJmEGZCWccOGsnM2BjUM",
+	"yRJbkz4M8kzkoku+SpiSjEvmoxXZyeF3O8fRbfHSt7zm66tUNgfNUIm5CvYj04R2kIbllsZqe/SYft1r",
+	"hcOOeNBa7eE/bplLIoNpsHo15RcW9NTEw6yagM/1Z1bYAjbEgjT2gUrLU1WCHKeVsWoB+tRDy+kVL0TG",
+	"PeEafk0qO75Qlcw2vlVJXtlcafEHbH5RSJp3nGrIQFrBC7PxfZTRx46UjFtYNfzBhdIzkWUgx0qLudi8",
+	"OQO2KsdpoQxkO7xo1SXIsd/Cxvc9cmx8pwemOx2b1VzW3Gb49ZKvUO4aW6XGBddz2HJ5pipLpS1k4wVK",
+	"bWMfBTr8icZlF2Ih7Nb7tqAlLyKWqR7t9HM60E42xSmfVSb/O0TsWWU1K0Q69XHG6yTkH8/OXr1g7i2M",
+	"HUjYjBt4clLponakl+iBkvPJVubammxokUNxhRQHV1Ymj9mC1vIcYVHaDrdsEYKdXSUZFOIKdHyc3s78",
+	"GM3U7c9jex2OcK5m9R2YHWbuvp+0Dmo4XpAOuvXdq+yaRod18W+n6eLyHMiMWF2USAOmLRPp/cVHUvVd",
+	"ONJioAuQIDbTamlQFuZpCngfJIiJuaSkzWGh1wfFusD7CBQixY4LWsePn2T5dmnHv5e4kdYPq/d6fSR+",
+	"QbHTpcCzmLZYCDDTC60ichLay4y3FzslYqHIXsw1OElUVdLWCSwL4NKQ9JJVQC5UQ2+GtIEbWJBvJUli",
+	"T+elurgwYKeYIT4Urr1DhOrWvd3w8zre7JqYWBtlNwWb0m/t8+jOm3ThaIu2hmc8gNseUqYehuLX/fUe",
+	"1+7RX+HwDQ3dw9/9WQahdt03RAla3gUUdYLhMHcTMLN2L1tCZjYTiV1A655AZe+7Xru7wVzGzYeQqkLp",
+	"1qN2dMi2HMibxmluTn3ZMZFSSEbvDKdMurAH7bMQ9k6b3BDp2DmifjqkO9ndTVb+Agfo4E3uaddc1Zse",
+	"TfxU3Mo37PiOYuuavd2ESNzNue8D+Ne5lchRN7H8ve2nONN0eJ8k0enVNPWRNesvkCEujeeb5txMnaI6",
+	"FamS8UMuVMoHbCzDZ1iZfJqrSg9ZbRbwx+5BqK0P6uW0dtY7haR7au3FrO/43YbruG3QXwfubbd7N+cb",
+	"23BVXsdRvkcSSlV2MlHQfnRD37sbI4n64FtLeze04Z8bZbxPzRGaRMzh/Or8Z/bo6MmT8RHjRZnz8TFD",
+	"mDMJM2Q16lhXt6Sn9S3m9ayDK27TiXWOG546KGwSInogj8WNFsIYzBeswcjrgt9eA0ZvRoE+c+IyfFUD",
+	"Bi8JkJkpGVF3yChtvx2damAWl8S0DSs7Kb/IDYBrOwNup3wO0wiU/ZarApiBVMnMMCNkCiTN4QHqbwxD",
+	"IxWrR/EynzdHCIuAqY1lVvSC03YvkUE22emFBpgORIT8sKKSMFdc0FDMKlohL0umnOhJY7ArVVQLaIul",
+	"wrKUS6TXM6CaYNddo5h70aOV4bJDvalgBd1YR64xpX5IRsMZND0wCi/GFrd+7SEHbhQ5b7/MGCzWWX17",
+	"6jghdPCWE802KAY04xZ5P+xmgCsOLnq31bQXsmn2Wxe+f+o5rfcVuK+x7+HNabgSsFw/3MGQ+kpeSrWU",
+	"6+mr+3FaH87eGe3d9oXuCwr7hOn0VrgVMDAXd20l+1eVkWYHWDW9EilR87aBtNLCrs6RUrnlmH4NUCFH",
+	"pyNX6zMg4+moKQPanAovBXq1qFqmkBcqLu+kSlrNUxf2bCl6puV3Y8/OXk3YK8tyhcIQ5YHgS8H2bkI4",
+	"nI9UYLNKFBkrc26APcjAiLlkmUpdHYWjxw8n7CVPc5zEUVBWCGMNDeFdfMx56qhAqmFqKVnOZVaARsbC",
+	"uDRL0Akri8owzv7HV3X5H+bDHlioRNrsR4IbfyGyrIAl19AayQUfrBilLZ6yk8NHrO/xZQ+c32QBNlcZ",
+	"m1WW/fjyF3Ka/O3lsxcPE/oq5lhmD+qhiYAsuL6EjL0fq3RMqW6QjZe5KGAc+zoJnsVOFaKklfRCQIDU",
+	"ibenZx4SHtISHx8esuA0ndT+0NPR2jWPWqxwdDQ5nBy6ikkgeSlGp6NHk8PJI9IObE6QedCPBJmDHaKy",
+	"7k4TpnQGGjJ0RtVFICYM7ee0WKvIdULyIxWpDXEis8oICcaQkMT+oNiMmbK5OxYjrmCCH+MpMC98eImp",
+	"HjtEzz06ciNTsAQT9qmLBFkK48QwDxfCsJPjYxJ3FJ5bDbHoDxxhcOWzbiJ8yTVfgAVtKMSd0PR/K9Cr",
+	"Bku9n6ChC076aarfbnG7fkji41p1o1Hf9er3Hh8ebqjdu1/N3n5JxUjt3l7Whpkg3J0cHg0NXa+1KQic",
+	"jE6Oj/d6v64GtfM35H5eLLhe+ftntrdwpIWcacJBdUFQ5i1hu+aqGMZNEz41Yb7iIfOrpSI0Nd44GoiL",
+	"CGa6mhqHYg5PEeoLQIVCyfpnpjQVqn6PlypsPYswLADRhD2TzLN2ej1URPOJdkrXgzlEmbDfvPjvQ1WQ",
+	"KO1U/beDcYffhe9DKJYy3UNOQq3qTo07/BjBfh1Tn2vgFp51XDu4SzD2By9z3DagOxHnQ1cECEmRXUQ7",
+	"uov5h5BMwrJ9lNfDs8Pv9nv/6NGnjMeY/Iq4wDunl3R528GfIvvQYnBdAPsRbBe6YowAmWZDr72zeSu9",
+	"HpBy74le70CrrwlCJ58ySPwIjljybmxpGVciXTBwSzL2ZkODp7O1tG5oCZAWwDXR8sWEytEYtgA9d+Vp",
+	"LmFFQ+AHTMNCXeGY+POEtcrOMg1lwVMv7C7JyITC9Snj4TXGCw08WwUjTpsQXwKUTuSm6qyuWCutXIsU",
+	"nroN8iyDLIzmwlx8kVdumVUZX31jvBuSIagE6kw13diDFnl/yHQlTSPLolznGegOXMMJultYAatVR9qH",
+	"E0Fb1imvzrMcdIRv/ErVWT4GZt8pb3K2kJ1408ciKl4yt3m4ovuhMl8WY3N0aTfWdtCEhsdl1WeSeXXV",
+	"3wibCyRCx4eHT0l7drH0XoBbjy1GZ4n/0KoWfj/4ffQWKAKf699HniTYLXRjP/HvvMOdz0NfgC8AkzsV",
+	"oL8i9P8RhCbtznEydRFH705pymHlE8UKjG3lmTeS4NBkm3TSBnVycfdlHDevR2ZzBd5PJaSTGVJVQkdp",
+	"pF+QgyNmtK0pObdOSBrU1cI0d6WpdctJ37eeVu9uk5YWXkqcGixVU2L8OqjzaYP2sywjSG6dTAeOa/3r",
+	"WjK4h/XEQySZGREkvSAYREmj8H1M1SDpH42qDTDTgPQpd8aO2h6C4BL+5XhXgyX4PhUbZxqMVbru+RWV",
+	"NFtQ/9lyp2558vtmStswq3UzPYbk0YwcDjfBs8OTLwkvWzLkRtQ8aLVViPMbilZ0ZdMJK1pl1JuxDbP8",
+	"EuoLYK1U7obf8IWSc8dyxKzAQB0ULuucZucBmLlFu9ROP0SwjPJFCxCGWJBPhP98MbGdG37PDM6f3Qbu",
+	"FtLtv2KY53weRK0iU00XKzZi3MGfyueo3Yw/OvzZwBIbBNvMGAeY2/3hUxIdNJzSp4uqH4VjbkZVD5Uf",
+	"R3n7XDijCkeISFrZ/KBQcyGHOeFPKrjnT9FZJgzL1ZLx8GPQyCjmQhimuUUrLuVFsxK0t2myV2fONgua",
+	"hcDdiJNauXz1u4DaVlWwewbaN4PyHQabQDYWks7kqfeEdpr0CsMMkAze6vp7DnbcxNfE5vYvH3Qb8n74",
+	"cB1M2BNST46/uwfI9nFHo9N/vWvD+TmG7wjppOMAaN6f4WPEO5CvKjsM+i983+N2uFC4HhySspjDczrh",
+	"CXvmzY4UJcNiBdb8lTpulfvQnmKJER4UfKQqG8UMXOoalEaq1J8TUOEwT3tBN2692bWBKdps+lowdUNq",
+	"du7PycnIdJ4hlGzHUCWP9TUoNL8PAcPfyd3Uno1ggEpnGJ+o7qzKFOvjnpGTLAoED3gHUBxlNWBP3RSe",
+	"zLqfaRzIHqLisNSoTvTL7ARzVVPSpGu5SijG6OTwyC9MVZJiM5ZcZ42WUYIe1ziTQcFXVGiHXXCBxm9i",
+	"FBEFhHZ21qRg3AX17pUy2omCD3VwaJ1ZnaLzCdqo7oeORs21Hbb0jamP7Fr4NWs3OopG3IUMlqSlWie1",
+	"0zZhdXsXAl5q8MIe2BwoZrLSIdKwsXFptTQPE9pLt1xSEg2BglbEn0MaV4fXO51bwX3O7KyYVf1ovsTH",
+	"NTkXNi0UfwhLZ1dcC0wgMMQicFbh45d4hgxLSWDkf3JFancODjw+PLyF6MAfwTb9qL5GBg7WnfcnNCTO",
+	"SV6aXNnPIR6QolxtjqpySJRJeZojuhGMKdnshz498F2Jmipgw56as9+eMQ2lovhAyegTl2hTzXOvwbsm",
+	"T8hUDD7ili259oJbqjL43s3nuuVNmK+Kzh4cIWYcHx4eIvHWPLWgEddbPV38O09OXDyxi2auv3uIgoMR",
+	"GWGH0E5XcZEhaw4fzKyg7jLkzGXfdmclBlJZHyAehIKcWCYlKbJZlV4CxbPMKm1IXDk6JErhEH6BKO2o",
+	"z5OQX/UUqa1lwibs5Pg7dx5vwerV+BlieFQ0bHXeuSP+u9bb57oc+LWaf2W4LiJXzRvkqP2ZvCzb6DYc",
+	"pv7LGnNrx6ojNU2YTyjodgcmiAo/fe8Cj36VJfepyuth48/rTmo78IVW76gGsrZ1sr1Tst1qWzRAt/35",
+	"fVZh3AE8BsO1SYgXhhHdOzruEK6muVFVBnI6Ca3NvExSF5asMxl8QizqBPi73wnTMHc9qCWZhl3LaTeW",
+	"yy6u+5u4iGsuI4UsWe5HdYoIfb0ead2va9mKuK4FvE60Ta8xUxNp50IWXY7Q1nZ7vslezO/yPDTwvTui",
+	"+1F8In5fG3wi7tS+hmR7n4g/jw7t7odhr8eo9ZIUCPdspSVkzKq4nF5D3Gcdtb0Zvm4EW59FrHZaV9m9",
+	"lgtsQ4+6SIT20z5ddlfMeGHUGo3eJ5h7Q1CJh+h4RAkpAH1i3oRO9kOtw3N3Ijjk0jGSOALRPNmOnGDA",
+	"/3fPWHZXvOOjOOl2we2vEZa36NQb5D3XSXiVsARjXc0OxCGnGLAItzJWFIVLh37adrE3uHhyeLJJpdgh",
+	"H/VzTEO627TRT5u/kX7SMLhvTGfHEQhdhM5C25TcMldWbYDPAJzuPZeV7cth3A30ulYznznYNo13BgDW",
+	"Hef/DVB1e3VACu9Lpe2w8M7++9UZ2vPcx9xMUnOVsFTUfzr3hVD0TxJaMo4nifeTdMz+wcxKLxmrgS8Q",
+	"oqlVD/oGgybfKYAw/uc///nP8Zs34xcvJn+IMumo6uPgsrAuxN3ZmOoC0eCwh81W1hdjkAiCRV3QIhzd",
+	"09qr4D3JUgK5J5xXUhkUs4wrtZSppcSS++QtNExIY3GP6F5xEVlkF8VTI/tqodQlmhQWZQGxsMaXdP4v",
+	"uOWjvcD/D1F2oX97z6Eo3P/3q7Oen/y5m3D8Qph2qcjup9xanuZI7J7S5eHdff/7aNPV/T6adIxla8u7",
+	"f//6i3CXzjatIUV/abhAhyALGEaOvWIgGveDZBaKwsGHsPQh4+bSdz9Co0P4PqoZv4HRJxDFMxnd/32t",
+	"r+JantqaF8ctij+gw7N0RR80UIsvgnFz6lqKqYvaK0n9xLwTtFrMOo/Ymx8S/wiYV32ICoUXjrFbWC8X",
+	"ttsujeavuzJhfZtO1QhhmATIsOC9M3Z3P7aBrbEZFErOjasWx237xW+CXdCtlbNMXFyACzqtVxYqSVA8",
+	"t/WA60pvcd8CzbVyVdmq85TCyfGbAyRP44xbntBoR4/r0ZSuT4e8T8Ia56xyLz5qFXREflJSrz38Kkgy",
+	"OEriS2eopQRdL6H+zL+atFwEGp8uUG9E4u53GNGSkT4EEWhYgY1sdE/hxM103/ZPt7MhhCcDg4Oh+/Fk",
+	"HT3+lCUpd0WMuxMZNbRkdwOow0fiCvrKWz9JAnINKzu5fcQ1fGQUuqwzzyBWwPUAY/hkJHXazsG/S5jf",
+	"ipSCNOZLNZP2epZSpQUPYINW065BMheZt0Y68KqdrLXEX8fq7Jz1dr+wdPt2wVaD03sPg95AUt0FfY3c",
+	"j3iXHEg7cYDAc4jQHtSdWT8BcvsLreVLpblNp9svmfrWm+wQXwQ6rAZ84OuOzmFj1ghTkpWVLpWBUxrV",
+	"p/G7UpGNJhAq/iyVvgRNHq2g+wnbtl04URbjBZzKw2JByT+CDU3y7pCkhSkGIKXfbW9y6+kOsVlaN7TW",
+	"fW44ZM/3WPvGsH5/N/Zf5z//lAShNxQp7Sm97BlzSkeos9oqz6QxX0hm7NUL+h/mzDqujBo9NkJjDzAu",
+	"76nX8b0Gd3x45GxXYcCOdiVZbm1p2K9vX5OKQ8PQG6HnWdPY0CfSaurCXoCc2zyJx/tNWLcxHU431HOu",
+	"V7XFHdgMzkKvvjuIgY823rtnLh5pNjgA/fXFLbmp63g5KHpKcEF3hvdQkWTlggJvU4nbfa0Id21k+RKL",
+	"Vpzbuj1gBkhq0eJdmbyzcUc8NCyEzECPKdZ+Q5kltt6IjOLzPZJzyVqtuhARD5lV7NGTxz52IVB9qrcU",
+	"2pd1RmgVjEua9EVeRLqOPWizEbTuUKnEORfSJULhsN+4As01s8lB1m6ihyGErbfmI79mJyHVEf09xuXy",
+	"fBi8DyrFLLiuJqzX1MxpJz4Jx/df9PhBsb8uMNn1cHzqVROl63WGLyk0xH1Omo1USDyHItXe+julBpN3",
+	"Q6CajoH3bK2hPW1Abbz5L7YODQvYStuMIfDNytFs7/HnMC+CXoR8lLaGD7tqBcNmiK2yvOtYEiJRaVlN",
+	"DXH6nLwFC37p7tfjUFlGVRKnuPfg/3PV35s2jvfM+DfhGN3uV+V9Q4TOBhw1B77P5WAEhANvYhxYsRSR",
+	"BrguBOiEPKgVGf6lw5a17J1ODXscBLHBJ6H4YAfKxmevOpzIhKrZl6IsIavlajSZDWUKvKhqNDN3qXe9",
+	"qGBTzELd1vhj+OLqCP36fqmEJFCzgIyv+pdfqPlwZNZ7ntpiRddZxxog8VWabrFdAP0pk/Sa9omJdb5f",
+	"/dWk/oY3OY3D/QqcXVQUlDGgqDoRZNT94CcXghN+cNEEnVp6XRfZUBxNgJXXar5bckk97Og6FVZ6g/kM",
+	"wk8jt/C1mm+C6ELNKan1i43DaSMM7VZdtGJzEKrxX4Q+Qwkv5850v8y5G87ZiTLhU1l4TRZ8HkqdbYK/",
+	"sQdImJNuEVDSBtJc6YdMNISxoAw2yqin9Elh2FILa0E2KoGzlaDhA7Uaw0itoWUcHx52MIVYp9LtiUnP",
+	"cRM720SmwJk9Lnwgjhe1UIJKQuEwJX35AZtz2afeZCNxgc+ZmAvbs5W4HKHH/lmyY/HLtxQWEpD47sq2",
+	"vJRWr+5b3Hmt5sgPByUetezYNRxQPO3d/q1bNLasCmVhTyq+RHXHAZwH3Rqd6R568O6YbNDMN1s+/VtN",
+	"yb4Ja3cRbnLoTk4Ok04HY2HYIU5KabwPavVcaacVNZkV+M1DX3mjUJTO9h9az+ezGXvgoUVIhpE6OuUG",
+	"Hg7p8KGd+N2gWqfX9T1r8GFnm+xzXk/8YvV4U59BC3ZvQXcfaLq9nigUGiFsSOupNft4Xs8ZVbxsl9dA",
+	"NwB96dMpbQ4r34JhSFNvoPxzVdI7PdTvmXFtwaT6Ar9q68Paeg8TW13ar4OEoadwwtothQmFSA0DksMu",
+	"xHvXlYTa/u5Z3nkQk/zS7wrM2w3T7x3O/d4GAd09vyVI/2xq7deKvGkOqAXFB6Hh/04xvmc/+RDffgQv",
+	"A57mG8N4H1EUr49lDT3Jbe7GRO8xt5WGawbIbo173RK4+goP4c7iVnH0fcJWBwqV4U25awheU7o8c/D4",
+	"6HhSYkaFzBim+BUwtqpK8zE+pidIwMB1Z/oanzp66/pM1ZkGhAIBK6pyGBt6tU9TEsJNy7pQGdB0Dah4",
+	"u6Qa/0EocmSr0hcDqqMP3Y+FkJdkOyBtprK50uKPgdDD5z5NhlrM3x0xr8qPIvsPZ1Y0h3xvtVH3TRA+",
+	"/ALYyEBw0V+FFCZ3YD3WlXSA20Kcdhn9LVFgpy3IX4o/uM4oRcO0Yru4XDl8Ihe6oYLCTa9lU5Wl0kjp",
+	"QxkaFKJMNPKLQPlnv7a7FUGaeSIgTM9ZmitU5O4m+MsPvn66CrNVTPuymp5Z0bv6GydbBVIikNYfyFrw",
+	"XmeOlBdF9AaVDvfuLzNhVrEMUpFRzIWzUypmsMYpDusGHL7Mug3W3d6ln2bwKvEI4fYv8rdwIjn0sY1o",
+	"HGUqqxIC09p8kf9wVfASthBzd5TsKvwUGhdinF8OXNsZIPeZ+/KVaKZ2rAmwDCAAMyUyTl8Ik0KN2ZUq",
+	"qkUT/kIhRPjFpBlxyucwJfsYGcIqaUXRzO1qPYn0kryW2KqRBp7ihFPMSW2+rL3+ftKmF6IGnrUkQSf/",
+	"4Y9YZDNsxJ2Uy6J1DeB4UYSHroEjTUPhOvTrRHuzh28zEDbnPG1Z3dyoHTNFMmy9Umr6kXFRrNzXGlzQ",
+	"tFQo5MZB/O6hexCwfyHpHUnrR0tcdJdkUg0gGUnaBOZ11dfN5ttOnbNv22XO3BWSaiGMl6EZeJdqsBnj",
+	"1Yeve1UlEbzoa+8/WvAClYGushHqurZ8JvhNQkq7y7suQYfM6lNmVtLy9+6JCVUMyBffH9EkpGQx4UZ0",
+	"Xvwhy/Av/rDuSDgMw38U+bDe2wbjcACWL9c6HAqg2uY02khyUGq4ErAcRpa34KMRAlJ4qu4KsU7Yb15H",
+	"b/nuLbJz/0UlCovh3oajLtKu79Rur0yjRIfgYWT2oFuP0ir1sNahaC+213C9MQukXKZQ+E67Uo1RgKjL",
+	"XPqVtb8lqmxyIJYjlYShUh9roRKOLpI72oWtUVmD0w4Z+H3055+/j0iKoT74Ft7bEEO6Rh/cW8IatJsX",
+	"yG0StwnyIk/CB9Mrro2Xewn91wZClomz/U42cGLQk0tY/T5KtpGKMwci90Qr/GwfJUq9t4ZhxiddZBTe",
+	"3JfpMSUI5k3UMsGHS+BqYisa7OlTlRt4n3xAUsvjVDPUgNL4mvO72lyrap43QRmuGhw3hJbE4jb6pTpR",
+	"2Tsnc7Yw4XN1NdWQ/jFs8Ns4c3MrX71Nw96mCGfvKot/jkzHVHX6r3cITo5xO3itdDE6HR3wUhxcHY0+",
+	"vPvw/wcA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

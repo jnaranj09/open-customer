@@ -17,6 +17,8 @@ VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed '
 GO_PKGS := $(shell go list -e ./... | grep -v /node_modules/)
 # golangci-lint takes directories, not import paths.
 GO_DIRS := $(shell go list -e -f '{{.Dir}}' ./... | grep -v /node_modules/ | sed 's|^$(CURDIR)|.|')
+# The packages with non-test files: go build refuses a test-only package (internal/guards).
+GO_BUILD_PKGS := $(shell go list -e -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./... | grep -v /node_modules/)
 
 # CI installs golangci-lint with its action and sets GOLANGCI_LINT=golangci-lint.
 GOLANGCI_LINT ?= bin/tools/golangci-lint-$(GOLANGCI_LINT_VERSION)/golangci-lint
@@ -27,7 +29,7 @@ DEADCODE_BUDGET := 0
 
 # Packages make cover holds to the 90% statement floor (an owner decision; design doc item 2). It
 # grows by phase: auth (P2); attributes, appointments, templates (P3); reminders (P4).
-COVER_PKGS := ./internal/auth ./internal/attributes ./internal/appointments ./internal/templates
+COVER_PKGS := ./internal/auth ./internal/attributes ./internal/appointments ./internal/templates ./internal/reminders
 COVER_FLOOR := 90.0
 
 # make dev's Postgres container (design doc item 2). The password is for this local container only.
@@ -89,6 +91,8 @@ $(GOLANGCI_LINT):
 lint: web-stub node-check $(GOLANGCI_LINT)
 	go mod tidy -diff
 	$(GOLANGCI_LINT) run $(GO_DIRS)
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build $(GO_BUILD_PKGS)
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build $(GO_BUILD_PKGS)
 	@out=$$(go tool deadcode -test -tags db $(GO_PKGS)) || exit 1; \
 	if [ -n "$$out" ]; then printf '%s\n' "$$out" >&2; fi; \
 	n=$$(printf '%s' "$$out" | awk 'NF { c++ } END { print c + 0 }'); \

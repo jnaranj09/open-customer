@@ -49,11 +49,16 @@ func (s *Server) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}) {
 		return
 	}
-	writeJSON(w, http.StatusOK, gen.Settings{
-		Name: out.Name, Timezone: out.Timezone, Locale: out.Locale, Currency: out.Currency,
-		CountryCode: out.CountryCode, AccentColor: out.AccentColor, PushHour: out.PushHour,
-		HasCustomIcon: out.HasCustomIcon,
-	})
+	writeJSON(w, http.StatusOK, toGenSettings(out))
+}
+
+// toGenSettings is the wire form of the settings.
+func toGenSettings(v settings.Settings) gen.Settings {
+	return gen.Settings{
+		Name: v.Name, Timezone: v.Timezone, Locale: v.Locale, Currency: v.Currency,
+		CountryCode: v.CountryCode, AccentColor: v.AccentColor, PushHour: v.PushHour,
+		HasCustomIcon: v.HasCustomIcon,
+	}
 }
 
 // UploadIcon stores the two icon PNGs. The body is at most 3 MB and each part is read up to one

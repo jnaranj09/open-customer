@@ -477,6 +477,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render a template body for a client or the sample
+         * @description Renders the body on the server. Without client_id it uses the built-in sample client and appointment. With client_id it uses that client (archived ones too) and her latest appointment that is not cancelled or no-show, or the sample appointment when she has none; an unknown client is 422 on client_id. The render never fails: a malformed "{{" shows as text and an unknown variable shows its fallback, or nothing. unknown_vars lists each unknown variable once as "namespace.key", in body order.
+         */
+        post: operations["previewTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/templates/{id}": {
         parameters: {
             query?: never;
@@ -495,6 +515,210 @@ export interface paths {
          * @description Changes only the fields sent; none may be null. A body that is sent goes through the same check as on create. archived true archives the template and false restores it.
          */
         patch: operations["updateTemplate"];
+        trace?: never;
+    };
+    "/reminder-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a reminder rule
+         * @description A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule takes a service_id, an optional return_service_id (the service to book again; the rule's own service when left out) and an offset_days of 1 to 365. The template and the services must exist and be active. include_overdue true counts items already past their moment; false or left out counts only items from now on.
+         */
+        post: operations["createReminderRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reminder-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a reminder rule
+         * @description Changes only the fields sent. Only return_service_id may be null (the rule's own service again). A rule never changes kind or service. include_overdue is read only when the change can make new items appear.
+         */
+        patch: operations["updateReminderRule"];
+        trace?: never;
+    };
+    "/reminders/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the reminders to send today
+         * @description The items due today or earlier, computed on read from one snapshot, ordered by due date, then client name. Items already sent or skipped are not listed.
+         */
+        get: operations["listDueReminders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reminders/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the reminder log of one client or one day
+         * @description Exactly one of client_id or date is required; none or both is 422 on client_id. date is a local day in the business time zone and filters on acted_at. Newest acted_at first. An unknown client_id is 404.
+         */
+        get: operations["listReminderLog"];
+        put?: never;
+        /**
+         * Record that a due item was sent or skipped
+         * @description Stores what the owner did with a due item. When the same item (rule, appointment and anchor) is already logged, nothing is written and the stored row comes back with 200. An unknown rule or appointment, an anchor that does not fit the rule's kind, an action other than sent or skipped, or phone digits that are not 1 to 15 digits, is 422 on that field.
+         */
+        post: operations["recordReminder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The VAPID public key
+         * @description No session on purpose: the key is public, and the service worker may ask for it before the owner has signed in.
+         */
+        get: operations["getPushKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Store this device's push subscription
+         * @description The browser's PushSubscription JSON, stored for the signed-in user. A known endpoint keeps its row and ID and takes the new keys (200); a new one is 201. An endpoint that is not an https URL, or keys that are not base64url of the right length, are 422 on that field. expirationTime is accepted and ignored.
+         */
+        post: operations["subscribePush"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download every record as a ZIP
+         * @description A ZIP of clientas.csv, citas.csv, servicios.csv and datos.json, read in one snapshot and streamed. The file name is open-customer-YYYY-MM-DD.zip, the business-local date. An error before the first byte is a normal problem response; after it the connection is closed, so the download fails instead of ending as a ZIP that looks complete.
+         */
+        get: operations["exportData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The status screen data
+         * @description Version, migration version, the timer's heartbeat age, the backup line, free space on the media volume and the push line. heartbeat_age_s is null until the timer has ticked once; media_free_bytes is null when the volume cannot be read. A missing or unreadable backup status file gives all backup times null and backup.red true. The push line is red with no subscription, or when the last daily push reached nobody.
+         */
+        get: operations["getStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything the app caches, from one snapshot
+         * @description Settings, attributes, services, templates and rules (these four include archived rows), the active clients, the appointments of every status that start on the local days from to to, both inclusive, the due list and the template variables. All of it is read in one transaction. to must not be before from and at most 200 days after it; otherwise the answer is 422 on to.
+         */
+        get: operations["getBootstrap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/client-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log an error from the app
+         * @description The PWA reports an error it caught. The server logs it at warn with code=client_error. message (1 to 2000 characters), app_version (1 to 64) and route (1 to 200) outside their limits are 422 on that field; a stack over 8000 characters is cut. Each session has a token bucket: a burst of 10, then one more every 6 seconds; past it, 429 with Retry-After.
+         */
+        post: operations["logClientError"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/media": {
@@ -729,11 +953,211 @@ export interface components {
             name: string;
             body: string;
         };
+        TemplatePreviewInput: {
+            body: string;
+            /** Format: uuid */
+            client_id?: string;
+        };
+        TemplatePreview: {
+            text: string;
+            unknown_vars: string[];
+        };
         /** @description Every field is optional; a field left out is not changed. None may be null. */
         TemplatePatch: {
             name?: string;
             body?: string;
             archived?: boolean;
+        };
+        /** @enum {string} */
+        RuleKind: "before_appointment" | "come_back";
+        Rule: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            service_id: string | null;
+            /** Format: uuid */
+            return_service_id: string | null;
+            offset_days: number;
+            /** Format: uuid */
+            template_id: string;
+            /**
+             * Format: date-time
+             * @description Items before this moment are not counted; null means overdue items are included.
+             */
+            applies_from: string | null;
+            archived: boolean;
+        };
+        RuleInput: {
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            service_id?: string | null;
+            /** Format: uuid */
+            return_service_id?: string | null;
+            offset_days: number;
+            /** Format: uuid */
+            template_id: string;
+            include_overdue?: boolean;
+        };
+        /** @description Every field is optional; a field left out is not changed. Only return_service_id may be null. */
+        RulePatch: {
+            offset_days?: number;
+            /** Format: uuid */
+            template_id?: string;
+            /** Format: uuid */
+            return_service_id?: string | null;
+            archived?: boolean;
+            include_overdue?: boolean;
+        };
+        /** @enum {string} */
+        DueItemMode: "message" | "booking_prompt";
+        /** @description The future booking a come-back item asks to extend with the return service. */
+        BookingPrompt: {
+            /** Format: uuid */
+            appointment_id: string;
+            /** Format: date-time */
+            starts_at: string;
+            services: string[];
+            /** Format: uuid */
+            return_service_id: string;
+            return_service_name: string;
+        };
+        DueItem: {
+            id: string;
+            /** Format: uuid */
+            rule_id: string;
+            /** Format: uuid */
+            appointment_id: string;
+            /**
+             * Format: date-time
+             * @description The appointment start for a before_appointment item; null for come_back.
+             */
+            anchor_at: string | null;
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            client_id: string;
+            client_name: string;
+            /** Format: date */
+            due_date: string;
+            late: boolean;
+            text: string;
+            phone_digits: string | null;
+            /** @description Null when the client has no phone. */
+            wa_link: string | null;
+            mode: components["schemas"]["DueItemMode"];
+            /** @description Set only when mode is booking_prompt. */
+            prompt: components["schemas"]["BookingPrompt"] | null;
+        };
+        DueList: {
+            items: components["schemas"]["DueItem"][];
+        };
+        /** @enum {string} */
+        LogAction: "sent" | "skipped";
+        LogEntry: {
+            /** Format: uuid */
+            rule_id: string;
+            /** Format: uuid */
+            appointment_id: string;
+            /**
+             * Format: date-time
+             * @description The appointment start for a before_appointment rule; null or left out for come_back.
+             */
+            anchor_at?: string | null;
+            action: components["schemas"]["LogAction"];
+            body?: string | null;
+            phone_digits?: string | null;
+            /** Format: date-time */
+            acted_at: string;
+        };
+        TemplateVar: {
+            ns: string;
+            key: string;
+            label: string;
+        };
+        Bootstrap: {
+            /** Format: date-time */
+            server_time: string;
+            settings: components["schemas"]["Settings"];
+            attributes: components["schemas"]["Attribute"][];
+            services: components["schemas"]["Service"][];
+            templates: components["schemas"]["Template"][];
+            rules: components["schemas"]["Rule"][];
+            clients: components["schemas"]["Client"][];
+            appointments: components["schemas"]["Appointment"][];
+            due: components["schemas"]["DueItem"][];
+            template_vars: components["schemas"]["TemplateVar"][];
+            backup_red: boolean;
+        };
+        Status: {
+            version: string;
+            /** Format: int64 */
+            migration_version: number;
+            /**
+             * Format: int64
+             * @description Whole seconds since the timer's last heartbeat; null before its first tick.
+             */
+            heartbeat_age_s: number | null;
+            backup: components["schemas"]["BackupStatus"];
+            /**
+             * Format: int64
+             * @description Bytes available to the app on the media volume; null when it cannot be read.
+             */
+            media_free_bytes: number | null;
+            push: components["schemas"]["PushStatus"];
+        };
+        BackupStatus: {
+            /** Format: date-time */
+            checked_at: string | null;
+            /** Format: date-time */
+            last_dump_at: string | null;
+            /** Format: date-time */
+            last_copy_at: string | null;
+            last_error: string | null;
+            red: boolean;
+        };
+        PushStatus: {
+            subscriptions: number;
+            last_push: {
+                /** Format: date */
+                date: string;
+                attempted: number;
+                delivered: number;
+            } | null;
+            red: boolean;
+        };
+        ClientErrorInput: {
+            message: string;
+            stack?: string;
+            app_version: string;
+            route: string;
+        };
+        PushKey: {
+            /** @description The VAPID public key, base64url without padding. */
+            public_key: string;
+        };
+        PushSubscriptionInput: {
+            endpoint: string;
+            /** @description Sent by every browser; accepted and ignored. */
+            expirationTime?: number | null;
+            keys: {
+                p256dh: string;
+                auth: string;
+            };
+        };
+        PushSubscriptionId: {
+            /** Format: uuid */
+            id: string;
+        };
+        LogItem: components["schemas"]["LogEntry"] & {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["RuleKind"];
+            /** Format: uuid */
+            client_id: string;
+            client_name: string;
+        };
+        LogList: {
+            items: components["schemas"]["LogItem"][];
         };
         Client: {
             /** Format: uuid */
@@ -1678,6 +2102,34 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    previewTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePreviewInput"];
+            };
+        };
+        responses: {
+            /** @description The rendered text. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplatePreview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     updateTemplate: {
         parameters: {
             query?: never;
@@ -1706,6 +2158,308 @@ export interface operations {
             404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createReminderRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleInput"];
+            };
+        };
+        responses: {
+            /** @description The new rule. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateReminderRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePatch"];
+            };
+        };
+        responses: {
+            /** @description The rule after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDueReminders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The due items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DueList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listReminderLog: {
+        parameters: {
+            query?: {
+                client_id?: string;
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The log rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    recordReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogEntry"];
+            };
+        };
+        responses: {
+            /** @description The row was already logged; the stored row. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogItem"];
+                };
+            };
+            /** @description The new log row. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogItem"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPushKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The VAPID public key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushKey"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    subscribePush: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionInput"];
+            };
+        };
+        responses: {
+            /** @description The endpoint was already stored; its keys are updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionId"];
+                };
+            };
+            /** @description The new subscription. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionId"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ZIP. */
+            200: {
+                headers: {
+                    /** @description attachment; filename="open-customer-YYYY-MM-DD.zip". */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBootstrap: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bootstrap"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    logClientError: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientErrorInput"];
+            };
+        };
+        responses: {
+            /** @description Logged. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

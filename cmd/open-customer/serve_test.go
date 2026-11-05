@@ -189,6 +189,46 @@ func TestServeNoSetupLinkWhenUserExists(t *testing.T) {
 	}
 }
 
+// vapidKeys reads the two VAPID rows of server_keys from the database c, name to value.
+func vapidKeys(t *testing.T, c dbtest.Conn) map[string]string {
+	t.Helper()
+	pool := openPool(t, c)
+	rows, err := pool.Query(t.Context(), `SELECT name, value FROM server_keys WHERE name IN ('vapid_public', 'vapid_private')`)
+	if err != nil {
+		t.Fatalf("query server_keys: %v", err)
+	}
+	defer rows.Close()
+	got := map[string]string{}
+	for rows.Next() {
+		var name, value string
+		if err := rows.Scan(&name, &value); err != nil {
+			t.Fatalf("scan server_keys: %v", err)
+		}
+		got[name] = value
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read server_keys: %v", err)
+	}
+	return got
+}
+
+func TestServeCreatesVAPIDKeys(t *testing.T) {
+	c := dbtest.Empty(t)
+	cfg := serveConfig(t, c)
+	first := startServe(t, cfg)
+	first.stop(t)
+	created := vapidKeys(t, c)
+	if created["vapid_public"] == "" || created["vapid_private"] == "" {
+		t.Fatalf("server_keys after start = %v, want vapid_public and vapid_private", created)
+	}
+
+	second := startServe(t, cfg)
+	second.stop(t)
+	if kept := vapidKeys(t, c); kept["vapid_public"] != created["vapid_public"] || kept["vapid_private"] != created["vapid_private"] {
+		t.Errorf("server_keys after a restart differ from the first start: the keys were regenerated")
+	}
+}
+
 func hasJSONLine(out, msg string) bool {
 	sc := bufio.NewScanner(strings.NewReader(out))
 	for sc.Scan() {
@@ -225,4 +265,25 @@ func TestServeExitsOneWhenMigrateFails(t *testing.T) {
 	if c, err := ln.Accept(); err == nil {
 		t.Errorf("listener still accepts after serveOn failed (conn %v)", c.LocalAddr())
 	}
+}
+
+// TestServeStartsDailyTimer: the timer's first tick runs at start and writes the heartbeat. The
+// test waits on that row (each poll is one query), then serve still shuts down cleanly with the
+// timer stopped.
+func TestServeStartsDailyTimer(t *testing.T) {
+	c := dbtest.Empty(t)
+	s := startServe(t, serveConfig(t, c))
+	pool := openPool(t, c)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	for {
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM scheduler_state WHERE name = 'heartbeat'`).Scan(&n); err != nil {
+			t.Fatalf("read the heartbeat: %v", err)
+		}
+		if n == 1 {
+			break
+		}
+	}
+	s.stop(t)
 }

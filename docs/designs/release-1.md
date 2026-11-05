@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. P0–P3 are built; P4 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
+*   **Status:** Accepted. P0–P4 are built; P5 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
 
@@ -90,7 +90,7 @@ Each goal has a check. Release 1 is done when all checks pass.
     Check: creating an appointment with client, service(s), date and attributes takes under 30 seconds for an existing client.
 3.  **Reminders are correct.**
     Checks:
-    *   `internal/reminders/due_test.go` has a passing case for every row and bullet of the rules table, including the last four checks below.
+    *   The due-list tests in `internal/reminders` (`due_test.go`, `due_comeback_test.go` and the `DueList` database tests in `due_db_test.go`) have a passing case for every row and bullet of the rules table, including the last four checks below.
     *   During the 4-week gate (Goal 4), every reminder she expected but did not see is logged as a bug, and none is open at the end. A reminder missed because the PC was off is not a bug (see "Accepted risks").
     *   A "before" reminder is never shown after the appointment has started.
     *   A come-back reminder is never missing because she forgot to mark an appointment as done.
@@ -290,7 +290,9 @@ One binary, `open-customer`, with subcommands:
 The **daily timer** is one goroutine in `serve`. Every minute it does two things:
 
 1.  Writes a heartbeat time to `scheduler_state`.
-2.  If the business-local time is past the push hour, and today's push has not been sent yet, and it is before 20:00, it counts the items `DueList` returns (see "Due-list computation"; late items included, the same list as "Para enviar hoy") and sends one summary push when the count is above 0. Then it records today's date in `scheduler_state`, even when the count was 0, so a quiet day does not re-check every minute and no second push goes out later that day. If the count fails (for example the database is not ready yet after boot), it records nothing and tries again the next minute. When it sends, it also records the last push result in `scheduler_state` (`last_push`: the date, how many subscriptions it tried, how many accepted it). If the PC was off at the push hour, the push goes out when the PC comes back, up to 20:00. Before setup there is no settings row, so the timer writes only the heartbeat.
+2.  If the business-local time is past the push hour, and today's push has not been sent yet, and it is before 20:00, it counts the items `DueList` returns (see "Due-list computation"; late items included, the same list as "Para enviar hoy") and sends one summary push when the count is above 0. Then it records today's date in `scheduler_state`, even when the count was 0, so a quiet day does not re-check every minute and no second push goes out later that day. If the count fails (for example the database is not ready yet after boot), it records nothing and tries again the next minute. When it sends, it also records the last push result in `scheduler_state` (`last_push`: the date, how many subscriptions it tried, how many accepted it). If the PC was off at the push hour, the push goes out when the PC comes back, up to 20:00. Before setup there is no settings row, so the timer writes only the heartbeat. If the send fails before it tries any subscription, it records nothing and tries again the next minute; if it stops part way (deleting a gone subscription failed), it logs `code=push_send_partial` and still records the day and `last_push`, so the morning push is not sent again every minute.
+
+The timer is `scheduler.Run(ctx, ticks)`: it calls `Tick` once at start and then on every value from `ticks`, until `ctx` is done. `serve` passes `time.NewTicker(time.Minute).C`, cancels the timer on shutdown and waits for `Run` to return. A failed `Tick` returns its error, and `Run` logs `code=scheduler_tick_failed` and tries again on the next tick. Tests call `Tick` directly with the fake clock, never sleeping. The push sender is the one interface (`scheduler.Sender`), so the tests use a fake.
 
 Nothing stores a "completed" status: `IsDone` computes it on every read (see "Reminder rules" below), so no stored value can disagree with it.
 
@@ -338,7 +340,7 @@ Dependency rules:
 *   `auth` imports no domain module. Setup needs one thing from another module, and `cmd/open-customer` passes it to `auth` as a function when it builds it: the settings creator (a closure over `settings.Create`, which also validates the time zone, currency and country; item 40). `auth` defines the type of that function and of its input, so it never names a `settings` type. Setup writes nothing else: no starter content.
 *   Modules are concrete Go types; `httpapi` holds them directly. An interface is added only where a test needs a fake (`push` for the scheduler tests). The method list in item 32 is the contract.
 *   **Transactions are passed explicitly.** Every module function takes `(ctx, q db.DBTX, …)`. `db.DBTX` is the interface sqlc generates; both the pool and a `pgx.Tx` satisfy it. Who opens the transaction:
-    *   **Every non-GET handler** runs its module call inside `db.WithTx` (read-write) and passes the `pgx.Tx`. It commits before it writes the response, so a failed commit is never shown to her as saved (Goal 6). A module write with several statements (an appointment and its service lines, a password change and its session revokes) is then all or nothing. Setup is the same: the `POST /setup` handler opens the transaction for `auth.CompleteSetup`.
+    *   **Every non-GET handler that reads or writes the database** runs its module call inside `db.WithTx` (read-write) and passes the `pgx.Tx`. It commits before it writes the response, so a failed commit is never shown to her as saved (Goal 6). A module write with several statements (an appointment and its service lines, a password change and its session revokes) is then all or nothing. Setup is the same: the `POST /setup` handler opens the transaction for `auth.CompleteSetup`.
     *   **The four snapshot readers** use a read-only `REPEATABLE READ` transaction: bootstrap, `GET /reminders/due` and the daily timer (all three call `DueList`), and export.
     *   **Every other GET handler** passes the pool.
 *   **Modules have their own types.** Each module defines plain input and output structs (for example `clients.Client`, `clients.CreateInput`). Handlers convert between them and the generated `gen` types. Modules never import `gen`.
@@ -489,6 +491,7 @@ Behavior:
 *   **Preview:** `POST /templates/preview` renders on the server, so there is one renderer, written in Go. Above the preview, "Vista previa con:" lets her pick who it is for:
     *   **The sample client** (the default). Her own attributes get placeholder values, so they are visible in the preview: text shows the label in brackets ("[Bebida favorita]"), select and multiselect show the first active option, number shows 1, date shows today.
     *   **A real client** she picks with the client search. The preview uses that client's data and the client's latest appointment that is not cancelled or no-show. If the client has none, the `appointment.*` values come from the sample appointment.
+    *   **Lenient, and the same path as the due list.** The preview never rejects a body: a malformed `{{` shows as text and an unknown variable shows its fallback or nothing, so she sees the text while typing. `unknown_vars` lists each unknown variable once as `ns.key`, in body order (the save check reports every occurrence; the preview lists names). Both records go through the same `buildData` as the due list. The latest appointment is the one with the largest `starts_at` among `scheduled` and `confirmed` ones (ties by ID). An archived client can be previewed; an unknown `client_id` is 422 on `client_id`.
     *   Preview lives in `reminders` (item 32), not in `templates`, because it reuses the loader that builds the data map for the due list. That loader reads clients, appointments, services and attributes, which `templates` may not read.
 
 ### Reminder rules and the "done" rule
@@ -533,13 +536,13 @@ There are two rule kinds:
 2.  Then load the candidate appointments, one query after another on the same `q`. The caller passes a read-only `REPEATABLE READ` transaction (bootstrap, `GET /reminders/due` and the timer all do), so every query sees one snapshot:
     *   **Before candidates:** appointments with `starts_at` between `now` and the end of today plus the largest "before" `offset_days`.
     *   **Come-back candidates:** appointments with `ends_at` between today minus (largest come-back `offset_days` + 60 days) and `now`.
-    *   For each come-back candidate client, the appointments (not cancelled or no-show) that start after that client's earliest candidate `ends_at`, with their `starts_at` and service lines (`service_id`, `name`). The skip rule and the booking prompt both read these.
+    *   For the come-back candidates' clients, the appointments (not cancelled or no-show) that start after the earliest candidate `ends_at`, with their `starts_at` and service lines (`service_id`, `name`). The skip rule and the booking prompt both read these; `compute` keeps, for each visit, only the ones of its client that start after its own `ends_at`.
     *   Log rows for the candidate appointments.
     *   Both candidate loads skip appointments whose client is archived.
-3.  For each (rule, appointment) pair, compute `anchor_at` (`starts_at` for "before", none for `come_back`) and the due day, and apply the table above. For a remaining `come_back` item, the earliest later appointment that starts after `now` and lacks the return service makes it a booking prompt ("Booking prompt" above).
+3.  For each (rule, appointment) pair, compute `anchor_at` (`starts_at` for "before", none for `come_back`) and the due day, and apply the table above. A `come_back` rule pairs only with appointments that have one of its lines on the rule's service. For a remaining `come_back` item, the earliest later appointment that starts after `now` and lacks the return service makes it a booking prompt ("Booking prompt" above).
 4.  Drop pairs that already have a log row: a "before" item matches on `(rule_id, appointment_id, anchor_at)`, a `come_back` item on `(rule_id, appointment_id)`.
 5.  Render each remaining item's text with `templates`, and build its `wa.me` link from `phone_digits`. A booking prompt gets the same text and link (for "Enviar mensaje"), plus the future appointment's ID, start and service names and the return service's ID and name.
-6.  Finally, return the items as "Para enviar hoy" (due today or earlier), sorted by due day (oldest first), then client name. Each item carries a `late` flag when its due day is before today.
+6.  Finally, return the items as "Para enviar hoy" (due today or earlier), sorted by due day (oldest first), then client name, then the item ID, so the order is fixed. Each item carries a `late` flag when its due day is before today.
 
 The 60-day look-back means a come-back item she never handles drops out of the list 60 days after its due day (it is dropped when the due day is more than 60 days before today). The visit stays in the client's history; the reminder is no longer listed. A log row is only written when she acts on an item.
 
@@ -579,7 +582,7 @@ sequenceDiagram
 *   On first start, `push` creates a VAPID key pair in `server_keys`. There is no env override: the pair is in the database, so the backup covers it. `VAPID_SUBJECT` (a `mailto:` address) is required.
 *   The installed PWA subscribes after she taps "Allow". The subscription is saved with `POST /push/subscriptions`, which inserts it or, for a known endpoint, updates its keys.
 *   **Re-subscribe:** each time the installed app opens, it calls `pushManager.getSubscription()`. If there is one, it posts it again, so a subscription the server deleted comes back. If permission is not granted yet, or there is no subscription, `push.ts` reports "needs activation", and "Hoy" and the status screen show an "Activar notificaciones" button. The same button does the first request in CUJ 1 and any later re-subscribe, because iOS asks for permission only after a user tap.
-*   The daily timer sends one notification: "Tienes N mensajes para enviar hoy", with `TTL` 28800 s (8 h) and `Urgency: normal`, so a phone that was off does not get the morning count the next day. The service worker also sets the app badge to N.
+*   The daily timer sends one notification: "Tienes N mensajes para enviar hoy" ("Tienes 1 mensaje para enviar hoy" when N is 1; `locale.PushBody`), with `TTL` 28800 s (8 h) and `Urgency: normal`, so a phone that was off does not get the morning count the next day. The service worker also sets the app badge to N.
 *   **The badge follows the list.** After each refresh and each successful log `POST`, the app calls `navigator.setAppBadge(n)` with the current due count, or `clearAppBadge()` at 0, so the Home Screen number never shows the morning count all day.
 *   **A 0-day item for an early appointment gets no push.** If the appointment starts before the push hour, the item is hidden at `starts_at` (see "Reminder rules"), so the push does not count it. She sees it only if she opens the app before the appointment.
 *   A 404 or 410 answer from the push service deletes that subscription.
@@ -721,12 +724,16 @@ Rules for the CSV files:
 *   UTF-8 with a BOM, so Excel opens accents correctly. Go's `encoding/csv` writes and quotes the values, so a decimal comma or a comma in a note is safe.
 *   Attribute columns are named by label, in `position` order. If two attributes share a label, each gets ` (<key>)` added.
 *   Each array in `datos.json` uses the API schema from item 15 (`reminder_log` uses `LogItem`).
-*   An error after the ZIP has started streaming is logged with the request ID, and the connection is closed, so the phone gets a broken download instead of a file that looks complete.
+*   An error before the first byte reached the client is a normal problem response (the handler counts the bytes it passes on). After that byte the status is already sent, so the handler logs `code=export_aborted` with the request ID and calls `panic(http.ErrAbortHandler)`, which closes the connection (`recoverPanic` lets that value through, item 34). The phone gets a broken download instead of a file that looks complete. The file name date comes from `Server.businessZone`, the same helper `GET /appointments` and `GET /reminders/log` use.
 *   Archived attributes are left out of the CSV; `datos.json` keeps them.
 *   Money and numbers use the value table's locale format, with the currency's decimals and no symbol ("12500,00").
 *   Fixed values are Spanish words: `estado` is "agendada", "confirmada", "cancelada", "no vino" or "realizada"; `archivada` and `archivado` are "sí" or empty.
 *   Dates are `YYYY-MM-DD` and times `HH:MM`, in the business time zone. `telefono` is E.164. The ZIP file name uses the business-local date.
-*   The exporter reads in pages of 500 by `id` (`WHERE id > $1 ORDER BY id LIMIT 500`), all inside one read-only `REPEATABLE READ` transaction, so the ZIP is one consistent snapshot.
+*   The exporter reads in pages of 500 by `id` (`WHERE id > $1 ORDER BY id LIMIT 500`; a table ends at its first empty page), all inside one read-only `REPEATABLE READ` transaction, so the ZIP is one consistent snapshot.
+*   The entries are written in this order: `clientas.csv`, `citas.csv`, `servicios.csv`, `datos.json`. Each table is paged twice in the one snapshot, once for its CSV and once for the JSON, so no more than one page is held at a time (attribute definitions are the exception: `attributes.List` loads them all).
+*   The CSV file names, column headers, `estado` words and "sí" are in `locale` (`ExportText`), because Spanish in Go lives only in `locale` and `problem`. Money uses `locale.Money` with the currency's decimals from `currency.Standard.Rounding` (`golang.org/x/text/currency`). `datos.json` is not Spanish and is a constant in the exporter.
+*   `datos.json` uses the exporter's own types (`Settings`, `Attribute`, `Option`, `Service`, `Template`, `Rule`, `Client`, `Appointment`, `AppointmentService`, `LogItem`), because the exporter may not import `gen`; their JSON keys equal the API schemas of the same name; `TestExportJSONMatchesSchemas` (in `httpapi`, which may import both) compares the `json` tag names and `omitempty` flags of each pair by reflection. `exported_at` is the clock's time in UTC; `appointments[].done` comes from `IsDone`.
+*   The exporter returns errors wrapped and logs nothing; the handler logs.
 
 ### Status screen
 
@@ -847,7 +854,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 ### Observability
 
 *   Logs are JSON from `log/slog` to stdout. Each request log line has a request ID, `CF-Ray`, the route, the status and the duration.
-*   `POST /client-errors` takes errors from the PWA (message, stack, app version, route) and logs them at `warn`. It is rate limited per session.
+*   `POST /client-errors` takes errors from the PWA (message, stack, app version, route) and logs them at `warn` with `code=client_error`, the route, the app version, the message and the stack. It opens no transaction and touches no table. Limits, in characters: `message` 1 to 2000, `app_version` 1 to 64, `route` 1 to 200 (outside them: 422 on that field); a `message` over 2000 is rejected, never cut; only a `stack` over 8000 is cut to 8000 (a 422 would drop the report), so the logged `message` and `stack` never exceed their limits. It is rate limited by a token bucket per session, keyed by the session's token hash: a burst of 10, then one more every 6 seconds (429 with `Retry-After` when no token is left). The message and stack are the one raw outside text the app logs: they come from our own PWA and are the only way to debug it (see the exception in `.claude/rules/maintainability.md`).
 *   The status screen is the main health signal for her and for the author. There is no Prometheus endpoint.
 
 ### Time and locale
@@ -1283,7 +1290,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 | P1 Database and HTTP skeleton | 6 (`sqlc.yaml`; it needs the migrations, so it moved here from P0), 15–16 (`GET /setup/status` only), 17 (`serve`), 18 (P1 steps), 25–32, 33 (`handlers_auth.go`: `GET /setup/status` only), 34 (steps 1–5), 35, 37 (middleware steps 1–5, problem JSON, static), 40 (`SetupNeeded` only), 60 (`/healthz`, `/readyz`), 61, 66 (`schema.d.ts` only, generated by `make generate`) | `serve` migrates an empty DB and serves `/healthz`, `/readyz`, `GET /api/v1/setup/status` and the placeholder page | `make check-generated test test-db`; `go run ./cmd/open-customer serve` against Docker Postgres returns 200 on `/readyz` and `{"needs_setup":true}` on `/api/v1/setup/status` |
 | P2 Auth, setup and settings | 17 (`reset-password`, `setup-link`, `healthcheck`), 18 (P2 step), 19, 33 (auth, settings), 34 (steps 6–8), 37 (session and `must_change_password` steps), 38–42, 44 | Setup link, owner creation (setup creates nothing else), login, sessions, settings, manifest, icons | `make test test-db cover` (gate: `auth`); with `curl -H "Origin: $PUBLIC_URL"`: setup → login → `GET /me` → logout |
 | P3 Catalog | 33 (catalog), 37 (409 overlap responses), 45–52, 53 (without `sample.go`), 54 | Attributes, clients, services, appointments, media, templates | `make test test-db cover` (gates added: `attributes`, `appointments`, `templates`) |
-| P4 Reminders, push and export | 18 (P4 steps), 28 (migration `00002`), 33 (reminders and `POST /templates/preview`, push, export, status, bootstrap), 53 (`sample.go`), 55–59, 60 (`Status()`, client errors) | Due list (messages and booking prompts), reminder log, daily push, export, the status screen data | `make test test-db cover` (gate added: `reminders`); a `db`-tagged Go test in `internal/reminders` inserts the CUJ 4 and 5 rows (CUJ 5 including the booking prompt), and `GET /reminders/due` returns those items |
+| P4 Reminders, push and export | 18 (P4 steps), 28 (migration `00002`), 33 (reminders and `POST /templates/preview`, push, export, status, bootstrap), 53 (`sample.go`), 55–59, 60 (`Status()`, client errors) | Due list (messages and booking prompts), reminder log, daily push, export, the status screen data | `make test test-db cover` (gate added: `reminders`); a `db`-tagged Go test in `internal/reminders` (`cuj_db_test.go`) inserts the CUJ 4 and 5 rows (CUJ 5 including the booking prompt), and `GET /reminders/due` returns those items |
 | P5 Web app | 62–63 (finished), 64–78 | The PWA on top of the finished API | `make lint test build`; the binary serves the real app; manual pass of CUJ 1–6 in Safari's iPhone view |
 | P6 End-to-end tests | 79–80 | Playwright specs | `make e2e` green in CI |
 | P7 Deploy, backups and docs | 9 (backup-image step), 11–14, 81–87 | Compose stack, backup image and scripts, docs moved, root files deleted | The Verification Plan's manual steps on the PC, including the restore drill |
@@ -1303,7 +1310,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
         *   `github.com/nyaruka/phonenumbers`
         *   `golang.org/x/crypto` (argon2), `golang.org/x/time` (rate), `golang.org/x/text` (currency), `golang.org/x/sys` (`unix.Statfs`)
         *   `github.com/oapi-codegen/nullable` (the `nullable.Nullable[T]` type from `nullable-type`)
-        *   `github.com/SherClockHolmes/webpush-go`
+        *   `github.com/SherClockHolmes/webpush-go` v1.4.0 (it pulls in `github.com/golang-jwt/jwt/v5`)
         *   `github.com/testcontainers/testcontainers-go` and its `modules/postgres` (test only)
     *   `tool` lines for `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen`, `golang.org/x/vuln/cmd/govulncheck` and `golang.org/x/tools/cmd/deadcode` (the dead-code check in `make lint`, `TASKS.md` T7). There is no goose `tool` line: the goose CLI pulls in every database driver, and the app runs migrations itself. A new migration is a hand-made file named `0000N_<name>.sql` with the markers from item 28.
     *   `sqlc` is **not** a `tool` line: its PostgreSQL parser needs cgo, which breaks the `CGO_ENABLED=0` setup. `make generate` runs it from the pinned `sqlc/sqlc` Docker image instead.
@@ -1326,14 +1333,14 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `test-db` | `web-stub`, then Go tests tagged `db` |
     | `vuln` | `web-stub`, then `govulncheck` on `$(GO_PKGS)` |
     | `e2e` | `build`; then drop and recreate the e2e database (`dropdb --if-exists` and `createdb` with `psql` tools against the maintenance database; locally through `docker exec` on the `dev` container); then Playwright (item 79). If `E2E_DATABASE_URL` is already set (CI sets it to its service container), that database is used and no container is started. Otherwise the target starts the `dev` Postgres container if needed and uses `open_customer_e2e` on it. |
-    | `lint` | `web-stub`, then `go mod tidy -diff` (fails on `go.mod` or `go.sum` drift), golangci-lint on `$(GO_DIRS)` (installed by the Makefile into `bin/tools/golangci-lint-<version>/`; CI passes `GOLANGCI_LINT=golangci-lint` from its action), `go tool deadcode -test -tags db` (so the db-tagged tests are roots and the `dbtest` helper is not dead) against an exact `DEADCODE_BUDGET`, shellcheck on every `*.sh`, `pnpm check` (`svelte-kit sync` + svelte-check), and `pnpm lint` (eslint, prettier check, knip, jscpd) |
+    | `lint` | `web-stub`, then `go mod tidy -diff` (fails on `go.mod` or `go.sum` drift), golangci-lint on `$(GO_DIRS)` (installed by the Makefile into `bin/tools/golangci-lint-<version>/`; CI passes `GOLANGCI_LINT=golangci-lint` from its action), `go build` of `$(GO_BUILD_PKGS)` (the packages with non-test files) for `GOOS=darwin` and `GOOS=windows` (`GOARCH=amd64`, `CGO_ENABLED=0`; the app runs on Linux, but `make dev` runs `serve` on the host, so an OS-specific call must not break other systems), `go tool deadcode -test -tags db` (so the db-tagged tests are roots and the `dbtest` helper is not dead) against an exact `DEADCODE_BUDGET`, shellcheck on every `*.sh`, `pnpm check` (`svelte-kit sync` + svelte-check), and `pnpm lint` (eslint, prettier check, knip, jscpd) |
     | `cover` | `web-stub`, then `go test -tags db -coverprofile` for each package in `COVER_PKGS`; writes `coverage-<name>.out` and fails, naming the package, if any package's total (`go tool cover -func`) is below `COVER_FLOOR` (90.0). `COVER_PKGS` grows by phase: `auth` (P2); `attributes`, `appointments`, `templates` (P3); `reminders` (P4) |
     | `dev` | `web-stub`, then Docker Postgres (`PG_IMAGE`) in the container `open-customer-dev` on host port `DEV_PG_PORT` (default `5433`; started or reused, password `devpassword`, dev only), the binary built to `bin/dev/open-customer` running `serve` on `:8080` in the background, and the Vite dev server on `:5173` in the foreground with the proxy from item 63. A `trap` stops `serve` when Vite exits; it runs the built binary, not `go run`, because `go run` does not pass SIGTERM on to the server. Env and the Origin rule are below the table. |
     | `image` | `docker build --build-arg VERSION=$(VERSION)` of the app image |
 
     *   **`dev` env:** the Go server gets `PUBLIC_URL=http://localhost:5173`, `DB_HOST=localhost`, `DB_PORT=$(DEV_PG_PORT)` and `DB_PASSWORD=devpassword` for the container, `VAPID_SUBJECT=mailto:dev@localhost` and `ALLOW_MIGRATE_WITHOUT_BACKUP=true` (there is no backup status file in dev). The browser's `Origin` is `http://localhost:5173`, and the Vite proxy forwards it unchanged, so the Origin check passes.
     *   `VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)`. The same value goes to `-ldflags`, the web build and `make image`; the release workflow sets it from the tag.
-    *   `GO_PKGS := $(shell go list -e ./... | grep -v /node_modules/)`. Every Go target uses it instead of a bare `./...`, so Go never walks into `web/node_modules` (some npm packages ship `.go` files). golangci-lint takes directories, not import paths, so `lint` uses `GO_DIRS` (the same list as `./`-relative folders).
+    *   `GO_PKGS := $(shell go list -e ./... | grep -v /node_modules/)`. Every Go target uses it instead of a bare `./...`, so Go never walks into `web/node_modules` (some npm packages ship `.go` files). golangci-lint takes directories, not import paths, so `lint` uses `GO_DIRS` (the same list as `./`-relative folders). `go build` refuses a package with only test files (`internal/guards`), so the cross-OS builds in `lint` use `GO_BUILD_PKGS` (the same list, kept to packages with non-test files).
     *   **Targets by phase:** P0 has `check-pins`, `node-check`, `web-stub`, `web`, `build`, `test`, `vuln`, `lint` and `image`. `generate` and `check-generated` come in P1, `test-db` in P1, `cover` in P2, `dev` in P1 (it needs `serve`), `e2e` in P6.
     *   Why `web-stub`: `web/embed.go` has `//go:embed all:build`, and `web/build` is gitignored. On a clean checkout the embed has no files, so every Go command fails to compile. The stub gives the embed one file without running Node. A plain `go build` without `make` on a clean checkout still fails, with the embed error; `README.md` says to use `make`.
 
@@ -1520,6 +1527,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   A shared `Problem` schema (RFC 9457 with `errors[].field`).
     *   Cookie security scheme `oc_session`.
     *   **Response headers are set by the code that has the `ResponseWriter`**, not generated: handlers set `Set-Cookie` (setup, login, logout), `Content-Disposition` (export) and `Cache-Control` (media); the middleware sets `X-App-Version` (item 34); `problem.Write` sets `Retry-After` (item 24). The spec may document them, but generates no code for them.
+    *   **`datos.json` keys.** The export's JSON types (`internal/exporter/json.go`) copy the keys of the `Settings`, `Attribute`, `Option`, `Service`, `Template`, `Rule`, `Client`, `Appointment`, `AppointmentService` and `LogItem` schemas; `TestExportJSONMatchesSchemas` keeps them equal.
     *   **`attrs`** is `type: object, additionalProperties: true` with `x-go-type: json.RawMessage` and `x-go-type-import: {path: encoding/json}`. The handlers pass it on unchanged, and `attributes/validate.go` decodes each value against its attribute type.
     *   **Absent vs `null` in `PATCH`:** every `PATCH` body field is optional. A field that may be cleared is also `nullable: true`. With `output-options.nullable-type: true` (item 16), oapi-codegen generates `nullable.Nullable[T]` for those fields, which tells "absent", "null" and "a value" apart. Optional fields that cannot be cleared become pointers (absent = `nil`). The option name is checked against the pinned oapi-codegen version at P1.
     *   **Multipart and streaming.** `POST /media` and `POST /settings/icon` are `multipart/form-data`; the handler reads them with `r.MultipartReader()`. `GET /export` and `GET /media/{id}` are `format: binary`; the handler writes to `w` (the export straight from `archive/zip`). Every `/api/v1` route is generated, so no hand-registered route can clash with one.
@@ -1575,7 +1583,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `LogEntry` | `rule_id`, `appointment_id`, `anchor_at` (nullable; null for `come_back`), `action`, `body?`, `phone_digits?`, `acted_at` |
     | `LogItem` | `LogEntry` plus `id`, `kind`, `client_id`, `client_name`. Returned by `GET /reminders/log`, so "Enviados" and the client history show the name even when the appointment is outside the cached window. |
     | `Bootstrap` | `server_time`, `settings`, `attributes[]` (with options), `services[]`, `templates[]`, `rules[]` (these four include archived rows, with `archived: true`, because the phone renders old values by their last label and warns about archived templates and services), `clients[]` (active only), `appointments[]` (in the window), `due[]`, `template_vars[]` (`ns`, `key`, `label`, for the chip row), `backup_red` (the same value as `Status.backup.red`, for the line on "Hoy") |
-    | `Status` | `version`, `migration_version`, `heartbeat_age_s`, `backup` (`checked_at?`, `last_dump_at?`, `last_copy_at?`, `last_error?`, `red`; a missing or unreadable file gives all times null and `red: true`, which the UI shows as "desconocido"), `media_free_bytes`, `push` (`subscriptions`, `last_push?` (`date`, `attempted`, `delivered`), `red`) |
+    | `Status` | `version`, `migration_version`, `heartbeat_age_s?` (null until the timer's first tick), `backup` (`checked_at?`, `last_dump_at?`, `last_copy_at?`, `last_error?`, `red`; a missing or unreadable file gives all times null and `red: true`, which the UI shows as "desconocido"), `media_free_bytes?` (null when the volume cannot be read), `push` (`subscriptions`, `last_push?` (`date`, `attempted`, `delivered`), `red`) |
 
     **Request bodies**
 
@@ -1593,13 +1601,13 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `POST /appointments` | `client_id`, `starts_at`, `ends_at?` (default: `starts_at` + the sum of the service durations), `service_ids[]` (order kept, repeats allowed), `attrs`, `notes?`, `allow_overlap`. At least one service, or an explicit `ends_at`, is required; an archived client or service is rejected with 422. | 201 `Appointment` |
     | `POST /appointments/{id}/status` | `status`, `allow_overlap` (default `false`; used when the change is to `scheduled`) | 200 `Appointment` |
     | `POST /templates` | `name`, `body` | 201 `Template` |
-    | `POST /templates/preview` | `body`, `client_id?` (none: the sample client; set: that client and the client's latest appointment that is not cancelled or no-show, see "Message templates") | 200 `{text, unknown_vars[]}` |
+    | `POST /templates/preview` | `body`, `client_id?` (none: the sample client; set: that client and the client's latest appointment that is not cancelled or no-show, see "Message templates") | 200 `{text, unknown_vars[]}`; `unknown_vars[]` holds `ns.key` strings, each once, in body order; an unknown `client_id` is 422 |
     | `POST /reminder-rules` | `kind`, `service_id?`, `return_service_id?` (`come_back` only; absent or null = the rule's own service), `offset_days`, `template_id`, `include_overdue` (bool, optional, default `false` = "Solo de hoy en adelante"). An archived template, service or return service is 422. | 201 `Rule` |
-    | `POST /reminders/log` | `LogEntry`. An unknown `rule_id` or `appointment_id` is 422, not a foreign-key 500. | 201, or 200 when the row already existed |
-    | `POST /push/subscriptions` | the browser's `PushSubscription` JSON (`endpoint`, `keys.p256dh`, `keys.auth`) | 201 `{id}` for a new endpoint, 200 `{id}` for a known one (keys updated) |
+    | `POST /reminders/log` | `LogEntry`. An unknown `rule_id` or `appointment_id` is 422, not a foreign-key 500. | 201 `LogItem`, or 200 `LogItem` (the stored row) when the row already existed |
+    | `POST /push/subscriptions` | the browser's `PushSubscription` JSON (`endpoint`, `expirationTime?` (number or null; accepted and ignored: the browser always sends it and unknown fields are rejected), `keys.p256dh`, `keys.auth`) | 201 `{id}` for a new endpoint, 200 `{id}` for a known one (keys updated) |
     | `POST /media` | multipart: `full` (JPEG, ≤ 10 MB), `thumb` (JPEG, ≤ 1 MB), `client_id?`, `appointment_id?` (at least one; the request is ≤ 12 MB). The server always stores `client_id`: with `appointment_id`, it is filled from the appointment; a different one is 422 (see "Photos"). | 201 `Media` |
     | `POST /settings/icon` | multipart: `icon512`, `icon180` (PNG, each ≤ 1 MB; the request is ≤ 3 MB; the PNG signature is checked, otherwise 415) | 204 |
-    | `POST /client-errors` | `message`, `stack?`, `app_version`, `route` | 204 |
+    | `POST /client-errors` | `message`, `stack?`, `app_version`, `route` (limits in "Observability": 422 on a field outside them; no transaction) | 204, or 429 past the session's token bucket (a burst of 10, then one every 6 seconds) |
 
     **`PATCH` bodies** (every field optional; `?` = may be `null` to clear)
 
@@ -1621,7 +1629,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | --- | --- | --- |
     | `GET /setup/options` | — (no session) | 200 `{countries[]}` from `settings.Countries()`: the ISO codes from `phonenumbers.GetSupportedRegions()`, sorted. The phone shows them with `Intl.DisplayNames(['es'], {type: 'region'})`. |
     | `GET /me` | — | 200 `Me` |
-    | `GET /bootstrap` | `from`, `to` (`YYYY-MM-DD`, both required, at most 200 days apart) | 200 `Bootstrap` |
+    | `GET /bootstrap` | `from`, `to` (`YYYY-MM-DD`, both required; `to` is not before `from` and at most 200 days after it, else 422 on `to`: "Elige un rango válido de hasta 200 días"; the check runs before the transaction) | 200 `Bootstrap` |
     | `GET /clients` | `archived?` (default `false`) | 200 `{items: Client[]}`, by name. There is no `q`: search runs on the phone. |
     | `GET /clients/{id}` | — | 200 `Client` |
     | `GET /clients/{id}/appointments` | — | 200 `{items: Appointment[]}`, newest first |
@@ -1630,12 +1638,12 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `GET /appointments/{id}` | — | 200 `Appointment` |
     | `GET /media/{id}`, `GET /media/{id}/thumb` | — | 200 `image/jpeg` (binary) |
     | `GET /reminders/due` | — | 200 `{items: DueItem[]}` |
-    | `GET /reminders/log` | exactly one of `client_id` or `date` (`YYYY-MM-DD`), or 422. `date` filters on `acted_at`, as a local day in the business time zone. | 200 `{items: LogItem[]}`, newest first by `acted_at` |
+    | `GET /reminders/log` | exactly one of `client_id` or `date` (`YYYY-MM-DD`), or 422. `date` filters on `acted_at`, as a local day in the business time zone. | 200 `{items: LogItem[]}`, newest first by `acted_at`; an unknown `client_id` is 404 |
     | `GET /push/key` | — (no session) | 200 `{public_key}` (base64url) |
     | `GET /export` | — | 200 `application/zip` (binary), `Content-Disposition: attachment; filename="open-customer-<YYYY-MM-DD>.zip"` |
     | `GET /status` | — | 200 `Status` |
 
-    **Push payload** (JSON, encrypted by Web Push): `{"title": <business name>, "body": "Tienes N mensajes para enviar hoy", "count": N, "url": "/enviar"}`.
+    **Push payload** (JSON, encrypted by Web Push): `{"title": <business name>, "body": "Tienes N mensajes para enviar hoy", "count": N, "url": "/enviar"}` (the body is singular for N = 1: "Tienes 1 mensaje para enviar hoy").
 
 ##### 16. `api/oapi-codegen.yaml` (Create)
 
@@ -1655,10 +1663,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**: The steps, and the phase that adds each one:
     1.  Loads config and opens the pool. (P1)
     2.  Runs `db.Migrate` with the backup guard. (P1)
-    3.  Ensures the VAPID keys exist. (P4)
+    3.  Ensures the VAPID keys exist, with `push.EnsureKeys` in its own `db.WithTx` (the two keys are two inserts, so a half pair never persists). (P4, built)
     4.  Prints the setup link if there are no users: `Setup: <PUBLIC_URL>/setup#<token>`, one plain stdout line, not slog (see "Auth, sessions and handover"). `NewSetupToken` runs in its own `db.WithTx`. (P2)
     5.  Builds the modules and `httpapi.Server`. (P1, with each phase adding its modules)
-    6.  Starts `scheduler.Run`. (P4)
+    6.  Starts `scheduler.Run` in a goroutine on a one-minute ticker; on shutdown it cancels it and waits for it to return. (P4, built)
     7.  Serves on `:8080`. (P1)
     8.  Shuts down gracefully on SIGTERM. (P1)
 
@@ -1709,7 +1717,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 25. `internal/db/db.go` (Create)
 
 *   **Type / Scope**: Connection.
-*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`. `pool` is a `db.Beginner`: the `*pgxpool.Pool`, or in a test a fake whose `Commit` fails (item 37). `WithTx` begins the transaction with `opts` (read-write for every non-GET handler; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
+*   **Proposed Changes**: A `pgxpool` setup, `type DBTX = sqlc.DBTX` (sqlc generates the interface in its own package; this alias is the `db.DBTX` every module uses), and `WithTx(ctx, pool, opts, fn func(pgx.Tx) error)`. `pool` is a `db.Beginner`: the `*pgxpool.Pool`, or in a test a fake whose `Commit` fails (item 37), or `dbtest.TxModeRecorder`, which records the isolation level and read-only flag Postgres gives each transaction. `WithTx` begins the transaction with `opts` (read-write for every non-GET handler that reads or writes the database; read-only `REPEATABLE READ` for bootstrap, `GET /reminders/due`, the timer and export, which `TestSnapshotReadersUseReadOnlyRepeatableRead` (httpapi) and `TestTickCountsInASnapshot` (scheduler) check through that recorder; see "Code layout and module rules"), commits on nil and rolls back on error. Module functions build `sqlc.New(q)` from the `db.DBTX` they get, so the same code runs on the pool or inside a transaction. `DATABASE_URL` comes from `config` (item 20).
 
 ##### 26. `internal/db/migrate.go` (Create)
 
@@ -1748,8 +1756,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: sqlc queries.
 *   **Proposed Changes**: One file per module, holding only the queries that module runs:
     *   `appointments.sql`: the overlap check and the window load.
-    *   `reminders.sql`: the candidate loads for `DueList`, and the log insert with `ON CONFLICT DO NOTHING`.
-    *   `export.sql`: one keyset-paged query per table (`WHERE id > $1 ORDER BY id LIMIT 500`), as in "Export". sqlc `:many` loads all rows of a query into a slice, so paging is what keeps memory bounded.
+    *   `reminders.sql`: the candidate loads for `DueList`, the log insert with `ON CONFLICT DO NOTHING`, the log reads (`GetLogItem`, `ListLogForClient`, `ListLogInRange`) and the existence checks `Record` needs.
+    *   `push.sql`: the `server_keys` read and insert-if-missing, the subscription upsert (`ON CONFLICT (endpoint)`, returning whether the row is new), list, delete and count.
+    *   `scheduler.sql`: `UpsertState` (name, value, `updated_at` from the clock) and `ListState`, on `scheduler_state`.
+    *   `export.sql`: one keyset-paged query per table (`WHERE id > @after ORDER BY id LIMIT 500`), as in "Export": `ExportClients`, `ExportAppointments` (with the client name), `ExportServices`, `ExportTemplates`, `ExportRules` and `ExportLog` (with the rule kind, client id and client name), plus `ExportAppointmentLines` (`appointment_id = ANY(@ids)`, the lines of one page of appointments). sqlc `:many` loads all rows of a query into a slice, so paging is what keeps memory bounded.
 
 ##### 30. `internal/db/sqlc/` (Create, generated)
 
@@ -1768,7 +1778,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: Server implementation.
 *   **Proposed Changes**: The `Server` struct holds the pool and the module values (concrete types), and implements `gen.ServerInterface`.
     *   Mounting: `gen.HandlerWithOptions(server, gen.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: mux, ErrorHandlerFunc: <writes a validation problem>})`.
-    *   `New` refuses an `Options` without one of the module values (`Auth`, `Settings`, `Attributes`, `Services`, `Clients`, `Appointments`, `Media`, `Templates`, `Status`), so a module `serve` forgot to pass fails at startup, not on the first request that reaches it.
+    *   `New` refuses an `Options` without any of these 13 values: the twelve module values (`Auth`, `Settings`, `Attributes`, `Services`, `Clients`, `Appointments`, `Media`, `Templates`, `Reminders`, `Push`, `Status`, `Exporter`) and the `Clock`, so a dependency `serve` forgot to pass fails at startup, not on the first request that reaches it. The server keeps the clock for the handlers that need "now" (`GET /reminders/due`), and `Server.snapshot` is the read-only `REPEATABLE READ` `db.WithTx` the snapshot readers share, and `Server.businessZone(ctx, q)` reads the settings and loads the business time zone for the handlers that need it (`GET /appointments`, `GET /reminders/log`, `GET /export`; `GET /bootstrap` reads the time zone and the locale from the `settings.Get` result it already has).
     *   A catch-all `/api/` handler answers every unknown path and every wrong method under `/api/` with 404 `not-found` problem JSON. Without it, the `/` fallback in item 35 would answer them with `index.html` and a 200.
     *   Handler shape: generated handlers take `(w, r, <path params>, params)`, for example `(w, r, id, params)`.
     *   Shared helpers: `decodeJSON(w, r, &v)` (decodes into the generated request type with `DisallowUnknownFields`, because the web client is ours and an unknown field is a bug; there is no `Validate()` on generated types: the module that owns a field validates it and answers the field errors; a body over the limit, `*http.MaxBytesError`, gives `payload-too-large`; any other decode failure gives `validation`; the multipart readers check `MaxBytesError` the same way) ; `decodePatch(w, r, &v, nullable...)` for every `PATCH` body: `decodeJSON`, plus a top-level field sent as `null` is `validation` on that field unless the endpoint lists it as nullable (the `?` fields of the `PATCH` table; the generated patch fields are pointers, so a `null` would otherwise read as "not sent"), and a bare `null` body is `validation`; `readParts(r, limits)` (in `multipart.go`, with `bodyProblem`, `uploadRejectCode` and `withoutFileText`; the one multipart reader of `POST /media` and `POST /settings/icon`: form-data only, each part at most once, only the named parts, each read up to its limit; the handler checks which parts are required); and `writeJSON(w, status, v)`. Response values are the generated `gen` types, so field names come from the spec.
@@ -1786,11 +1796,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `services` | `List() []Service`; `GetMany(ids) map[id]Service`; `Create(ServiceInput) Service`; `Update(id, ServicePatch) Service` |
     | `appointments` | `ListRange(from, to, loc *time.Location) []Appointment` (the handler passes the business time zone; every status is listed; `to` before `from` is a 422 on `to`, and there is no length limit here: `GET /appointments` checks its 31-day limit and bootstrap reads a longer window); `ListForClient(clientID) []Appointment`; `Get(id) Appointment`; `Create(AppointmentInput) Appointment`; `Update(id, AppointmentPatch) Appointment`; `SetStatus(id, status, allowOverlap) Appointment` (returns `overlap` 409 when the change is to `scheduled` and an overlap exists) |
     | `media` | `Save(MediaInput) Media`; `Open(id, thumb bool) (io.ReadSeekCloser, Media)`; `Discard(ctx, Media)`; `ListForClient(clientID) []Media`; `SetArchived(id, archived *bool) Media` (an absent `archived` leaves the photo as it is; archiving twice keeps the first time) |
-    | `templates` | `List() []Template`; `Vars(loc) []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)` and `SampleData(locale, countryCode)` are plain functions with no `q`. |
-    | `reminders` | `Preview(body, clientID?) Preview` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem` (messages and booking prompts, `DueItem.mode`); `Record(LogEntry) (created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(date) []LogItem` |
+    | `templates` | `List() []Template`; `Vars(loc) []TemplateVar` (for `template_vars[]`); `Create(TemplateInput) Template`; `Update(id, TemplatePatch) Template`. `Render(tmpl, data)`, `Sample(loc, attrs, now, tz)` and `UnknownVars(parsed, attrs)` are plain functions with no `q`. |
+    | `reminders` | `Preview(body, clientID?) Preview{Text, UnknownVars}` (builds the data map with the same loader as `DueList`, so preview and the due list share one code path; with a client, it picks the client's latest appointment that is not cancelled or no-show); `ListRules() []Rule`; `CreateRule(RuleInput) Rule`; `UpdateRule(id, RulePatch) Rule`; `DueList(now) []DueItem` (messages and booking prompts, `DueItem.mode`); `Record(LogEntry) (LogItem, created bool)`; `LogForClient(clientID) []LogItem`; `LogForDate(day, loc) []LogItem` |
     | `push` | `PublicKey() string`; `Subscribe(userID, Subscription) (id, created bool)`; `CountSubscriptions() int`; `EnsureKeys()`; `SendAll(Payload) SendResult` (`attempted`, `delivered`) |
-    | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction) |
-    | `status` | `Health()`; `Ready() bool`; `Status() Status`; `BackupRed() bool` (reads `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(sessionID, ClientError)` |
+    | `exporter` | `Write(w io.Writer)` (the handler opens the read-only transaction). `FileName(day) string` (`open-customer-YYYY-MM-DD.zip`, from the business-local day) is a plain function with no `q`. |
+    | `status` | `Health()`; `Ready() bool`; `Status(ctx, pool) (Report, error)`; `Backup() Backup` and `BackupRed() bool` (read `BACKUP_STATUS_FILE` with `backupstatus.Read`, no `q`); `LogClientError(ctx, sessionKey, ClientError) error` (`sessionKey` is the hex of the session's token hash) |
 
     Every method returns `error` last. Errors are `problem` types (item 24).
 
@@ -1798,11 +1808,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Handlers.
 *   **Proposed Changes**: One file per area. Each handler decodes the request, calls one module function and encodes the result. No business logic lives here.
-    *   `handlers_bootstrap.go` opens one read-only `REPEATABLE READ` transaction with `db.WithTx` and passes the `pgx.Tx` to each module's read function in turn (`settings.Get`, `attributes.List`, `services.List`, `templates.List`, `reminders.ListRules`, `clients.List(false)`, `appointments.ListRange`, `reminders.DueList`, `templates.Vars`), so all parts come from the same snapshot. Outside the transaction it adds `server_time` from the `Clock` and `backup_red` from `status.BackupRed()`. There is no `pgx.Batch`: the sqlc `DBTX` has no `SendBatch`, and one snapshot already makes the reads consistent. `GET /reminders/due` and the timer also call `DueList` inside a read-only `REPEATABLE READ` transaction.
+    *   `handlers_bootstrap.go` opens one read-only `REPEATABLE READ` transaction with `db.WithTx` and passes the `pgx.Tx` to each module's read function in turn (`settings.Get`, `attributes.List`, `services.List`, `templates.List`, `reminders.ListRules`, `clients.List(false)`, `appointments.ListRange`, `reminders.DueList`, `templates.Vars`), so all parts come from the same snapshot. The range check (`maxBootstrapRangeDays` = 200) runs before the transaction. `templates.Vars` gets the locale of the settings read. Outside the transaction it adds `server_time` from the `Clock` (the same `now` passed to `DueList`) and `backup_red` from `status.BackupRed()`. There is no `pgx.Batch`: the sqlc `DBTX` has no `SendBatch`, and one snapshot already makes the reads consistent. `GET /reminders/due` and the timer also call `DueList` inside a read-only `REPEATABLE READ` transaction.
     *   Multipart: `handlers_media.go` (`POST /media`) and `handlers_settings.go` (`POST /settings/icon`) read it with `r.MultipartReader()`. Binary bodies: `handlers_media.go` (`GET /media/{id}`, `/thumb`) and `handlers_export.go` write to `w`, with the headers from item 15.
     *   `handlers_auth.go` also serves `GET /setup/options` (no session).
     *   `handlers_settings.go` also holds the handlers, outside `/api/v1` and with no session, of `GET /manifest.webmanifest` (`settings.Manifest`), `GET /icons/512.png` and `GET /apple-touch-icon.png` (`settings.Icon`), with `Cache-Control: no-cache`; `handlers_status.go` holds those of `/healthz` and `/readyz`. `server.go` registers all five by literal path, before `/`. An icon file error's text can name a path, so the icon handlers answer it as `internal` with a fixed text and never log it.
-    *   Every non-GET handler wraps its module call in `db.WithTx` ("Code layout and module rules").
+    *   Every non-GET handler that reads or writes the database wraps its module call in `db.WithTx` ("Code layout and module rules").
 
 ##### 34. `internal/httpapi/middleware.go` (Create)
 
@@ -1810,7 +1820,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**: Applied in this order. Steps 1–5 are built in P1. Steps 6–8 are built in P2, because they need `auth.Authenticate`.
     1.  Request ID + logging. The layer just inside step 5 (around the mux) records the matched route pattern with `logging.SetRoute`, because the `r.WithContext` copies in steps 2–5 keep the mux's `r.Pattern` from reaching the log line.
     2.  `X-App-Version` header. It is set before any handler or the recovery code runs, so every response from the app has it, including errors and panics; the PWA uses its absence to detect "server off".
-    3.  Panic recovery: logs the stack with the request ID and answers `internal` through `problem.Write`.
+    3.  Panic recovery: logs the stack with the request ID and answers `internal` through `problem.Write`. It re-panics `http.ErrAbortHandler` untouched: the export handler uses it to close a connection after the stream started, and a problem body there would be glued onto the half-written file.
     4.  Client IP (`CF-Connecting-IP` only from `TRUSTED_PROXY_CIDRS`).
     5.  Origin check on every method except GET and HEAD (the mux routes HEAD to GET handlers).
     6.  Session loading, plus the hourly sliding write from "Session and request rules" (`last_seen_at`, `expires_at` and a new `Set-Cookie`). `auth.Authenticate` runs in a short `db.WithTx`, because it may write the slide. A malformed, unknown or expired cookie leaves the request without a session; a database error is a 500.
@@ -2007,8 +2017,8 @@ The items below are grouped by area, not by order. Build them in these phases. A
         ```
 
         A missing or empty entry renders the fallback. `templates` never formats values itself; the caller fills `Data` with `attributes.Format` (item 45) and `internal/locale`.
-    *   `vars.go`: one table of the fixed variables with two views. `Vars(loc)` lists the fixed variables and the active attributes with their current labels, and is sent to the phone as `template_vars[]` in `/bootstrap`, for the chip row. The save check uses the other view, `known`, which counts every attribute of the matching scope, archived ones included, so a template that uses an archived attribute still saves. The labels of the fixed variables come from `locale.VarLabel` (item 61).
-    *   `sample.go` (built in P4, because its only caller is `reminders.Preview`, which sets its inputs): the built-in sample client and appointment data for previews, plus the placeholder value per attribute type (see "Message templates"). The sample names and texts come from `internal/locale` for `settings.locale`, and the sample phone is `phonenumbers.GetExampleNumber(settings.country_code)`, so no country is written in this package (Goal 7).
+    *   `vars.go`: one table of the fixed variables with two views. `Vars(loc)` lists the fixed variables and the active attributes with their current labels, and is sent to the phone as `template_vars[]` in `/bootstrap`, for the chip row. The save check uses the other view, `known`, which counts every attribute of the matching scope, archived ones included, so a template that uses an archived attribute still saves. The labels of the fixed variables come from `locale.VarLabel` (item 61). `UnknownVars(parsed, attrs)` returns every occurrence that `known` rejects, in body order; the save check and the preview both call it.
+    *   `sample.go` (built in P4, because its only caller is `reminders.Preview`, which sets its inputs): `Sample(loc, attrs, now, tz) SampleRecord` builds the built-in sample client and appointment for previews, with the placeholder value per attribute type (see "Message templates"). `SampleRecord` holds `ClientName`, raw `ClientAttrs` and `AppointmentAttrs` JSON, `StartsAt` and `ServiceNames`. Values are raw: `reminders` formats them with `attributes.Format`, as for a real client. Only active attributes get a value. Text is its label in brackets, number is 1, date is today's local day (`YYYY-MM-DD`), select is the ID of the first active root option (by position, then ID), multiselect is a list of that ID; a select with no such option gets no key. `StartsAt` is tomorrow at 15:00 in the business zone. The sample names and texts come from `internal/locale` (`SampleClientName`, `SampleServiceNames`), so no language is written in this package. The sample has no phone: the preview never shows one.
     *   `templates.go`: CRUD. The preview endpoint is served by `reminders.Preview` (item 32), which loads the data, fills `Data` and calls `Render`.
 
 ##### 54. `internal/templates/*_test.go` (Create)
@@ -2027,16 +2037,16 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Reminders.
 *   **Proposed Changes**:
-    *   `rules.go`: CRUD for the two kinds. It sets `applies_from` from `include_overdue` (absent or `false`: now; `true`: `NULL`) on create and on the changes listed in "Reminder rules". It rejects an archived template, service or return service (422). The CHECK rules are mirrored in Go: `service_id` and `return_service_id` are set only for `come_back`; `offset_days` is `>= 0` for `before_appointment` and `> 0` for `come_back`; `kind` and `service_id` cannot change after creation; `return_service_id` can.
+    *   `rules.go`: CRUD for the two kinds. It sets `applies_from` from `include_overdue` (absent or `false`: now; `true`: `NULL`) on create and on the changes listed in "Reminder rules". It rejects an archived template, service or return service (422). The CHECK rules are mirrored in Go: `service_id` and `return_service_id` are set only for `come_back`; `offset_days` is `>= 0` for `before_appointment` and `> 0` for `come_back`; `kind` and `service_id` cannot change after creation; `return_service_id` can. Range: `offset_days <= 365` for both kinds. A `before_appointment` rule sent a `service_id` or `return_service_id` is 422 `MsgServiceNotAllowed` on that field; a `come_back` rule without `service_id` is 422 `MsgServiceRequired`. The template, service and return service must exist and be active (an unknown id is 422 like an archived one); every bad field is collected. `UpdateRule` looks the rule up first (unknown id: 404, before any field check) and has no `kind` or `service_id`. The "asks" changes (they set `applies_from` to now, or to `NULL` with `include_overdue`; any other change keeps it and ignores `include_overdue`) are: a new `offset_days`; a changed *effective* return service (`return_service_id`, or `service_id` when empty, so setting it to the rule's own service, or back to null, does not ask); restoring an archived rule; a new template while the stored one is archived; a new return service while the stored effective one is archived. Archiving uses `archive.At`. `created_at` and `applies_from` come from the injected clock.
     *   `due.go`: `DueList(ctx, q, now)` and the pure `compute(data, now)`, exactly as in "Due-list computation".
-    *   `log.go`: `Record(LogEntry) (created bool)` with `ON CONFLICT DO NOTHING`. `anchorAt` must be set for a "before" rule and null for a `come_back` rule, or it returns a validation error (422).
-    *   `log.go` also has `LogForClient(clientID)` and `LogForDate(day)`. Both join the appointment and client, so each row carries `client_id` and `client_name` (`LogItem`). `LogForDate` filters `acted_at` on the local day in the business time zone.
-    *   `links.go`: `WhatsAppLink(digits, text)`. This is the only place that builds the link: `https://wa.me/<digits>?text=<encoded>`. It switches to `whatsapp://send?phone=<digits>&text=<encoded>` only if the Open Questions test on her iPhone fails with `wa.me`. The text is percent-encoded with spaces as `%20`: Go's `url.QueryEscape` writes `+`, which WhatsApp may show as a literal plus (not checked), so the encoder replaces it.
+    *   `log.go`: `ParseAction` (422 on `action`) and `Record(LogEntry) (LogItem, created bool)` with `ON CONFLICT DO NOTHING`. Validation (D11) reports every bad field as a 422: an unknown `rule_id` or `appointment_id`; `anchor_at` unset for a "before" rule, or set for a `come_back` rule; `phone_digits` that are not 1 to 15 digits. An archived rule still records, because she acted on what she saw. When the item (rule, appointment, anchor) is already logged, nothing is written and `Record` returns the stored `LogItem` with `created` false (O4); the handler answers 200 with it, not 409.
+    *   `log.go` also has `LogForClient(clientID)` (newest `acted_at` first; an unknown client is 404) and `LogForDate(day, loc)`. Both join the rule, appointment and client, so each row carries `kind`, `client_id` and `client_name` (`LogItem`). `LogForDate` returns the rows whose `acted_at` falls on the local day of `day` in `loc`, the business time zone.
+    *   `links.go`: `WhatsAppLink(digits, text)`. This is the only place that builds the link: `https://wa.me/<digits>?text=<encoded>`. It switches to `whatsapp://send?phone=<digits>&text=<encoded>` only if the Open Questions test on her iPhone fails with `wa.me`. The text is percent-encoded with spaces as `%20`: Go's `url.QueryEscape` writes `+`, which WhatsApp may show as a literal plus (not checked), so the encoder replaces it. The replace runs after `QueryEscape`, so a literal plus in the text stays `%2B`.
 
-##### 56. `internal/reminders/due_test.go` (Create)
+##### 56. `internal/reminders/due_test.go`, `due_comeback_test.go`, `due_db_test.go`, `cuj_db_test.go` (Create)
 
 *   **Type / Scope**: Tests (fake clock, DB-backed).
-*   **Proposed Changes**: One case per row and bullet of the rules table:
+*   **Proposed Changes**: One case per row and bullet of the rules table. The unit tests of `compute` (`due_test.go`, `due_comeback_test.go`) cover the cases it owns; the cases that need the database (a cancelled later booking or a return service taken off it, an archived client, the `include_overdue` default, the push count) are `DueList` tests (`due_db_test.go`, `db`-tagged). `cuj_db_test.go` is the P4 exit test ("Build order"): it makes the CUJ 4 and 5 rows with the real modules and checks the three items `DueList` returns (a "before" message, a come-back message and a booking prompt):
     *   A 1-day "before" rule is not skipped by its own appointment (the SAD bug: its skip rule counted the appointment itself as a later one).
     *   It is hidden after `starts_at`.
     *   One item for a two-service appointment.
@@ -2068,24 +2078,33 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   A come-back item counts at 00:01 local time on its due day, so the push at `push_hour` includes it.
     *   A 0-day "before" item whose appointment starts before `push_hour` is not in the list at `push_hour`.
     *   A rule created without `include_overdue` behaves as "Solo de hoy en adelante".
-    *   Items are sorted by due day, then client name.
+    *   Items are sorted by due day, then client name, then item ID.
 
-##### 57. `internal/push/push.go`, `push_test.go` (Create)
+##### 57. `internal/push/push.go`, `push_db_test.go`, `send_db_test.go` (Create)
 
 *   **Type / Scope**: Web Push.
 *   **Proposed Changes**:
-    *   `EnsureKeys`: generates the pair and stores it in `server_keys` if it is missing.
-    *   `Subscribe`: insert, or update the keys of a known endpoint.
-    *   `SendAll(payload)` to every subscription, with `TTL: 28800` and `Urgency: normal`. A 404 or 410 deletes the subscription. Returns how many were tried and how many the push service accepted. `VAPID_SUBJECT` is passed so the JWT `sub` has exactly one `mailto:` (some webpush-go versions add the prefix; a unit test decodes the JWT and checks `sub`).
+    *   `EnsureKeys`: generates the pair with `webpush.GenerateVAPIDKeys` and stores it in `server_keys` (`vapid_public`, `vapid_private`, base64url) if the public key is missing. It runs in a transaction, so both keys are stored together. The private key is never logged or written anywhere else.
+    *   `Subscribe`: checks the subscription (the endpoint is an absolute `https` URL; `keys.p256dh` decodes from base64url to 65 bytes and `keys.auth` to 16; each bad field is a 422 on `endpoint`, `keys.p256dh` or `keys.auth` with `MsgPushEndpointInvalid`), then inserts it, or gives a known endpoint the new keys (its row and ID stay; `created` is false).
+    *   `SendAll(payload)` to every subscription, one after another, with `TTL: 28800` and `Urgency: normal`. A 2xx answer counts as delivered. A 404 or 410 deletes the subscription. Any other answer or a network error counts as not delivered and logs `code=push_send_failed` with the status only (never the endpoint or the error, which quotes it). Answer bodies are closed. Returns how many were tried and how many the push service accepted. A database error (loading the list or the keys, deleting a gone subscription) is returned.
+    *   `Options.HTTPClient` sends the requests; nil means a client with a 15 s timeout.
+    *   `VAPID_SUBJECT` starts with `mailto:`. webpush-go v1.4.0 adds `mailto:` to every subscriber that does not start with `https:` (checked in its `vapid.go`), so `push.New` strips the prefix before passing it on, and the JWT `sub` has exactly one `mailto:` (`TestVAPIDSubjectHasOneMailto` decodes the JWT and checks `sub`). v1.4.0 also signs the JWT expiry with its own clock and ignores `VapidExpiration`; the module still sets it from the injected clock.
 
-    Tests use an `httptest` push endpoint.
+    Tests (`db`-tagged) use a fake push service from `httptest.NewTLSServer`, with its `Client()` as `Options.HTTPClient`, and generate every key at test time.
 
-##### 58. `internal/scheduler/scheduler.go`, `scheduler_test.go` (Create)
+##### 58. `internal/scheduler/scheduler.go`, `scheduler_db_test.go` (Create)
 
 *   **Type / Scope**: Daily timer.
 *   **Proposed Changes**:
-    *   `Run`: the one-minute tick exactly as in "Process model" (heartbeat; one push per local day between `push_hour` and 20:00 when the count is above 0; `last_push`; heartbeat only before setup).
-    *   `State(ctx, q)`: reads the `scheduler_state` keys (heartbeat, `push_checked_date`, `last_push`) for `status`.
+    *   `Run(ctx, ticks)`: `Tick` at start, then per tick, as in "Process model".
+    *   `Tick(ctx)`, in this order:
+        1.  Writes `heartbeat` = now (RFC 3339) on the pool; an error is returned.
+        2.  `settings.Get`: `NotFound` (before setup) returns nil; another error is returned.
+        3.  In the business time zone: before `push_hour`, from 20:00, or when `push_checked_date` is already today (`YYYY-MM-DD`), it returns nil.
+        4.  Counts `DueList` in a read-only `REPEATABLE READ` transaction; an error is returned and nothing is recorded.
+        5.  When the count is above 0, `SendAll` with `{title: business name, body: locale.PushBody(n), count: n, url: "/enviar"}`. An error with no attempt is returned; an error after some attempts logs `code=push_send_partial` and goes on.
+        6.  In one write transaction: `push_checked_date` = today and, when it sent, `last_push` = `{date, attempted, delivered}`.
+    *   `State(ctx, q)`: reads the `scheduler_state` keys (heartbeat, `push_checked_date`, `last_push`) for `status`. A stored heartbeat or `last_push` it cannot parse is nil and logs `code=heartbeat_invalid` or `code=last_push_invalid`.
 
     Tests (fake clock):
     *   Push sent once.
@@ -2093,27 +2112,29 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   No push when the count is 0.
     *   The day boundary in the business time zone.
     *   `last_push` records attempted and delivered counts; no settings row means no push and no error.
+    *   A count failure records nothing; a send that fails with no attempt records nothing; a partial send still records the day.
+    *   A corrupt `last_push` or heartbeat row logs its code; `Run` ticks at start and per tick until cancelled.
 
-##### 59. `internal/exporter/export.go`, `export_test.go` (Create)
+##### 59. `internal/exporter/export.go`, `json.go`, `export_test.go`, `export_db_test.go`, `export_json_db_test.go` (Create)
 
 *   **Type / Scope**: Export.
-*   **Proposed Changes**: Streams a ZIP with the four files and the CSV rules from "Export". Test: reads the ZIP back and checks headers, an accented name, a multiselect cell, two attributes with the same label, a note with a comma, an archived client, and JSON round trip of IDs.
+*   **Proposed Changes**: `New(Options{Clock, Settings, Attributes})`; `Write(ctx, q, w)` streams a ZIP with the four files and the rules from "Export" (`export.go`: the ZIP and the CSV files; `json.go`: the `datos.json` types and writer); `FileName(day)`. Tests (db, settings `USD` and `Europe/Madrid`; they read the ZIP back with `archive/zip` and `encoding/csv`): `TestExportHasFourFilesInOrder`; `TestExportCSVHeadersAndBOM` (`EF BB BF`, then `nombre,telefono,notas,creada,archivada,<labels>`); `TestExportAccentedNameAndCommaNote` ("Lucía Rojas", "Uñas, cortas"); `TestExportMultiselectCell` ("A; B; C"); `TestExportSameLabelGetsKey` (`Color (color)`, `Color (color_2)`); `TestExportArchivedClientMarked`; `TestExportArchivedAttributeOnlyInJSON`; `TestExportAppointmentRow` (2026-10-24T13:00Z gives `2026-10-24`, `15:00`, "Acrílico; Pedicure", "12500,00", an empty `pagado`, "realizada" once past `ends_at`); `TestExportNoShowAppointment` ("no vino"); `TestExportZeroDecimalCurrency` (`JPY`, "12500"); `TestExportPagesPast500` (501 clients in the CSV and the JSON); `TestExportJSONRoundTripsIDs` (client, appointment, rule and log IDs, `version` 1, `reminder_log[0].client_name`); `TestExportDBErrorIsReturned` (`FailingDB` at the second call). Unit: `TestFileNameUsesTheDay`.
 
-##### 60. `internal/status/status.go`, `status_test.go` (Create)
+##### 60. `internal/status/status.go`, `mediafree_statfs.go`, `mediafree_other.go`, `status_test.go` (Create)
 
 *   **Type / Scope**: Health and status.
 *   **Proposed Changes**:
     *   `/healthz` (P1): `200` with the plain-text body `ok`.
     *   `/readyz` (DB ping + no pending migrations, through `db.HasPending`) (P1): `200 ok`, or `503` with the plain-text body `not ready`.
-    *   `Status()` (P4). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content (`backupstatus.Read`), and media volume free space via `golang.org/x/sys/unix.Statfs`.
-    *   The client-error log endpoint, rate limited to 10 per minute per session (P4).
+    *   `New(Options{Version, Clock, MediaDir, BackupStatusFile, Push, Scheduler})` builds the module. `Status(ctx, pool)` (P4) returns a `Report` (`Version`, `MigrationVersion`, `HeartbeatAgeS *int64`, `Backup`, `MediaFreeBytes *int64`, `Push`). It owns no table and calls only read functions: the version string passed in by `main` when `status` is built, `db.Version` (migration version), `scheduler.State` (heartbeat age, last push result), `push.CountSubscriptions`, the `BACKUP_STATUS_FILE` content (`backupstatus.Read`), and media volume free space via `golang.org/x/sys/unix.Statfs` (`Bavail * Bsize`, each field widened to `uint64` because its type differs per OS; nil with `code=status_statfs_failed` when it fails). `Statfs` is built only for Linux, macOS, FreeBSD and DragonFly; on any other system, Windows included, a stub file returns nil, so `go build` works on every OS (`make lint` builds darwin and windows). `heartbeat_age_s` is whole seconds since the heartbeat, nil when there is none. The backup line is red when the file is missing or unreadable (all times nil), `last_copy_at` is nil or older than 48 h, `last_error` is set, or `checked_at` is nil or older than 2 h (`Backup()`; `BackupRed()` is its `Red`). The push line is red with 0 subscriptions, or when `last_push` has `attempted > 0` and `delivered == 0`.
+    *   `LogClientError` (P4) is the client-error log endpoint: limits and logged fields in "Observability", rate limited by a token bucket per session, a burst of 10 then one more every 6 seconds (`golang.org/x/time/rate` on the injected clock).
 
-    Tests: missing or corrupt `status.json` gives `backup.red: true` with null times, not a crash; each red rule from "Backups" (old `last_copy_at`, `last_error` set, old `checked_at`); a file written in the exact `backup.sh` time form parses.
+    Tests: missing or corrupt `status.json` gives `backup.red: true` with null times, not a crash; each red rule from "Backups" (old `last_copy_at`, `last_error` set, old or missing `checked_at`); a file written in the exact `backup.sh` time form parses.
 
 ##### 61. `internal/locale/locale.go`, `es.go`, `locale_test.go` (Create)
 
 *   **Type / Scope**: Formatting.
-*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller. `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). `Locale.VarLabel(ns, key)` gives the label of a fixed template variable (`""` for an unknown pair), because Spanish text in Go lives only in `locale` and `problem`. Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m.") and a DST zone (`Europe/Madrid`) for day offsets.
+*   **Proposed Changes**: Day and month names, date and time formats, number format and list joining per locale; `LocalDay` and `AddDays` for calendar-day arithmetic in a zone. Currency formats are added in the phase of their first caller: `Money(minor, scale)` (P4, the export) formats an amount in minor units with the decimal mark and no symbol (`1250000, 2` → "12500,00"; `12500, 0` → "12500"). `ExportText()` (P4) gives the export's CSV file names, column headers, `estado` words and "sí". `import _ "time/tzdata"` (also imported in `cmd/open-customer/main.go`). `Locale.VarLabel(ns, key)` gives the label of a fixed template variable (`""` for an unknown pair), and `SampleClientName()` ("Ana Pérez") and `SampleServiceNames()` (["Servicio de ejemplo"]) give the sample texts that template previews use, because Spanish text in Go lives only in `locale` and `problem`. Tests cover Spanish formats (`appointment.date` as "sábado 24 de octubre", `appointment.time` as "3:00 p. m."), a DST zone (`Europe/Madrid`) for day offsets, `TestMoney`, `TestExportText` and `TestExportTextIsACopy`.
 
 #### Web app (`web/`)
 
@@ -2410,7 +2431,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Compilation/Build**: `make build` (web build + `CGO_ENABLED=0` Go build). `make image` builds the app image. The backup image is built in the release workflow.
 *   **Unit Tests**: `make test` (`go test $(GO_PKGS)` + `pnpm test`).
 *   **Database Tests**: `make test-db` (`go test -tags db $(GO_PKGS)` with testcontainers Postgres 18).
-*   **Static Analysis & Linting**: `make lint` (golangci-lint with the `depguard` module rules, `deadcode`, shellcheck, `pnpm check` (svelte-check), `pnpm lint` (eslint, prettier, knip, jscpd)) and `make vuln` (govulncheck). CI adds gitleaks and `pnpm audit --audit-level high`.
+*   **Static Analysis & Linting**: `make lint` (golangci-lint with the `depguard` module rules, the darwin and windows `go build`, `deadcode`, shellcheck, `pnpm check` (svelte-check), `pnpm lint` (eslint, prettier, knip, jscpd)) and `make vuln` (govulncheck). CI adds gitleaks and `pnpm audit --audit-level high`.
 *   **Clean checkout:** CI runs on a fresh clone, and `make build` is its last step before e2e (item 8), so `make lint`, `make test`, `make vuln` and `make test-db` passing first shows the targets compile with only the stub present.
 *   **Generated Code**: `make check-generated` must show no diff.
 *   **Test Coverage Requirement**: 90%+ statement coverage (the `go tool cover -func` total) on `internal/reminders`, `internal/templates`, `internal/attributes`, `internal/appointments` and `internal/auth`, enforced in CI by `make cover`. No target for handlers or UI. Their behavior is covered by e2e.

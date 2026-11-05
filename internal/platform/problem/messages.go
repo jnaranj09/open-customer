@@ -15,6 +15,8 @@ const (
 	MsgIDInvalid = "Identificador no válido"
 	// MsgFieldRequired is a required field that is missing.
 	MsgFieldRequired = "Este dato es obligatorio"
+	// MsgClientErrorFieldInvalid is a client error field that is empty or over its limit.
+	MsgClientErrorFieldInvalid = "Dato no válido"
 )
 
 // Field messages for the business settings (design doc item 44).
@@ -80,6 +82,9 @@ const (
 	// MsgRangeInvalid is a list range whose "to" is before "from", or longer than the endpoint's
 	// 31-day limit.
 	MsgRangeInvalid = "Elige un rango válido de hasta 31 días"
+	// MsgBootstrapRangeInvalid is a bootstrap window whose "to" is before "from", or longer than
+	// 200 days.
+	MsgBootstrapRangeInvalid = "Elige un rango válido de hasta 200 días"
 )
 
 // Field messages for media (design doc "Photos").
@@ -95,4 +100,30 @@ const (
 	MsgTemplateUnclosed    = "Hay un {{ sin cerrar (posición %d)"
 	MsgTemplateUnknownVar  = "La variable '%s' no existe"
 	MsgTemplateBodyInvalid = "Escribe un mensaje de hasta 2000 caracteres"
+)
+
+// Field messages for reminder rules (design doc item 55).
+const (
+	MsgRuleKindInvalid       = "Elige un tipo de recordatorio"
+	MsgOffsetInvalid         = "Escribe un número de días de 0 a 365"
+	MsgComeBackOffsetInvalid = "Escribe un número de días de 1 a 365"
+	MsgServiceRequired       = "Elige un servicio"
+	MsgServiceNotAllowed     = "Este recordatorio no lleva servicio"
+	MsgTemplateUnavailable   = "Esa plantilla no existe o está archivada"
+)
+
+// Field messages for the reminder log (design doc item 55). MsgLogFilterInvalid is GET
+// /reminders/log with neither or both of its filters.
+const (
+	MsgActionInvalid      = "Acción no válida"
+	MsgRuleUnknown        = "Ese recordatorio no existe"
+	MsgAnchorInvalid      = "La hora de la cita no corresponde al recordatorio"
+	MsgPhoneDigitsInvalid = "Número no válido"
+	MsgLogFilterInvalid   = "Elige una clienta o una fecha"
+)
+
+// Field messages for push subscriptions (design doc item 57). The same text goes on `endpoint`,
+// `keys.p256dh` and `keys.auth`: she cannot fix any of them, the browser made them.
+const (
+	MsgPushEndpointInvalid = "La suscripción no es válida"
 )

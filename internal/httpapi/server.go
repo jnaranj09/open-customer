@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -25,10 +27,14 @@ import (
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
+	"github.com/jnaranj09/open-customer/internal/exporter"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/media"
+	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
+	"github.com/jnaranj09/open-customer/internal/push"
+	"github.com/jnaranj09/open-customer/internal/reminders"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
@@ -58,17 +64,21 @@ type Options struct {
 	Appointments   *appointments.Module
 	Media          *media.Module
 	Templates      *templates.Module
+	Reminders      *reminders.Module
+	Push           *push.Module
 	Status         *status.Status
+	Exporter       *exporter.Exporter
+	Clock          clock.Clock
 	Log            *slog.Logger
-	// beginner opens the write transactions; nil means Pool. Only tests set it (a Commit that
-	// fails).
+	// beginner opens every transaction (db.WithTx); nil means Pool. Only tests set it (a Commit
+	// or query that fails, or a recorder of the transaction modes).
 	beginner db.Beginner
 }
 
 // Server implements gen.ServerInterface over the module values (design doc item 32).
 type Server struct {
 	pool         *pgxpool.Pool
-	beginner     db.Beginner // begins every write transaction (db.WithTx)
+	beginner     db.Beginner // begins every transaction (db.WithTx)
 	auth         *auth.Auth
 	settings     *settings.Module
 	attributes   *attributes.Module
@@ -77,7 +87,11 @@ type Server struct {
 	appointments *appointments.Module
 	media        *media.Module
 	templates    *templates.Module
+	reminders    *reminders.Module
+	push         *push.Module
 	status       *status.Status
+	exporter     *exporter.Exporter
+	clock        clock.Clock
 	// secureCookies is PUBLIC_URL's scheme == https: the session cookie drops Secure only for a
 	// plain-http PUBLIC_URL (localhost in development and e2e).
 	secureCookies bool
@@ -88,12 +102,12 @@ var _ gen.ServerInterface = (*Server)(nil)
 // New returns the app's whole HTTP handler: the probes, the manifest and icons, the generated
 // /api/v1 routes (behind the session steps 6–8), the /api/ catch-all and the SPA, inside the
 // middleware steps 1–5 of design doc item 34. It fails when a module (Auth, Settings, Attributes,
-// Services, Clients, Appointments, Media, Templates, Status) is missing, or when the embedded spec
+// Services, Clients, Appointments, Media, Templates, Reminders, Push, Status, Exporter, Clock) is missing, or when the embedded spec
 // cannot be read or its security or x-oc-allowed-while-must-change-password values are not ones
 // steps 7–8 can enforce.
 func New(opts Options) (http.Handler, error) {
-	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Status == nil {
-		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates and Status are required")
+	if opts.Auth == nil || opts.Settings == nil || opts.Attributes == nil || opts.Services == nil || opts.Clients == nil || opts.Appointments == nil || opts.Media == nil || opts.Templates == nil || opts.Reminders == nil || opts.Push == nil || opts.Status == nil || opts.Exporter == nil || opts.Clock == nil {
+		return nil, errors.New("httpapi: Options.Auth, Settings, Attributes, Services, Clients, Appointments, Media, Templates, Reminders, Push, Status, Exporter and Clock are required")
 	}
 	spec, err := gen.GetSpec()
 	if err != nil {
@@ -109,7 +123,7 @@ func New(opts Options) (http.Handler, error) {
 	}
 	s := &Server{
 		pool: opts.Pool, beginner: opts.beginner,
-		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, templates: opts.Templates, status: opts.Status,
+		auth: opts.Auth, settings: opts.Settings, attributes: opts.Attributes, services: opts.Services, clients: opts.Clients, appointments: opts.Appointments, media: opts.Media, templates: opts.Templates, reminders: opts.Reminders, push: opts.Push, status: opts.Status, exporter: opts.Exporter, clock: opts.Clock,
 		secureCookies: opts.PublicURL.Scheme == "https",
 	}
 	if s.beginner == nil {
@@ -286,6 +300,30 @@ func (s *Server) inWriteTx(w http.ResponseWriter, r *http.Request, fn func(pgx.T
 		return false
 	}
 	return true
+}
+
+// snapshot runs fn in a read-only REPEATABLE READ transaction, so every query in fn sees one
+// snapshot (design doc "Code layout and module rules"). The caller maps the returned error with
+// writeError.
+func (s *Server) snapshot(r *http.Request, fn func(pgx.Tx) error) error {
+	if err := db.WithTx(r.Context(), s.beginner, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, fn); err != nil {
+		return fmt.Errorf("snapshot: %w", err)
+	}
+	return nil
+}
+
+// businessZone reads the business time zone from the settings. q is the pool or the caller's
+// transaction.
+func (s *Server) businessZone(ctx context.Context, q db.DBTX) (*time.Location, error) {
+	cfg, err := s.settings.Get(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("get settings: %w", err)
+	}
+	loc, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		return nil, fmt.Errorf("load the business time zone: %w", err)
+	}
+	return loc, nil
 }
 
 // writeJSON writes v as a JSON response with status. The status is already sent when encoding

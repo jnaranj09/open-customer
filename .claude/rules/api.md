@@ -25,9 +25,9 @@ paths:
 - **Auth and input limits on every route by default** (body size, Origin check, login rate limit).
   A route without auth says why in a comment (setup status, healthz, readyz, manifest, icons).
   Sensor: gosec; reviewer.
-- **Writes commit before the response.** Every non-GET handler runs its module call in `db.WithTx`
-  and commits before it writes the body, so a failed commit is never shown as saved. Prose only;
-  reviewer check.
+- **Writes commit before the response.** Every non-GET handler that reads or writes the database runs its
+  module call in `db.WithTx` and commits before it writes the body, so a failed commit is never
+  shown as saved. Prose only; reviewer check.
 - **Handlers stay thin**: parse → call the module → map the result. Logic lives in the module.
   Sensor: depguard (module rules); reviewer.
 - **Secrets come from the environment, never from code or logs.** Sensor: gosec + gitleaks in CI.

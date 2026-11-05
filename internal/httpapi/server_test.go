@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -26,11 +27,15 @@ import (
 	"github.com/jnaranj09/open-customer/internal/auth"
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/db"
+	"github.com/jnaranj09/open-customer/internal/exporter"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/media"
 	"github.com/jnaranj09/open-customer/internal/platform/clock"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
+	"github.com/jnaranj09/open-customer/internal/push"
+	"github.com/jnaranj09/open-customer/internal/reminders"
+	"github.com/jnaranj09/open-customer/internal/scheduler"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
 	"github.com/jnaranj09/open-customer/internal/status"
@@ -109,7 +114,11 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Appointments:   appointments.New(appointments.Options{Clock: fake, Services: servicesModule, Attributes: attrsModule}),
 		Media:          media.New(media.Options{Clock: fake, MediaDir: cfg.mediaDir}),
 		Templates:      templates.New(templates.Options{Clock: fake, Attributes: attrsModule}),
-		Status:         status.New(testVersion),
+		Reminders:      reminders.New(reminders.Options{Clock: fake, Attributes: attrsModule}),
+		Push:           push.New(push.Options{Clock: fake, Subject: "mailto:dev@example.com"}),
+		Status:         testStatus(t, fake, cfg.mediaDir),
+		Exporter:       exporter.New(exporter.Options{Clock: fake, Settings: settingsModule, Attributes: attrsModule}),
+		Clock:          fake,
 		Log:            logging.New(io.Discard, slog.LevelInfo),
 		beginner:       cfg.beginner,
 	})
@@ -117,6 +126,18 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		t.Fatalf("New: %v", err)
 	}
 	return testApp{handler: handler, auth: a, clock: fake}
+}
+
+// testStatus is the status module on clk. Its backup status file does not exist, so the backup line
+// is red.
+func testStatus(t *testing.T, clk clock.Clock, mediaDir string) *status.Status {
+	t.Helper()
+	return status.New(status.Options{
+		Version: testVersion, Clock: clk, MediaDir: mediaDir,
+		BackupStatusFile: filepath.Join(t.TempDir(), "status.json"),
+		Push:             push.New(push.Options{Clock: clk, Subject: "mailto:dev@example.com"}),
+		Scheduler:        scheduler.New(scheduler.Options{Clock: clk}),
+	})
 }
 
 // newTestServer is newTestApp's handler with the default config, on pool.
@@ -459,7 +480,13 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		}),
 		Media:     media.New(media.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
 		Templates: templates.New(templates.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
-		Status:    status.New(testVersion),
+		Reminders: reminders.New(reminders.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
+		Push:      push.New(push.Options{Clock: clock.NewFake(testStart), Subject: "mailto:dev@example.com"}),
+		Status:    testStatus(t, clock.NewFake(testStart), t.TempDir()),
+		Exporter: exporter.New(exporter.Options{
+			Clock: clock.NewFake(testStart), Settings: settings.New(settings.Options{Clock: clock.NewFake(testStart)}), Attributes: attrs,
+		}),
+		Clock: clock.NewFake(testStart),
 	}
 	for _, tc := range []struct {
 		name   string
@@ -473,7 +500,11 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		{"a nil Appointments is refused", func(o *Options) { o.Appointments = nil }},
 		{"a nil Media is refused", func(o *Options) { o.Media = nil }},
 		{"a nil Templates is refused", func(o *Options) { o.Templates = nil }},
+		{"a nil Reminders is refused", func(o *Options) { o.Reminders = nil }},
+		{"a nil Push is refused", func(o *Options) { o.Push = nil }},
 		{"a nil Status is refused", func(o *Options) { o.Status = nil }},
+		{"a nil Exporter is refused", func(o *Options) { o.Exporter = nil }},
+		{"a nil Clock is refused", func(o *Options) { o.Clock = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := full

@@ -160,10 +160,8 @@ func (m *Module) checkBody(ctx context.Context, q db.DBTX, body string) error {
 	if err != nil {
 		return fmt.Errorf("list attributes for the save check: %w", err)
 	}
-	for _, v := range parsed.Vars {
-		if !known(v.NS, v.Key, attrs) {
-			errs = append(errs, problem.FieldError{Field: "body", Message: fmt.Sprintf(problem.MsgTemplateUnknownVar, v.Key)})
-		}
+	for _, v := range UnknownVars(parsed, attrs) {
+		errs = append(errs, problem.FieldError{Field: "body", Message: fmt.Sprintf(problem.MsgTemplateUnknownVar, v.Key)})
 	}
 	if len(errs) > 0 {
 		return problem.Validation{Errors: errs}

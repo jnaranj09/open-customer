@@ -31,12 +31,13 @@ with fnm, `fnm use` in web/).
 - `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript.
 - `make check-generated`: `generate`, then fails on any diff.
 - `make check-pins`: Postgres, Node, Go and golangci-lint pins agree across files.
-- `make lint`: `go mod tidy -diff`, golangci-lint, deadcode (exact `DEADCODE_BUDGET`), shellcheck,
-  svelte-check, eslint, prettier check, knip, jscpd (fails on an empty scan).
+- `make lint`: `go mod tidy -diff`, golangci-lint, `go build` for darwin and windows, deadcode
+  (exact `DEADCODE_BUDGET`), shellcheck, svelte-check, eslint, prettier check, knip, jscpd (fails
+  on an empty scan).
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
   (testcontainers).
 - `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`,
-  `internal/attributes`, `internal/appointments`, `internal/templates`).
+  `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
   app Docker image.
 - `make e2e`: build, fresh e2e database, Playwright WebKit (from P6).
@@ -67,7 +68,8 @@ A check that could not run is reported as NOT RUN, never as passing.
    layout and module rules". depguard checks the coarse ones; the rest is a review check. Each
    module writes only its own tables.
 9. **Transactions are explicit.** Every module function takes `ctx` and a `db.DBTX`. Every non-GET
-   handler runs in `db.WithTx` and commits before writing the response. The snapshot readers
+   handler that reads or writes the database runs in `db.WithTx` and commits before writing the
+   response. The snapshot readers
    (bootstrap, due list, daily timer, export) use a read-only REPEATABLE READ transaction.
 10. **Time is injected.** Modules take the clock from the platform clock package and the business
     time zone from settings; no direct `time.Now()` in a module.

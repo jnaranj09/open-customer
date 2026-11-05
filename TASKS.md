@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8, P1 exit, P2 exit, P3 exit)
+## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -71,6 +71,26 @@ once by breaking what they protect, then restored.
   `service_ids` edit keeps the saved price of services already on a visit) landed at 946683e; the
   gate passed on it locally, and the clone run and `curl` checks were not re-run. CI green on PR #2
   at 946683e, including `make cover` (run 41913102949). NOT RUN: the plain-host :8080 variant.
+- **P4 exit.** `make check-pins lint test vuln build check-generated test-db cover` exits 0, run as
+  one command from a fresh `git clone` of branch p4 at ebd2a21. `make cover`: internal/auth 96.3%,
+  internal/attributes 93.5%, internal/appointments 98.4%, internal/templates 98.1%,
+  internal/reminders 98.5% (floor 90.0%). `TestDueListCUJ4AndCUJ5` and
+  `TestGetRemindersDueReturnsCUJ4And5Items` PASS under the `db` tag. The Goal 7 grep
+  (`Costa|CRC|America/Costa_Rica|+506|Uña|Nails`) over `internal/*.go` and `*.sql` has no hit
+  outside `internal/locale/es.go` and `_test.go` files. The `curl` checks were run on the image
+  built from that clone (`open-customer:ebd2a21`), in an isolated container network namespace with
+  `curlimages/curl:8.22.0` (host :8080 belongs to an unrelated container): setup (Europe/Madrid,
+  ES), services, templates, preview (`unknown_vars`), rules (`applies_from` set for before, null for
+  come back; 422 on `service_id` for a before rule), three clients, appointments, `GET
+  /reminders/due` (3 items: Ana "before" with a `https://wa.me/34` link, Marta come-back message,
+  Lucía `booking_prompt` for Pedicure), PATCH of Lucía's future booking (`ends_at` +75 min; her item
+  gone), `POST /reminders/log` 201 then 200, `GET /reminders/log` (1 item; 422 without `date`),
+  `GET /push/key` without a cookie (87 characters), `POST /push/subscriptions` 201 then 200, `GET
+  /status` (`migration_version` 2, `backup.red` true, 1 subscription, heartbeat age under 120 s),
+  `GET /bootstrap` (every key, `due` = Marta's come-back; 422 on a range over the limit), `GET
+  /export` (dated file name; the four files in the zip), `POST /client-errors` 204 x10 then 429
+  with `Retry-After`, 401 without a cookie, and `docker logs` has no line matching "Ana Rojas", "Marta", "Lucía" or `wa.me`.
+  All matched. CI: NOT RUN (pending push). NOT RUN: the plain-host :8080 variant.
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
@@ -98,6 +118,6 @@ own change.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.
 - Owner exception recorded: the design doc keeps the 90% `make cover` floor, which the bootstrap
   skill would not use. Kept by owner decision.
-- Public repo: the old review reports in `docs/designs/history/review-release-1/round-1/` and the
-  root goldfish_brainstorm_findings.md name a home folder path (line 3 / lines 6–7). Strip it
-  before the first push.
+- `make vuln` lists 3 known vulnerabilities in kin-openapi and golang.org/x/crypto that our code
+  does not call (govulncheck passes).
+- Design doc item 87's root-file deletions (design_draft.md and the others) are still pending.

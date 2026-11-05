@@ -53,7 +53,7 @@ match).
 9. **Docs in the same change.** A changed behaviour updates `CLAUDE.md` / the rule file /
    `docs/designs/release-1.md` it contradicts; a stale comment next to changed code is a finding.
    Renamed names and old wording were searched.
-10. **Transactions.** Every non-GET handler runs its module call in `db.WithTx` and commits before it
+10. **Transactions.** Every non-GET handler that reads or writes the database runs its module call in `db.WithTx` and commits before it
     writes the response. Bootstrap, the due list, the daily timer and export use a read-only
     REPEATABLE READ transaction. Every module function takes `ctx` and `q db.DBTX` first.
 11. **Generated code.** No hand edit in the Go `gen` or `sqlc` output or the web `schema.d.ts`; the
