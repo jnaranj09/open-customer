@@ -1,6 +1,6 @@
 // Photo and icon preparation on the phone (design doc items 69 and 73). The sizing math is pure
 // and tested; the canvas parts need a browser and are checked in the running app. `toJpegs` (the
-// photo pair, 2048 and 400 px at quality 0.8) comes with the first screen that uploads a photo.
+// photo pair, 2048 and 400 px at quality 0.8) comes with the photo screen (Task 11).
 
 export type Size = { w: number; h: number };
 
@@ -18,6 +18,29 @@ export function fitLongEdge(w: number, h: number, max: number): Size {
 export function squareCrop(w: number, h: number): { sx: number; sy: number; size: number } {
 	const size = Math.min(w, h);
 	return { sx: Math.round((w - size) / 2), sy: Math.round((h - size) / 2), size };
+}
+
+/** How long a decode may take before it counts as failed. A browser can leave `createImageBitmap`
+ *  or `img.decode()` pending on a file it cannot read; the screen must still end in a message. */
+export const DECODE_TIMEOUT_MS = 15_000;
+
+/** `work`, or a rejection once `ms` have passed. */
+export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(new Error('timeout'));
+		}, ms);
+		work.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error: unknown) => {
+				clearTimeout(timer);
+				reject(error instanceof Error ? error : new Error('decode failed'));
+			}
+		);
+	});
 }
 
 const ICON_BIG = 512;
@@ -103,7 +126,7 @@ async function pngSquare(d: Decoded, edge: number): Promise<Blob> {
 
 /** The app icon pair: the centered square of the image as 512 px and 180 px PNGs. */
 export async function toIconPngs(file: File): Promise<{ big: Blob; small: Blob }> {
-	const d = await decode(file);
+	const d = await withTimeout(decode(file), DECODE_TIMEOUT_MS);
 	try {
 		return { big: await pngSquare(d, ICON_BIG), small: await pngSquare(d, ICON_SMALL) };
 	} finally {

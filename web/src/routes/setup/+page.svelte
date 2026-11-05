@@ -51,8 +51,6 @@
 
 	const index = $derived(STEPS.indexOf(step));
 	const creating = $derived(step === 'password');
-	// After the account exists there is no way back: the token is spent.
-	const created = $derived(index > STEPS.indexOf('password'));
 
 	onMount(() => {
 		void api.setupOptions().then((result) => {
@@ -183,7 +181,7 @@
 </script>
 
 {#snippet back()}
-	{#if index > 0 && !created}
+	{#if index > 0}
 		<Button
 			variant="secondary"
 			onclick={() => {
@@ -305,6 +303,9 @@
 			{:else if step === 'color'}
 				<h2 class="text-xl font-bold text-ink">{t('setup_color_title')}</h2>
 				<ColorPicker bind:value={color} />
+				{#if stepError !== null}
+					<p role="alert" class="text-sm text-error">{stepError}</p>
+				{/if}
 			{:else if step === 'username'}
 				<TextField
 					label={t('setup_username_label')}

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { fitLongEdge, squareCrop } from './photos';
+import { describe, expect, it, vi } from 'vitest';
+import { DECODE_TIMEOUT_MS, fitLongEdge, squareCrop, withTimeout } from './photos';
 
 describe('fitLongEdge', () => {
 	it('scales 4032x3024 to 2048x1536', () => {
@@ -30,5 +30,26 @@ describe('squareCrop', () => {
 
 	it('keeps a square as is', () => {
 		expect(squareCrop(300, 300)).toEqual({ sx: 0, sy: 0, size: 300 });
+	});
+});
+
+describe('withTimeout', () => {
+	it('rejects when the work never settles', async () => {
+		vi.useFakeTimers();
+		const result = withTimeout(new Promise<never>(() => undefined), DECODE_TIMEOUT_MS);
+		const outcome = result.catch((e: unknown) => (e instanceof Error ? e.message : ''));
+		await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS);
+		expect(await outcome).toBe('timeout');
+		vi.useRealTimers();
+	});
+
+	it('gives the value when the work settles first', async () => {
+		expect(await withTimeout(Promise.resolve(7), DECODE_TIMEOUT_MS)).toBe(7);
+	});
+
+	it('passes the work error through', async () => {
+		await expect(withTimeout(Promise.reject(new Error('bad')), DECODE_TIMEOUT_MS)).rejects.toThrow(
+			'bad'
+		);
 	});
 });
