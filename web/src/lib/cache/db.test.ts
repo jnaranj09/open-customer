@@ -46,6 +46,14 @@ describe('reading the cache', () => {
 		expect(snapshot?.due).toHaveLength(2);
 	});
 
+	it('keeps the server order of the due list when the ids sort the other way', async () => {
+		const data = bootstrap(3);
+		// The server's order (due date, then name) with ids that sort in reverse.
+		data.due = data.due.map((item, i) => ({ ...item, id: `z${String(9 - i)}` }));
+		await writeSnapshot(data, SYNCED);
+		expect((await readAll())?.due.map((i) => i.id)).toEqual(['z9', 'z8', 'z7']);
+	});
+
 	it('a cached row that fails its schema clears the cache and reads null', async () => {
 		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		await writeSnapshot(bootstrap(1), SYNCED);

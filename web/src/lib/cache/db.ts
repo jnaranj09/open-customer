@@ -104,6 +104,16 @@ const ALL_TABLES: Table[] = Object.values(t);
 
 const SINGLE = 'only';
 
+/** A cached due row: the item and its place in the server's list. The table is keyed by `id`, and
+ *  Dexie reads rows back in key order, so the server's order (due date, then name) is kept as
+ *  `position`. A row stored in the older shape (the bare item) fails this schema, which clears the
+ *  cache and refreshes it. */
+const DueRowSchema = z.object({
+	id: z.string(),
+	position: z.number().int().nonnegative(),
+	item: DueItemSchema
+});
+
 /** Deletes the whole database (cached data, due items, drafts, the pending confirmation, the
  *  logged ids) and opens an empty one. The 401 handler (`lib/api/app.ts`), the bad-row path below
  *  and logout (`lib/logout.ts`) call it (design doc item 67). */
@@ -206,7 +216,9 @@ export function readAll(): Promise<CacheSnapshot | null> {
 			rules: parseRows('rules', RuleSchema, rules),
 			clients: parseRows('clients', ClientSchema, clients),
 			appointments: parseRows('appointments', AppointmentSchema, appointments),
-			due: parseRows('due', DueItemSchema, due)
+			due: parseRows('due', DueRowSchema, due)
+				.sort((a, b) => a.position - b.position)
+				.map((row) => row.item)
 		};
 	}, null);
 }
@@ -255,7 +267,10 @@ export async function writeSnapshot(data: Bootstrap, syncedAt: string): Promise<
 		await replace(t.rules, data.rules);
 		await replace(t.clients, data.clients);
 		await replace(t.appointments, data.appointments);
-		await replace(t.due, data.due);
+		await replace(
+			t.due,
+			data.due.map((item, position) => ({ id: item.id, position, item }))
+		);
 		const meta: Meta = {
 			...current,
 			lastSyncAt: syncedAt,
