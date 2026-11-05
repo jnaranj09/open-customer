@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -11,7 +12,7 @@
 	import { logOut } from '../logout';
 	import { submitOnce } from '../submit';
 	import Icon from './icons/Icon.svelte';
-	import ListRow from './ListRow.svelte';
+	import ListRow from './ui/ListRow.svelte';
 
 	// The Ajustes sections (the mockup's two groups): the screen on compact, the 280 px column on
 	// wide, where the open section is marked. "Cerrar sesión" ends the session; the rest are links.
@@ -80,10 +81,10 @@
 {/snippet}
 
 <nav aria-label={t('settings_sections')} class="flex flex-col gap-4">
-	<ul class="glass-card flex flex-col rounded-lg p-1">
+	<Card as="ul" pad="list" class="flex flex-col">
 		{@render group(config)}
-	</ul>
-	<ul class="glass-card flex flex-col rounded-lg p-1">
+	</Card>
+	<Card as="ul" pad="list" class="flex flex-col">
 		{@render group(account)}
 		<li class="mx-3 h-px bg-glass-edge" aria-hidden="true"></li>
 		<li>
@@ -98,7 +99,7 @@
 				{/snippet}
 			</ListRow>
 		</li>
-	</ul>
+	</Card>
 	{#if error !== null}
 		<p role="alert" class="px-2 text-sm text-error">{error}</p>
 	{/if}

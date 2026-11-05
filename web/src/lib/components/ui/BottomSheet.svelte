@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	import { createSheetStack } from '../sheetStack';
+	import { createSheetStack } from '../../sheetStack';
 
 	// Every open sheet, shared by all instances: one page lock, and one top sheet for Escape and Tab.
 	let savedOverflow = '';
@@ -16,8 +16,8 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { nextFocus } from '../focus';
-	import { t } from '../i18n';
+	import { nextFocus } from '../../focus';
+	import { t } from '../../i18n';
 
 	let {
 		open,
@@ -143,7 +143,7 @@
 			aria-labelledby={titleId}
 			tabindex="-1"
 			style:transform={dragY > 0 ? `translateY(${String(dragY)}px)` : undefined}
-			class="glass-panel shadow-sheet relative flex max-h-[90dvh] w-full flex-col items-center gap-4 overflow-y-auto rounded-t-xl px-6 pt-3 lg:max-w-120 lg:rounded-xl lg:pt-6"
+			class="glass-panel shadow-sheet relative flex max-h-sheet w-full flex-col items-center gap-4 overflow-y-auto rounded-t-xl px-6 pt-3 lg:max-w-120 lg:rounded-xl lg:pt-6"
 		>
 			<!-- The swipe handle is a touch affordance; the Escape key and the scrim close it too. -->
 			<div

@@ -8,9 +8,11 @@
 	import { clock } from '../lib/clock.svelte';
 	import { cache } from '../lib/cache/store.svelte';
 	import { bootstrapWindow } from '../lib/cache/refresh';
-	import Button from '../lib/components/Button.svelte';
+	import Button from '../lib/components/ui/Button.svelte';
+	import Card from '../lib/components/ui/Card.svelte';
+	import IconButton from '../lib/components/ui/IconButton.svelte';
 	import DayView from '../lib/components/DayView.svelte';
-	import DueCard from '../lib/components/DueCard.svelte';
+	import DueSummary from '../lib/components/DueSummary.svelte';
 	import Icon from '../lib/components/icons/Icon.svelte';
 	import PushActivate from '../lib/components/PushActivate.svelte';
 	import WeekView from '../lib/components/WeekView.svelte';
@@ -186,22 +188,19 @@
 		</header>
 
 		{#if layout.current === 'compact'}
-			<DueCard items={cache.shownDue} {hasRules} />
+			<DueSummary items={cache.shownDue} {hasRules} />
 			<PushActivate />
 		{/if}
 
 		<div class="flex items-center gap-2">
-			<button
-				type="button"
-				class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
-				title={view === 'week' ? t('agenda_prev_week') : t('agenda_prev_day')}
-				aria-label={view === 'week' ? t('agenda_prev_week') : t('agenda_prev_day')}
+			<IconButton
+				variant="plain"
+				icon="chevron-left"
+				label={view === 'week' ? t('agenda_prev_week') : t('agenda_prev_day')}
 				onclick={() => {
 					move(-1);
 				}}
-			>
-				<Icon name="chevron-left" class="size-5.5" />
-			</button>
+			/>
 			<label
 				class="relative flex min-h-tap min-w-0 flex-1 items-center rounded-pill px-2 text-base font-bold text-ink hover:bg-accent-100 focus-within:outline-2 lg:flex-none lg:w-44 lg:rounded-sm lg:border lg:border-glass-edge lg:bg-glass-strong lg:px-0"
 				title={t('agenda_pick_date')}
@@ -215,22 +214,15 @@
 					class="absolute inset-0 size-full opacity-0 lg:static lg:px-3 lg:opacity-100"
 				/>
 			</label>
-			<button
-				type="button"
-				class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
-				title={view === 'week' ? t('agenda_next_week') : t('agenda_next_day')}
-				aria-label={view === 'week' ? t('agenda_next_week') : t('agenda_next_day')}
+			<IconButton
+				variant="plain"
+				icon="chevron-right"
+				label={view === 'week' ? t('agenda_next_week') : t('agenda_next_day')}
 				onclick={() => {
 					move(1);
 				}}
-			>
-				<Icon name="chevron-right" class="size-5.5" />
-			</button>
-			<div
-				role="group"
-				aria-label={t('agenda_view')}
-				class="glass-card flex rounded-pill lg:ml-auto"
-			>
+			/>
+			<Card role="group" aria-label={t('agenda_view')} radius="pill" class="flex lg:ml-auto">
 				{#each VIEWS as v (v.id)}
 					<button
 						type="button"
@@ -245,15 +237,15 @@
 						{t(v.label)}
 					</button>
 				{/each}
-			</div>
+			</Card>
 		</div>
 
 		{#if needsConnection}
-			<p role="status" class="glass-card rounded-lg px-5 py-3 text-base text-ink">
+			<Card as="p" role="status" pad="message" class="text-base text-ink">
 				{t('agenda_needs_connection')}
-			</p>
+			</Card>
 		{:else if loadFailure !== null}
-			<div role="alert" class="glass-card flex flex-col gap-3 rounded-lg px-5 py-3">
+			<Card role="alert" pad="message" class="flex flex-col gap-3">
 				<p class="text-base text-error">{loadFailure}</p>
 				<Button
 					variant="ghost"
@@ -263,7 +255,7 @@
 				>
 					{t('agenda_retry')}
 				</Button>
-			</div>
+			</Card>
 		{:else if appointments === null}
 			<p role="status" class="px-2 text-base text-ink-muted">{t('agenda_loading')}</p>
 		{:else if view === 'week'}
@@ -275,7 +267,7 @@
 
 	{#if layout.current === 'wide'}
 		<aside class="flex w-90 shrink-0 flex-col gap-4">
-			<DueCard items={cache.shownDue} {hasRules} />
+			<DueSummary items={cache.shownDue} {hasRules} />
 			{@render backupLine()}
 			<PushActivate />
 		</aside>
@@ -283,23 +275,15 @@
 		<!-- The floating "+" of the mockup; the sidebar's "Nueva cita" does this on wide. -->
 		<div class="fixed right-4 bottom-32 z-20 flex flex-col items-end gap-2">
 			{#if cache.offline}
-				<p class="glass-card rounded-lg px-4 py-2 text-sm text-ink">{t('offline_cannot_save')}</p>
-				<span
-					class="grid size-14 place-items-center rounded-pill bg-accent text-on-accent opacity-60 shadow-raised"
-					role="img"
-					aria-label={t('appointment_new')}
-				>
-					<Icon name="plus" class="size-7" />
-				</span>
+				<Card as="p" pad="note" class="text-sm text-ink">{t('offline_cannot_save')}</Card>
+				<IconButton variant="add" icon="plus" label={t('appointment_new')} disabled />
 			{:else}
-				<a
+				<IconButton
+					variant="add"
+					icon="plus"
+					label={t('appointment_new')}
 					href={resolve(newHref)}
-					title={t('appointment_new')}
-					aria-label={t('appointment_new')}
-					class="grid size-14 place-items-center rounded-pill bg-accent text-on-accent shadow-raised hover:bg-accent-700"
-				>
-					<Icon name="plus" class="size-7" />
-				</a>
+				/>
 			{/if}
 		</div>
 	{/if}

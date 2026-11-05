@@ -13,11 +13,11 @@
 	import { navigationAllowed, templateDirty, type Exemption } from '../templateEdit';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import ChipEditor from './ChipEditor.svelte';
 	import FormCard from './FormCard.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
 	// One message template: its name and its text in the ChipEditor (design doc item 77). The

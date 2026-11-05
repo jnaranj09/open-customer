@@ -12,12 +12,13 @@
 	import { bootstrapWindow } from '../../../lib/cache/refresh';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import ActionButton from '../../../lib/components/ActionButton.svelte';
-	import Button from '../../../lib/components/Button.svelte';
-	import BottomSheet from '../../../lib/components/BottomSheet.svelte';
+	import Button from '../../../lib/components/ui/Button.svelte';
+	import BottomSheet from '../../../lib/components/ui/BottomSheet.svelte';
 	import ClientForm from '../../../lib/components/ClientForm.svelte';
 	import DuplicatePhone from '../../../lib/components/DuplicatePhone.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
-	import ListRow from '../../../lib/components/ListRow.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
+	import Card from '../../../lib/components/ui/Card.svelte';
+	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
 	import Toast from '../../../lib/components/Toast.svelte';
@@ -189,14 +190,13 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
+		<IconButton
+			variant="plain"
+			icon="chevron-left"
+			label={t('client_back')}
 			href={resolve('/clientas')}
-			title={t('client_back')}
-			aria-label={t('client_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100 lg:hidden"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+			class="lg:hidden"
+		/>
 		<h1 class="text-3xl font-extrabold text-ink">
 			{editing ? t('client_edit_title') : (client?.name ?? '')}
 		</h1>
@@ -226,7 +226,7 @@
 		/>
 	{:else}
 		<div class="flex flex-col gap-4 lg:max-w-190">
-			<section class="glass-card flex flex-col gap-4 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-4">
 				{#if client.archived}
 					<p class="rounded-md bg-glass-tint px-4 py-3 text-sm font-bold text-ink">
 						{t('client_archived_note')}
@@ -298,9 +298,9 @@
 						<p role="alert" class="text-sm text-error">{errorText(actionError)}</p>
 					{/if}
 				{/if}
-			</section>
+			</Card>
 
-			<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 				<h2 class="text-xl font-bold text-ink">{t('client_history')}</h2>
 				<ul class="flex flex-col divide-y divide-glass-edge">
 					{#each cachedAppts as a (a.id)}
@@ -336,13 +336,13 @@
 						{t('client_history_more')}
 					</Button>
 				{/if}
-			</section>
+			</Card>
 
 			{#key client.id}
 				<PhotoSection clientId={client.id} empty="photos_empty_client" />
 			{/key}
 
-			<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 				<h2 class="text-xl font-bold text-ink">{t('client_reminders')}</h2>
 				{#if remindersError !== null}
 					<p role="alert" class="text-sm text-error">{remindersError}</p>
@@ -365,7 +365,7 @@
 						{/each}
 					</ul>
 				{/if}
-			</section>
+			</Card>
 		</div>
 	{/if}
 </div>

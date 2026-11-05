@@ -1,8 +1,9 @@
 <script lang="ts">
+	import Card from '../../../lib/components/ui/Card.svelte';
 	import { api } from '../../../lib/api/app';
 	import { cache } from '../../../lib/cache/store.svelte';
-	import Button from '../../../lib/components/Button.svelte';
-	import { buttonClasses } from '../../../lib/components/buttonStyle';
+	import Button from '../../../lib/components/ui/Button.svelte';
+	import { buttonClasses } from '../../../lib/components/ui/buttonStyle';
 	import { t } from '../../../lib/i18n';
 
 	// Ajustes → Descargar mis datos (design doc item 77, CUJ 8): a plain download link, so the
@@ -16,7 +17,7 @@
 	<header class="flex min-h-12 items-center">
 		<h1 class="text-3xl font-extrabold text-ink">{t('export_title')}</h1>
 	</header>
-	<div class="glass-card flex flex-col gap-4 rounded-lg p-5">
+	<Card pad="md" class="flex flex-col gap-4">
 		<p class="text-base text-ink-muted">{t('export_body')}</p>
 		<div class="sm:w-64">
 			{#if cache.offline}
@@ -29,5 +30,5 @@
 				</a>
 			{/if}
 		</div>
-	</div>
+	</Card>
 </div>

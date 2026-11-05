@@ -15,12 +15,12 @@
 	import { submitOnce } from '../submit';
 	import type { createToaster } from '../toaster.svelte';
 	import ActionButton from './ActionButton.svelte';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import OptionTree from './OptionTree.svelte';
 	import SaveButton from './SaveButton.svelte';
 	import SelectField from './SelectField.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
 	// Add or edit one attribute in a sheet (design doc item 77, CUJ 2 step 2). A new one asks for

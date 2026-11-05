@@ -2,11 +2,11 @@
 	import type { Attribute } from '../api/schemas';
 	import { optionPath, type AttrValue } from '../booking';
 	import { t } from '../i18n';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import Icon from './icons/Icon.svelte';
 	import SelectField from './SelectField.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// One attribute as an input (design doc item 70): text, number and date as plain fields, a flat
 	// select as the native `<select>`, and a nested select or any multiselect as a drill-down in a

@@ -28,7 +28,7 @@
 	import ClientPicker from './ClientPicker.svelte';
 	import OverlapSheet from './OverlapSheet.svelte';
 	import ServicePicker from './ServicePicker.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// The booking form, shared by "Nueva cita" and the detail's edit mode (design doc item 75).
 	// Creating, it keeps a draft (item 67) and asks for the client; editing, the client is fixed and

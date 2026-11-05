@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { ButtonVariant } from './buttonStyle';
+	import type { ButtonVariant } from './ui/buttonStyle';
 	import WriteButton from './WriteButton.svelte';
 
 	// One of the buttons in a detail card's action row. It changes data on the server, so offline

@@ -7,7 +7,7 @@
 	import { cache } from '../../../lib/cache/store.svelte';
 	import { clock } from '../../../lib/clock.svelte';
 	import AppointmentForm from '../../../lib/components/AppointmentForm.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import { t } from '../../../lib/i18n';
 
 	// "Nueva cita" (CUJ 3). `dia` is the day the link was opened from; `volver` is where "save"
@@ -22,14 +22,7 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
-			href={back}
-			title={t('appointment_back')}
-			aria-label={t('appointment_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+		<IconButton variant="plain" icon="chevron-left" label={t('appointment_back')} href={back} />
 		<h1 class="text-3xl font-extrabold text-ink">{t('appointment_new')}</h1>
 	</header>
 

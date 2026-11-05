@@ -14,9 +14,10 @@
 	import { retryWhileOffline } from '../lib/cache/retry';
 	import { applyAccent } from '../lib/color';
 	import ConfirmSentSheet from '../lib/components/ConfirmSentSheet.svelte';
-	import OfflineBanner from '../lib/components/OfflineBanner.svelte';
+	import OfflineBanner from '../lib/components/ui/OfflineBanner.svelte';
 	import Sidebar from '../lib/components/Sidebar.svelte';
-	import TabBar from '../lib/components/TabBar.svelte';
+	import BottomNav from '../lib/components/ui/BottomNav.svelte';
+	import Card from '../lib/components/ui/Card.svelte';
 	import UpdatePrompt from '../lib/components/UpdatePrompt.svelte';
 	import {
 		canSync,
@@ -225,7 +226,7 @@
 			<OfflineBanner lastSyncAt={cache.meta.lastSyncAt} {zone} />
 		{/if}
 		{#if failure !== null}
-			<p role="alert" class="glass-card rounded-lg px-5 py-3 text-base text-error">{failure}</p>
+			<Card as="p" role="alert" pad="message" class="text-base text-error">{failure}</Card>
 		{/if}
 		{@render children()}
 	</div>
@@ -233,9 +234,9 @@
 
 {#if verdict?.kind === 'offline_blank'}
 	<main class="grid min-h-dvh place-items-center p-8">
-		<p role="status" class="glass-card rounded-lg px-6 py-4 text-base text-ink">
+		<Card as="p" role="status" pad="message" class="text-base text-ink">
 			{t('error_offline')}
-		</p>
+		</Card>
 	</main>
 {:else if verdict?.kind === 'stay'}
 	{#if !hasShell(path)}
@@ -255,7 +256,7 @@
 		<div class="pt-safe">
 			<main class="px-4 pt-4 pb-32">{@render content()}</main>
 		</div>
-		<TabBar pathname={path} />
+		<BottomNav pathname={path} />
 	{/if}
 {/if}
 

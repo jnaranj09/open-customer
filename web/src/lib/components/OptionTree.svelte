@@ -4,10 +4,10 @@
 	import { cache } from '../cache/store.svelte';
 	import { indexAtY, levelOf, reorder, type Positioned } from '../attributes';
 	import { t } from '../i18n';
-	import Button from './Button.svelte';
+	import Button from './ui/Button.svelte';
 	import WriteButton from './WriteButton.svelte';
 	import Icon from './icons/Icon.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// The options of a select attribute (design doc item 77): one list per level with "+ Agregar
 	// opción" at the end of each, a handle to drag a row, and a menu per row. The same moves work

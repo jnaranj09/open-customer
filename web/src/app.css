@@ -132,3 +132,18 @@ body {
 @utility pr-safe {
 	padding-right: env(safe-area-inset-right);
 }
+
+/* Named heights and generated content, so no component needs an arbitrary `-[…]` value (lint
+   rejects those; .claude/rules/ui.md "UI pipeline"). */
+@utility max-h-sheet {
+	max-height: 90dvh;
+}
+
+@utility max-h-grid {
+	max-height: 75dvh;
+}
+
+@utility content-placeholder {
+	--tw-content: attr(data-placeholder);
+	content: var(--tw-content);
+}

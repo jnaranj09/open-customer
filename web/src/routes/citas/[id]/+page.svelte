@@ -12,11 +12,12 @@
 	import ActionButton from '../../../lib/components/ActionButton.svelte';
 	import AppointmentForm from '../../../lib/components/AppointmentForm.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
+	import Card from '../../../lib/components/ui/Card.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import OverlapSheet from '../../../lib/components/OverlapSheet.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
-	import TextField from '../../../lib/components/TextField.svelte';
+	import TextField from '../../../lib/components/ui/TextField.svelte';
 	import Toast from '../../../lib/components/Toast.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { amountText, exponentOf, formatMoney, parseAmount } from '../../../lib/money';
@@ -155,14 +156,12 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
+		<IconButton
+			variant="plain"
+			icon="chevron-left"
+			label={t('appointment_back')}
 			href={resolve('/')}
-			title={t('appointment_back')}
-			aria-label={t('appointment_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+		/>
 		<h1 class="text-3xl font-extrabold text-ink">
 			{editing ? t('appointment_edit_title') : t('appointment_title')}
 		</h1>
@@ -192,7 +191,7 @@
 		/>
 	{:else}
 		<div class="flex flex-col gap-4 lg:max-w-190">
-			<section class="glass-card flex flex-col gap-4 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-4">
 				<div class="flex items-start gap-3">
 					<div class="min-w-0 flex-1">
 						<h2 class="text-xl font-bold text-ink">{appt.client_name}</h2>
@@ -268,9 +267,9 @@
 				{#if actionError !== null}
 					<p role="alert" class="text-sm text-error">{errorText(actionError)}</p>
 				{/if}
-			</section>
+			</Card>
 
-			<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 				<form
 					class="flex items-start gap-3"
 					onsubmit={(e) => {
@@ -292,7 +291,7 @@
 						</WriteButton>
 					</div>
 				</form>
-			</section>
+			</Card>
 		</div>
 	{/if}
 

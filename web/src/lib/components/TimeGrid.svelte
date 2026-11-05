@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { resolve } from '$app/paths';
 	import type { Appointment } from '../api/schemas';
 	import { layoutDay, scrollHour, type Placed } from '../agenda';
@@ -62,11 +63,7 @@
 </script>
 
 <!-- One hour is 4rem tall; a minute is a sixtieth of it. -->
-<div
-	bind:this={scroller}
-	class="glass-card max-h-[75dvh] overflow-auto rounded-lg"
-	style="--hour: 4rem"
->
+<Card bind:ref={scroller} class="max-h-grid overflow-auto" style="--hour: 4rem">
 	<div class="flex {onpickday === undefined ? '' : 'min-w-176'}">
 		<div class="w-12 shrink-0">
 			{#if onpickday !== undefined}
@@ -151,4 +148,4 @@
 			{/each}
 		</div>
 	</div>
-</div>
+</Card>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Chip from './ui/Chip.svelte';
 	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
@@ -63,18 +64,14 @@
 		<h3 id="preview-with" class="text-sm font-bold text-ink">{t('preview_with')}</h3>
 		<div class="flex gap-2">
 			{#each [['sample', 'preview_sample'], ['client', 'preview_client']] as const as [value, label] (value)}
-				<button
-					type="button"
-					aria-pressed={mode === value}
-					class="min-h-tap rounded-pill border px-4 text-sm font-bold {mode === value
-						? 'border-accent bg-accent-100 text-accent-700'
-						: 'border-glass-edge bg-glass-strong text-ink hover:bg-accent-100'}"
+				<Chip
+					variant={mode === value ? 'selected' : 'default'}
 					onclick={() => {
 						mode = value;
 					}}
 				>
 					{t(label)}
-				</button>
+				</Chip>
 			{/each}
 		</div>
 	</div>

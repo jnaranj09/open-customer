@@ -2,8 +2,8 @@
 	import type { Appointment } from '../api/schemas';
 	import { t } from '../i18n';
 	import { formatTime } from '../time';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import WriteButton from './WriteButton.svelte';
 
 	// The 409 `overlap` answer (CUJ 3): the appointments in the way, and "Agendar igual" to save

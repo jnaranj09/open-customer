@@ -23,7 +23,7 @@
 	import AttributeField from './AttributeField.svelte';
 	import DuplicatePhone from './DuplicatePhone.svelte';
 	import FormCard from './FormCard.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// "Nueva clienta" and the detail's edit mode (design doc item 76): name and phone first, then the
 	// client attributes and the notes. Creating, it keeps a draft (item 67); editing, only what

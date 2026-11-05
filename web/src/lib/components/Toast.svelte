@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { UNDO_MS } from '../undo';
 
 	let {
@@ -36,8 +37,11 @@
 		role="status"
 		class="pointer-events-none fixed inset-x-0 top-0 z-60 flex justify-center px-4 pt-safe"
 	>
-		<div
-			class="glass-panel pointer-events-auto mt-4 flex min-h-tap items-center gap-4 rounded-pill py-2 pr-2 pl-5 text-ink"
+		<Card
+			variant="strong"
+			radius="pill"
+			pad="trail"
+			class="pointer-events-auto mt-4 flex min-h-tap items-center gap-4 text-ink"
 		>
 			<p class="text-sm">{message}</p>
 			{#if actionLabel !== undefined}
@@ -49,6 +53,6 @@
 					{actionLabel}
 				</button>
 			{/if}
-		</div>
+		</Card>
 	</div>
 {/if}

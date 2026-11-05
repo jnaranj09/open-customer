@@ -6,12 +6,12 @@
 	import { api } from '../../lib/api/app';
 	import { errorText } from '../../lib/api/errors';
 	import AuthCard from '../../lib/components/AuthCard.svelte';
-	import Button from '../../lib/components/Button.svelte';
+	import Button from '../../lib/components/ui/Button.svelte';
 	import ColorPicker from '../../lib/components/ColorPicker.svelte';
 	import IconFileInput from '../../lib/components/IconFileInput.svelte';
 	import InstallGuide from '../../lib/components/InstallGuide.svelte';
 	import SelectField from '../../lib/components/SelectField.svelte';
-	import TextField from '../../lib/components/TextField.svelte';
+	import TextField from '../../lib/components/ui/TextField.svelte';
 	import { applyAccent, DEFAULT_ACCENT } from '../../lib/color';
 	import { t } from '../../lib/i18n';
 	import { needsInstallGuide } from '../../lib/install';

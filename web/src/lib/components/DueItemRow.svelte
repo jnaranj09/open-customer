@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
+
 	// One line of a list on "Para enviar": a due item on the wide layout (a button that selects it),
 	// or a sent one under "Enviados" (plain, with the time).
 	let {
@@ -15,8 +17,7 @@
 		onselect?: () => void;
 	} = $props();
 
-	const ROW =
-		'glass-card flex min-h-tap w-full items-center gap-3 rounded-lg px-5 py-3 text-left text-ink';
+	const ROW = 'flex min-h-tap w-full items-center gap-3 text-left text-ink';
 </script>
 
 {#snippet content()}
@@ -32,16 +33,18 @@
 {/snippet}
 
 {#if onselect === undefined}
-	<div class="{ROW} {selected ? 'outline-2 outline-accent' : ''}">
+	<Card pad="message" class="{ROW} {selected ? 'outline-2 outline-accent' : ''}">
 		{@render content()}
-	</div>
+	</Card>
 {:else}
-	<button
+	<Card
+		as="button"
 		type="button"
 		onclick={onselect}
 		aria-current={selected ? 'true' : undefined}
+		pad="message"
 		class="{ROW} hover:bg-accent-100 {selected ? 'outline-2 outline-accent' : ''}"
 	>
 		{@render content()}
-	</button>
+	</Card>
 {/if}

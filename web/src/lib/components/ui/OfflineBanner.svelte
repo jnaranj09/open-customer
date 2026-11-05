@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { t } from '../i18n';
-	import { formatTime } from '../time';
-	import Icon from './icons/Icon.svelte';
+	import { t } from '../../i18n';
+	import { formatTime } from '../../time';
+	import Icon from '../icons/Icon.svelte';
 
 	let { lastSyncAt, zone }: { lastSyncAt: string | null; zone: string } = $props();
 

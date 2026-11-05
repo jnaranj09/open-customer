@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { t } from '../i18n';
 	import { pushControl } from '../pushControl.svelte';
-	import Button from './Button.svelte';
+	import Button from './ui/Button.svelte';
 	import Icon from './icons/Icon.svelte';
 </script>
 

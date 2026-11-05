@@ -9,7 +9,7 @@
 	import { layout } from '../../../lib/layout';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import ClientForm from '../../../lib/components/ClientForm.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import { t } from '../../../lib/i18n';
 
 	// "Nueva clienta" (design doc item 76). `volver` is the screen she came from; `savedDestination`
@@ -24,14 +24,13 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
+		<IconButton
+			variant="plain"
+			icon="chevron-left"
+			label={t('client_back')}
 			href={back}
-			title={t('client_back')}
-			aria-label={t('client_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100 lg:hidden"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+			class="lg:hidden"
+		/>
 		<h1 class="text-3xl font-extrabold text-ink">{t('client_new_title')}</h1>
 	</header>
 

@@ -3,8 +3,8 @@
 	import type { Snippet } from 'svelte';
 	import { cache } from '../cache/store.svelte';
 	import { t } from '../i18n';
-	import Button from './Button.svelte';
-	import { buttonClasses, type ButtonVariant } from './buttonStyle';
+	import Button from './ui/Button.svelte';
+	import { buttonClasses, type ButtonVariant } from './ui/buttonStyle';
 
 	// A link to a screen that creates something ("Nueva cita", "Nueva clienta"). Offline the screen
 	// could not save, so the link is a button that is off and says why.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
@@ -7,10 +8,10 @@
 	import { visibleClients } from '../clients';
 	import { t } from '../i18n';
 	import { submitOnce } from '../submit';
-	import Button from './Button.svelte';
-	import EmptyState from './EmptyState.svelte';
-	import ListRow from './ListRow.svelte';
-	import TextField from './TextField.svelte';
+	import Button from './ui/Button.svelte';
+	import EmptyState from './ui/EmptyState.svelte';
+	import ListRow from './ui/ListRow.svelte';
+	import TextField from './ui/TextField.svelte';
 	import WriteLink from './WriteLink.svelte';
 
 	// The client list (design doc item 76): the search box over the cached clients, online and
@@ -85,7 +86,7 @@
 	{#if cache.snapshot === null}
 		<p role="status" class="px-2 text-base text-ink-muted">{t('clients_loading')}</p>
 	{:else if noneAtAll}
-		<div class="glass-card rounded-lg">
+		<Card>
 			<EmptyState
 				title={t('clients_empty_title')}
 				body={t('clients_empty_body')}
@@ -93,9 +94,9 @@
 				href={resolve('/clientas/nueva')}
 				creates
 			/>
-		</div>
+		</Card>
 	{:else}
-		<ul class="glass-card flex flex-col divide-y divide-glass-edge rounded-lg px-1 py-1">
+		<Card as="ul" pad="list" class="flex flex-col divide-y divide-glass-edge">
 			{#each rows as client (client.id)}
 				<li>
 					<ListRow
@@ -113,7 +114,7 @@
 						: t('client_no_results')}
 				</li>
 			{/each}
-		</ul>
+		</Card>
 	{/if}
 
 	{#if failure !== null}

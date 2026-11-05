@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { getContext, untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
@@ -12,12 +13,12 @@
 	import { businessPatch, LAST_PUSH_HOUR } from '../settingsPage';
 	import { submitOnce } from '../submit';
 	import type { createToaster } from '../toaster.svelte';
-	import Button from './Button.svelte';
+	import Button from './ui/Button.svelte';
 	import ColorPicker from './ColorPicker.svelte';
 	import FormCard from './FormCard.svelte';
 	import IconFileInput from './IconFileInput.svelte';
 	import SelectField from './SelectField.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// The Negocio form: name, time zone, color and the hour of the daily notice, saved together.
 	// The icon is its own card, because it is a separate upload. Currency, country and language are
@@ -166,9 +167,12 @@
 	{/if}
 </FormCard>
 
-<form
-	class="glass-card flex flex-col gap-4 rounded-xl p-5 lg:max-w-190 lg:p-8"
-	onsubmit={(e) => {
+<Card
+	as="form"
+	radius="xl"
+	pad="section"
+	class="flex flex-col gap-4 lg:max-w-190"
+	onsubmit={(e: SubmitEvent) => {
 		e.preventDefault();
 		void uploadIcon.run();
 	}}
@@ -196,4 +200,4 @@
 			<Button variant="primary" type="submit" busy={iconBusy}>{t('business_icon_upload')}</Button>
 		{/if}
 	</div>
-</form>
+</Card>

@@ -1,7 +1,8 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import type { Snippet } from 'svelte';
 	import { t } from '../i18n';
-	import Button from './Button.svelte';
+	import Button from './ui/Button.svelte';
 	import WriteButton from './WriteButton.svelte';
 
 	// The card both record forms sit in (D2: one glass card, up to 760 px on wide): the notice of a
@@ -30,9 +31,12 @@
 	} = $props();
 </script>
 
-<form
-	class="glass-card flex flex-col gap-4 rounded-xl p-5 lg:max-w-190 lg:p-8"
-	onsubmit={(e) => {
+<Card
+	as="form"
+	radius="xl"
+	pad="section"
+	class="flex flex-col gap-4 lg:max-w-190"
+	onsubmit={(e: SubmitEvent) => {
 		e.preventDefault();
 		onsubmit();
 	}}
@@ -64,4 +68,4 @@
 			</div>
 		{/if}
 	</div>
-</form>
+</Card>

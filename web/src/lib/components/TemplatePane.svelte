@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { getContext } from 'svelte';
@@ -6,8 +7,8 @@
 	import { cache } from '../cache/store.svelte';
 	import { t } from '../i18n';
 	import type { createToaster } from '../toaster.svelte';
-	import EmptyState from './EmptyState.svelte';
-	import Icon from './icons/Icon.svelte';
+	import EmptyState from './ui/EmptyState.svelte';
+	import IconButton from './ui/IconButton.svelte';
 	import TemplateForm from './TemplateForm.svelte';
 
 	// The pane beside the template list: the open template's form, or the new-template form (no
@@ -21,14 +22,13 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex min-h-12 items-center gap-2">
-		<a
+		<IconButton
+			variant="plain"
+			icon="chevron-left"
+			label={t('template_back')}
 			href={list}
-			title={t('template_back')}
-			aria-label={t('template_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100 @3xl:hidden"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+			class="@3xl:hidden"
+		/>
 		{#if template !== undefined || (!missing && cache.snapshot !== null)}
 			<h2 class="text-3xl font-extrabold text-ink">
 				{template?.name ?? t('templates_new_title')}
@@ -36,9 +36,9 @@
 		{/if}
 	</header>
 	{#if missing || cache.snapshot === null}
-		<div class="glass-card rounded-lg">
+		<Card>
 			<EmptyState title={t('templates_pick_title')} body={t('templates_pick_body')} />
-		</div>
+		</Card>
 	{:else}
 		<TemplateForm
 			data={cache.snapshot}

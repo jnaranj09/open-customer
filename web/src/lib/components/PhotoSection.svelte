@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText } from '../api/errors';
@@ -102,7 +103,7 @@
 	}
 </script>
 
-<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 	<div class="flex items-center gap-3">
 		<h2 class="flex-1 text-xl font-bold text-ink">{t('photos_title')}</h2>
 		<label
@@ -130,7 +131,7 @@
 	{#if photos !== null && photos.length > 0}
 		<PhotoGrid {photos} onarchive={archive} />
 	{/if}
-</section>
+</Card>
 
 {#if toaster.current !== null}
 	{#key toaster.current.n}

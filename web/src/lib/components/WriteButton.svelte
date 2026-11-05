@@ -2,8 +2,8 @@
 	import type { Snippet } from 'svelte';
 	import { cache } from '../cache/store.svelte';
 	import { t } from '../i18n';
-	import Button from './Button.svelte';
-	import type { ButtonVariant } from './buttonStyle';
+	import Button from './ui/Button.svelte';
+	import type { ButtonVariant } from './ui/buttonStyle';
 
 	// A button that writes to the server (save, archive, confirm). The server holds the truth and
 	// nothing is queued, so offline it is off and says why (design doc "Phone cache and offline

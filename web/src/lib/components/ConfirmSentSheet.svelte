@@ -7,8 +7,8 @@
 	import { confirmSent, notYet, pendingToAsk } from '../pending';
 	import { submitOnce } from '../submit';
 	import { systemNow } from '../time';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 
 	// "¿Lo enviaste a …?" (design doc "Sending flow"). Mounted once in the app shell, so it opens
 	// first on any app start while a confirmation is stored. It reads the stored confirmation and

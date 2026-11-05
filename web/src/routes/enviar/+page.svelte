@@ -8,7 +8,8 @@
 	import { appBadge } from '../../lib/cache/refresh';
 	import { cache } from '../../lib/cache/store.svelte';
 	import { clock } from '../../lib/clock.svelte';
-	import DueItemDetail from '../../lib/components/DueItemDetail.svelte';
+	import Card from '../../lib/components/ui/Card.svelte';
+	import DueCard from '../../lib/components/ui/DueCard.svelte';
 	import DueItemRow from '../../lib/components/DueItemRow.svelte';
 	import NoRulesState from '../../lib/components/NoRulesState.svelte';
 	import OverlapSheet from '../../lib/components/OverlapSheet.svelte';
@@ -214,14 +215,14 @@
 			/>
 		</li>
 	{:else}
-		<li class="glass-card rounded-lg p-5">
+		<Card as="li" pad="md">
 			{@render detail(item)}
-		</li>
+		</Card>
 	{/if}
 {/snippet}
 
 {#snippet detail(item: DueItem)}
-	<DueItemDetail
+	<DueCard
 		{item}
 		{zone}
 		offline={cache.offline}
@@ -250,7 +251,7 @@
 	{@render group(t('due_overdue_heading'), groups.late)}
 	{@render group(t('today_title'), groups.today)}
 	{#if items.length === 0}
-		<p class="glass-card rounded-lg px-5 py-4 text-base text-ink">{t('due_today_none')}</p>
+		<Card as="p" pad="message" class="text-base text-ink">{t('due_today_none')}</Card>
 	{/if}
 	<section class="flex flex-col gap-3">
 		<h2 class="text-sm font-bold text-ink-muted">{t('due_sent_heading')}</h2>
@@ -283,7 +284,7 @@
 	</header>
 
 	{#if actionError !== null}
-		<p role="alert" class="glass-card rounded-lg px-5 py-3 text-base text-error">{actionError}</p>
+		<Card as="p" role="alert" pad="message" class="text-base text-error">{actionError}</Card>
 	{/if}
 
 	{#if !hasRules}
@@ -292,9 +293,9 @@
 		<div class="flex items-start gap-6">
 			<div class="flex w-105 shrink-0 flex-col gap-4">{@render lists()}</div>
 			{#if selected !== null}
-				<section class="glass-card min-w-0 flex-1 rounded-lg p-6">
+				<Card as="section" pad="lg" class="min-w-0 flex-1">
 					{@render detail(selected)}
-				</section>
+				</Card>
 			{/if}
 		</div>
 	{:else}

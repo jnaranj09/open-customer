@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { ResolvedPathname } from '$app/types';
-	import Icon from './icons/Icon.svelte';
+	import Icon from '../icons/Icon.svelte';
 	import { buttonClasses } from './buttonStyle';
-	import WriteLink from './WriteLink.svelte';
+	import WriteLink from '../WriteLink.svelte';
 
 	// `href` is already resolved by the caller (`resolve`). `creates` marks an action that
 	// opens a form to create something: offline it is off and says why.

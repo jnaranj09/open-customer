@@ -18,11 +18,11 @@
 	import type { Option } from '../setup';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import SaveButton from './SaveButton.svelte';
 	import SelectField from './SelectField.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
 	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A change

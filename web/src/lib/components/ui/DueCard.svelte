@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import type { DueItem } from '../api/schemas';
-	import { t } from '../i18n';
-	import { canSend, type Sendable } from '../pending';
-	import { formatDayShort, todayIn } from '../time';
+	import type { DueItem } from '../../api/schemas';
+	import { t } from '../../i18n';
+	import { canSend, type Sendable } from '../../pending';
+	import { formatDayShort, todayIn } from '../../time';
 	import Button from './Button.svelte';
-	import WriteButton from './WriteButton.svelte';
+	import WriteButton from '../WriteButton.svelte';
 	import { buttonClasses } from './buttonStyle';
 
 	// A due item with its actions: the client, the full message and Enviar / Omitir, or the booking
