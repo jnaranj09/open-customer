@@ -7,6 +7,7 @@ import {
 	SCHEMA_VERSION,
 	clearCache,
 	getDraft,
+	onBadRow,
 	putDraft,
 	readAll,
 	readMeta,
@@ -127,6 +128,63 @@ describe('meta', () => {
 		);
 		expect((await readMeta()).lastSyncAt).toBeNull();
 		expect(await raw((db) => db.table('clients').count())).toBe(0);
+	});
+});
+
+describe('a bad cached row', () => {
+	it('tells the bad-row listeners after it clears the cache', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const seen: number[] = [];
+		onBadRow(() => {
+			seen.push(1);
+		});
+		await writeSnapshot(bootstrap(1), SYNCED);
+		await raw((db) => db.table('clients').toCollection().modify({ name: 42 }));
+		await readAll();
+		expect(seen).toEqual([1]);
+	});
+});
+
+describe('a draft that fails its schema', () => {
+	const Form = z.object({ name: z.string() });
+
+	async function badDraft(): Promise<void> {
+		await writeSnapshot(bootstrap(1, 'Ana Rojas'), SYNCED);
+		await writeMeta({ pending: PENDING });
+		await putDraft('cita:new', { name: 42 });
+		await putDraft('clienta:new', { name: 'Lucía Rojas' });
+	}
+
+	it('reads null', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		await badDraft();
+		expect(await getDraft('cita:new', Form)).toBeNull();
+	});
+
+	it('is deleted, and the other drafts stay', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		await badDraft();
+		await getDraft('cita:new', Form);
+		expect(await raw((db) => db.table('drafts').toCollection().primaryKeys())).toEqual([
+			'clienta:new'
+		]);
+	});
+
+	it('keeps the pending confirmation and the cached data', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		await badDraft();
+		await getDraft('cita:new', Form);
+		expect([(await readMeta()).pending, (await readAll())?.clients.map((c) => c.name)]).toEqual([
+			PENDING,
+			['Ana Rojas']
+		]);
+	});
+
+	it('logs a code, never the draft', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		await badDraft();
+		await getDraft('cita:new', Form);
+		expect(warn.mock.calls).toEqual([['code=draft_invalid']]);
 	});
 });
 

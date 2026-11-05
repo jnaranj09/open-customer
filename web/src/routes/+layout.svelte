@@ -118,6 +118,7 @@
 	let opened = false;
 
 	$effect(() => {
+		cache.setSyncing(syncing);
 		if (!syncing) {
 			opened = false;
 			pushControl.reset();
@@ -228,7 +229,7 @@
 		<Sidebar
 			name={cache.snapshot?.settings.name ?? ''}
 			pathname={path}
-			dueCount={cache.snapshot?.due.length ?? 0}
+			dueCount={cache.shownDue.length}
 			newDay={shownDay.current ?? clock.today(zone)}
 			sync={syncLine(cache.meta.lastSyncAt, zone, cache.offline)}
 		/>

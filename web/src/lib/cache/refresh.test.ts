@@ -60,6 +60,12 @@ describe('refresh', () => {
 		expect(badge.set).toHaveBeenCalledWith(3);
 	});
 
+	it('the badge leaves out the items the server has already logged', async () => {
+		const { deps, badge } = setup(ok(bootstrap(3)));
+		await refresh(deps, () => ['3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f:0']);
+		expect(badge.set).toHaveBeenCalledWith(2);
+	});
+
 	it('a refresh with 0 items clears the badge', async () => {
 		const { deps, badge } = setup(ok(bootstrap(0)));
 		await refresh(deps);

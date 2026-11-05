@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Appointment, DueItem } from './api/schemas';
 import type { Api } from './api/client';
 import type { Result } from './api/errors';
-import { addReturnService, addToBooking, groupDue, nextAfter, visibleDue } from './due';
+import { addReturnService, addToBooking, groupDue, nextAfter, shownDue, visibleDue } from './due';
 
 const ID = '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f';
 const RULE = '7a1c9e20-2b3d-4f5a-8b6c-0d9e8f7a6b5c';
@@ -48,6 +48,27 @@ describe('visibleDue', () => {
 	it('shows an online list as the server sent it', () => {
 		const items = [before('past', '2026-11-04T14:00:00Z')];
 		expect(visibleDue(items, NOW, false)).toEqual(items);
+	});
+});
+
+describe('shownDue', () => {
+	it('hides an item the server has logged', () => {
+		const items = [item({ id: 'a' }), item({ id: 'b' })];
+		expect(shownDue(items, { now: NOW, offline: false, logged: ['a'] }).map((i) => i.id)).toEqual([
+			'b'
+		]);
+	});
+
+	it('offline, also hides a before item whose anchor_at has passed', () => {
+		const items = [before('past', '2026-11-04T14:00:00Z'), item({ id: 'a' }), item({ id: 'c' })];
+		expect(shownDue(items, { now: NOW, offline: true, logged: ['a'] }).map((i) => i.id)).toEqual([
+			'c'
+		]);
+	});
+
+	it('online with nothing logged is the server list as sent', () => {
+		const items = [before('past', '2026-11-04T14:00:00Z'), item({ id: 'a' })];
+		expect(shownDue(items, { now: NOW, offline: false, logged: [] })).toEqual(items);
 	});
 });
 

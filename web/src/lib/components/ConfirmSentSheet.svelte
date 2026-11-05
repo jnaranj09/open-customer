@@ -16,6 +16,7 @@
 	// and when its item has left the due list. It cannot be dismissed (Escape, a tap outside, a
 	// swipe do nothing): a dismissed question would leave the item listed with "Enviar" enabled.
 	const pending = $derived(cache.meta.pending);
+	// The question follows the cached server list; the badge after "Sí" counts the shown list.
 	const due = $derived(cache.snapshot?.due ?? []);
 	// Before the cache is read the list is empty, and an empty list would clear a real question.
 	const decision = $derived(cache.snapshot === null ? 'none' : pendingToAsk(pending, due));
@@ -52,7 +53,7 @@
 					store: cache,
 					badge: appBadge,
 					now: systemNow,
-					due
+					due: cache.shownDue
 				});
 				if (!result.ok) {
 					error = t('due_confirm_failed');

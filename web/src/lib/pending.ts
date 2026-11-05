@@ -86,7 +86,7 @@ async function logItem(
 
 /** "Sí": logs the item as sent with the exact text, then clears the confirmation. A failed POST
  *  keeps the confirmation so she can tap "Sí" again (a repeated POST is safe on the server).
- *  `due` is the current list, for the badge. */
+ *  `due` is the shown list (`cache.shownDue`), for the badge. */
 export async function confirmSent(
 	item: DueItem,
 	deps: LogDeps & { store: PendingStore }

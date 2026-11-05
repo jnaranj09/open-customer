@@ -11,7 +11,7 @@
 	import NoRulesState from '../../lib/components/NoRulesState.svelte';
 	import OverlapSheet from '../../lib/components/OverlapSheet.svelte';
 	import Toast from '../../lib/components/Toast.svelte';
-	import { addToBooking, groupDue, nextAfter, visibleDue } from '../../lib/due';
+	import { addToBooking, groupDue, nextAfter } from '../../lib/due';
 	import { t } from '../../lib/i18n';
 	import { layout } from '../../lib/layout';
 	import { skipItem, startSend, type Sendable } from '../../lib/pending';
@@ -35,12 +35,8 @@
 		flush: () => Promise<unknown>;
 	} | null>(null);
 
-	// The cached due list. The clock is read here, not in `visibleDue`, so the filter stays pure.
-	const items = $derived(
-		visibleDue(cache.snapshot?.due ?? [], systemNow(), cache.offline).filter(
-			(i) => i.id !== skipping?.id && !cache.logged.includes(i.id)
-		)
-	);
+	// The shown due list (the store's `shownDue`), without the item an "Omitir" is waiting on.
+	const items = $derived(cache.shownDue.filter((i) => i.id !== skipping?.id));
 	const groups = $derived(groupDue(items));
 	const ordered = $derived([...groups.late, ...groups.today]);
 
@@ -98,7 +94,7 @@
 				badge: appBadge,
 				store: cache,
 				now: systemNow,
-				due: cache.snapshot?.due ?? []
+				due: cache.shownDue
 			});
 			if (result.ok) {
 				await cache.refresh();

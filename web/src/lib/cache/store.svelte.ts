@@ -3,9 +3,11 @@
 import { api } from '../api/app';
 import type { Api } from '../api/client';
 import type { ApiError, Result } from '../api/errors';
-import type { Me } from '../api/schemas';
+import type { DueItem, Me } from '../api/schemas';
+import { shownDue } from '../due';
 import {
 	EMPTY_META,
+	onBadRow,
 	onCacheCleared,
 	readAll,
 	readMeta,
@@ -25,9 +27,14 @@ export function createCache(deps: Deps) {
 	let meta = $state<Meta>(EMPTY_META);
 	let offline = $state(false);
 	let lastError = $state<ApiError | null>(null);
-	// Due items the server has logged (a 201 or 200) that the cached list may still hold, because the
-	// refresh after the POST failed. Hidden until a refresh succeeds. Not optimistic: it follows the answer.
+	// Due items the server has logged (a 201 or 200) that the cached list may still hold: the refresh
+	// after the POST failed, or a refresh asked before the POST answered with the old list. A
+	// refresh that succeeds drops only the ids its list no longer holds. Not optimistic: it follows
+	// the answer.
 	let logged = $state<string[]>([]);
+	// Whether a session is live (the app shell says so); a bad cached row then asks `/bootstrap`.
+	let syncing = false;
+	let running = 0;
 
 	// A cleared cache (401, bad row, logout) must not leave the old session's data on screen, nor
 	// its user for an offline open to reuse.
@@ -39,6 +46,17 @@ export function createCache(deps: Deps) {
 		logged = [];
 	});
 
+	// A bad snapshot or meta row has just emptied the cache: ask the server again, so the screen does
+	// not stay on "Cargando…". Not during a refresh: that one reads the cache again when it is done,
+	// and a row that still fails then would only start another refresh.
+	onBadRow(() => {
+		if (syncing && running === 0) {
+			void run().catch(() => {
+				console.warn('code=cache_load_failed');
+			});
+		}
+	});
+
 	async function load(): Promise<void> {
 		snapshot = await readAll();
 		meta = await readMeta();
@@ -47,7 +65,7 @@ export function createCache(deps: Deps) {
 	/** The refresh, with a failed cache write turned into a failed Result (code only in the log). */
 	async function attempt(): Promise<Result<void>> {
 		try {
-			return await refresh(deps);
+			return await refresh(deps, () => logged);
 		} catch {
 			console.warn('code=cache_write_failed');
 			return { ok: false, error: { kind: 'cache_write_failed' } };
@@ -57,14 +75,22 @@ export function createCache(deps: Deps) {
 	/** Fetches `/bootstrap`, then reloads what changed. Every outcome is recorded: `offline` is true
 	 *  only when the server did not answer, and `lastError` holds any failure (null after success). */
 	async function runOnce(): Promise<Result<void>> {
-		const result = await attempt();
-		offline = !result.ok && result.error.kind === 'offline';
-		lastError = result.ok ? null : result.error;
-		if (result.ok) {
-			logged = [];
+		running += 1;
+		try {
+			const result = await attempt();
+			offline = !result.ok && result.error.kind === 'offline';
+			lastError = result.ok ? null : result.error;
+			await load();
+			if (result.ok) {
+				// A logged item never comes back on the server, so an id the new list still holds
+				// is from a refresh asked before its log POST: it stays hidden.
+				const due = snapshot?.due ?? [];
+				logged = logged.filter((id) => due.some((i) => i.id === id));
+			}
+			return result;
+		} finally {
+			running -= 1;
 		}
-		await load();
-		return result;
 	}
 
 	/** Two refreshes never overlap: a call made during one waits for it and then refreshes once more,
@@ -81,9 +107,14 @@ export function createCache(deps: Deps) {
 		get offline(): boolean {
 			return offline;
 		},
-		/** Ids of due items already logged on the server, still in a cached list that has not refreshed. */
+		/** Ids of due items already logged on the server that the cached list still holds. */
 		get logged(): readonly string[] {
 			return logged;
+		},
+		/** The due list every screen shows and counts (`shownDue`): the cached list without the
+		 *  logged items and, offline, without a "before" item whose time has passed. */
+		get shownDue(): DueItem[] {
+			return shownDue(snapshot?.due ?? [], { now: deps.now(), offline, logged });
 		},
 		/** Notes that the server logged this due item. */
 		markLogged(id: string): void {
@@ -109,15 +140,12 @@ export function createCache(deps: Deps) {
 			await writeMeta({ pending: null });
 			meta = await readMeta();
 		},
+		/** The app shell says whether a session is live, so a bad cached row can ask for a refresh. */
+		setSyncing(on: boolean): void {
+			syncing = on;
+		},
 		/** Reads the cache only, never the server. */
 		load,
-		/** Reads the cache; with none (first open, or a bad row just cleared it) asks for a refresh. */
-		async reload(): Promise<void> {
-			await load();
-			if (snapshot === null) {
-				await run();
-			}
-		},
 		refresh: run
 	};
 }

@@ -59,7 +59,7 @@ describe('autosave', () => {
 		expect(await draft.load()).toBeNull();
 	});
 
-	it('a stored draft that fails its schema clears the cache and loads null', async () => {
+	it('a stored draft that fails its schema loads null', async () => {
 		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		await putDraft('cita:new', { name: 42 });
 		expect(await autosave('cita:new', Form).load()).toBeNull();

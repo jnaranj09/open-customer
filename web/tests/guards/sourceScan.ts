@@ -112,10 +112,10 @@ export function importSpecifiers(sf: ts.SourceFile): string[] {
 	return out;
 }
 
-/** Where a specifier points: an absolute path for `$lib` and relative imports, else null (a
- *  package or a SvelteKit module such as `$app/environment`). */
+/** Where a specifier points: an absolute path for `#lib` (SvelteKit 3's alias for src/lib) and
+ *  relative imports, else null (a package or a SvelteKit module such as `$app/env`). */
 function target(file: string, spec: string): string | null {
-	if (spec === '$lib' || spec.startsWith('$lib/')) return join(SRC, 'lib', spec.slice(4));
+	if (spec === '#lib' || spec.startsWith('#lib/')) return join(SRC, 'lib', spec.slice(4));
 	if (spec.startsWith('.')) return resolve(dirname(file), spec);
 	return null;
 }

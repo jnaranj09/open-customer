@@ -37,7 +37,7 @@ describe('layer rules', () => {
 		expect(
 			at(
 				'service-worker.ts',
-				"import { assets } from '$app/manifest';\nimport { t } from '$lib/i18n';\nimport { goto } from '$app/navigation';\nimport { x } from './routes/x';\n"
+				"import { assets } from '$app/manifest';\nimport { t } from '#lib/i18n';\nimport { goto } from '$app/navigation';\nimport { x } from './routes/x';\n"
 			)
 		).toEqual(['service-worker.ts → $app/navigation', 'service-worker.ts → ./routes/x']);
 	});
@@ -46,7 +46,7 @@ describe('layer rules', () => {
 		expect(
 			at(
 				'routes/+page.svelte',
-				"<script>\nimport { t } from '$lib/i18n';\nimport { browser } from '$app/environment';\n</script>\n"
+				"<script>\nimport { t } from '#lib/i18n';\nimport { browser } from '$app/env';\n</script>\n"
 			)
 		).toEqual([]);
 	});

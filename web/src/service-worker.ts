@@ -3,7 +3,7 @@
 import { version } from '$app/env';
 import { assets, immutable } from '$app/manifest';
 import { self as sw } from '$app/service-worker';
-import { pushCount, pushNotice, swAction } from './lib/sw-routes';
+import { pushShown, swAction } from './lib/sw-routes';
 
 const CACHE = `oc-${version}`;
 // The SPA fallback page is not in SvelteKit's lists, so it is added by hand.
@@ -62,26 +62,16 @@ sw.addEventListener('fetch', (event) => {
 });
 
 sw.addEventListener('push', (event) => {
-	if (!event.data) {
-		return;
-	}
-	let payload: unknown;
-	try {
-		payload = event.data.json();
-	} catch {
+	// Every push shows a notification, even one with no or a bad payload (see `pushShown`).
+	const shown = pushShown(event.data ? event.data.text() : null);
+	if (!shown.valid) {
 		console.warn('code=push_payload_invalid');
-		return;
 	}
-	const notice = pushNotice(payload);
-	if (!notice) {
-		console.warn('code=push_payload_invalid');
-		return;
-	}
-	const badge = pushCount(payload);
+	const badge = shown.badge;
 	const nav: { setAppBadge?: (n: number) => Promise<void> } = sw.navigator;
 	event.waitUntil(
 		Promise.all([
-			sw.registration.showNotification(notice.title, { body: notice.body }),
+			sw.registration.showNotification(shown.title, { body: shown.body }),
 			badge !== null && nav.setAppBadge ? nav.setAppBadge(badge).catch(() => undefined) : undefined
 		])
 	);

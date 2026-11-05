@@ -1,7 +1,8 @@
 // The phone cache: the one module that touches Dexie (guard `layers`). It is a read-only copy of
 // what `/bootstrap` last said, plus drafts and the pending send confirmation. Every row read back
-// is parsed once with its zod schema; a row that fails clears the whole cache and reads as empty,
-// so a bad cached row never reaches a screen (rules/boundaries.md).
+// is parsed once with its zod schema, so a bad cached row never reaches a screen
+// (rules/boundaries.md). A bad snapshot or meta row clears the whole cache and reads as empty; a
+// bad draft is deleted alone, because it is the app's own local value, not a copy of the server.
 import Dexie, { type Table } from 'dexie';
 import { z } from 'zod';
 import { byPosition } from '../order';
@@ -20,7 +21,8 @@ import {
 	type Settings
 } from '../api/schemas';
 
-/** Bump with any change to the stored shapes; an older cache then rebuilds from `/bootstrap`. */
+/** The Dexie version of the stores below. There is no upgrade step: a version bump keeps the old
+ *  rows, and an old row is dropped only when it fails its schema on read (see `guarded`). */
 export const SCHEMA_VERSION = 1;
 export const DB_NAME = 'open-customer';
 
@@ -118,6 +120,14 @@ export function onCacheCleared(listener: () => void): void {
 	clearListeners.add(listener);
 }
 
+const badRowListeners = new Set<() => void>();
+
+/** Runs `listener` after a bad snapshot or meta row has cleared the cache, so the store can ask
+ *  `/bootstrap` again. A 401 or a logout clears the cache too, but does not call it. */
+export function onBadRow(listener: () => void): void {
+	badRowListeners.add(listener);
+}
+
 /** Thrown inside this module when a stored row fails its schema; `table` is only a table name. */
 class BadRow extends Error {
 	constructor(readonly table: string) {
@@ -137,7 +147,7 @@ const parseRows = <T>(table: string, schema: z.ZodType<T>, raw: unknown[]): T[] 
 	raw.map((row) => parseRow(table, schema, row));
 
 /** Runs a read; a row that fails its schema logs the table and a code (never the row), clears the
- *  cache and gives `onBad` instead. */
+ *  cache, tells the bad-row listeners and gives `onBad` instead. */
 async function guarded<T>(read: () => Promise<T>, onBad: T): Promise<T> {
 	try {
 		return await read();
@@ -147,6 +157,9 @@ async function guarded<T>(read: () => Promise<T>, onBad: T): Promise<T> {
 		}
 		console.warn(`code=cache_row_invalid table=${e.table}`);
 		await clearCache();
+		for (const listener of badRowListeners) {
+			listener();
+		}
 		return onBad;
 	}
 }
@@ -247,12 +260,20 @@ export async function putDraft(key: string, value: unknown): Promise<void> {
 }
 
 /** The stored draft value, parsed with `schema`; null when absent. A draft that fails its schema
- *  clears the cache like any other bad row. */
-export function getDraft<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {
-	return guarded(async () => {
-		const row = await t.drafts.get(key);
-		return row === undefined ? null : parseRow('drafts', schema, row.value);
-	}, null);
+ *  (one from an older form shape) is deleted and reads null; the rest of the cache stays, the
+ *  pending send confirmation included. */
+export async function getDraft<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {
+	const row = await t.drafts.get(key);
+	if (row === undefined) {
+		return null;
+	}
+	const parsed = schema.safeParse(row.value);
+	if (parsed.success) {
+		return parsed.data;
+	}
+	console.warn('code=draft_invalid');
+	await t.drafts.delete(key);
+	return null;
 }
 
 export async function deleteDraft(key: string): Promise<void> {

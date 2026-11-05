@@ -2,6 +2,7 @@
 // window around the business day, every table replaced in one transaction, then the app badge.
 import type { Api } from '../api/client';
 import type { Result } from '../api/errors';
+import { shownDue } from '../due';
 import { addDays, todayIn } from '../time';
 import { readSettings, writeSnapshot } from './db';
 
@@ -47,14 +48,18 @@ export async function applyBadge(badge: Badge, due: number): Promise<void> {
 	await (due > 0 ? badge.set(due) : badge.clear());
 }
 
-/** Fetches `/bootstrap`, replaces the cache and sets the badge to the due count. The window uses
- *  the business zone from the cached settings, or the browser zone before the first refresh. A
- *  failed call changes nothing. A failed write rejects: the old data is still in place. */
-export async function refresh(deps: {
-	api: Api;
-	now: () => Date;
-	badge: Badge;
-}): Promise<Result<void>> {
+/** Fetches `/bootstrap`, replaces the cache and sets the badge to the due count, leaving out the
+ *  items `logged()` names once the answer is in (already logged on the server, see `shownDue`). The window uses the business
+ *  zone from the cached settings, or the browser zone before the first refresh. A failed call
+ *  changes nothing. A failed write rejects: the old data is still in place. */
+export async function refresh(
+	deps: {
+		api: Api;
+		now: () => Date;
+		badge: Badge;
+	},
+	logged: () => readonly string[] = () => []
+): Promise<Result<void>> {
 	const now = deps.now();
 	const settings = await readSettings();
 	const zone = settings?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -63,6 +68,7 @@ export async function refresh(deps: {
 		return answer;
 	}
 	await writeSnapshot(answer.data, now.toISOString());
-	await applyBadge(deps.badge, answer.data.due.length);
+	const shown = shownDue(answer.data.due, { now, offline: false, logged: logged() });
+	await applyBadge(deps.badge, shown.length);
 	return { ok: true, data: undefined };
 }

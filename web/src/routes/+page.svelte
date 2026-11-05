@@ -112,7 +112,6 @@
 			: null
 	);
 
-	const dueItems = $derived(cache.snapshot?.due ?? []);
 	const hasRules = $derived(
 		cache.snapshot === null || cache.snapshot.rules.some((r) => !r.archived)
 	);
@@ -187,7 +186,7 @@
 		</header>
 
 		{#if layout.current === 'compact'}
-			<DueCard items={dueItems} {hasRules} />
+			<DueCard items={cache.shownDue} {hasRules} />
 			<PushActivate />
 		{/if}
 
@@ -276,7 +275,7 @@
 
 	{#if layout.current === 'wide'}
 		<aside class="flex w-90 shrink-0 flex-col gap-4">
-			<DueCard items={dueItems} {hasRules} />
+			<DueCard items={cache.shownDue} {hasRules} />
 			{@render backupLine()}
 			<PushActivate />
 		</aside>

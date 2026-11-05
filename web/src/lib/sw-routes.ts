@@ -1,5 +1,6 @@
 // The pure decisions of the service worker (design item 65), kept out of `service-worker.ts` so
 // Vitest can test them.
+import { t } from './i18n';
 
 export type SwAction = 'shell' | 'precache' | 'network';
 
@@ -39,4 +40,34 @@ export function pushNotice(data: unknown): PushNotice | null {
 		return null;
 	}
 	return { title, body, count };
+}
+
+/** What the worker shows for one push. */
+export type PushShown = { title: string; body: string; badge: number | null; valid: boolean };
+
+/** Parses the push payload text (null when the push carried none). Every push shows a
+ *  notification: the page subscribes with `userVisibleOnly`, and iOS can revoke a subscription
+ *  whose push shows none. An empty or bad payload (for example from a newer server than this
+ *  worker) shows the fixed fallback text, sets no badge and is `valid: false`, so the worker logs
+ *  a code. */
+export function pushShown(text: string | null): PushShown {
+	const notice = pushNotice(text === null ? null : parseJson(text));
+	if (notice === null) {
+		return {
+			title: t('push_fallback_title'),
+			body: t('push_fallback_body'),
+			badge: null,
+			valid: false
+		};
+	}
+	return { title: notice.title, body: notice.body, badge: notice.count, valid: true };
+}
+
+function parseJson(text: string): unknown {
+	try {
+		return JSON.parse(text);
+	} catch {
+		// Not JSON reads as no payload: the caller shows the fallback and logs the code.
+		return null;
+	}
 }

@@ -21,6 +21,16 @@ export function visibleDue(items: DueItem[], now: Date, offline: boolean): DueIt
 	);
 }
 
+/** The due list every screen shows and counts: "Para enviar", Hoy's card and rail, the sidebar
+ *  count and the app badge. It is `visibleDue`, minus the items the server has already logged
+ *  (`logged`) that the cached list still holds because no refresh has dropped them yet. */
+export function shownDue(
+	items: DueItem[],
+	at: { now: Date; offline: boolean; logged: readonly string[] }
+): DueItem[] {
+	return visibleDue(items, at.now, at.offline).filter((i) => !at.logged.includes(i.id));
+}
+
 /** The server's `late` flag splits the list; the order inside each group is the server's. */
 export function groupDue(items: DueItem[]): { late: DueItem[]; today: DueItem[] } {
 	return { late: items.filter((i) => i.late), today: items.filter((i) => !i.late) };

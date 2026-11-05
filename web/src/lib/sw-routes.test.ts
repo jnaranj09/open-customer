@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pushCount, pushNotice, swAction } from './sw-routes';
+import { pushCount, pushNotice, pushShown, swAction } from './sw-routes';
 
 const ORIGIN = 'https://app.test';
 const precached: ReadonlySet<string> = new Set(['/index.html', '/_app/immutable/entry/start.js']);
@@ -65,5 +65,32 @@ describe('pushNotice', () => {
 
 	it('is null when the title is missing', () => {
 		expect(pushNotice({ body: 'x', count: 1 })).toBeNull();
+	});
+});
+
+describe('pushShown', () => {
+	const FALLBACK = {
+		title: 'Mensajes para enviar',
+		body: 'Abre la app para ver los mensajes de hoy',
+		badge: null,
+		valid: false
+	};
+
+	it('shows the title, body and count the server sent', () => {
+		expect(
+			pushShown(JSON.stringify({ title: 'Estudio Ana', body: 'Tienes 2 mensajes', count: 2 }))
+		).toEqual({ title: 'Estudio Ana', body: 'Tienes 2 mensajes', badge: 2, valid: true });
+	});
+
+	it('a push with no payload still shows the fallback text', () => {
+		expect(pushShown(null)).toEqual(FALLBACK);
+	});
+
+	it('a payload that is not JSON still shows the fallback text', () => {
+		expect(pushShown('{not json')).toEqual(FALLBACK);
+	});
+
+	it('a payload of another shape still shows the fallback text', () => {
+		expect(pushShown(JSON.stringify({ message: 'x' }))).toEqual(FALLBACK);
 	});
 });
