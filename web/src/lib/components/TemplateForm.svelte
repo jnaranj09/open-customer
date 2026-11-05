@@ -46,6 +46,11 @@
 	// (after a save or an archive) and the one she confirmed go through.
 	let leaving = false;
 	let discardTo = $state<URL | null>(null);
+	// A new edit ends the exemption: a save that stays on this page (an update, a restore) must not
+	// leave the guard off for what she types next.
+	const edited = (): void => {
+		leaving = false;
+	};
 	const dirty = $derived(templateDirty(template, name, body));
 
 	beforeNavigate((nav) => {
@@ -155,7 +160,18 @@
 	{#if locked}
 		<p class="rounded-md bg-glass-tint px-4 py-3 text-sm text-ink">{t('template_archived_note')}</p>
 	{/if}
-	<TextField label={t('template_name')} autocomplete="off" bind:value={name} error={nameError} />
+	<TextField
+		label={t('template_name')}
+		autocomplete="off"
+		bind:value={
+			() => name,
+			(v: string) => {
+				name = v;
+				edited();
+			}
+		}
+		error={nameError}
+	/>
 	<ChipEditor
 		value={body}
 		vars={cache.meta.templateVars}
@@ -165,6 +181,7 @@
 		onchange={(next: string, found: BodyProblem[]) => {
 			body = next;
 			problems = found;
+			edited();
 		}}
 	/>
 	{#if otherError !== null}
