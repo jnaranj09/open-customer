@@ -70,15 +70,15 @@ type Options struct {
 	Exporter       *exporter.Exporter
 	Clock          clock.Clock
 	Log            *slog.Logger
-	// beginner opens the write transactions; nil means Pool. Only tests set it (a Commit that
-	// fails).
+	// beginner opens every transaction (db.WithTx); nil means Pool. Only tests set it (a Commit
+	// or query that fails, or a recorder of the transaction modes).
 	beginner db.Beginner
 }
 
 // Server implements gen.ServerInterface over the module values (design doc item 32).
 type Server struct {
 	pool         *pgxpool.Pool
-	beginner     db.Beginner // begins every write transaction (db.WithTx)
+	beginner     db.Beginner // begins every transaction (db.WithTx)
 	auth         *auth.Auth
 	settings     *settings.Module
 	attributes   *attributes.Module

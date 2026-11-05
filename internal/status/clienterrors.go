@@ -20,12 +20,12 @@ const (
 	maxRouteRunes      = 200
 )
 
+// Each session has a token bucket: it may log clientErrorBurst errors at once, then one more each
+// clientErrorRefill. A bucket idle for clientErrorFull is full again.
 const (
-	// clientErrorBurst is the number of client errors one session may log per clientErrorWindow.
 	clientErrorBurst  = 10
-	clientErrorWindow = time.Minute
-	// clientErrorRefill is the time one token takes to come back.
-	clientErrorRefill = clientErrorWindow / clientErrorBurst
+	clientErrorRefill = 6 * time.Second
+	clientErrorFull   = clientErrorBurst * clientErrorRefill
 )
 
 // ClientError is what the PWA reports about itself.
@@ -37,9 +37,9 @@ type ClientError struct {
 }
 
 // LogClientError logs e at warn with code=client_error. sessionKey is the hex of the session's
-// token hash; each key may log 10 errors per minute, then the call is problem.RateLimited. A
-// message, app version or route that is empty or over its limit is a problem.Validation on that
-// field. A stack over its limit is cut, not rejected: a long trace is still worth the first part.
+// token hash; each key has a token bucket (a burst of 10, then one more every 6 seconds), and a
+// call with no token left is problem.RateLimited. A message, app version or route that is empty or
+// over its limit is a problem.Validation on that field. A stack over its limit is cut, not rejected: a long trace is still worth the first part.
 // The texts come from our own PWA and are the only way to debug it, so they are logged (a named
 // exception in the maintainability rule); everything else logs a code and never a value.
 func (s *Status) LogClientError(ctx context.Context, sessionKey string, e ClientError) error {
@@ -89,7 +89,7 @@ func cutRunes(s string, limit int) string {
 }
 
 // clientErrorLimiter holds one token bucket per session key. Idle buckets are full again, so the
-// calls drop them, at most once per clientErrorWindow: no goroutine and no size cap.
+// calls drop them, at most once per clientErrorFull: no goroutine and no size cap.
 type clientErrorLimiter struct {
 	mu        sync.Mutex
 	buckets   map[string]*bucket
@@ -110,10 +110,10 @@ func newClientErrorLimiter() *clientErrorLimiter {
 func (l *clientErrorLimiter) allow(key string, now time.Time) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !now.Before(l.lastSweep.Add(clientErrorWindow)) {
+	if !now.Before(l.lastSweep.Add(clientErrorFull)) {
 		l.lastSweep = now
 		for k, b := range l.buckets {
-			if !now.Before(b.lastSeen.Add(clientErrorWindow)) {
+			if !now.Before(b.lastSeen.Add(clientErrorFull)) {
 				delete(l.buckets, k)
 			}
 		}

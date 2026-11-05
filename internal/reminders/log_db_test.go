@@ -105,7 +105,7 @@ func TestRecordTwiceKeepsOneRow(t *testing.T) {
 }
 
 func TestRecordRejects(t *testing.T) {
-	bad := "88-88"
+	bad, sixteen, empty := "88-88", "1234567890123456", ""
 	tests := map[string]struct {
 		change func(s logSetup, e *LogEntry)
 		field  string
@@ -115,6 +115,8 @@ func TestRecordRejects(t *testing.T) {
 		"before without anchor": {func(_ logSetup, e *LogEntry) { e.AnchorAt = nil }, "anchor_at"},
 		"come back with anchor": {func(s logSetup, e *LogEntry) { e.RuleID, e.AnchorAt = s.comeBack.ID, &s.visit }, "anchor_at"},
 		"bad phone digits":      {func(_ logSetup, e *LogEntry) { e.PhoneDigits = &bad }, "phone_digits"},
+		"16 phone digits":       {func(_ logSetup, e *LogEntry) { e.PhoneDigits = &sixteen }, "phone_digits"},
+		"empty phone digits":    {func(_ logSetup, e *LogEntry) { e.PhoneDigits = &empty }, "phone_digits"},
 		"unknown action":        {func(_ logSetup, e *LogEntry) { e.Action = "later" }, "action"},
 	}
 	for name, tc := range tests {
@@ -129,6 +131,20 @@ func TestRecordRejects(t *testing.T) {
 				t.Fatalf("Record = %v, %v; want a 422 on %s", created, err, tc.field)
 			}
 		})
+	}
+}
+
+// TestRecordAccepts15PhoneDigits: 15 digits is the longest international number (E.164).
+func TestRecordAccepts15PhoneDigits(t *testing.T) {
+	s := newLogSetup(t)
+	entry := s.beforeEntry(ActionSent)
+	fifteen := "123456789012345"
+	entry.PhoneDigits = &fifteen
+
+	it, created, err := s.e.m.Record(t.Context(), s.e.pool, entry)
+
+	if err != nil || !created || it.PhoneDigits == nil || *it.PhoneDigits != fifteen {
+		t.Fatalf("Record = %+v, %v, %v; want the 15 digits stored", it, created, err)
 	}
 }
 

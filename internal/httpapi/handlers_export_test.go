@@ -109,16 +109,33 @@ func TestExportNeedsSession(t *testing.T) {
 
 func TestExportFailsBeforeStreamIsProblem(t *testing.T) {
 	_, pool, c := signedInOwner(t)
+	sink := &lockedBuffer{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(sink, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	// Query 6 is the exporter's first page of clients; the session, the handler's settings read and
+	// the exporter's settings and attributes come before it. The err assertion below proves which
+	// query failed. The ZIP writer buffers, so no byte has reached the client yet.
 	var calls int
-	app := newTestApp(t, testServerConfig{pool: pool, beginner: failingQueries{pool: pool, failAt: 1, calls: &calls}})
+	app := newTestApp(t, testServerConfig{pool: pool, beginner: failingQueries{pool: pool, failAt: 6, calls: &calls}})
 
 	rec := sendAs(app, c, http.MethodGet, exportPath, "")
 
 	if got := problemType(t, rec, http.StatusInternalServerError); !strings.HasSuffix(got, ":internal") {
 		t.Fatalf("type = %q, want internal", got)
 	}
+	if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
+		t.Errorf("Content-Type = %q, want application/problem+json", got)
+	}
 	if got := rec.Header().Get("Content-Disposition"); got != "" {
 		t.Errorf("Content-Disposition = %q on a problem response, want none", got)
+	}
+	line := lineWith(sink.lines(t), "code", "internal")
+	if line == nil {
+		t.Fatalf("no code=internal log line")
+	}
+	if got, _ := line["err"].(string); !strings.Contains(got, "export data: ") || !strings.Contains(got, "export clients: ") {
+		t.Errorf("err = %q, want the failure inside the export's clients query", got)
 	}
 }
 

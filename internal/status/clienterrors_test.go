@@ -43,6 +43,25 @@ func TestLogClientErrorRateLimit(t *testing.T) {
 	}
 }
 
+func TestLogClientErrorRefillsOneEverySixSeconds(t *testing.T) {
+	captureLog(t)
+	s, fake := clientErrorModule()
+	for i := range 10 {
+		if err := s.LogClientError(t.Context(), "a", validClientError()); err != nil {
+			t.Fatalf("call %d: %v", i+1, err)
+		}
+	}
+
+	fake.Advance(6 * time.Second)
+	if err := s.LogClientError(t.Context(), "a", validClientError()); err != nil {
+		t.Fatalf("one call 6 s later: %v", err)
+	}
+	var rl problem.RateLimited
+	if err := s.LogClientError(t.Context(), "a", validClientError()); !errors.As(err, &rl) {
+		t.Fatalf("second call 6 s later err = %v, want RateLimited", err)
+	}
+}
+
 func TestLogClientErrorRejectsBadFields(t *testing.T) {
 	captureLog(t)
 	s, _ := clientErrorModule()

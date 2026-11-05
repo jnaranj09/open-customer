@@ -476,3 +476,19 @@ func TestRunTicksUntilCancelled(t *testing.T) {
 		t.Fatalf("Heartbeat = %v, want %v", st.Heartbeat, e.clock.Now())
 	}
 }
+
+// TestTickCountsInASnapshot: the due list is counted in a read-only REPEATABLE READ transaction,
+// so its queries see one snapshot.
+func TestTickCountsInASnapshot(t *testing.T) {
+	e := newSetUpEnv(t)
+	e.beforeItem(t)
+	rec := &dbtest.TxModeRecorder{Pool: e.pool}
+	scheduler.SetBeginner(e.s, rec)
+
+	e.tickAt(t, e.at(2026, 10, 22, 8, 0))
+
+	e.wantCalls(t, 1)
+	if got := rec.Modes(); len(got) == 0 || got[0] != dbtest.SnapshotMode {
+		t.Fatalf("transaction modes = %+v, want the count first in %+v", got, dbtest.SnapshotMode)
+	}
+}

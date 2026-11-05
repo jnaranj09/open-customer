@@ -29,8 +29,8 @@ func Open(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// Beginner begins a transaction: the pool (*pgxpool.Pool) in the app, or a test fake whose Commit
-// fails.
+// Beginner begins a transaction: the pool (*pgxpool.Pool) in the app, or a test fake (a Commit or
+// query that fails, or dbtest.TxModeRecorder).
 type Beginner interface {
 	BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error)
 }

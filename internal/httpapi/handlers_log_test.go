@@ -120,6 +120,21 @@ func TestGetReminderLogByDate(t *testing.T) {
 	}
 }
 
+// TestGetReminderLogByDateWestOfUTC: in America/Bogota (UTC-5) the 22nd runs from 05:00Z on the
+// 22nd to 05:00Z on the 23rd, so the day asked for is not the UTC one.
+func TestGetReminderLogByDateWestOfUTC(t *testing.T) {
+	f := newReminderFixture(t)
+	if rec := f.send(http.MethodPatch, settingsPath, `{"timezone":"America/Bogota"}`); rec.Code != http.StatusOK {
+		t.Fatalf("set the time zone: status %d (%q)", rec.Code, rec.Body.String())
+	}
+	late := f.record(t, f.book(t, f.client, 0), "2026-10-23T03:00:00Z") // 22:00 on the 22nd in Bogota
+	f.record(t, f.book(t, f.client, 1), "2026-10-22T04:00:00Z")         // 23:00 on the 21st in Bogota
+	got := decodeInto[gen.LogList](t, f.send(http.MethodGet, logPath+"?date=2026-10-22", ""), http.StatusOK).Items
+	if len(got) != 1 || got[0].Id != late.Id {
+		t.Fatalf("items = %+v; want only %s (the 21st left out)", got, late.Id)
+	}
+}
+
 func TestGetReminderLogByClient(t *testing.T) {
 	f := newReminderFixture(t)
 	marta := createClient(t, f.app, f.cookie, `{"name":"Marta Solano"}`)

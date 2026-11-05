@@ -7,12 +7,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math"
-	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/sys/unix"
 
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/platform/backupstatus"
@@ -153,23 +150,6 @@ func (s *Status) BackupRed() bool {
 // older reports whether t is missing or more than limit before now.
 func older(t *time.Time, now time.Time, limit time.Duration) bool {
 	return t == nil || now.Sub(*t) > limit
-}
-
-// mediaFreeBytes is the space an unprivileged process can still use on the media volume, or nil
-// when it cannot be read.
-func (s *Status) mediaFreeBytes(ctx context.Context) *int64 {
-	var st unix.Statfs_t
-	if err := unix.Statfs(s.mediaDir, &st); err != nil {
-		slog.WarnContext(ctx, "media free space unavailable", "code", "status_statfs_failed")
-		return nil
-	}
-	// big.Int keeps the unsigned-by-signed product exact; an absurd value is capped.
-	total := new(big.Int).Mul(new(big.Int).SetUint64(st.Bavail), big.NewInt(st.Bsize))
-	n := int64(math.MaxInt64)
-	if total.IsInt64() {
-		n = total.Int64()
-	}
-	return &n
 }
 
 // Health reports that the process is alive. It touches no database and cannot fail.

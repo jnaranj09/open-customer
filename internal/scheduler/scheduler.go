@@ -59,6 +59,7 @@ type Options struct {
 type Scheduler struct {
 	clock     clock.Clock
 	pool      *pgxpool.Pool
+	beginner  db.Beginner // begins every transaction (db.WithTx); the pool, or a test recorder
 	settings  *settings.Module
 	reminders *reminders.Module
 	push      Sender
@@ -66,7 +67,7 @@ type Scheduler struct {
 
 // New returns the daily timer.
 func New(opts Options) *Scheduler {
-	return &Scheduler{clock: opts.Clock, pool: opts.Pool, settings: opts.Settings, reminders: opts.Reminders, push: opts.Push}
+	return &Scheduler{clock: opts.Clock, pool: opts.Pool, beginner: opts.Pool, settings: opts.Settings, reminders: opts.Reminders, push: opts.Push}
 }
 
 // LastPush is the result of the last daily push: its business-local day and how many
@@ -151,7 +152,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		return nil
 	}
 	var items []reminders.DueItem
-	err = db.WithTx(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	err = db.WithTx(ctx, s.beginner, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		var err error
 		if items, err = s.reminders.DueList(ctx, tx, now); err != nil {
 			return fmt.Errorf("count the due list: %w", err)
@@ -177,7 +178,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 
 // record marks today as checked and stores last (when it sent) in one write transaction.
 func (s *Scheduler) record(ctx context.Context, today string, last *LastPush, now time.Time) error {
-	err := db.WithTx(ctx, s.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err := db.WithTx(ctx, s.beginner, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		queries := sqlc.New(tx)
 		if err := queries.UpsertState(ctx, sqlc.UpsertStateParams{Name: keyPushCheckedDate, Value: today, Now: now}); err != nil {
 			return fmt.Errorf("write push_checked_date: %w", err)

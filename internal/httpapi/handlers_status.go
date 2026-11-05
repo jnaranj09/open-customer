@@ -13,6 +13,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
+	"github.com/jnaranj09/open-customer/internal/platform/nullval"
 	"github.com/jnaranj09/open-customer/internal/status"
 )
 
@@ -64,13 +65,13 @@ func statusBody(rep status.Report) gen.Status {
 	out := gen.Status{
 		Version:          rep.Version,
 		MigrationVersion: rep.MigrationVersion,
-		HeartbeatAgeS:    nullInt64(rep.HeartbeatAgeS),
-		MediaFreeBytes:   nullInt64(rep.MediaFreeBytes),
+		HeartbeatAgeS:    nullval.Of(rep.HeartbeatAgeS),
+		MediaFreeBytes:   nullval.Of(rep.MediaFreeBytes),
 		Backup: gen.BackupStatus{
 			CheckedAt:  nullTime(rep.Backup.CheckedAt),
 			LastDumpAt: nullTime(rep.Backup.LastDumpAt),
 			LastCopyAt: nullTime(rep.Backup.LastCopyAt),
-			LastError:  nullString(rep.Backup.LastError),
+			LastError:  nullval.Of(rep.Backup.LastError),
 			Red:        rep.Backup.Red,
 		},
 		Push: gen.PushStatus{
@@ -89,22 +90,6 @@ func statusBody(rep status.Report) gen.Status {
 		}
 	}
 	return out
-}
-
-// nullInt64 is a response integer field; nil is an explicit null.
-func nullInt64(n *int64) nullable.Nullable[int64] {
-	if n == nil {
-		return nullable.NewNullNullable[int64]()
-	}
-	return nullable.NewNullableWithValue(*n)
-}
-
-// nullString is a response string field; nil is an explicit null.
-func nullString(v *string) nullable.Nullable[string] {
-	if v == nil {
-		return nullable.NewNullNullable[string]()
-	}
-	return nullable.NewNullableWithValue(*v)
 }
 
 // LogClientError logs an error the PWA caught. It opens no transaction: it touches no table (O3).

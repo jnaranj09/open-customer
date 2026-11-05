@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jnaranj09/open-customer/internal/db/dbtest"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
@@ -167,4 +169,24 @@ func TestBootstrapBadDateIs422(t *testing.T) {
 func TestBootstrapNeedsSession(t *testing.T) {
 	app, _, _ := signedInOwner(t)
 	assertUnauthorized(t, send(app.handler, http.MethodGet, bootstrapURL("2026-03-01", "2026-04-01"), testOrigin, "", nil))
+}
+
+// TestSnapshotReadersUseReadOnlyRepeatableRead: bootstrap, the due list and the export each read
+// in one read-only REPEATABLE READ transaction, as Postgres reports it, so a write between their
+// queries cannot show half a change (CLAUDE.md constraint 9).
+func TestSnapshotReadersUseReadOnlyRepeatableRead(t *testing.T) {
+	for _, path := range []string{bootstrapURL("2026-03-01", "2026-04-01"), duePath, exportPath} {
+		t.Run(path, func(t *testing.T) {
+			_, pool, c := signedInOwner(t)
+			rec := &dbtest.TxModeRecorder{Pool: pool}
+			app := newTestApp(t, testServerConfig{pool: pool, beginner: rec})
+
+			if got := sendAs(app, c, http.MethodGet, path, ""); got.Code != http.StatusOK {
+				t.Fatalf("status = %d (%q)", got.Code, got.Body.String())
+			}
+			if got := rec.Modes(); !slices.Contains(got, dbtest.SnapshotMode) {
+				t.Fatalf("transaction modes = %+v, want one %+v", got, dbtest.SnapshotMode)
+			}
+		})
+	}
 }
