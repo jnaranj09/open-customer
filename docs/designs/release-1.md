@@ -2235,11 +2235,13 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `push.ts`: permission request (in the installed app only, from the "Activar notificaciones" tap), subscription, and the check on each open that sets "needs activation" when permission is not granted or no subscription exists (see "Daily push"). `checkPush` returns `unsupported`, `not_installed` (checked first: iOS Safari tabs have no push), `needs_activation` or `active`; a failed re-post (offline) stays `active` and the next open retries. `activatePush` asks for permission before any request, so it stays inside the tap, then reads the key (`GET /push/key`), subscribes, and posts the subscription; any browser-side failure is the `push_unavailable` error.
     *   `install.ts`: detects iOS + not standalone, for the install guide.
 
-##### 70. `web/src/lib/components/` — `BottomSheet.svelte`, `ListRow.svelte`, `EmptyState.svelte`, `OfflineBanner.svelte`, `UpdatePrompt.svelte`, `ColorPicker.svelte`, `ChipEditor.svelte`, `AttributeField.svelte`, `ClientPicker.svelte`, `ServicePicker.svelte`, `DayView.svelte`, `WeekView.svelte`, `ConfirmSentSheet.svelte`, `InstallGuide.svelte`, `StatusRow.svelte` (Create)
+##### 70. `web/src/lib/components/` — `BottomSheet.svelte`, `ListRow.svelte`, `EmptyState.svelte`, `OfflineBanner.svelte`, `UpdatePrompt.svelte`, `ColorPicker.svelte`, `ChipEditor.svelte`, `AttributeField.svelte`, `ClientPicker.svelte`, `ServicePicker.svelte`, `DayView.svelte`, `WeekView.svelte`, `ConfirmSentSheet.svelte`, `InstallGuide.svelte`, `StatusRow.svelte`, `Button.svelte`, `TextField.svelte`, `Toast.svelte`, `buttonStyle.ts`, `icons/Icon.svelte` (Create)
 
 *   **Type / Scope**: Own UI components (Tailwind).
 *   **Proposed Changes**:
     *   `BottomSheet`: a focus trap, swipe down to close, and the safe area.
+    *   `Button` (variants primary, secondary, ghost, danger; a busy state; a visible reason when disabled) and `TextField` (label, error, hint); `buttonStyle.ts` holds the button classes that links styled as buttons share. `Toast`: a short message with an optional action ("Deshacer"), gone after `ms` (default 5000, the delay of `lib/undo.ts` `delayed`). `icons/Icon.svelte`: the Lucide icons the mockup uses, drawn inline (no icon package). `ColorPicker` offers `swatches()` from `lib/color.ts` plus a native color input.
+    *   The focus trap's wrap rule is `nextFocus` in `lib/focus.ts`, tested; components import `lib/` with relative paths (SvelteKit 3 writes no `$lib` alias here).
     *   `ChipEditor`:
         *   A `contenteditable` field that shows tokens as chips.
         *   A row of chips to insert variables.

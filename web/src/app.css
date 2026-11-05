@@ -29,6 +29,8 @@
 	--glass-tint: color-mix(in oklab, var(--accent-300) 35%, transparent);
 
 	--shadow-glass: 0 8px 32px #a14d641f, inset 0 1px #ffffffe6;
+	--shadow-raised: 0 4px 14px #a14d6433, inset 0 1px #ffffff99;
+	--shadow-sheet: 0 16px 64px #a14d642e, inset 0 1px #ffffffe6;
 }
 
 @theme inline {
@@ -52,6 +54,7 @@
 	--color-success: var(--success);
 	--color-warning: var(--warning);
 	--color-error: var(--error);
+	--color-on-strong: var(--on-strong);
 
 	--radius-sm: 10px;
 	--radius-md: 16px;
@@ -91,6 +94,20 @@ body {
 	border: 1px solid var(--glass-edge);
 	backdrop-filter: blur(24px);
 	box-shadow: var(--shadow-glass);
+}
+
+@utility shadow-raised {
+	box-shadow: var(--shadow-raised);
+}
+
+@utility shadow-sheet {
+	box-shadow: var(--shadow-sheet);
+}
+
+/* One visible keyboard ring for every control. */
+:focus-visible {
+	outline: 2px solid var(--accent-700);
+	outline-offset: 2px;
 }
 
 @utility min-h-tap {

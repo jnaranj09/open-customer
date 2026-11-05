@@ -62,5 +62,16 @@
 	"month_10": "octubre",
 	"month_11": "noviembre",
 	"month_12": "diciembre",
-	"date_long": "{weekday} {day} de {month}"
+	"date_long": "{weekday} {day} de {month}",
+	"sheet_close": "Cerrar",
+	"offline_banner_no_data": "Sin conexión con el sistema.",
+	"update_available": "Hay una versión nueva de la app.",
+	"update_apply": "Actualizar",
+	"color_group": "Color",
+	"color_swatch": "Color {hex}",
+	"color_custom": "Elegir otro color",
+	"install_title": "Instala la app en tu iPhone",
+	"install_step_share": "Toca el botón Compartir, abajo en Safari.",
+	"install_step_add": "Elige «Agregar a pantalla de inicio».",
+	"install_step_confirm": "Toca «Agregar». La app queda en tu pantalla de inicio."
 }

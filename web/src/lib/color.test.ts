@@ -7,7 +7,8 @@ import {
 	applyAccent,
 	isHexColor,
 	luminance,
-	onAccent
+	onAccent,
+	swatches
 } from './color';
 
 /** A stand-in for an element: the only thing `applyAccent` touches is the style. */
@@ -95,5 +96,19 @@ describe('applyAccent', () => {
 		const { root, vars } = fakeRoot();
 		applyAccent(root, 'red');
 		expect(vars.get('--accent')).toBe(DEFAULT_ACCENT);
+	});
+});
+
+describe('swatches', () => {
+	it('are all #rrggbb', () => {
+		expect(swatches().every(isHexColor)).toBe(true);
+	});
+
+	it('are all different', () => {
+		expect(new Set(swatches()).size).toBe(swatches().length);
+	});
+
+	it('start from the default accent so her first choice is on the row', () => {
+		expect(swatches()[0]).toBe(DEFAULT_ACCENT);
 	});
 });

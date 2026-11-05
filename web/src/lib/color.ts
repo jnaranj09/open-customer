@@ -47,3 +47,26 @@ export function applyAccent(root: HTMLElement, hex: string | null): void {
 		onAccent(accent) === 'light' ? 'var(--on-strong)' : 'var(--ink)'
 	);
 }
+
+const SWATCH_HUES: readonly number[] = [14, 38, 140, 185, 215, 265, 305];
+
+/** `#rrggbb` of an HSL color (h in degrees, s and l in percent). */
+function hslToHex(h: number, s: number, l: number): string {
+	const sat = s / 100;
+	const light = l / 100;
+	const a = sat * Math.min(light, 1 - light);
+	const channelAt = (n: number): string => {
+		const k = (n + h / 30) % 12;
+		const v = light - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+		return Math.round(v * 255)
+			.toString(16)
+			.padStart(2, '0');
+	};
+	return `#${channelAt(0)}${channelAt(8)}${channelAt(4)}`;
+}
+
+/** The accent choices the color picker offers: the default accent first, then soft hues of
+ *  similar weight. Built here because a literal color may not live in a component. */
+export function swatches(): string[] {
+	return [DEFAULT_ACCENT, ...SWATCH_HUES.map((h) => hslToHex(h, 45, 62))];
+}
