@@ -158,6 +158,7 @@ ifeq ($(E2E_GIVEN),)
 else
 	@name=$$(node -e 'process.stdout.write(new URL(process.env.E2E_DATABASE_URL).pathname.slice(1))'); \
 	admin=$$(node -e 'const u = new URL(process.env.E2E_DATABASE_URL); u.pathname = "/postgres"; process.stdout.write(u.href)'); \
+	case "$$name" in *_e2e) ;; *) echo "make e2e: E2E_DATABASE_URL must name a *_e2e database" >&2; exit 1;; esac; \
 	psql -q -v ON_ERROR_STOP=1 "$$admin" -c "DROP DATABASE IF EXISTS \"$$name\" WITH (FORCE)" -c "CREATE DATABASE \"$$name\""
 endif
 	$(PNPM) e2e

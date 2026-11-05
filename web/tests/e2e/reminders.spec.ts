@@ -80,7 +80,8 @@ test.describe('CUJ 4: morning sending', () => {
 });
 
 test.describe('CUJ 5: come-back reminder lifecycle', () => {
-	/** An Acrílico visit of `clientId` that ended 21 days ago (14:30–16:00), typed in a day before. */
+	/** An Acrílico visit of `clientId` that ended 21 days ago (14:30–16:00). The visit row was created
+	 *  the day before (`created_at` 22 days ago). */
 	function visit(clientId: string, status?: 'no_show'): Promise<string> {
 		return insertAppointment({
 			clientId,

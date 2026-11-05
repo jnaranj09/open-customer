@@ -31,7 +31,7 @@ run.
 | `make build` | The web build, then `bin/open-customer` |
 | `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
 | `make image` | The app Docker image |
-| `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names), then Playwright WebKit against the binary. Needs the Playwright WebKit browser and its host libraries, and port 8080 free |
+| `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary. Needs the Playwright WebKit browser and its host libraries, port 8080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
 
 The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover`.
 The gate leaves out `make e2e`. CI runs it after `make build` (design doc item 8); locally it runs

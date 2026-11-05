@@ -2,7 +2,8 @@
 // specs need lives here, not in both.
 import type { Locator, Page } from '@playwright/test';
 
-/** An es.json text with its `{name}` placeholders filled; a missing value throws. */
+/** An es.json text with its `{name}` placeholders filled; a missing value throws. Copies `t()` of src/lib/i18n, whose
+ *  es.json import (no `type: json`) Playwright's loader rejects. */
 export function fill(text: string, params: Record<string, string>): string {
 	return text.replace(/\{(\w+)\}/g, (_match, name: string) => {
 		const value = params[name];

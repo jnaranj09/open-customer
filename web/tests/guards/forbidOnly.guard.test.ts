@@ -1,7 +1,7 @@
 // forbid-only (principle P3): a focused test fails the run. Vitest needs `allowOnly: false` (and
 // `restoreMocks: true`, so a spy never leaks into the next test); Playwright needs
-// `forbidOnly: true` once its config exists (design doc item 79, P6).
-import { existsSync, readFileSync } from 'node:fs';
+// `forbidOnly: true` (design doc item 79).
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -29,7 +29,7 @@ export function booleanProps(text: string, name: string): boolean[] {
 }
 
 const PLAYWRIGHT = join(WEB, 'playwright.config.ts');
-const playwrightText = existsSync(PLAYWRIGHT) ? readFileSync(PLAYWRIGHT, 'utf8') : null;
+const playwrightText = readFileSync(PLAYWRIGHT, 'utf8');
 
 describe('booleanProps', () => {
 	it('reads literal true and false, not comments or other values', () => {
@@ -56,9 +56,7 @@ describe('vitest config', () => {
 });
 
 describe('playwright config', () => {
-	it('sets forbidOnly: true, and nothing else, once it exists', () => {
-		expect(playwrightText === null ? [true] : booleanProps(playwrightText, 'forbidOnly')).toEqual([
-			true
-		]);
+	it('sets forbidOnly: true, and nothing else', () => {
+		expect(booleanProps(playwrightText, 'forbidOnly')).toEqual([true]);
 	});
 });

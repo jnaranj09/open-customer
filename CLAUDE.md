@@ -45,7 +45,7 @@ with fnm, `fnm use` in web/).
 
 **Gate (run before saying "done", report the command and its output):**
 `make check-pins lint test vuln build check-generated test-db cover`. CI
-(`.github/workflows/ci.yml`) also runs gitleaks and `pnpm audit --audit-level high`.
+(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e` (after `make build`).
 
 A check that could not run is reported as NOT RUN, never as passing.
 

@@ -36,9 +36,12 @@ export function readZip(buf: Buffer): Map<string, string> {
 		if (method === DEFLATED) {
 			// `info` gives the engine, whose `bytesWritten` is the compressed bytes it consumed.
 			const { buffer, engine } = inflateRawSync(buf.subarray(start), { info: true }) as unknown as {
-				buffer: Buffer;
-				engine: { bytesWritten: number };
+				buffer: unknown;
+				engine?: { bytesWritten?: unknown };
 			};
+			if (!Buffer.isBuffer(buffer) || typeof engine?.bytesWritten !== 'number') {
+				throw new Error(`readZip: ${name}: zlib did not report the bytes it consumed`);
+			}
 			data = buffer;
 			used = engine.bytesWritten;
 		} else if (method === STORED && !described) {
