@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+	bodyProblems,
+	chipKnown,
 	chipLabel,
 	chipText,
 	fallbackError,
@@ -241,5 +243,66 @@ describe('chipText', () => {
 
 	it('shows the fallback after the label', () => {
 		expect(chipText('Bebida favorita', 'algo rico')).toBe('Bebida favorita · algo rico');
+	});
+});
+
+describe('bodyProblems', () => {
+	const known = (_ns: string, key: string): boolean => key !== 'gone';
+	const text = (t: string): Piece => ({ kind: 'text', text: t });
+
+	it('finds nothing in text and known variables', () => {
+		expect(bodyProblems([text('Hola '), name, text(' { y } }}')], known)).toEqual([]);
+	});
+
+	it('finds a "{{" typed in the text', () => {
+		expect(bodyProblems([text('Hola {{client.name}}')], known)).toEqual(['braces']);
+	});
+
+	it('finds a "{" right before a variable, which the saved body would read as a "{{"', () => {
+		expect(bodyProblems([text('Hola {'), name], known)).toEqual(['braces']);
+	});
+
+	it('does not mind a "{" before a variable when a space is between them', () => {
+		expect(bodyProblems([text('Hola { '), name], known)).toEqual([]);
+	});
+
+	it('finds a variable that no longer exists', () => {
+		expect(
+			bodyProblems([{ kind: 'var', ns: 'client', key: 'gone', fallback: null }], known)
+		).toEqual(['unknown']);
+	});
+
+	it('names each problem once, in the order first found', () => {
+		expect(
+			bodyProblems(
+				[
+					{ kind: 'var', ns: 'client', key: 'gone', fallback: null },
+					text('{{'),
+					{ kind: 'var', ns: 'client', key: 'gone', fallback: null },
+					text('{{')
+				],
+				known
+			)
+		).toEqual(['unknown', 'braces']);
+	});
+});
+
+describe('chipKnown', () => {
+	const vars = [{ ns: 'client', key: 'drink', label: 'Bebida favorita' }];
+	const attributes = [{ scope: 'client' as const, key: 'old', label: 'Color anterior' }];
+
+	it('knows a variable the row offers', () => {
+		expect(chipKnown('client', 'drink', vars, attributes)).toBe(true);
+	});
+
+	it('knows an archived attribute', () => {
+		expect(chipKnown('client', 'old', vars, attributes)).toBe(true);
+	});
+
+	it('does not know another key, nor an attribute of the other scope', () => {
+		expect([
+			chipKnown('client', 'nope', vars, attributes),
+			chipKnown('appointment', 'old', vars, attributes)
+		]).toEqual([false, false]);
 	});
 });

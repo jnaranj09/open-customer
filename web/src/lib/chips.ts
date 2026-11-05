@@ -197,3 +197,48 @@ export function chipLabel(
 export function chipText(label: string, fallback: string | null): string {
 	return fallback === null || fallback === '' ? label : `${label} · ${fallback}`;
 }
+
+/** What is wrong with the editor's text before it is saved. The syntax has no escape for braces,
+ *  so the saved body would not mean what the editor shows: `braces` is a "{{" in the text, or a
+ *  "{" right before a variable (which reads as "{{"); `unknown` is a chip whose variable no longer
+ *  exists. Each is named once, in the order first found. */
+export type BodyProblem = 'braces' | 'unknown';
+
+export function bodyProblems(
+	pieces: readonly Piece[],
+	known: (ns: string, key: string) => boolean
+): BodyProblem[] {
+	const found: BodyProblem[] = [];
+	const add = (p: BodyProblem): void => {
+		if (!found.includes(p)) {
+			found.push(p);
+		}
+	};
+	pieces.forEach((piece, i) => {
+		if (piece.kind === 'var') {
+			if (!known(piece.ns, piece.key)) {
+				add('unknown');
+			}
+		} else if (
+			piece.text.includes('{{') ||
+			(piece.text.endsWith('{') && pieces[i + 1]?.kind === 'var')
+		) {
+			add('braces');
+		}
+	});
+	return found;
+}
+
+/** True when the variable is one the chip row offers or an attribute (archived ones too), the
+ *  same rule the server applies on save. */
+export function chipKnown(
+	ns: string,
+	key: string,
+	vars: readonly { ns: string; key: string }[],
+	attributes: readonly { scope: string; key: string }[]
+): boolean {
+	return (
+		vars.some((v) => v.ns === ns && v.key === key) ||
+		attributes.some((a) => a.scope === ns && a.key === key)
+	);
+}

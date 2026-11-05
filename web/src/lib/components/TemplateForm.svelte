@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { beforeNavigate, goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { Path } from '$app/types';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Template } from '../api/schemas';
 	import type { CacheSnapshot } from '../cache/db';
 	import { cache } from '../cache/store.svelte';
+	import type { BodyProblem } from '../chips';
 	import { t } from '../i18n';
+	import { templateDirty } from '../templateEdit';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
 	import BottomSheet from './BottomSheet.svelte';
@@ -35,7 +40,24 @@
 
 	let name = $state(untrack(() => template?.name ?? ''));
 	let body = $state(untrack(() => template?.body ?? ''));
+	let problems = $state<BodyProblem[]>([]);
 	let attempted = $state(false);
+	// Leaving with unsaved changes asks first. `leaving` lets a navigation the form itself starts
+	// (after a save or an archive) and the one she confirmed go through.
+	let leaving = false;
+	let discardTo = $state<URL | null>(null);
+	const dirty = $derived(templateDirty(template, name, body));
+
+	beforeNavigate((nav) => {
+		if (leaving || !dirty) {
+			return;
+		}
+		nav.cancel();
+		// A reload or a closed tab gets the browser's own question; a move inside the app gets ours.
+		if (!nav.willUnload && nav.to !== null) {
+			discardTo = nav.to.url;
+		}
+	});
 	let failure = $state<ApiError | null>(null);
 	let busy = $state(false);
 	let archiving = $state(false);
@@ -55,7 +77,7 @@
 		async () => {
 			failure = null;
 			attempted = true;
-			if (name.trim() === '' || body === '') {
+			if (name.trim() === '' || body === '' || problems.length > 0) {
 				return;
 			}
 			const trimmed = name.trim();
@@ -75,6 +97,7 @@
 				return;
 			}
 			await cache.refresh();
+			leaving = true;
 			onsaved(result.data);
 		},
 		(pending) => {
@@ -96,12 +119,23 @@
 			}
 			await cache.refresh();
 			archiving = false;
+			leaving = true;
 			onarchived(archived);
 		},
 		(pending) => {
 			toggling = pending;
 		}
 	);
+
+	function discard(): void {
+		const to = discardTo;
+		discardTo = null;
+		leaving = true;
+		if (to !== null) {
+			// The app's own address, as a typed path: `resolve` adds the base path to it.
+			void goto(resolve((to.pathname + to.search) as Path));
+		}
+	}
 
 	const otherError = $derived(
 		failure === null || fieldError('name') !== undefined || fieldError('body') !== undefined
@@ -128,8 +162,9 @@
 		attributes={data.attributes}
 		label={t('template_message')}
 		error={bodyError}
-		onchange={(next: string) => {
+		onchange={(next: string, found: BodyProblem[]) => {
 			body = next;
+			problems = found;
 		}}
 	/>
 	{#if otherError !== null}
@@ -185,5 +220,24 @@
 		}}
 	>
 		{t('cancel')}
+	</Button>
+</BottomSheet>
+
+<BottomSheet
+	open={discardTo !== null}
+	title={t('template_discard_title')}
+	onclose={() => {
+		discardTo = null;
+	}}
+>
+	<p class="text-base text-ink">{t('template_discard_body')}</p>
+	<Button variant="danger" onclick={discard}>{t('template_discard')}</Button>
+	<Button
+		variant="secondary"
+		onclick={() => {
+			discardTo = null;
+		}}
+	>
+		{t('template_keep_editing')}
 	</Button>
 </BottomSheet>

@@ -2,11 +2,14 @@
 	import { untrack } from 'svelte';
 	import type { Attribute } from '../api/schemas';
 	import {
+		bodyProblems,
+		chipKnown,
 		chipLabel,
 		fallbackError,
 		parseBody,
 		piecesFromDom,
 		serializeBody,
+		type BodyProblem,
 		type Piece
 	} from '../chips';
 	import {
@@ -22,7 +25,7 @@
 		setChipFallback,
 		syncSentinel
 	} from '../chipsDom';
-	import { t } from '../i18n';
+	import { t, type MessageKey } from '../i18n';
 	import BottomSheet from './BottomSheet.svelte';
 	import Button from './Button.svelte';
 	import TemplatePreview from './TemplatePreview.svelte';
@@ -49,12 +52,19 @@
 		attributes: readonly Pick<Attribute, 'scope' | 'key' | 'label'>[];
 		label: string;
 		error?: string | undefined;
-		onchange: (body: string) => void;
+		/** The body, and what is wrong with it (the caller blocks saving while there is anything). */
+		onchange: (body: string, problems: BodyProblem[]) => void;
 	} = $props();
+
+	const PROBLEM_TEXT = {
+		braces: 'template_problem_braces',
+		unknown: 'template_problem_unknown'
+	} as const satisfies Record<BodyProblem, MessageKey>;
 
 	const fieldId = $props.id();
 	let field: HTMLElement | undefined = $state();
 	let body = $state(untrack(() => value));
+	let problems = $state<BodyProblem[]>([]);
 	let composing = false;
 	// The last caret inside the field: a tap on a chip button moves focus away from it.
 	let caret: Range | null = null;
@@ -82,8 +92,10 @@
 		if (!composing) {
 			syncSentinel(field);
 		}
-		body = serializeBody(readPieces());
-		onchange(body);
+		const pieces = readPieces();
+		body = serializeBody(pieces);
+		problems = bodyProblems(pieces, (ns, key) => chipKnown(ns, key, vars, attributes));
+		onchange(body, problems);
 	}
 
 	// Initial content: rendered once when the field mounts (the caller keys the editor on its record).
@@ -115,6 +127,18 @@
 		changed();
 	}
 
+	// A pasted body (a copied message) turns its variables into chips, as a saved one does when it
+	// is opened: text and saved body then agree. Any other braces stay text and are reported.
+	function pasteText(text: string): void {
+		const fragment = document.createDocumentFragment();
+		for (const p of parseBody(text.replaceAll('\r\n', '\n').replaceAll('\r', '\n'))) {
+			fragment.appendChild(
+				p.kind === 'text' ? document.createTextNode(p.text) : newChip(p.ns, p.key, p.fallback)
+			);
+		}
+		insertNode(fragment);
+	}
+
 	const insertText = (text: string): void => {
 		insertNode(document.createTextNode(text.replaceAll('\r\n', '\n').replaceAll('\r', '\n')));
 	};
@@ -135,7 +159,7 @@
 
 	function onpaste(event: ClipboardEvent): void {
 		event.preventDefault();
-		insertText(event.clipboardData?.getData('text/plain') ?? '');
+		pasteText(event.clipboardData?.getData('text/plain') ?? '');
 	}
 
 	function openFallback(el: HTMLElement): void {
@@ -178,13 +202,12 @@
 			tabindex="0"
 			aria-multiline="true"
 			aria-labelledby="{fieldId}-label"
-			aria-invalid={error !== undefined}
-			aria-describedby={error === undefined ? undefined : `${fieldId}-error`}
+			aria-invalid={error !== undefined || problems.length > 0}
 			contenteditable="true"
 			spellcheck="true"
 			data-placeholder={t('template_message_placeholder')}
 			class="min-h-40 w-full rounded-sm border bg-glass-strong px-4 py-3 text-base leading-loose wrap-break-word whitespace-pre-wrap text-ink empty:before:text-ink-muted empty:before:content-[attr(data-placeholder)] focus:border-accent {error ===
-			undefined
+				undefined && problems.length === 0
 				? 'border-glass-edge'
 				: 'border-error'}"
 			{onbeforeinput}
@@ -215,9 +238,9 @@
 				}
 			}}
 		></div>
-		{#if error !== undefined}
-			<p id="{fieldId}-error" class="text-sm text-error">{error}</p>
-		{/if}
+		{#each [...(error === undefined ? [] : [error]), ...problems.map( (p) => t(PROBLEM_TEXT[p]) )] as message (message)}
+			<p class="text-sm text-error">{message}</p>
+		{/each}
 	</div>
 
 	<div class="flex flex-col gap-2">

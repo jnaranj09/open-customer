@@ -289,5 +289,12 @@
 	"preview_sample": "Clienta de ejemplo",
 	"preview_client": "Una clienta",
 	"preview_empty": "Escribe el mensaje para verlo aquí",
-	"preview_updating": "Actualizando…"
+	"preview_updating": "Actualizando…",
+	"template_problem_braces": "Hay llaves { } sueltas en el mensaje. Quítalas para poder guardar.",
+	"template_problem_unknown": "Hay un dato en el mensaje que ya no existe. Quítalo para poder guardar.",
+	"template_discard_title": "¿Descartar los cambios?",
+	"template_discard_body": "Lo que cambiaste en esta plantilla no se ha guardado.",
+	"template_discard": "Descartar cambios",
+	"template_keep_editing": "Seguir editando",
+	"template_new_link": "Nueva plantilla"
 }
