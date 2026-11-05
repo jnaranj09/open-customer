@@ -1,3 +1,19 @@
+<script lang="ts" module>
+	import { createSheetStack } from '../sheetStack';
+
+	// Every open sheet, shared by all instances: one page lock, and one top sheet for Escape and Tab.
+	let savedOverflow = '';
+	const sheets = createSheetStack<symbol>({
+		lock: () => {
+			savedOverflow = document.body.style.overflow;
+			document.body.style.overflow = 'hidden';
+		},
+		unlock: () => {
+			document.body.style.overflow = savedOverflow;
+		}
+	});
+</script>
+
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { nextFocus } from '../focus';
@@ -19,6 +35,7 @@
 	} = $props();
 
 	const titleId = $props.id();
+	const sheetId = Symbol('sheet');
 	const FOCUSABLE =
 		'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -46,11 +63,10 @@
 			return;
 		}
 		const before = document.activeElement;
-		const overflow = document.body.style.overflow;
-		document.body.style.overflow = 'hidden';
+		sheets.push(sheetId);
 		(focusables()[0] ?? panel).focus();
 		return () => {
-			document.body.style.overflow = overflow;
+			sheets.remove(sheetId);
 			if (before instanceof HTMLElement) {
 				before.focus();
 			}
@@ -58,7 +74,7 @@
 	});
 
 	function onkeydown(event: KeyboardEvent): void {
-		if (!open) {
+		if (!open || !sheets.isTop(sheetId)) {
 			return;
 		}
 		if (event.key === 'Escape') {

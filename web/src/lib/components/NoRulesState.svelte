@@ -4,7 +4,7 @@
 	import EmptyState from './EmptyState.svelte';
 </script>
 
-<!-- No reminder rules yet: leads to Ajustes (shown by Hoy's card and by "Para enviar"). -->
+<!-- No reminder rules yet: leads to Ajustes → Recordatorios (shown by Hoy's card and by "Para enviar"). -->
 <div class="glass-card rounded-lg">
 	<EmptyState
 		title={t('due_no_rules_title')}

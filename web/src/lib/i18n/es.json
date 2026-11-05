@@ -442,7 +442,7 @@
 	"status_timer": "Temporizador diario",
 	"status_timer_none": "Aún sin latido",
 	"status_backup": "Último respaldo",
-	"status_backup_none": "Aún sin respaldo",
+	"status_backup_unknown": "Desconocido",
 	"status_space": "Espacio libre para fotos",
 	"status_space_unknown": "No disponible",
 	"status_push": "Notificaciones",

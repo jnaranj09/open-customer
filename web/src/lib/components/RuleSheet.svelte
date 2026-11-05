@@ -25,8 +25,9 @@
 	import TextField from './TextField.svelte';
 
 	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A change
-	// that can add items first asks "¿Incluir recordatorios atrasados?" in a second sheet. A rule
-	// never changes kind or service, so an open rule shows those as text.
+	// that can add items first asks "¿Incluir recordatorios atrasados?": the question replaces the
+	// form in the same sheet, and "Cancelar" or Escape on it goes back to the form. A rule never
+	// changes kind or service, so an open rule shows those as text.
 	let {
 		rule,
 		templates,

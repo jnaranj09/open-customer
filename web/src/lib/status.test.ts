@@ -70,7 +70,7 @@ describe('statusLines', () => {
 	it('writes the last backup copy in the business zone', () => {
 		expect(value(statusLines(status(), ZONE, NOW), 'status_backup')).toBe('5/11 15:30');
 	});
-	it('marks the backup line red with the problem text', () => {
+	it('says desconocido, in red, when there is no status file', () => {
 		const lines = statusLines(
 			status({
 				backup: {
@@ -86,29 +86,45 @@ describe('statusLines', () => {
 		);
 		expect(lines.find((line) => line.label === 'status_backup')).toEqual({
 			label: 'status_backup',
-			value: 'Respaldo con problema',
+			value: 'Desconocido',
 			red: true
 		});
 	});
-	it('writes the year of a backup from another year', () => {
-		const lines = statusLines(status(), ZONE, new Date('2027-01-10T12:00:00Z'));
-		expect(value(lines, 'status_backup')).toBe('5/11/2026 15:30');
-	});
-	it('says there is no backup yet when it is not red and has no copy', () => {
+	it('keeps the last copy time next to the problem text while the line is red', () => {
 		const lines = statusLines(
 			status({
 				backup: {
-					checked_at: null,
-					last_dump_at: null,
-					last_copy_at: null,
-					last_error: null,
-					red: false
+					checked_at: '2026-11-05T22:00:00Z',
+					last_dump_at: '2026-11-05T21:00:00Z',
+					last_copy_at: '2026-11-05T21:30:00Z',
+					last_error: 'copy: x',
+					red: true
 				}
 			}),
 			ZONE,
 			NOW
 		);
-		expect(value(lines, 'status_backup')).toBe('Aún sin respaldo');
+		expect(lines.find((line) => line.label === 'status_backup')).toEqual({
+			label: 'status_backup',
+			value: '5/11 15:30 · Respaldo con problema',
+			red: true
+		});
+	});
+	it('says the problem when the line is red and nothing was ever copied', () => {
+		const lines = statusLines(
+			status({
+				backup: {
+					checked_at: '2026-11-05T22:00:00Z',
+					last_dump_at: null,
+					last_copy_at: null,
+					last_error: 'dump: x',
+					red: true
+				}
+			}),
+			ZONE,
+			NOW
+		);
+		expect(value(lines, 'status_backup')).toBe('Respaldo con problema');
 	});
 	it('says the free space cannot be read', () => {
 		expect(value(statusLines(status({ media_free_bytes: null }), ZONE, NOW), 'status_space')).toBe(

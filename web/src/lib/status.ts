@@ -30,6 +30,20 @@ export function bytesText(bytes: number): string {
 	return `${NUMBER.format(bytes / 1e6)} MB`;
 }
 
+/** The backup line (design doc "Backups"): "desconocido" when there is no status file (red, every
+ *  time null); otherwise the last copy, with the problem text while the line is red. The server
+ *  keeps the line red while `last_copy_at` is missing, so a line with no copy is always a problem. */
+function backupValue(backup: Status['backup'], dayTime: (iso: string) => string): string {
+	const { checked_at, last_dump_at, last_copy_at } = backup;
+	if (backup.red && checked_at === null && last_dump_at === null && last_copy_at === null) {
+		return t('status_backup_unknown');
+	}
+	if (last_copy_at === null) {
+		return t('backup_red');
+	}
+	return backup.red ? `${dayTime(last_copy_at)} · ${t('backup_red')}` : dayTime(last_copy_at);
+}
+
 /** The lines of the status screen, in order. `now` gives the business day, so a date from another
  *  year shows its year. */
 export function statusLines(status: Status, zone: string, now: Date): StatusLine[] {
@@ -52,15 +66,7 @@ export function statusLines(status: Status, zone: string, now: Date): StatusLine
 				status.heartbeat_age_s === null ? t('status_timer_none') : ageText(status.heartbeat_age_s),
 			red: false
 		},
-		{
-			label: 'status_backup',
-			value: backup.red
-				? t('backup_red')
-				: backup.last_copy_at === null
-					? t('status_backup_none')
-					: dayTime(backup.last_copy_at),
-			red: backup.red
-		},
+		{ label: 'status_backup', value: backupValue(backup, dayTime), red: backup.red },
 		{
 			label: 'status_space',
 			value:

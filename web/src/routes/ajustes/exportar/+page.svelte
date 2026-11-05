@@ -6,9 +6,10 @@
 	import { t } from '../../../lib/i18n';
 
 	// Ajustes → Descargar mis datos (design doc item 77, CUJ 8): a plain download link, so the
-	// browser saves the streamed ZIP itself and the service worker lets it go to the network
-	// (`rel="external"`: it is an API file, not an app route). A link
-	// cannot be switched off, so offline the page shows a disabled button that says why.
+	// browser saves the streamed ZIP itself. The service worker sends everything under `/api/` to
+	// the network, so it never answers this request. `rel="external"` only keeps the router and the
+	// lint rule off the link: it is an API file, not an app route. A link cannot be switched off, so
+	// offline the page shows a disabled button that says why.
 </script>
 
 <div class="flex max-w-190 flex-col gap-4">
