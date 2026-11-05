@@ -3,6 +3,7 @@ import {
 	addDays,
 	formatDayLong,
 	formatDayShort,
+	formatWeekdayShort,
 	formatTime,
 	todayIn,
 	weekStart,
@@ -66,6 +67,16 @@ describe('formatTime', () => {
 describe('formatDayLong', () => {
 	it('names the weekday and the month in Spanish', () => {
 		expect(formatDayLong('2026-11-04')).toBe('miércoles 4 de noviembre');
+	});
+});
+
+describe('formatWeekdayShort', () => {
+	it('gives the first three letters of the weekday', () => {
+		expect(formatWeekdayShort('2026-11-04')).toBe('mié');
+	});
+
+	it('starts the week on lunes for a Monday', () => {
+		expect(formatWeekdayShort('2026-11-02')).toBe('lun');
 	});
 });
 

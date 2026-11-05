@@ -109,6 +109,10 @@ export const AppointmentSchema = z.object({
 	updated_at: instant
 }) satisfies z.ZodType<Schemas['Appointment']>;
 
+export const AppointmentListSchema = z.object({
+	items: z.array(AppointmentSchema)
+}) satisfies z.ZodType<Schemas['AppointmentList']>;
+
 const BookingPromptSchema = z.object({
 	appointment_id: id,
 	starts_at: instant,

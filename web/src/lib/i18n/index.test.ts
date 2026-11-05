@@ -11,7 +11,7 @@ describe('t', () => {
 	});
 
 	it('fills a numeric param', () => {
-		expect(t('due_today_summary', { count: 2 })).toBe('2 mensajes para enviar hoy');
+		expect(t('due_today_summary_other', { count: 2 })).toBe('2 mensajes para enviar hoy');
 	});
 
 	it('throws on a missing param', () => {

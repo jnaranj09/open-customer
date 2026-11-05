@@ -19,10 +19,8 @@
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
 	import { syncLine } from '../lib/nav';
-	import { activatePush, checkPush, type PushState } from '../lib/push';
-	import { browserPushDeps } from '../lib/push-browser';
+	import { pushControl } from '../lib/pushControl.svelte';
 	import { resolveSession } from '../lib/session';
-	import { submitOnce } from '../lib/submit';
 	import { systemNow } from '../lib/time';
 
 	let { children }: { children: Snippet } = $props();
@@ -86,15 +84,12 @@
 	const syncing = $derived(canSync(session));
 
 	// On open: refresh the cache, then check push. Both again after a new sign-in.
-	let pushState = $state<PushState | null>(null);
-	let pushError = $state<string | null>(null);
-	let pushBusy = $state(false);
 	let opened = false;
 
 	$effect(() => {
 		if (!syncing) {
 			opened = false;
-			pushState = null;
+			pushControl.reset();
 			return;
 		}
 		if (opened) {
@@ -102,25 +97,8 @@
 		}
 		opened = true;
 		void cache.refresh();
-		void checkPush(browserPushDeps(api)).then((state) => {
-			pushState = state;
-		});
+		void pushControl.check();
 	});
-
-	const push = submitOnce(
-		async () => {
-			pushError = null;
-			const result = await activatePush(browserPushDeps(api));
-			if (result.ok) {
-				pushState = 'active';
-			} else {
-				pushError = errorText(result.error);
-			}
-		},
-		(pending) => {
-			pushBusy = pending;
-		}
-	);
 
 	// On focus: refresh when the last refresh is old. One at a time: a repeated focus event while
 	// this one runs is dropped, and the store orders it against the refresh on open.
@@ -197,12 +175,6 @@
 			pathname={path}
 			dueCount={cache.snapshot?.due.length ?? 0}
 			sync={syncLine(cache.meta.lastSyncAt, zone, cache.offline)}
-			{pushState}
-			{pushBusy}
-			{pushError}
-			onactivatepush={() => {
-				void push.run();
-			}}
 		/>
 		<main class="ml-64 p-8">{@render content()}</main>
 	{:else}

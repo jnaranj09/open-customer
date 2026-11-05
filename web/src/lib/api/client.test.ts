@@ -290,3 +290,23 @@ describe('setup, icon and password', () => {
 		});
 	});
 });
+
+describe('listAppointments', () => {
+	it('asks for the range and returns the items', async () => {
+		const { api, fetchFn } = setup(() => json({ items: [appointment] }));
+		const result = await api.listAppointments({ from: '2026-11-02', to: '2026-11-08' });
+		expect(result).toEqual({ ok: true, data: [appointment] });
+		expect(fetchFn.mock.calls.map(([request]) => (request as Request).url)).toEqual([
+			`${BASE}/appointments?from=2026-11-02&to=2026-11-08`
+		]);
+	});
+
+	it('returns response_invalid for an item that fails its schema', async () => {
+		const { api } = setup(() => json({ items: [{ ...appointment, status: 'done' }] }));
+		const result = await api.listAppointments({ from: '2026-11-02', to: '2026-11-08' });
+		expect(result).toEqual({
+			ok: false,
+			error: { kind: 'response_invalid', path: '/appointments' }
+		});
+	});
+});

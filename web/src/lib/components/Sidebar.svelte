@@ -2,31 +2,22 @@
 	import { resolve } from '$app/paths';
 	import { t } from '../i18n';
 	import { isActivePath } from '../nav';
-	import type { PushState } from '../push';
-	import Button from './Button.svelte';
 	import { buttonClasses } from './buttonStyle';
 	import Icon from './icons/Icon.svelte';
 	import { NAV_ITEMS } from './navItems';
+	import PushActivate from './PushActivate.svelte';
 
 	let {
 		name,
 		pathname,
 		dueCount,
-		sync,
-		pushState,
-		pushBusy,
-		pushError,
-		onactivatepush
+		sync
 	}: {
 		name: string;
 		pathname: string;
 		dueCount: number;
 		/** The sync line: when the data is from, or that the system is off. */
 		sync: string;
-		pushState: PushState | null;
-		pushBusy: boolean;
-		pushError: string | null;
-		onactivatepush: () => void;
 	} = $props();
 
 	// The icon is never cached (the manifest rules): offline it cannot load, and a broken image
@@ -79,15 +70,7 @@
 	</nav>
 
 	<div class="mt-auto flex flex-col gap-3">
-		{#if pushState === 'needs_activation'}
-			<Button variant="ghost" busy={pushBusy} onclick={onactivatepush}>
-				<Icon name="bell" />
-				{t('push_activate')}
-			</Button>
-			{#if pushError !== null}
-				<p role="alert" class="text-sm text-error">{pushError}</p>
-			{/if}
-		{/if}
+		<PushActivate />
 		<p class="text-sm text-ink-muted">{sync}</p>
 	</div>
 </aside>

@@ -123,6 +123,15 @@ export function formatDayLong(day: string): string {
 	return t('date_long', { weekday: t(weekday), day: ymd.d, month: t(month) });
 }
 
+/** `mié`: the first three letters of the weekday name. */
+export function formatWeekdayShort(day: string): string {
+	const weekday = WEEKDAYS[noon(parseDay(day)).getUTCDay()];
+	if (weekday === undefined) {
+		throw new RangeError('time: a day must be a real date');
+	}
+	return t(weekday).slice(0, 3);
+}
+
 /** `4/11`: day and month, not padded. */
 export function formatDayShort(day: string): string {
 	const { m, d } = parseDay(day);

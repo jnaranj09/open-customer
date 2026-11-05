@@ -5,6 +5,7 @@ import type { z } from 'zod';
 import type { ApiError, ProblemName, Result } from './errors';
 import type { components, paths } from './schema';
 import {
+	AppointmentListSchema,
 	BootstrapSchema,
 	MeSchema,
 	PROBLEM_PREFIX,
@@ -12,7 +13,8 @@ import {
 	PushKeySchema,
 	PushSubscriptionIdSchema,
 	SetupOptionsSchema,
-	SetupStatusSchema
+	SetupStatusSchema,
+	type Appointment
 } from './schemas';
 
 export type ApiOptions = {
@@ -117,6 +119,16 @@ export function createApi(opts: ApiOptions) {
 			read('/bootstrap', BootstrapSchema, () =>
 				client.GET('/bootstrap', { params: { query: range } })
 			),
+		/** The appointments of the local days `from` to `to`, both inclusive (at most 31 days). */
+		listAppointments: async (range: {
+			from: string;
+			to: string;
+		}): Promise<Result<Appointment[]>> => {
+			const got = await read('/appointments', AppointmentListSchema, () =>
+				client.GET('/appointments', { params: { query: range } })
+			);
+			return got.ok ? { ok: true, data: got.data.items } : got;
+		},
 		me: () => read('/me', MeSchema, () => client.GET('/me')),
 		setupStatus: () => read('/setup/status', SetupStatusSchema, () => client.GET('/setup/status')),
 		setupOptions: () =>
