@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -31,6 +32,13 @@
 	const data = $derived(cache.snapshot);
 	const zone = $derived(business.zone);
 	const money = (minor: number): string => formatMoney(minor, business.currency, business.locale);
+
+	// The back arrow returns to where she came from (the client page, Hoy, Enviar): history back
+	// when this page was reached inside the app, else a link to Hoy (an opened link, a reload).
+	let cameFromApp = $state(false);
+	afterNavigate(({ from }) => {
+		cameFromApp = from !== null;
+	});
 
 	let appt = $state<Appointment | null>(null);
 	let loadError = $state<ApiError | null>(null);
@@ -118,15 +126,14 @@
 
 	// Amount paid
 	const exponent = $derived(exponentOf(business.currency || 'USD', business.locale));
-	let paid = $state('');
+	// The field starts from the stored amount and follows it only when the amount (or the
+	// appointment) changes: a status change returns a new `appt` with the same amount, and must
+	// not wipe what she typed.
+	const savedPaid = $derived(appt?.paid_cents ?? null);
+	const apptId = $derived(appt?.id ?? null);
+	let paid = $derived(apptId === null || savedPaid === null ? '' : amountText(savedPaid, exponent));
 	let paidError = $state<string | null>(null);
 	let paying = $state(false);
-	$effect(() => {
-		const a = appt;
-		untrack(() => {
-			paid = a?.paid_cents == null ? '' : amountText(a.paid_cents, exponent);
-		});
-	});
 
 	const savePaid = submitOnce(
 		async () => {
@@ -156,12 +163,23 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<IconButton
-			variant="plain"
-			icon="chevron-left"
-			label={t('appointment_back')}
-			href={resolve('/')}
-		/>
+		{#if cameFromApp}
+			<IconButton
+				variant="plain"
+				icon="chevron-left"
+				label={t('appointment_back')}
+				onclick={() => {
+					history.back();
+				}}
+			/>
+		{:else}
+			<IconButton
+				variant="plain"
+				icon="chevron-left"
+				label={t('appointment_back')}
+				href={resolve('/')}
+			/>
+		{/if}
 		<h1 class="text-3xl font-extrabold text-ink">
 			{editing ? t('appointment_edit_title') : t('appointment_title')}
 		</h1>
