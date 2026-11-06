@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Card from './ui/Card.svelte';
 	import { resolve } from '$app/paths';
+	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Client } from '../api/schemas';
@@ -48,6 +49,28 @@
 			loading = pending;
 		}
 	);
+
+	// Syncs with the server: an archive or a restore refreshes the cache, so while the archived
+	// list shows, each new snapshot reads it again (a restored client leaves it, an archived one
+	// joins it). The list stays on screen until the answer comes; a failure shows under it.
+	let archivedRun = 0;
+	$effect(() => {
+		if (cache.snapshot === null || !untrack(() => showArchived)) {
+			return;
+		}
+		const run = ++archivedRun;
+		void api.listClients({ archived: true }).then((result) => {
+			if (run !== archivedRun) {
+				return;
+			}
+			if (result.ok) {
+				archived = result.data;
+				archivedError = null;
+			} else {
+				archivedError = result.error;
+			}
+		});
+	});
 
 	const failure = $derived(
 		archivedError === null
