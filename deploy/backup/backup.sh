@@ -137,8 +137,8 @@ backup_recent() {
 # fresh_volumes_guard: whether this run may go on. A run that starts without status.json is on new
 # volumes (a new PC, or `docker compose down --volumes`); if the repository already has snapshots,
 # backing up the empty database would make that empty snapshot `latest`, so `restore.sh latest`
-# would restore nothing, and once the repository holds 14 days its forget would also drop that
-# day's real snapshot. The state is kept in $RESTORE_FIRST, because the run's own status.json
+# would restore nothing, and its forget could also drop that day's real snapshot (forget keeps
+# only the newest snapshot of each day). The state is kept in $RESTORE_FIRST, because the run's own status.json
 # write must not lift it. A restore also sets it before it drops the database, so a restore that
 # fails after that point blocks the next backup of the half-restored data. It is lifted by a
 # missing repository folder or one with no snapshot files (a first install), by a successful

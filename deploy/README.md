@@ -262,8 +262,8 @@ only move forward, so a rollback is always a restore.
 After the volumes were lost (a new PC, or `docker compose down --volumes`), restore before her
 data goes in again. Until then `backup` takes no snapshot: it finds earlier snapshots in the
 backup folder but no `status.json` on the new volumes, so a backup now would hold an empty
-database and become `latest`, and `scripts/restore.sh latest` would then restore nothing. Once the
-folder holds 14 days of snapshots, that backup's clean-up would also drop the day's real snapshot.
+database and become `latest`, and `scripts/restore.sh latest` would then restore nothing. Its
+clean-up could also drop that day's real snapshot (it keeps only the newest snapshot of each day).
 The status screen and "Hoy" show the backup line red ("Respaldo con problema"), and
 `scripts/backup-now.sh` exits non-zero. The backup log has an English line starting `guard:`; the
 Spanish reason, "Hay respaldos anteriores: restaure primero", is only in the status file
@@ -275,6 +275,10 @@ docker compose exec backup cat /backup-status/status.json
 ```
 
 A restore lifts it and the hourly backups go on.
+
+Never use this reset after a failed restore: it lifts the guard over a half-restored database,
+and the next backup would make that `latest`. Run `scripts/restore.sh` again instead (see the end
+of this section).
 
 If the database is intact and only the status file or the `backup-status` volume was lost, do not
 restore: a restore of `latest` can lose up to about a day of her work. Replace the status file with
