@@ -1,6 +1,7 @@
 <script lang="ts">
 	import TextButton from './ui/TextButton.svelte';
 	import Card from './ui/Card.svelte';
+	import { LIVE_LAYER, toBody } from '../inert';
 	import { UNDO_MS } from '../undo';
 
 	let {
@@ -15,7 +16,8 @@
 	//
 	// Stacking: a sheet (BottomSheet, z-50) rises from the bottom or sits centered, so the toast
 	// lives at the top of the screen on a layer above it (z-60): it never covers a sheet's buttons,
-	// and a toast raised while a sheet is open (an "Omitir" undo) stays visible and tappable.
+	// and a toast raised while a sheet is open (an "Omitir" undo) stays visible and tappable. For
+	// that it is its own live layer of <body>, outside the page a sheet makes inert.
 	let gone = $state(false);
 
 	$effect(() => {
@@ -35,6 +37,8 @@
 
 {#if !gone}
 	<div
+		{@attach toBody}
+		{...{ [LIVE_LAYER]: '' }}
 		role="status"
 		class="pointer-events-none fixed inset-x-0 top-0 z-60 flex justify-center px-4 pt-safe"
 	>

@@ -1,15 +1,22 @@
 <script lang="ts" module>
+	import { inertBehind, type Layer } from '../../inert';
 	import { createSheetStack } from '../../sheetStack';
 
-	// Every open sheet, shared by all instances: one page lock, and one top sheet for Escape and Tab.
+	// Every open sheet, shared by all instances: one page lock, one top sheet for Escape and Tab,
+	// and everything behind the top sheet inert.
 	let savedOverflow = '';
-	const sheets = createSheetStack<symbol>({
+	const madeInert = new Set<Layer>();
+	const sheets = createSheetStack<HTMLElement>({
 		lock: () => {
 			savedOverflow = document.body.style.overflow;
 			document.body.style.overflow = 'hidden';
 		},
 		unlock: () => {
 			document.body.style.overflow = savedOverflow;
+		},
+		showTop: (top) => {
+			const layers = [...document.body.children].filter((el) => el instanceof HTMLElement);
+			inertBehind(layers, top, madeInert);
 		}
 	});
 </script>
@@ -18,6 +25,7 @@
 	import type { Snippet } from 'svelte';
 	import { nextFocus } from '../../focus';
 	import { t } from '../../i18n';
+	import { toBody } from '../../inert';
 
 	let {
 		open,
@@ -35,23 +43,14 @@
 	} = $props();
 
 	const titleId = $props.id();
-	const sheetId = Symbol('sheet');
 	const FOCUSABLE =
 		'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+	// The sheet's own layer of <body>, and the panel inside it.
+	let layer: HTMLElement | undefined = $state();
 	let panel: HTMLElement | undefined = $state();
 	let dragY = $state(0);
 	let dragStart: number | null = null;
-
-	// A sheet is a fixed layer above the whole app. A card with `backdrop-filter` (a glass card) is
-	// its own stacking context, so a sheet declared inside one would sit under the tab bar: the sheet
-	// moves to <body> instead of staying where it is written.
-	function toBody(node: HTMLElement): () => void {
-		document.body.appendChild(node);
-		return () => {
-			node.remove();
-		};
-	}
 
 	function focusables(): HTMLElement[] {
 		return panel === undefined ? [] : Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
@@ -59,14 +58,15 @@
 
 	// Focus moves into the sheet when it opens and back to what had it when it closes.
 	$effect(() => {
-		if (!open || panel === undefined) {
+		if (!open || panel === undefined || layer === undefined) {
 			return;
 		}
 		const before = document.activeElement;
-		sheets.push(sheetId);
+		const own = layer;
+		sheets.push(own);
 		(focusables()[0] ?? panel).focus();
 		return () => {
-			sheets.remove(sheetId);
+			sheets.remove(own);
 			if (before instanceof HTMLElement) {
 				before.focus();
 			}
@@ -74,7 +74,7 @@
 	});
 
 	function onkeydown(event: KeyboardEvent): void {
-		if (!open || !sheets.isTop(sheetId)) {
+		if (!open || layer === undefined || !sheets.isTop(layer)) {
 			return;
 		}
 		if (event.key === 'Escape') {
@@ -127,7 +127,11 @@
 <svelte:window {onkeydown} />
 
 {#if open}
-	<div {@attach toBody} class="fixed inset-0 z-50 flex items-end justify-center lg:items-center">
+	<div
+		{@attach toBody}
+		bind:this={layer}
+		class="fixed inset-0 z-50 flex items-end justify-center lg:items-center"
+	>
 		<button
 			type="button"
 			tabindex="-1"

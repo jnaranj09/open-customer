@@ -35,10 +35,6 @@ export const ALLOW: readonly Allow[] = [
 		bug: 'UIP-M1'
 	}),
 	// /ajustes/atributos
-	...entries('/ajustes/atributos', 'inert', ['new attribute'], {
-		why: 'the page behind an open BottomSheet stays reachable (not inert)',
-		bug: 'UIP-L16'
-	}),
 	// /ajustes/plantillas/[id]
 	...entries('/ajustes/plantillas/[id]', 'busy', ['template busy'], {
 		width: 'compact',
@@ -62,15 +58,7 @@ export const ALLOW: readonly Allow[] = [
 		bug: 'UIP-N5'
 	}),
 	// /ajustes/recordatorios
-	...entries('/ajustes/recordatorios', 'inert', ['new rule'], {
-		why: 'the page behind an open BottomSheet stays reachable (not inert)',
-		bug: 'UIP-L16'
-	}),
 	// /ajustes/servicios
-	...entries('/ajustes/servicios', 'inert', ['new service'], {
-		why: 'the page behind an open BottomSheet stays reachable (not inert)',
-		bug: 'UIP-L16'
-	}),
 	// /citas/[id]
 	...entries('/citas/[id]', 'busy', ['photos busy'], {
 		why: 'the photo section shows no loading line while the photos load',
@@ -87,10 +75,6 @@ export const ALLOW: readonly Allow[] = [
 		bug: 'UIP-M5'
 	}),
 	// /citas/nueva
-	...entries('/citas/nueva', 'inert', ['quick-add client'], {
-		why: 'the page behind an open BottomSheet stays reachable (not inert)',
-		bug: 'UIP-L16'
-	}),
 	// /clientas
 	...entries('/clientas', 'scroll', ['base'], {
 		width: 'compact',
@@ -110,10 +94,6 @@ export const ALLOW: readonly Allow[] = [
 	...entries('/clientas/[id]', 'busy', ['photos busy'], {
 		why: 'the photo section shows no loading line while the photos load',
 		bug: 'UIP-N4'
-	}),
-	...entries('/clientas/[id]', 'inert', ['archive'], {
-		why: 'the page behind an open BottomSheet stays reachable (not inert)',
-		bug: 'UIP-L16'
 	}),
 	...entries(
 		'/clientas/[id]',
