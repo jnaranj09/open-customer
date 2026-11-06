@@ -1,0 +1,200 @@
+# open-customer — Security pipeline
+
+Status: approved by the owner (2026-11-06). Not built.
+
+## Intent
+
+Protect the app, first. Then give the repo a real security pipeline that any self-hoster can run.
+Learning the tools is a minor, third goal.
+
+The owner is not a security expert, so the pipeline must cover every gap, not only the ones a tool
+happens to find. The way to do that is a threat model: a list of every way the app can be attacked
+or lose data, where each threat names the check that covers it, or a written reason it is accepted.
+The tools serve the threat model, not the other way round. This is the repo's existing rule ("every
+rule names its sensor") applied to security.
+
+## Goals
+
+1. Every threat to the app has a check that turns red, or an accepted-risk line with its reason.
+2. A high or critical finding with a fix blocks a merge.
+3. A new vulnerability in an image that already shipped is found within a week, without anyone
+   looking.
+4. Anyone who deploys the app can scan their own live deployment with one command.
+5. Nothing in the repo or in GitHub holds a credential for any outside service.
+
+## Non-goals
+
+- **The host machine.** The OS, the disk, the Docker daemon and `deploy/.env` at rest are the
+  deployer's job. The threat model lists them as out of scope.
+- **Cloudflare settings.** The repo stays generic: it must not depend on Cloudflare. A Cloudflare
+  check, if any, lives outside the repo. What Cloudflare does is still seen from outside by the
+  live scan (below), like any other front proxy.
+- **Scheduling and alerting for the live scan.** Each deployer picks their own cron, email service
+  or anything else. The repo gives an exit code and a report file.
+- **Runtime monitoring (Falco, Tetragon).** Both need the host, which is out of scope. Later.
+
+## Anti-goals (a failure even if it works)
+
+- Any API key, token or password for an outside service stored in the repo, in a GitHub secret or in
+  a GitHub variable, even read-only. CI uses only what GitHub gives every run (`GITHUB_TOKEN`, OIDC).
+- A scan of a real deployment running in GitHub. On a public repo the Actions logs are public, so it
+  would publish the URL and its weak points.
+- A check that skips or passes silently when its tool is missing or its download fails.
+- An allow-list entry with no reason or no expiry date, or a list that grows to get green.
+
+## Constraints from the repo
+
+- `CLAUDE.md` and `.claude/rules/*` apply. Every new check names its sensor; allow-lists only
+  shrink; a check that could not run is reported as NOT RUN.
+- Every tool and image is pinned in one place and kept equal by `make check-pins` (design doc
+  "Pins"). Dependabot bumps what it can.
+- `CLAUDE.md` says `docs/designs/release-1.md` is the only architecture source. The change that
+  builds this pipeline updates that line to name this document too.
+- CI already starts the real app and a Postgres for `make e2e`. The dynamic scans reuse that, so
+  there is no staging environment.
+
+## What gets built
+
+### 1. Threat model (`docs/threat-model.md`)
+
+- One table. Each row: the asset (client data, photos, the session, the backups, the images, the
+  build), the threat, the entry point, and either the check that covers it (a test name, a guard, a
+  scan rule) or `accepted:` with the reason.
+- Seeded from release-1.md "Security summary", "Accepted risks" and "Handled risks", and from the
+  attack surface: the public URL behind any proxy, login and setup, the session cookie, uploads,
+  the API, the backup and restore scripts, the images, CI and the release workflow, dependencies.
+- Out-of-scope items (host, Cloudflare dashboard) are rows too, marked `out of scope:` with who owns
+  them, so the list is visibly complete.
+- A guard test fails when a row has neither a check nor `accepted:`/`out of scope:`, or names a test
+  or file that does not exist.
+- The one-time manual audit (section 8) adds rows.
+
+### 2. Code scan (Semgrep)
+
+- Semgrep's Go and TypeScript security rules, plus repo-specific rules where a security obligation
+  is now prose only (for example: no `slog` call logs a request body; every non-GET handler runs in
+  `db.WithTx`). Each custom rule is seen red once.
+- gosec stays in golangci-lint. Where both find the same thing, keep the existing one.
+- Rules are pinned, never fetched unpinned at run time: the Semgrep version is pinned per "Pins",
+  and registry rules are used only at a pinned version or copied in when their license allows it
+  in a public repo (the builder checks the current license). Custom rules live in the repo. My call.
+
+### 3. Config scan (Dockerfiles, compose, workflows)
+
+- Scans `Dockerfile`, `deploy/backup/Dockerfile`, `deploy/compose.yaml` and `.github/workflows/`.
+  Checkov or Trivy's config scanner: the builder checks which one reads Compose files and picks
+  the one that covers all three.
+- The workflows get a dedicated check for Actions risks (unpinned actions, too-wide permissions,
+  script injection). Builder's call which tool.
+- Expected fixes it forces: compose hardening (`read_only` where the service allows it, `cap_drop`,
+  `no-new-privileges`, memory limits), and every Action pinned by commit SHA (Dependabot keeps SHAs
+  current).
+
+### 4. Image scan and supply chain (Trivy)
+
+- On every push: build the app and backup images and scan them, plus the pinned `postgres` and
+  `cloudflared` images from `deploy/compose.yaml`.
+- In the release workflow: scan before push; a blocking finding stops the release.
+- Weekly scheduled CI run: scan the images of the latest release tag only (deployers upgrade to the
+  latest). A finding that meets the blocking policy fails the run, and GitHub emails the owner about
+  a failed scheduled run with no setup. Until the first `v*` tag exists, the job writes "NOT RUN: no
+  release tag" in its summary and passes. My call.
+- My call: the release also writes an SBOM and signs the images keylessly with cosign through
+  GitHub OIDC. Keyless signing stores no key, so it keeps anti-goal 1.
+- My call: `deploy/scripts/upgrade.sh` verifies the signature before it pulls, running cosign from
+  its pinned image (no install on the deployer's machine). A bad or missing signature stops the
+  upgrade with nothing changed; `make test-deploy` gets a test for it.
+
+### 5. Authorization and business-rule tests
+
+- Mostly there already: `TestPublicOperationsAreExactlyTheSetupLoginAndPushKeyOnes` reads the spec
+  and fails if any other route is public; Origin, the must-change-password gate and the login rate
+  limit have tests. Release 1 has one user, so cross-user ownership tests do not apply yet.
+- The threat model maps each auth threat to its test; any threat without one gets a new Go test
+  here.
+
+### 6. Running-app scan in CI (ZAP + Nuclei)
+
+- Against the app CI starts for e2e, after `make e2e`.
+- ZAP API scan driven by `api/openapi.yaml`, unauthenticated and authenticated (a made-up user
+  created the way e2e creates one).
+- Nuclei against the same app.
+- Expected fix it forces: security headers on every response (`Content-Security-Policy` including
+  `frame-ancestors`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and `Strict-Transport-Security`
+  only where the app knows it is behind HTTPS). Today the app sets none. Each header gets a Go test.
+
+### 7. Fuzz tests
+
+- Go native fuzz tests on the parsers that take outside input: JSON body decoding, the multipart
+  upload handlers, template parsing, and the backup status file reader.
+- The gate runs each seed corpus as a normal test; a longer fuzz run is a manual or scheduled job.
+  A crash found by fuzzing becomes a seed and a fix.
+
+### 8. Manual audit (once, then on big changes)
+
+- A one-time security review of the code for logic bugs no scanner finds (the `security-audit`
+  skill fits). Findings become threat-model rows and fixes.
+
+### 9. Live scan (`make scan-live URL=…`)
+
+- Runs on the deployer's own machine against any deployment, behind any proxy. Uses no key.
+- Nuclei (safe, non-intrusive templates only), ZAP baseline (passive), and TLS and header checks.
+- Exits non-zero on a blocking finding and writes a report file. `deploy/README.md` documents the
+  exit code, the report and how to schedule it with cron.
+- Never runs in GitHub.
+- Its allow-list is a local file the deployer owns, kept out of git (`deploy/.scan-live.allow`,
+  git-ignored), because what a proxy adds or strips differs per deployment. My call.
+
+## Blocking policy
+
+- **CVE scanners** (Trivy on images and dependencies): high or critical with a fixed version
+  available blocks. Medium and low are reported, not blocking.
+- **Every other tool** (Semgrep, config scan, Actions scan, ZAP, Nuclei, the threat-model guard):
+  every finding blocks unless it is allow-listed. Their severity scales differ and have no "fix
+  available", and a missing header or `cap_drop` must go red to be fixed. My call.
+- **Third-party images** (`postgres`, `cloudflared`): on push and PR they report only, so an
+  upstream CVE with no new image tag yet cannot turn every unrelated push red. The release and the
+  weekly run block on them. Our own images (app, backup) block on push. My call.
+- **Allow-list:** one file per tool or one shared file (builder's call). Each entry has the finding
+  id, a one-line reason and an expiry date; a guard fails on an entry missing any of the three and
+  on an expired entry. A new entry or a later expiry date needs the owner's agreement, written in
+  the commit message, like `ui-probe.allow.ts` (`.claude/rules/ui.md`). The default answer to a
+  finding is a code change. My call.
+- CI uploads SARIF to the repo's Security tab where the tool supports it.
+- **"Blocks a merge" is enforced by GitHub (owner's decision):** `main` gets branch protection (or
+  a ruleset) that requires a pull request and every blocking CI job as a required status check,
+  and forbids force-push and deletion. Changes reach `main` only through a green PR; no local merge
+  and push to `main`. This is a GitHub setting, not a repo file: the plan writes the exact setting
+  (and the `gh api` command that applies it), and the owner applies it or approves it being
+  applied. The threat model lists it as a row whose check is "GitHub setting, re-checked by hand".
+  The job names in CI stay stable, because a renamed required check silently blocks every PR.
+
+## Where each check runs
+
+| Check | Every push / PR | Release | Weekly CI | Local `make` |
+| --- | --- | --- | --- | --- |
+| Threat-model guard | yes | | | in the gate |
+| Semgrep | yes | | | in the gate |
+| Config scan | yes | | | in the gate |
+| Image scan | yes | before push | released images | `make image-scan` |
+| SBOM + signing | | yes | | |
+| ZAP + Nuclei (CI app) | yes | | | `make dast` |
+| Fuzz seed corpus | yes (in `make test`) | | | in the gate |
+| Live scan | never | never | never | `make scan-live URL=…` |
+
+My call: the tools that run offline-ish in Docker join the local gate (`CLAUDE.md` "Gate"), so an
+agent sees the same red locally. The scans that need the built app (ZAP, Nuclei) stay CI plus a
+separate `make dast`, like `make e2e`.
+
+## Later
+
+- Falco and Tetragon (need the host).
+- Cross-user ownership tests, when staff accounts arrive.
+
+## Left to the builder
+
+- Exact tool versions, images and flags (verified against each tool's docs; pinned per "Pins").
+- Checkov vs Trivy config, and the Actions-specific scanner.
+- The allow-list file format and location.
+- The phase split and order, with the image scan and the running-app scan (with the headers fix)
+  first, because they close the two gaps found today.
