@@ -25,16 +25,6 @@ export const ALLOW: readonly Allow[] = [
 		why: 'the compact template editor is blank while the templates load',
 		bug: 'UIP-N5'
 	}),
-	...entries('/ajustes/plantillas/[id]', 'target-size', ['base'], {
-		target: 'span "Bebida favorita. Toca para cambiar lo que se escribe si no tiene el dato"',
-		why: 'a variable chip in the message editor is 26 px tall',
-		bug: 'UIP-N6'
-	}),
-	...entries('/ajustes/plantillas/[id]', 'target-size', ['base'], {
-		target: 'span "name. Toca para cambiar lo que se escribe si no tiene el dato"',
-		why: 'a variable chip in the message editor is 26 px tall',
-		bug: 'UIP-N6'
-	}),
 	// /ajustes/plantillas/nueva
 	...entries('/ajustes/plantillas/nueva', 'busy', ['form data busy'], {
 		width: 'compact',
