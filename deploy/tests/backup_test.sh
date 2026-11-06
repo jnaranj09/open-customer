@@ -392,6 +392,46 @@ test_empty_status_fresh_start() {
   assert_eq "once after the failed run" 0 "$rc"
 }
 
+# snapshot_files: the repository's snapshot files and their checksums.
+snapshot_files() {
+  (cd /target/restic/snapshots && find . -type f -exec md5sum {} + | sort)
+}
+
+test_guard_fails_closed() {
+  fresh_volumes_with_repo
+  local before rc=0
+  # A snapshot file restic cannot read: `restic snapshots` skips it and answers [] with exit 0.
+  # The cache would still answer from the first run, so it goes too.
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/restic"
+  local f
+  f=$(find /target/restic/snapshots -type f | head -n1)
+  echo 'not a snapshot' >"$f"
+  before=$(snapshot_files)
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_ne "once exit code with a corrupt snapshot file" 0 "$rc"
+  assert_eq "last_error with a corrupt snapshot file" "$GUARD_ERROR" "$(field last_error)"
+  assert_eq "snapshot files" "$before" "$(snapshot_files)"
+
+  # The snapshots cannot be listed at all (an I/O error): blocked too, with the copy error.
+  mkdir -p "$LOGS/bin"
+  cat >"$LOGS/bin/restic" <<'FAKE'
+#!/usr/bin/env bash
+for a in "$@"; do
+  case "$a" in
+    snapshots | list) echo "made-up read error" >&2; exit 1 ;;
+  esac
+done
+exec /usr/bin/restic "$@"
+FAKE
+  chmod +x "$LOGS/bin/restic"
+  rc=0
+  PATH="$LOGS/bin:$PATH" "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_ne "once exit code when snapshots cannot be listed" 0 "$rc"
+  assert_eq "last_error when snapshots cannot be listed" "copy: made-up read error" "$(field last_error)"
+  assert_eq "snapshot files after the failed listing" "$before" "$(snapshot_files)"
+  [ -e "$GUARD_FILE" ] || fail "$GUARD_FILE was removed"
+}
+
 # exits_2 <args...>: the mode exits 2 with one output line.
 exits_2() {
   local rc=0 out
@@ -424,5 +464,6 @@ t "restore recreates the database and hands media to 65532" test_restore
 t "fresh volumes with an existing repository take no snapshot" test_fresh_volumes_guard
 t "restore lets backups resume" test_restore_resumes
 t "an empty status file allows a fresh start" test_empty_status_fresh_start
+t "the guard fails closed when the snapshots cannot be counted" test_guard_fails_closed
 t "bad args exit 2" test_bad_args
 finish

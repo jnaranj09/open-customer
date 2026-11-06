@@ -134,37 +134,40 @@ backup_recent() {
     "$STATUS" >/dev/null 2>&1
 }
 
-# fresh_volumes_guard: true when this run must take no snapshot. A run that starts without
-# status.json is on new volumes (a new PC, or `docker compose down --volumes`); if the repository
-# already has snapshots, backing up the empty database would make it `latest` and its forget
-# could drop the day's real snapshot. The state is kept in $RESTORE_FIRST, because the run's own
-# status.json write must not lift it. It is lifted by a missing or empty repository (a first
+# fresh_volumes_guard: whether this run may go on. A run that starts without status.json is on new
+# volumes (a new PC, or `docker compose down --volumes`); if the repository already has snapshots,
+# backing up the empty database would make it `latest` and its forget could drop the day's real
+# snapshot. The state is kept in $RESTORE_FIRST, because the run's own status.json write must not
+# lift it. It is lifted by a missing repository folder or one with no snapshot files (a first
 # install), by a successful restore, and by the operator replacing status.json with `{}` (a file
-# without checked_at, which backup.sh always writes). An unreadable repository leaves it set and
-# lets the run go on to the copy step, which reports that error.
+# without checked_at, which backup.sh always writes). It fails closed: a repository whose config
+# or snapshot list cannot be read keeps it and blocks the run with that error. The count is the
+# snapshot files (`restic list snapshots`), not `restic snapshots`, which skips a file it cannot
+# read and answers [] with exit 0.
+# Returns 0 (go on), 1 (blocked by the guard) or 2 (blocked, the restic error in $WORK/copy.err).
 fresh_volumes_guard() {
   if [ ! -e "$RESTORE_FIRST" ]; then
-    return 1
+    return 0
   fi
   if [ -f "$STATUS" ] && ! jq -e 'has("checked_at")' "$STATUS" >/dev/null 2>&1; then
     rm -f "$RESTORE_FIRST"
-    return 1
+    return 0
   fi
-  local count
-  if ! restic -r "$REPO" cat config >/dev/null 2>&1; then
-    if [ ! -e "$REPO" ]; then
-      rm -f "$RESTORE_FIRST"
-    fi
-    return 1
-  fi
-  if ! count=$(restic -r "$REPO" --no-lock snapshots --json 2>/dev/null | jq -e length); then
-    return 1
-  fi
-  if [ "$count" -eq 0 ]; then
+  if [ ! -e "$REPO" ]; then
     rm -f "$RESTORE_FIRST"
-    return 1
+    return 0
   fi
-  return 0
+  mkdir -p "$WORK"
+  local ids
+  if ! restic -r "$REPO" cat config >/dev/null 2>"$WORK/copy.err" ||
+    ! ids=$(restic -r "$REPO" --no-lock list snapshots 2>"$WORK/copy.err"); then
+    return 2
+  fi
+  if [ -z "$ids" ]; then
+    rm -f "$RESTORE_FIRST"
+    return 0
+  fi
+  return 1
 }
 
 # run_backup <check-age|always> [tag]: one run. The loop passes check-age (step 2 exists only
@@ -188,9 +191,17 @@ run_backup() {
   log "marker: ok"
 
   # Step 1b: earlier backups and new volumes; restore first.
-  if fresh_volumes_guard; then
+  local guard=0
+  fresh_volumes_guard || guard=$?
+  if [ "$guard" -eq 1 ]; then
     log "guard: the repository has snapshots and these volumes have none; restore first"
     fail_status "$RESTORE_FIRST_ERROR"
+    in_run=0
+    return 1
+  fi
+  if [ "$guard" -ne 0 ]; then
+    log "guard: the repository cannot be read; no snapshot until it can"
+    fail_status "copy: $(first_line "$WORK/copy.err")"
     in_run=0
     return 1
   fi

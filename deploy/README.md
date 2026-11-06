@@ -262,14 +262,24 @@ After the volumes were lost (a new PC, or `docker compose down --volumes`), rest
 data goes in again. Until then `backup` takes no snapshot: it finds earlier snapshots in the
 backup folder but no `status.json` on the new volumes, so a backup now would hold an empty
 database, become `latest`, and could push the day's real snapshot out. The status screen and "Hoy"
-show the backup line red with "Hay respaldos anteriores: restaure primero", and
-`scripts/backup-now.sh` exits non-zero. A restore lifts it and the hourly backups go on.
+show the backup line red ("Respaldo con problema"), and `scripts/backup-now.sh` exits non-zero.
+The reason, "Hay respaldos anteriores: restaure primero", is in the backup log and the status file:
 
-To start empty on purpose and keep the old snapshots (no restore), replace the status file with an
-empty one; the next backup then runs:
+```sh
+docker compose logs backup | tail -n 5
+docker compose exec backup cat /backup-status/status.json
+```
+
+A restore lifts it and the hourly backups go on.
+
+If the database is intact and only the status file or the `backup-status` volume was lost, do not
+restore: a restore of `latest` can lose up to about a day of her work. Replace the status file with
+an empty one instead, then take a backup now. Do the same to start empty on purpose and keep the
+old snapshots:
 
 ```sh
 docker compose run --rm --entrypoint sh backup -c 'echo {} > /backup-status/status.json'
+scripts/backup-now.sh
 ```
 
 1. Find the snapshot id. From this folder:
