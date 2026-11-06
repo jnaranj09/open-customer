@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Card from './ui/Card.svelte';
-	import { getContext, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Settings } from '../api/schemas';
@@ -12,7 +12,7 @@
 	import { timeZoneOptions } from '../setup';
 	import { businessPatch, LAST_PUSH_HOUR } from '../settingsPage';
 	import { submitOnce } from '../submit';
-	import type { createToaster } from '../toaster.svelte';
+	import { toaster } from '../toaster.svelte';
 	import Button from './ui/Button.svelte';
 	import ColorPicker from './ColorPicker.svelte';
 	import FormCard from './FormCard.svelte';
@@ -24,8 +24,6 @@
 	// The icon is its own card, because it is a separate upload. Currency, country and language are
 	// fixed at setup (the API refuses them), so they are not here.
 	let { settings }: { settings: Settings } = $props();
-
-	const toaster = getContext<ReturnType<typeof createToaster>>('settings-toaster');
 
 	let name = $state(untrack(() => settings.name));
 	let timezone = $state(untrack(() => settings.timezone));

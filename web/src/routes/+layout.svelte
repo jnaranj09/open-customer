@@ -16,6 +16,7 @@
 	import ConfirmSentSheet from '../lib/components/ConfirmSentSheet.svelte';
 	import OfflineBanner from '../lib/components/ui/OfflineBanner.svelte';
 	import Sidebar from '../lib/components/Sidebar.svelte';
+	import Toast from '../lib/components/Toast.svelte';
 	import BottomNav from '../lib/components/ui/BottomNav.svelte';
 	import Card from '../lib/components/ui/Card.svelte';
 	import UpdatePrompt from '../lib/components/UpdatePrompt.svelte';
@@ -38,6 +39,7 @@
 	import { finishingStep, sessionStore } from '../lib/setup';
 	import { shownDay } from '../lib/shownDay.svelte';
 	import { systemNow } from '../lib/time';
+	import { toaster } from '../lib/toaster.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -267,6 +269,18 @@
 		</div>
 		<BottomNav pathname={path} />
 	{/if}
+{/if}
+
+<!-- The app's one toast (lib/toaster.svelte.ts): a new message replaces the one on screen. -->
+{#if toaster.current !== null}
+	{#key toaster.current.n}
+		<Toast
+			message={toaster.current.message}
+			{...toaster.current.action === undefined
+				? {}
+				: { actionLabel: toaster.current.action.label, onaction: toaster.current.action.run }}
+		/>
+	{/key}
 {/if}
 
 <!-- Opens first on any app start while a send confirmation is stored (design doc "Sending flow"). -->

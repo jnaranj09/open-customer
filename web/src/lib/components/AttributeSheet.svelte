@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Callout from './ui/Callout.svelte';
-	import { getContext, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError, type Result } from '../api/errors';
 	import type { Attribute } from '../api/schemas';
@@ -14,7 +14,7 @@
 	import { cache } from '../cache/store.svelte';
 	import { t, type MessageKey } from '../i18n';
 	import { submitOnce } from '../submit';
-	import type { createToaster } from '../toaster.svelte';
+	import { toaster } from '../toaster.svelte';
 	import ActionButton from './ActionButton.svelte';
 	import BottomSheet from './ui/BottomSheet.svelte';
 	import Button from './ui/Button.svelte';
@@ -42,8 +42,6 @@
 		/** Told after a save, an archive or a restore, with the message to show. */
 		ondone: (message: MessageKey) => void;
 	} = $props();
-
-	const toaster = getContext<ReturnType<typeof createToaster>>('settings-toaster');
 
 	let label = $state(untrack(() => attribute?.label ?? ''));
 	let required = $state(untrack(() => attribute?.required ?? false));

@@ -59,12 +59,13 @@ type BootList =
 
 /** One source of server data on a screen. `empty` is what the screen says with no rows: from
  *  the real answer with `bootstrap` lists (or a list answer's `items`) emptied; `none` says why
- *  the feed has no empty state (one record, a form). */
+ *  the feed has no empty state (one record, a form). A screen whose two layouts show different
+ *  views (Hoy: a day on compact, a week on wide) gives the text per width. */
 type Feed = {
 	name: string;
 	/** The API paths of the feed. */
 	api: RegExp;
-	empty: { bootstrap?: BootList[]; text: string } | { none: string };
+	empty: { bootstrap?: BootList[]; text: string | Record<Width, string> } | { none: string };
 };
 
 type Probe = {
@@ -95,7 +96,10 @@ const PROBES: Record<string, Probe> = {
 			{
 				name: 'agenda',
 				api: /^\/api\/v1\/(bootstrap|appointments)$/,
-				empty: { bootstrap: ['appointments', 'due'], text: es.agenda_empty_day }
+				empty: {
+					bootstrap: ['appointments', 'due'],
+					text: { compact: es.agenda_empty_day, wide: es.agenda_empty_week }
+				}
 			}
 		]
 	},
@@ -271,6 +275,11 @@ function routesOnDisk(): string[] {
 
 function widthOf(project: string): Width {
 	return project === 'probe-wide' ? 'wide' : 'compact';
+}
+
+/** The empty text a feed shows at the width of `project`. */
+function emptyText(text: string | Record<Width, string>, project: string): string {
+	return typeof text === 'string' ? text : text[widthOf(project)];
 }
 
 const CLEAN = { open: [], stale: [] };
@@ -518,11 +527,12 @@ for (const [route, probe] of Object.entries(PROBES)) {
 				test(`${feed.name}: no rows shows the empty state`, async ({ page }, info) => {
 					await page.route(feedMatch(feed), (r) => answerEmpty(r, empty.bootstrap ?? []));
 					await page.goto(await probe.open(page, ids));
-					const found = await whenShown(
-						page,
-						await shows(page.getByText(empty.text, { exact: true })),
-						{ check: 'empty', target: feed.name, detail: `no "${empty.text}"` }
-					);
+					const text = emptyText(empty.text, info.project.name);
+					const found = await whenShown(page, await shows(page.getByText(text, { exact: true })), {
+						check: 'empty',
+						target: feed.name,
+						detail: `no "${text}"`
+					});
 					expect(verdict(found, route, info.project.name, `${feed.name} empty`)).toEqual(CLEAN);
 				});
 			}

@@ -19,11 +19,10 @@
 	import OverlapSheet from '../../../lib/components/OverlapSheet.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
 	import TextField from '../../../lib/components/ui/TextField.svelte';
-	import Toast from '../../../lib/components/Toast.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { amountText, exponentOf, formatMoney, parseAmount } from '../../../lib/money';
 	import { submitOnce } from '../../../lib/submit';
-	import { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import { formatDayLong, formatTime, todayIn } from '../../../lib/time';
 
 	// One appointment (CUJ 3 step 5): its facts, the status buttons, the amount paid, edit mode and
@@ -43,7 +42,6 @@
 	let appt = $state<Appointment | null>(null);
 	let loadError = $state<ApiError | null>(null);
 	let editing = $state(false);
-	const toaster = createToaster();
 
 	// The cached copy shows at once (and is all there is offline); the server's answer replaces it.
 	async function load(want: string): Promise<void> {
@@ -322,12 +320,6 @@
 		</div>
 	{/if}
 </div>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}
 
 <OverlapSheet
 	open={overlapping !== null}

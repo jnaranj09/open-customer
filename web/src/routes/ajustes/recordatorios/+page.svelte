@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Card from '../../../lib/components/ui/Card.svelte';
 	import { resolve } from '$app/paths';
-	import { getContext } from 'svelte';
 	import type { Rule } from '../../../lib/api/schemas';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
@@ -9,13 +8,12 @@
 	import RuleSheet from '../../../lib/components/RuleSheet.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { sortRules } from '../../../lib/rules';
-	import type { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Recordatorios (design doc item 77, CUJ 2 steps 3 and 4): the rules as sentences, with
 	// a sheet to add one or edit the one she taps. Archived rules are listed apart, so she can
 	// restore one. With no template yet there is nothing to send, so the screen leads to Plantillas.
-	const toaster = getContext<ReturnType<typeof createToaster>>('settings-toaster');
 
 	const data = $derived(cache.snapshot);
 	const active = $derived(sortRules(data?.rules.filter((r) => !r.archived) ?? []));

@@ -8,11 +8,10 @@
 	import { t, type MessageKey } from '../i18n';
 	import { toJpegs } from '../photos';
 	import { submitOnce } from '../submit';
-	import { createToaster } from '../toaster.svelte';
+	import { toaster } from '../toaster.svelte';
 	import FilePicker from './FilePicker.svelte';
 	import Icon from './icons/Icon.svelte';
 	import PhotoGrid from './PhotoGrid.svelte';
-	import Toast from './Toast.svelte';
 
 	// The photos of one client (the gallery) or of one of her appointments (design doc "Photos"): the
 	// list from the server, "Agregar foto" and "Archivar foto". Give it a new key when the owner
@@ -35,7 +34,6 @@
 	let listError = $state<string | null>(null);
 	let photosError = $state<string | null>(null);
 	let uploading = $state(false);
-	const toaster = createToaster();
 
 	async function load(): Promise<void> {
 		const result = await api.listClientMedia(clientId);
@@ -114,16 +112,12 @@
 	</div>
 	{#if photosError !== null || listError !== null}
 		<p role="alert" class="text-sm text-error">{photosError ?? listError}</p>
-	{:else if photos !== null && photos.length === 0}
+	{:else if photos === null}
+		<p role="status" class="px-2 text-base text-ink-muted">{t('photos_loading')}</p>
+	{:else if photos.length === 0}
 		<p class="text-sm text-ink-muted">{t(empty)}</p>
 	{/if}
 	{#if photos !== null && photos.length > 0}
 		<PhotoGrid {photos} onarchive={archive} />
 	{/if}
 </Card>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}

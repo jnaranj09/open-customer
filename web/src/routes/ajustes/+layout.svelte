@@ -1,23 +1,18 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { setContext, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import TextButton from '../../lib/components/ui/TextButton.svelte';
 	import SettingsList from '../../lib/components/SettingsList.svelte';
-	import Toast from '../../lib/components/Toast.svelte';
 	import { t } from '../../lib/i18n';
 	import { layout } from '../../lib/layout';
 	import { showSettingsBack } from '../../lib/settingsPage';
-	import { createToaster } from '../../lib/toaster.svelte';
 
 	// Ajustes (design doc "Screen layouts"): on wide the section list (280 px) stays on the left
 	// and the open section fills the right, with Negocio at `/ajustes`. On compact the list is the
 	// screen at `/ajustes` and a section replaces it, under a "Volver a Ajustes" bar. Plantillas
 	// sits in the right column and brings its own list and editor split.
 	let { children }: { children: Snippet } = $props();
-
-	const toaster = createToaster();
-	setContext('settings-toaster', toaster);
 
 	const wide = $derived(layout.current === 'wide');
 	const onRoot = $derived(page.url.pathname.replace(/\/$/, '') === resolve('/ajustes'));
@@ -51,15 +46,4 @@
 		{/if}
 		{@render children()}
 	</div>
-{/if}
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast
-			message={toaster.current.message}
-			{...toaster.current.action === undefined
-				? {}
-				: { actionLabel: toaster.current.action.label, onaction: toaster.current.action.run }}
-		/>
-	{/key}
 {/if}

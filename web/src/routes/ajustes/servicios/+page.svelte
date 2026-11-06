@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Card from '../../../lib/components/ui/Card.svelte';
-	import { getContext } from 'svelte';
 	import type { Service } from '../../../lib/api/schemas';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
@@ -9,12 +8,11 @@
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { formatMoney } from '../../../lib/money';
 	import { serviceSubtitle } from '../../../lib/services';
-	import type { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Servicios (design doc item 77, CUJ 2 step 1): the list, with a sheet to add one or
 	// edit the one she taps. Archived services are listed apart, so she can restore one.
-	const toaster = getContext<ReturnType<typeof createToaster>>('settings-toaster');
 
 	const data = $derived(cache.snapshot);
 	const active = $derived(data?.services.filter((s) => !s.archived) ?? []);

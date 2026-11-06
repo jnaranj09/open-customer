@@ -2,14 +2,12 @@
 	import Card from '../../../lib/components/ui/Card.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { setContext, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import type { Template } from '../../../lib/api/schemas';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
-	import Toast from '../../../lib/components/Toast.svelte';
 	import { t } from '../../../lib/i18n';
-	import { createToaster } from '../../../lib/toaster.svelte';
 	import WriteLink from '../../../lib/components/WriteLink.svelte';
 
 	// Ajustes → Plantillas (design doc item 77): the list of message templates, with the open
@@ -18,9 +16,6 @@
 	// list is one screen and the editor the next. The page has no shell of its own: the Ajustes
 	// layout frames it.
 	let { children }: { children: Snippet } = $props();
-
-	const toaster = createToaster();
-	setContext('templates-toaster', toaster);
 
 	const templates = $derived(cache.snapshot?.templates ?? []);
 	const active = $derived(templates.filter((x) => !x.archived));
@@ -75,9 +70,3 @@
 		</div>
 	</div>
 </div>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}

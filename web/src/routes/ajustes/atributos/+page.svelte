@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Card from '../../../lib/components/ui/Card.svelte';
-	import { getContext } from 'svelte';
 	import type { Attribute } from '../../../lib/api/schemas';
 	import { inScope, SCOPE_LABELS, TYPE_LABELS } from '../../../lib/attributes';
 	import { cache } from '../../../lib/cache/store.svelte';
@@ -8,13 +7,12 @@
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
-	import type { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Atributos (design doc item 77, CUJ 2 step 2): the attributes grouped by what they
 	// belong to (the client or each appointment), and a sheet to add one or edit the one she taps.
 	// The sheet follows the attribute by id, so the options it shows come from the refreshed cache.
-	const toaster = getContext<ReturnType<typeof createToaster>>('settings-toaster');
 
 	const data = $derived(cache.snapshot);
 	const scopes = ['client', 'appointment'] as const;

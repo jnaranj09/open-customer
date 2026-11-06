@@ -22,13 +22,12 @@
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
-	import Toast from '../../../lib/components/Toast.svelte';
 	import { historySplit, sharingNames } from '../../../lib/clients';
 	import { t } from '../../../lib/i18n';
 	import { formatMoney } from '../../../lib/money';
 	import { formatPhone } from '../../../lib/phone';
 	import { submitOnce } from '../../../lib/submit';
-	import { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import { formatDayWithYear, formatTime, todayIn } from '../../../lib/time';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
@@ -42,7 +41,6 @@
 	let client = $state<Client | null>(null);
 	let loadError = $state<ApiError | null>(null);
 	let editing = $state(false);
-	const toaster = createToaster();
 
 	// The cached copy shows at once (an archived client is not cached); the server's answer replaces it.
 	async function load(want: string): Promise<void> {
@@ -308,7 +306,8 @@
 					{#each cachedAppts as a (a.id)}
 						{@render appointmentRow(a)}
 					{:else}
-						{#if everything === null}
+						<!-- Before "Ver todas las citas", none in the cached window; after it, none at all. -->
+						{#if everything === null || others.length === 0}
 							<li class="text-sm text-ink-muted">{t('client_history_empty')}</li>
 						{/if}
 					{/each}
@@ -348,9 +347,11 @@
 				<h2 class="text-xl font-bold text-ink">{t('client_reminders')}</h2>
 				{#if remindersError !== null}
 					<p role="alert" class="text-sm text-error">{remindersError}</p>
-				{:else if reminders !== null && reminders.length === 0}
+				{:else if reminders === null}
+					<p role="status" class="px-2 text-base text-ink-muted">{t('client_reminders_loading')}</p>
+				{:else if reminders.length === 0}
 					<p class="text-sm text-ink-muted">{t('client_reminders_empty')}</p>
-				{:else if reminders !== null}
+				{:else}
 					<ul class="flex flex-col divide-y divide-glass-edge">
 						{#each reminders as row (row.id)}
 							<li class="flex flex-col gap-0.5 py-3">
@@ -401,9 +402,3 @@
 		{t('cancel')}
 	</Button>
 </BottomSheet>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}

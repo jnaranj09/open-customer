@@ -2,11 +2,10 @@
 	import Card from './ui/Card.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getContext } from 'svelte';
 	import type { Template } from '../api/schemas';
 	import { cache } from '../cache/store.svelte';
 	import { t } from '../i18n';
-	import type { createToaster } from '../toaster.svelte';
+	import { toaster } from '../toaster.svelte';
 	import EmptyState from './ui/EmptyState.svelte';
 	import IconButton from './ui/IconButton.svelte';
 	import TemplateForm from './TemplateForm.svelte';
@@ -17,7 +16,6 @@
 	// by Save or Cancel replaces its history entry, so Back does not open an empty form again.
 	let { template, missing = false }: { template?: Template; missing?: boolean } = $props();
 
-	const toaster = getContext<ReturnType<typeof createToaster>>('templates-toaster');
 	const list = $derived(resolve('/ajustes/plantillas'));
 </script>
 
@@ -36,7 +34,12 @@
 			</h2>
 		{/if}
 	</header>
-	{#if missing || cache.snapshot === null}
+	{#if cache.snapshot === null}
+		<!-- Beside the list (wide) the list says it; alone (compact) the pane does. -->
+		<p role="status" class="px-2 text-base text-ink-muted @3xl:hidden">
+			{t('templates_loading')}
+		</p>
+	{:else if missing}
 		<Card>
 			<EmptyState title={t('templates_pick_title')} body={t('templates_pick_body')} />
 		</Card>
