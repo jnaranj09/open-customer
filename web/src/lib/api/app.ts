@@ -6,6 +6,7 @@ import { resolve } from '$app/paths';
 import { writable } from 'svelte/store';
 import { clearCache } from '../cache/db';
 import type { ErrorReport } from '../report';
+import { rememberFinishing, sessionStore } from '../setup';
 import { createApi, type Api } from './client';
 
 /** True once the server reported a build version other than this app's; the update prompt reads it. */
@@ -71,7 +72,12 @@ export function createAppApi(env: AppApiEnv): Api {
 export const api = createAppApi({
 	fetch: (input, init) => fetch(input, init),
 	version,
-	clear: clearCache,
+	// A lost session also drops the setup wizard's finishing step: the login screen comes next,
+	// and a later sign-in must not reopen the wizard.
+	clear: () => {
+		rememberFinishing(sessionStore(), null);
+		return clearCache();
+	},
 	toLogin: () => goto(resolve('/login'))
 });
 
