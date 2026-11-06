@@ -11,7 +11,8 @@
 	import { t } from '../../../lib/i18n';
 
 	// "Nueva cita" (CUJ 3). `dia` is the day the link was opened from; `volver` is where "save"
-	// goes back to (Hoy by default).
+	// goes back to (Hoy by default). Save and Cancel replace this form's history entry, so Back does
+	// not open it again empty.
 	const zone = $derived(
 		cache.snapshot?.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 	);
@@ -33,10 +34,10 @@
 			data={cache.snapshot}
 			{day}
 			onsaved={() => {
-				void goto(back);
+				void goto(back, { replaceState: true });
 			}}
 			oncancel={() => {
-				void goto(back);
+				void goto(back, { replaceState: true });
 			}}
 		/>
 	{/if}

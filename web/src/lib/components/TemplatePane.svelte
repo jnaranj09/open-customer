@@ -13,7 +13,8 @@
 
 	// The pane beside the template list: the open template's form, or the new-template form (no
 	// `template`). Its routes are `/ajustes/plantillas/[id]` and `/ajustes/plantillas/nueva`, so Back
-	// works; leaving with unsaved changes is asked by `TemplateForm`.
+	// works; leaving with unsaved changes is asked by `TemplateForm`. Leaving the new-template form
+	// by Save or Cancel replaces its history entry, so Back does not open an empty form again.
 	let { template, missing = false }: { template?: Template; missing?: boolean } = $props();
 
 	const toaster = getContext<ReturnType<typeof createToaster>>('templates-toaster');
@@ -46,7 +47,7 @@
 			onsaved={(saved: Template) => {
 				toaster.say('template_saved');
 				if (template === undefined) {
-					void goto(resolve('/ajustes/plantillas/[id]', { id: saved.id }));
+					void goto(resolve('/ajustes/plantillas/[id]', { id: saved.id }), { replaceState: true });
 				}
 			}}
 			onarchived={(isArchived: boolean) => {
@@ -56,7 +57,7 @@
 				}
 			}}
 			oncancel={() => {
-				void goto(list);
+				void goto(list, { replaceState: template === undefined });
 			}}
 		/>
 	{/if}

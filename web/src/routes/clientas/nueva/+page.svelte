@@ -15,6 +15,7 @@
 	// "Nueva clienta" (design doc item 76). `volver` is the screen she came from; `savedDestination`
 	// decides where saving goes. `returnTo` checked the path is inside the app; `resolve` types a
 	// path without its first slash.
+	// Save and Cancel replace this form's history entry, so Back does not open it again empty.
 	const from = $derived(page.url.searchParams.get('volver'));
 	const wide = $derived(layout.current === 'wide');
 	const toPath = (id: string): Path => savedDestination(from, wide, id).slice(1) as Path;
@@ -40,10 +41,10 @@
 		<ClientForm
 			data={cache.snapshot}
 			onsaved={(saved: Client) => {
-				void goto(resolve(toPath(saved.id)));
+				void goto(resolve(toPath(saved.id)), { replaceState: true });
 			}}
 			oncancel={() => {
-				void goto(back);
+				void goto(back, { replaceState: true });
 			}}
 		/>
 	{/if}
