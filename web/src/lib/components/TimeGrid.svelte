@@ -148,7 +148,7 @@
 												{:else if a.status === 'confirmed'}
 													<span class="sr-only">{t('status_confirmed')}</span>
 												{/if}
-												{a.client_name}
+												<span>{a.client_name}</span>
 											</p>
 										{:else}
 											<p class="truncate text-xs font-bold text-accent-700">
