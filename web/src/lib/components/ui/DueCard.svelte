@@ -12,6 +12,7 @@
 	import { canSend, type Sendable } from '../../pending';
 	import { formatDayShort, todayIn } from '../../time';
 	import Button from './Button.svelte';
+	import { OFFLINE_REASON_ID } from './offlineReason';
 	import WriteButton from '../WriteButton.svelte';
 	import { buttonClasses } from './buttonStyle';
 
@@ -24,6 +25,7 @@
 		offline,
 		busy,
 		skipBlocked,
+		skipReasonId,
 		onsend,
 		onskip,
 		onadd
@@ -34,6 +36,8 @@
 		busy: boolean;
 		/** Another "Omitir" is still inside its "Deshacer" window. */
 		skipBlocked: boolean;
+		/** The id of the screen's one line that says why "Omitir" waits (`due_skip_wait`). */
+		skipReasonId: string;
 		onsend: (item: Sendable) => void;
 		onskip: (item: DueItem) => void;
 		onadd: (item: DueItem) => void;
@@ -54,13 +58,15 @@
 				})
 	);
 
-	// A button she must not use says why (ui.md): offline first, then a skip still undoable. Enviar
-	// and the booking button are `WriteButton`s, which say the offline reason themselves.
+	// A button she must not use says why (ui.md): offline first, then a skip still undoable. The
+	// reason is said once per screen, not under every card of the list: offline the banner's line,
+	// while a skip waits the screen's own line (`skipReasonId`). Enviar and the booking button are
+	// `WriteButton`s pointing at the banner the same way.
 	const skipOff = $derived(
 		offline
-			? { disabled: true as const, disabledReason: t('offline_cannot_save') }
+			? { disabled: true as const, reasonId: OFFLINE_REASON_ID }
 			: skipBlocked
-				? { disabled: true as const, disabledReason: t('due_skip_wait') }
+				? { disabled: true as const, reasonId: skipReasonId }
 				: {}
 	);
 </script>
@@ -76,6 +82,7 @@
 			<div class="min-w-40 flex-1">
 				<WriteButton
 					variant="strong"
+					sharedOfflineReason
 					{busy}
 					onclick={() => {
 						onadd(item);
@@ -89,6 +96,7 @@
 			{#if canSend(item)}
 				<WriteButton
 					variant={prompt === null ? 'strong' : 'glass'}
+					sharedOfflineReason
 					{busy}
 					onclick={() => {
 						onsend(item);

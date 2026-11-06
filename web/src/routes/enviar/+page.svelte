@@ -197,6 +197,10 @@
 	const sentFailure = $derived(
 		sentError !== null && sentError.kind !== 'offline' ? errorText(sentError) : null
 	);
+	// While a skip waits for "Deshacer", the other "Omitir" buttons are off: this one line says why
+	// (the buttons point at it), not one under every card.
+	const skipReasonId = $props.id();
+
 	const count = $derived(
 		items.length === 1 ? t('due_count_one') : t('due_count_other', { count: items.length })
 	);
@@ -228,6 +232,7 @@
 		offline={cache.offline}
 		{busy}
 		skipBlocked={skipping !== null}
+		{skipReasonId}
 		onsend={(sendable: Sendable) => void send.run(sendable)}
 		onskip={skip}
 		onadd={(due: DueItem) => void addToAppointment.run(due, false)}
@@ -285,6 +290,9 @@
 
 	{#if actionError !== null}
 		<Card as="p" role="alert" pad="message" class="text-base text-error">{actionError}</Card>
+	{/if}
+	{#if skipping !== null && !cache.offline}
+		<p id={skipReasonId} class="px-2 text-sm text-ink-muted">{t('due_skip_wait')}</p>
 	{/if}
 
 	{#if !hasRules}

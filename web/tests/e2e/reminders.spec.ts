@@ -131,6 +131,21 @@ test.describe('CUJ 4: morning sending', () => {
 		await expect(dueItem(page, 'Ana Rojas')).toHaveCount(0);
 	});
 
+	test('while an Omitir can be undone, the list says once why the other Omitir are off', async ({
+		page
+	}) => {
+		const lucia = await insertClient({ name: 'Lucía Mora', phone: '+50688885555' });
+		await insertAppointment({ clientId: lucia, services: ['Acrílico'], startsAt: at(1, '12:00') });
+		await skipAna(page);
+
+		for (const name of ['Marta Solano', 'Lucía Mora']) {
+			const skip = dueItem(page, name).getByRole('button', { name: es.due_skip, exact: true });
+			await expect(skip).toBeDisabled();
+			await expect(skip).toHaveAccessibleDescription(es.due_skip_wait);
+		}
+		await expect(page.getByText(es.due_skip_wait, { exact: true })).toHaveCount(1);
+	});
+
 	test('Omitir is sent at once when she goes to another page', async ({ page }) => {
 		await skipAna(page);
 		const posted = logPosted(page);

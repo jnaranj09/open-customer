@@ -3,6 +3,8 @@
 	import { buttonClasses, type ButtonVariant } from './buttonStyle';
 
 	// A disabled button always says why (ui.md). `busy` needs no reason: its spinner is the reason.
+	// The reason shows under the button (`disabledReason`), or, when many buttons share one reason
+	// (the cards of a list), once elsewhere on the screen: `reasonId` is that line's id.
 	type Props = {
 		variant: ButtonVariant;
 		busy?: boolean;
@@ -10,7 +12,9 @@
 		type?: 'button' | 'submit';
 		children: Snippet;
 	} & (
-		{ disabled?: false; disabledReason?: undefined } | { disabled: true; disabledReason: string }
+		| { disabled?: false; disabledReason?: undefined; reasonId?: undefined }
+		| { disabled: true; disabledReason: string; reasonId?: undefined }
+		| { disabled: true; disabledReason?: undefined; reasonId: string }
 	);
 
 	let {
@@ -18,12 +22,14 @@
 		busy = false,
 		disabled = false,
 		disabledReason,
+		reasonId: sharedReasonId,
 		onclick,
 		type = 'button',
 		children
 	}: Props = $props();
 
-	const reasonId = $props.id();
+	const ownReasonId = $props.id();
+	const reasonId = $derived(sharedReasonId ?? ownReasonId);
 	const off = $derived(disabled || busy);
 </script>
 
@@ -45,7 +51,7 @@
 		{/if}
 		{@render children()}
 	</button>
-	{#if disabled}
+	{#if disabled && sharedReasonId === undefined}
 		<p id={reasonId} class="text-center text-sm text-ink-muted">{disabledReason}</p>
 	{/if}
 </div>

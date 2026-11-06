@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from '../../i18n';
+	import { OFFLINE_REASON_ID } from './offlineReason';
 	import { formatTime } from '../../time';
 	import Icon from '../icons/Icon.svelte';
 
@@ -21,6 +22,6 @@
 	<Icon name="cloud-off" class="size-5.5 shrink-0 text-accent-text" />
 	<div class="flex min-w-0 flex-col gap-0.5">
 		<p class="text-base">{message}</p>
-		<p class="text-sm text-ink-muted">{t('offline_cannot_save')}</p>
+		<p id={OFFLINE_REASON_ID} class="text-sm text-ink-muted">{t('offline_cannot_save')}</p>
 	</div>
 </div>

@@ -12,9 +12,11 @@ import { dueItem } from './steps';
 
 test.use({ serviceWorkers: 'block' });
 
+let ana = '';
+
 test.beforeEach(async ({ page }) => {
 	await resetData();
-	const ana = await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
+	ana = await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
 	await insertAppointment({ clientId: ana, services: ['Acrílico'], startsAt: at(0, '17:00') });
 	// The 1-day "before" rule makes this one's message due today.
 	await insertAppointment({ clientId: ana, services: ['Acrílico'], startsAt: at(1, '17:00') });
@@ -114,6 +116,33 @@ test('offline keeps the cached due list read-only', async ({ page }) => {
 		await expect(button).toBeDisabled();
 		await expect(button).toHaveAccessibleDescription(es.offline_cannot_save);
 	}
+});
+
+test('offline the due list says why its buttons are off once, not under every card', async ({
+	page
+}) => {
+	const marta = await insertClient({ name: 'Marta Solano', phone: '+50688886666' });
+	await insertAppointment({ clientId: marta, services: ['Acrílico'], startsAt: at(1, '10:00') });
+	await page.goto('/enviar');
+	await expect(dueItem(page, 'Marta Solano')).toBeVisible();
+	await serverOff(page);
+	await page.reload();
+
+	await expect(page.getByRole('status').getByText(BANNER)).toBeVisible();
+	await expect(dueItem(page, 'Marta Solano')).toBeVisible();
+	await expect(page.getByText(es.offline_cannot_save, { exact: true })).toHaveCount(1);
+});
+
+test('offline "Agregar foto" is off and says why', async ({ page }) => {
+	await page.goto(`/clientas/${ana}`);
+	await expect(page.getByText(es.photos_empty_client, { exact: true })).toBeVisible();
+	await serverOff(page);
+	await page.reload();
+
+	await expect(page.getByRole('status').getByText(BANNER)).toBeVisible();
+	const add = page.getByRole('button', { name: es.photo_add });
+	await expect(add).toBeDisabled();
+	await expect(add).toHaveAccessibleDescription(es.offline_cannot_save);
 });
 
 test('a started form is kept as a draft', async ({ page }) => {
