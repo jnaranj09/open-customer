@@ -8,6 +8,8 @@ var spanish = Locale{
 		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 	},
 	dayMonthFormat: "%d de %s",
+	am:             "a. m.",
+	pm:             "p. m.",
 	decimalMark:    ",",
 	listAnd:        "y",
 	sampleClient:   "Ana Pérez",

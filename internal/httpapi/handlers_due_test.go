@@ -78,7 +78,7 @@ func TestGetRemindersDueReturnsCUJ4And5Items(t *testing.T) {
 	got := decodeInto[gen.DueList](t, rec, http.StatusOK).Items
 	anaItem, luciaItem, martaItem := got[0], got[1], got[2]
 
-	wantText := "Hola Ana, te esperamos viernes 23 de octubre a las 15:00"
+	wantText := "Hola Ana, te esperamos viernes 23 de octubre a las 3:00 p. m."
 	if anaItem.Kind != "before_appointment" || anaItem.AppointmentId != anaTomorrow.Id || anaItem.Text != wantText || anaItem.Mode != "message" {
 		t.Fatalf("first item = %+v; want Ana's before message %q", anaItem, wantText)
 	}

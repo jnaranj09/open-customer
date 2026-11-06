@@ -187,7 +187,7 @@ func TestRescheduleGivesBeforeNewIdentity(t *testing.T) {
 	if want := ":" + strconv.FormatInt(moved.StartsAt.Unix(), 10); !strings.HasSuffix(it.ID, want) {
 		t.Fatalf("ID %q does not end in %q", it.ID, want)
 	}
-	if !strings.Contains(it.Text, "17:00") {
+	if !strings.Contains(it.Text, "5:00 p. m.") {
 		t.Fatalf("text %q does not show the new time", it.Text)
 	}
 }

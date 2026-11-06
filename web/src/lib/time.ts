@@ -81,8 +81,9 @@ export function weekStart(day: string): string {
 	return addDays(day, -sinceMonday);
 }
 
-/** `HH:MM` on a 24-hour clock: the one time format of the app (design/soft-glass.pen), also in the
- *  messages the server renders (`locale.Time`). Every shown time goes through it. */
+/** `HH:MM` on a 24-hour clock: the one time format of the screens (design/soft-glass.pen); every
+ *  time a screen shows goes through it. Client messages are the server's (`locale.Time`, 12-hour,
+ *  "3:00 p. m."), by design. */
 export function clockText(hour: number, minute: number): string {
 	return `${pad(hour)}:${pad(minute)}`;
 }

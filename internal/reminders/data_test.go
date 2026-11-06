@@ -63,7 +63,7 @@ func TestBuildDataFixedValues(t *testing.T) {
 		"client.name":         "Ana Rojas",
 		"client.first_name":   "Ana",
 		"appointment.date":    "sábado 24 de octubre",
-		"appointment.time":    "15:00",
+		"appointment.time":    "3:00 p. m.",
 		"appointment.service": "Acrílico, Pedicure y Cejas",
 		"business.name":       "Estudio Sol",
 	}

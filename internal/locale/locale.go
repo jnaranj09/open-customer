@@ -18,6 +18,7 @@ type Locale struct {
 	weekdays       [7]string // indexed by time.Weekday, Sunday first
 	months         [12]string
 	dayMonthFormat string // %d day, %s month name
+	am, pm         string
 	decimalMark    string
 	listAnd        string
 	varLabels      map[string]string // "ns.key" to the label of a fixed template variable
@@ -56,10 +57,17 @@ func (l Locale) DayMonth(t time.Time) string {
 	return fmt.Sprintf(l.dayMonthFormat, t.Day(), l.months[t.Month()-1])
 }
 
-// Time formats t on a 24-hour clock, for example "15:00", in t's own zone: the same "HH:MM" the
-// app shows on every screen (design/soft-glass.pen), so a message and the agenda read one way.
+// Time formats t on a 12-hour clock, for example "3:00 p. m.", in t's own zone.
 func (l Locale) Time(t time.Time) string {
-	return fmt.Sprintf("%02d:%02d", t.Hour(), t.Minute())
+	mark := l.am
+	if t.Hour() >= 12 {
+		mark = l.pm
+	}
+	hour := t.Hour() % 12
+	if hour == 0 {
+		hour = 12
+	}
+	return fmt.Sprintf("%d:%02d %s", hour, t.Minute(), mark)
 }
 
 // Number formats f with the locale's decimal mark and no trailing zeros, for example "12,5".

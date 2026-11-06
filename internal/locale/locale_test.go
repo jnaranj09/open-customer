@@ -45,12 +45,12 @@ func TestSpanishTime(t *testing.T) {
 		hour, min int
 		want      string
 	}{
-		"afternoon":  {15, 0, "15:00"},
-		"morning":    {9, 5, "09:05"},
-		"midnight":   {0, 0, "00:00"},
-		"noon":       {12, 0, "12:00"},
-		"minute-pad": {23, 7, "23:07"},
-		"half-past":  {12, 30, "12:30"},
+		"afternoon":    {15, 0, "3:00 p. m."},
+		"morning":      {9, 5, "9:05 a. m."},
+		"midnight":     {0, 0, "12:00 a. m."},
+		"noon":         {12, 0, "12:00 p. m."},
+		"minute-pad":   {23, 7, "11:07 p. m."},
+		"hour-twelves": {12, 30, "12:30 p. m."},
 	} {
 		t.Run(name, func(t *testing.T) {
 			at := time.Date(2026, 10, 24, c.hour, c.min, 0, 0, loc)
