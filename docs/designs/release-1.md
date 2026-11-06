@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. P0–P6 are built; P7 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
+*   **Status:** Accepted. P0–P7 are built. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](history/concepts_brief.md), [PRD](../prd.md), [SAD](history/sad-original.md)
 
