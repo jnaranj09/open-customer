@@ -78,6 +78,23 @@ test('warns on an overlap and books with Agendar igual', async ({ page }) => {
 	await expect(page.getByRole('link', { name: /Marta Solano/ })).toBeVisible();
 });
 
+test('the status chip reads "Estado: Agendada" from its own text, with no aria-label', async ({
+	page
+}) => {
+	const appointment = await insertAppointment({
+		clientId: anaId,
+		services: ['Acrílico'],
+		startsAt: at(1, '10:00')
+	});
+	await page.goto(`/citas/${appointment}`);
+
+	const chip = page.getByText(`${es.appointment_status_label}: ${es.status_scheduled}`, {
+		exact: true
+	});
+	await expect(chip).toBeVisible();
+	await expect(chip).not.toHaveAttribute('aria-label');
+});
+
 test('the stored photo has no Exif data', async ({ page }) => {
 	// The fixture does carry Exif with GPS, so a clean stored file means the app removed it.
 	expect(readFileSync(PHOTO).includes(EXIF)).toBe(true);
