@@ -6,12 +6,13 @@ type Plan = { code: string; groups: readonly number[] };
 
 /** The calling codes the business is likely to meet (Costa Rica and its neighbours, the rest of
  *  Latin America, Spain and North America). E.164 codes are prefix-free, so the first match is the
- *  only one. A number of another country, or of an unexpected length, shows as stored. */
+ *  only one. A number of another country, or of an unexpected length, shows as stored. Mexico
+ *  (+52) is left out: its area codes are 2 or 3 digits, so one fixed grouping would split some
+ *  numbers wrongly. */
 const PLANS: readonly Plan[] = [
 	{ code: '1', groups: [3, 3, 4] },
 	{ code: '34', groups: [3, 3, 3] },
 	{ code: '51', groups: [3, 3, 3] },
-	{ code: '52', groups: [2, 4, 4] },
 	{ code: '56', groups: [1, 4, 4] },
 	{ code: '57', groups: [3, 3, 4] },
 	{ code: '58', groups: [3, 3, 4] },
