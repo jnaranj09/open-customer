@@ -202,6 +202,10 @@ Use made-up data. This wipes the volumes of this install, so do it before real u
    docker compose up -d db
    ```
 
+   Do not start `backup` or the whole stack yet. On empty volumes `backup` sees no earlier backup
+   and backs up the empty database at once: that snapshot becomes `latest`, and its `forget` step
+   can drop the snapshot taken earlier the same day.
+
 5. Restore the newest snapshot. Read the snapshot line and answer the prompt by typing `y`
    yourself; piped input is not supported:
 
@@ -248,6 +252,12 @@ backup. Run scripts/upgrade.sh."
 
 Use it after data loss, or to roll back an upgrade (restore the `pre-upgrade` snapshot). Migrations
 only move forward, so a rollback is always a restore.
+
+After the volumes were lost (a new PC, or `docker compose down --volumes`), start only `db`
+(`docker compose up -d db`) and restore before anything else, as in section 8. A `backup` service
+started on empty volumes backs up the empty database at once, so `latest` is then that empty
+snapshot, and the snapshot taken earlier that day can be gone. If that already happened, pick the
+id of the last good snapshot by its time instead of `latest`.
 
 1. Find the snapshot id. From this folder:
 
