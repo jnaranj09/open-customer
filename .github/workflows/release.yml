@@ -1,4 +1,5 @@
-# Design doc item 9. The backup image step is added in P7, with deploy/backup/Dockerfile.
+# Design doc item 9. Builds and pushes the app image (root Dockerfile) and the backup image
+# (deploy/backup/Dockerfile), both tagged with the version.
 name: release
 
 on:
@@ -30,3 +31,10 @@ jobs:
           push: true
           build-args: VERSION=${{ env.VERSION }}
           tags: ghcr.io/jnaranj09/open-customer:${{ env.VERSION }}
+      - name: Backup image
+        uses: docker/build-push-action@v7
+        with:
+          context: deploy/backup
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/jnaranj09/open-customer-backup:${{ env.VERSION }}

@@ -282,6 +282,24 @@ func TestChangePasswordWrongCurrentDelaysTheNextTry(t *testing.T) {
 	assertNoContent(t, send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
 }
 
+// The delay is checked before the handler's transaction: a too-early change opens only the
+// session step's transaction (item 34 step 6), not one of its own.
+func TestChangePasswordRateLimitedOpensOnlyTheSessionTransaction(t *testing.T) {
+	pool := dbtest.Pool(t)
+	rec := &dbtest.TxModeRecorder{Pool: pool}
+	app := newTestApp(t, testServerConfig{pool: pool, beginner: rec})
+	c := sessionCookie(completeSetup(t, app, pool, testOrigin))
+	wrong := send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody("made-up wrong password", newOwnerPassword), withCookie(c))
+	if wrong.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("wrong current password = %d %q, want 422", wrong.Code, wrong.Body.String())
+	}
+	before := len(rec.Modes())
+	assertRateLimited(t, send(app.handler, http.MethodPost, changeAccessPath, testOrigin, passwordBody(ownerPassword, newOwnerPassword), withCookie(c)))
+	if got := len(rec.Modes()) - before; got != 1 {
+		t.Fatalf("a rate-limited password change opened %d transactions; want 1 (the session step's)", got)
+	}
+}
+
 func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	app, _, c := signedInOwner(t)
 	other := login(t, app, ownerPassword)

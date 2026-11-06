@@ -42,11 +42,15 @@ with fnm, `fnm use` in web/).
   app Docker image.
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
+- `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
+  a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit), then
+  `deploy/tests/scripts_test.sh` (the operator scripts, with a fake `docker`) on the host.
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db cover`. CI
-(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e` (after `make build`).
+`make check-pins lint test vuln build check-generated test-db cover test-deploy`. CI
+(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e`
+(after `make build`).
 
 A check that could not run is reported as NOT RUN, never as passing.
 
@@ -68,9 +72,10 @@ A check that could not run is reported as NOT RUN, never as passing.
 8. **Module import rules.** The allowed imports per module are the list in the design doc's "Code
    layout and module rules". depguard checks the coarse ones; the rest is a review check. Each
    module writes only its own tables.
-9. **Transactions are explicit.** Every module function takes `ctx` and a `db.DBTX`. Every non-GET
-   handler that reads or writes the database runs in `db.WithTx` and commits before writing the
-   response. The snapshot readers
+9. **Transactions are explicit.** Every module function takes `ctx` and a `db.DBTX`, except the
+   two in-memory limit checks `auth.BeginLogin` and `auth.BeginPasswordChange`, which run before
+   the handler opens its transaction. Every non-GET handler that reads or writes the database runs
+   in `db.WithTx` and commits before writing the response. The snapshot readers
    (bootstrap, due list, daily timer, export) use a read-only REPEATABLE READ transaction.
 10. **Time is injected.** Modules take the clock from the platform clock package and the business
     time zone from settings; no direct `time.Now()` in a module.

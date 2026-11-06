@@ -1,5 +1,5 @@
 # Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
-# in P2, e2e in P6).
+# in P2, e2e in P6, test-deploy in P7).
 name: ci
 
 on:
@@ -61,6 +61,7 @@ jobs:
       - run: make vuln
       - run: make check-generated
       - run: make test-db
+      - run: make test-deploy
       - run: make cover
       # After every check above, so they ran with only the web stub (Verification Plan, "Clean checkout");
       # e2e below needs the real build.

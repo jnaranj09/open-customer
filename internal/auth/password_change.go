@@ -21,15 +21,33 @@ const (
 	tempPasswordLength   = 12
 )
 
-// ChangePassword sets the signed-in user's password to next (POST /auth/password). A wrong
-// current is Validation on current_password, never Unauthorized, which would sign her out; a next
-// under the minimum length is Validation on new_password. The current password check goes
-// through the same per-username delay as Login (item 41): the attempt is counted before the
-// check and taken back when current is right, so a stolen session cannot guess the current
-// password without limit, and an attempt that comes too early is RateLimited. On success it
-// clears must_change_password and revokes every other session of the user, keeping session
-// (item 39). A session whose user is gone is Unauthorized. The handler runs it in db.WithTx.
-func (a *Auth) ChangePassword(ctx context.Context, q db.DBTX, session Session, current, next string) error {
+// PasswordChangeAttempt is a password change that passed the per-username delay. Only
+// BeginPasswordChange makes one; ChangePassword refuses the zero value (errAttemptNotBegun).
+type PasswordChangeAttempt struct {
+	username string
+}
+
+// BeginPasswordChange puts the current password check of me (the signed-in user step 6 loaded)
+// through the same per-username delay as Login (item 41), in memory and before the handler opens
+// its transaction: an attempt that comes too early is RateLimited and holds no database
+// connection. Otherwise the attempt is counted before the check and ChangePassword takes it back
+// when current is right, so a stolen session cannot guess the current password without limit.
+// me.Username is already normalized, so it is the key Login uses.
+func (a *Auth) BeginPasswordChange(me Me) (PasswordChangeAttempt, error) {
+	if err := a.limiter.reserveName(me.Username, a.clock.Now()); err != nil {
+		return PasswordChangeAttempt{}, err
+	}
+	return PasswordChangeAttempt{username: me.Username}, nil
+}
+
+// ChangePassword sets the signed-in user's password to next (POST /auth/password), for an
+// attempt BeginPasswordChange let through. A wrong current is Validation on current_password,
+// never Unauthorized, which would sign her out, and the failure BeginPasswordChange counted
+// stands; a next under the minimum length is Validation on new_password. On success it clears
+// the delay and must_change_password and revokes every other session of the user, keeping
+// session (item 39). A session whose user is gone is Unauthorized; an attempt begun for another
+// user fails closed (errAttemptNotBegun). The handler runs it in db.WithTx.
+func (a *Auth) ChangePassword(ctx context.Context, q db.DBTX, session Session, attempt PasswordChangeAttempt, current, next string) error {
 	user, err := sqlc.New(q).GetUserCredentials(ctx, session.UserID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return problem.Unauthorized{}
@@ -37,18 +55,19 @@ func (a *Auth) ChangePassword(ctx context.Context, q db.DBTX, session Session, c
 	if err != nil {
 		return fmt.Errorf("load the password hash: %w", err)
 	}
-	// The stored username is already normalized, so it is the key Login uses.
-	if err := a.limiter.reserveName(user.Username, a.clock.Now()); err != nil {
-		return err
+	if user.Username != attempt.username {
+		// The zero attempt (the delay skipped), or one begun for someone else: clearing the delay
+		// below would clear the wrong name. A stored username is never empty.
+		return fmt.Errorf("%w: not begun for this user", errAttemptNotBegun)
 	}
-	ok, err := a.verify(user.PasswordHash, current)
+	ok, err := a.verify(ctx, user.PasswordHash, current)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return problem.Field("current_password", problem.MsgCurrentPasswordWrong)
 	}
-	a.limiter.recordSuccess(user.Username)
+	a.limiter.recordSuccess(attempt.username)
 	if err := validatePassword("new_password", next); err != nil {
 		return err
 	}
@@ -89,7 +108,7 @@ func (a *Auth) ResetPassword(ctx context.Context, q db.DBTX, username string) (s
 
 // setPassword stores pw hashed for the user, with the given must_change_password flag.
 func setPassword(ctx context.Context, q db.DBTX, userID uuid.UUID, pw string, mustChange bool) error {
-	hash, err := hashPassword(pw)
+	hash, err := hashPassword(ctx, pw)
 	if err != nil {
 		return err
 	}

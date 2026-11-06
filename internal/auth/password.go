@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -34,36 +35,77 @@ type argonParams struct {
 // defaultParams is item 38: m=64 MiB, t=3, p=1.
 var defaultParams = argonParams{memory: 64 * 1024, iterations: 3, threads: 1}
 
+// maxConcurrentHashes caps how many argon2id hashes and verifies run at once: each holds
+// defaultParams.memory (64 MiB) while it runs, and the target box is small (item 41). A burst of
+// logins for different usernames, each within its own delay, would otherwise hold that much
+// memory per request.
+const maxConcurrentHashes = 2
+
+// hashSlots is the semaphore behind maxConcurrentHashes: a hash or verify sends into it before
+// argon2 runs and receives after. It is package-level because the cap is per process.
+var hashSlots = make(chan struct{}, maxConcurrentHashes)
+
+// argonIDKey is argon2.IDKey. It is a variable only so a test can count the calls inside it while
+// they run (the concurrency cap has no other trace).
+var argonIDKey = argon2.IDKey
+
+// withHashSlot runs fn once a hash slot is free. If ctx ends first it returns ctx's error and fn
+// never runs. An already ended ctx never takes a slot, even when one is free.
+func withHashSlot(ctx context.Context, fn func()) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("wait for a password hash slot: %w", err)
+	}
+	select {
+	case hashSlots <- struct{}{}:
+	case <-ctx.Done():
+		return fmt.Errorf("wait for a password hash slot: %w", ctx.Err())
+	}
+	defer func() { <-hashSlots }()
+	fn()
+	return nil
+}
+
 // errMalformedHash means a stored password hash is not a PHC string this package can verify. It
 // never carries the stored value.
 var errMalformedHash = errors.New("malformed password hash")
 
 // hashPassword returns pw hashed with Argon2id and the default parameters, as a PHC string:
-// $argon2id$v=19$m=65536,t=3,p=1$<salt>$<hash>.
-func hashPassword(pw string) (string, error) {
-	return hashWith(pw, defaultParams)
+// $argon2id$v=19$m=65536,t=3,p=1$<salt>$<hash>. It waits for a hash slot (maxConcurrentHashes).
+func hashPassword(ctx context.Context, pw string) (string, error) {
+	return hashWith(ctx, pw, defaultParams)
 }
 
-// hashWith hashes pw with the given parameters and a fresh random salt.
-func hashWith(pw string, p argonParams) (string, error) {
+// hashWith hashes pw with the given parameters and a fresh random salt, in a hash slot.
+func hashWith(ctx context.Context, pw string, p argonParams) (string, error) {
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("read a password salt: %w", err)
 	}
-	key := argon2.IDKey([]byte(pw), salt, p.iterations, p.memory, p.threads, keyLength)
+	var key []byte
+	if err := withHashSlot(ctx, func() {
+		key = argonIDKey([]byte(pw), salt, p.iterations, p.memory, p.threads, keyLength)
+	}); err != nil {
+		return "", err
+	}
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, p.memory, p.iterations,
 		p.threads, base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(key)), nil
 }
 
 // verifyPassword reports whether pw matches the stored PHC string. It recomputes the key with the
 // stored parameters, so a hash made with older parameters still verifies. A stored value it cannot
-// parse is an error, never a match.
-func verifyPassword(stored, pw string) (bool, error) {
+// parse is an error, never a match. Like hashPassword it waits for a hash slot; a malformed
+// stored value is refused before it takes one.
+func verifyPassword(ctx context.Context, stored, pw string) (bool, error) {
 	p, salt, key, err := parsePHC(stored)
 	if err != nil {
 		return false, err
 	}
-	got := argon2.IDKey([]byte(pw), salt, p.iterations, p.memory, p.threads, keyLength)
+	var got []byte
+	if err := withHashSlot(ctx, func() {
+		got = argonIDKey([]byte(pw), salt, p.iterations, p.memory, p.threads, keyLength)
+	}); err != nil {
+		return false, err
+	}
 	return subtle.ConstantTimeCompare(got, key) == 1, nil
 }
 

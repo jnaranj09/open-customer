@@ -5,8 +5,10 @@ its clients, appointments and reminder messages. The owner sends reminders by ha
 WhatsApp; the app tells her who is due and writes the message. It is one Go binary that serves a
 SvelteKit PWA, with PostgreSQL, meant to run on a home PC behind a Cloudflare Tunnel.
 
-- Install and operate: deploy/README.md (written in P7).
+- Install and operate: [deploy/README.md](deploy/README.md).
 - Architecture and build plan: [docs/designs/release-1.md](docs/designs/release-1.md).
+- Architecture decisions (ADR index, Spanish): [docs/sad.md](docs/sad.md).
+- Product requirements (Spanish): [docs/prd.md](docs/prd.md).
 - License: not chosen yet.
 
 ## Development
@@ -27,13 +29,14 @@ run.
 | `make check-generated` | `generate`, then fails if a generated file differs from the committed one |
 | `make test-db` | Go tests tagged `db` against a testcontainers Postgres (needs Docker) |
 | `make cover` | The `db` tests with coverage for each package in `COVER_PKGS`; fails when one is under 90% |
+| `make test-deploy` | Builds the backup image and runs `deploy/tests/backup_test.sh` in it against a throwaway Postgres on a private Docker network (needs Docker; publishes no host port; removes its `oc-deploy-*` containers and network), then `deploy/tests/scripts_test.sh` on the host (the operator scripts against a fake `docker`) |
 | `make vuln` | govulncheck |
 | `make build` | The web build, then `bin/open-customer` |
 | `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
 | `make image` | The app Docker image |
 | `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary: the CUJ specs and the UI probe (axe and layout checks on every route at phone and desktop size). Needs the Playwright WebKit browser and its host libraries, port 8080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
 
-The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover`.
+The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy`.
 The gate leaves out `make e2e`. CI runs it after `make build` (design doc item 8); locally it runs
 by hand.
 

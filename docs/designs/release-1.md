@@ -1,9 +1,9 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. P0–P6 are built; P7 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
+*   **Status:** Accepted. P0–P7 are built; the P7 exit is pending: CI on the pushed branch, the release workflow and upgrade.sh end to end (both need a v* tag), and the on-PC and iPhone checks in the Verification Plan. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
-*   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
+*   **Predecessors:** [concepts_brief.md](history/concepts_brief.md), [PRD](../prd.md), [SAD](history/sad-original.md)
 
 --------------------------------------------------------------------------------
 
@@ -33,8 +33,8 @@ Priorities when goals conflict, in order:
 4.  Maintainable by one person.
 5.  Generic and self-hostable by others.
 
-This document replaces the architecture parts of the SAD for release 1. The SAD is reduced to a Spanish ADR index that links here (item 13), so architecture detail lives in one place.
-The PRD keeps the "what" and "why"; it will be updated to match this document (see [Detailed Implementation Plan](#detailed-implementation-plan), item 12).
+This document replaces the architecture parts of the SAD for release 1. The SAD is reduced to a Spanish ADR index ([docs/sad.md](../sad.md)) that links here (item 13), so architecture detail lives in one place.
+The PRD ([docs/prd.md](../prd.md)) keeps the "what" and "why", updated to match this document (see [Detailed Implementation Plan](#detailed-implementation-plan), item 12).
 
 ### Terms used in this document
 
@@ -52,7 +52,7 @@ The PRD keeps the "what" and "why"; it will be updated to match this document (s
 *   **"Item N"**: the numbered entry N in the [Detailed Implementation Plan](#detailed-implementation-plan).
 *   **P0–P7**: the build phases in "Build order". They are not the product Phases 1–3 above.
 *   **"Enviados"**: the list of today's sent messages, below "Para enviar hoy".
-*   **The review / the SAD bug**: the brainstorm review of the PRD and SAD ([goldfish_brainstorm_findings.md](../../goldfish_brainstorm_findings.md)). Its main reminder bug: the SAD's skip rule counted the appointment itself as a "future appointment", so every 24 h reminder was skipped.
+*   **The review / the SAD bug**: the brainstorm review of the PRD and SAD ([goldfish_brainstorm_findings.md](history/goldfish_brainstorm_findings.md)). Its main reminder bug: the SAD's skip rule counted the appointment itself as a "future appointment", so every 24 h reminder was skipped.
 *   **EGM**: the design-review workflow used to write and review this document.
 *   **FR-… and NFR-…**: functional and non-functional requirement IDs from the PRD.
 
@@ -100,7 +100,7 @@ Each goal has a check. Release 1 is done when all checks pass.
     Check: 4 weeks of daily use without going back to the notebook (the PRD's gate to Phase 2). Days with the PC off do not count as misses and do not restart the 4 weeks.
 5.  **Her data is safe and is hers.**
     Checks:
-    *   While the PC is on, backups run at most 25 h apart (the hourly check runs a backup once the last one is 24 h old), and each copy lands on a second disk or machine.
+    *   While the PC is on, backups run at most 25 h apart (the hourly check runs a backup once the last one is 24 h old), and each copy lands on a second disk or machine. The first install keeps `BACKUP_TARGET` on a folder of the same laptop that runs the stack (owner decision), so this check is met only once `BACKUP_TARGET` is on another disk or machine.
     *   One full restore on a clean install succeeds before her real data goes in.
     *   She can download her data as CSV + JSON from the app, without the author.
 6.  **"Hoy" opens in under 1 s, and the app shows when the server is off.**
@@ -224,11 +224,11 @@ Each goal has a check. Release 1 is done when all checks pass.
 
 ### CUJ 7: Backup, upgrade and restore
 
-*   **Given**: The USB backup disk is mounted on the PC and has the target marker file.
+*   **Given**: The backup folder (a removable disk, if the owner uses one, mounted) exists and has the target marker file.
 *   **When**: The PC has been off for two days and is turned on. Later, the author upgrades the app.
 *   **Then**:
     *   As soon as the backup container starts, it sees that the last backup is older than 24 h and runs one.
-    *   The app's status screen shows "Último respaldo: hoy 10:05 (USB)".
+    *   The app's status screen shows "Último respaldo" with the day and time of the last copy, for example "5/11 10:05" (the screen shows no disk label).
     *   During the upgrade, the upgrade script runs a backup before the new version starts.
     *   The new version will not run migrations unless a backup copy from the last 60 minutes exists.
     *   A rollback restores the snapshot taken before the upgrade and also puts back the app version that wrote it, so the old migrations are not re-run on a newer schema.
@@ -255,7 +255,7 @@ flowchart LR
     bk["<b>backup</b><br/>postgres:18-alpine + restic<br/>check at start + hourly"]
     media[("media volume")]
     status[("backup-status volume")]
-    usb[("USB / 2nd disk<br/>restic repository")]
+    usb[("Backup folder<br/>restic repository")]
   end
   push["Web Push service<br/>(Apple)"]
   wa["WhatsApp app<br/>on her phone"]
@@ -341,7 +341,7 @@ Dependency rules:
     *   the orchestrators `scheduler`, `exporter` and `status` → the modules they call. `exporter` calls `attributes.Format` and `appointments.IsDone`; it reads `reminder_log` through `export.sql`, not through `reminders`. `status` calls only read functions: `push.CountSubscriptions`, `scheduler.State` and `db.Version` (the goose version).
 *   `auth` imports no domain module. Setup needs one thing from another module, and `cmd/open-customer` passes it to `auth` as a function when it builds it: the settings creator (a closure over `settings.Create`, which also validates the time zone, currency and country; item 40). `auth` defines the type of that function and of its input, so it never names a `settings` type. Setup writes nothing else: no starter content.
 *   Modules are concrete Go types; `httpapi` holds them directly. An interface is added only where a test needs a fake (`push` for the scheduler tests). The method list in item 32 is the contract.
-*   **Transactions are passed explicitly.** Every module function takes `(ctx, q db.DBTX, …)`. `db.DBTX` is the interface sqlc generates; both the pool and a `pgx.Tx` satisfy it. Who opens the transaction:
+*   **Transactions are passed explicitly.** Every module function takes `(ctx, q db.DBTX, …)`, except the two in-memory limit checks `auth.BeginLogin` and `auth.BeginPasswordChange`, which touch no table and run before the handler opens its transaction (item 41). `db.DBTX` is the interface sqlc generates; both the pool and a `pgx.Tx` satisfy it. Who opens the transaction:
     *   **Every non-GET handler that reads or writes the database** runs its module call inside `db.WithTx` (read-write) and passes the `pgx.Tx`. It commits before it writes the response, so a failed commit is never shown to her as saved (Goal 6). A module write with several statements (an appointment and its service lines, a password change and its session revokes) is then all or nothing. Setup is the same: the `POST /setup` handler opens the transaction for `auth.CompleteSetup`.
     *   **The four snapshot readers** use a read-only `REPEATABLE READ` transaction: bootstrap, `GET /reminders/due` and the daily timer (all three call `DueList`), and export.
     *   **Every other GET handler** passes the pool.
@@ -639,7 +639,7 @@ Session and request rules:
 *   **Tokens:** the setup token and the session token are 32 random bytes, written as unpadded base64url in the link and the cookie, and stored as a SHA-256 hash.
 *   **Session cookie:** `oc_session`. `HttpOnly; Secure; SameSite=Lax; Path=/`. `Secure` is left off only when `PUBLIC_URL` is `http://localhost` or `http://127.0.0.1` (development and e2e), because WebKit does not store a `Secure` cookie over plain http. 90-day expiry that slides forward. `last_seen_at` is written at most once per hour per session; the same write extends `expires_at` and re-sends the cookie with a new 90-day `Max-Age`.
 *   **Writes:** every request except GET and HEAD must have an `Origin` header equal to `PUBLIC_URL`, or it gets a 403. The check is the same in development: `make dev` sets `PUBLIC_URL` to the Vite address (item 2).
-*   **Login rate limit:** 5 attempts per minute per client IP, plus a growing delay per username after failures (exact rule in item 41). The client IP is `CF-Connecting-IP` only when the TCP peer is in `TRUSTED_PROXY_CIDRS` (default: the private ranges, which include the Compose network). Otherwise it is the TCP peer address.
+*   **Login rate limit:** 5 attempts per minute per client IP (an IPv6 client per /64), plus a growing delay per username after failures (exact rule in item 41). The client IP is `CF-Connecting-IP` only when the TCP peer is in `TRUSTED_PROXY_CIDRS` (default: the private ranges, which include the Compose network). Otherwise it is the TCP peer address.
 *   **No device list:** there is no screen that lists sessions. If she loses a phone, she changes her password from another device (Ajustes → "Cambiar contraseña"), which closes every other session (item 39). If she has no other device, the author runs `reset-password`, which closes all of them.
 
 This replaces the brief's one-time code (Alternative K1).
@@ -796,7 +796,9 @@ Cloudflare settings the author sets once (documented in `deploy/README.md`):
 
 A failed step never ends the script early: its error goes to `status.json` (step 6) first. In loop mode the script then waits for the next hour instead of exiting, because `restart: unless-stopped` would otherwise restart it against a broken disk again and again. `once` exits non-zero after writing the status.
 
-1.  First, check that `/target/.open-customer-backup-target` exists. If it does not, the USB disk is not mounted. Write the error to `status.json`, do not write to `/target`, and wait for the next hour.
+1.  First, check that `/target/.open-customer-backup-target` exists. If it does not, the target is not there (for a removable disk: not mounted). Write the error to `status.json`, do not write to `/target`, and wait for the next hour.
+
+    Also in step 1, the new-volumes guard: a run that starts without `status.json` is on new volumes (a new PC, or `docker compose down --volumes`), and it creates `/backup-status/restore-first` (before the marker check, so a missing target does not lose it). While that file exists and the repository already has at least one snapshot, the run takes no snapshot and runs no `forget`: a backup of the new, empty database would become `latest`, so `restore.sh latest` would restore nothing, and its `forget` could also drop that day's real snapshot (`forget` keeps only the newest snapshot of each day). It writes the error "Hay respaldos anteriores: restaure primero" to `status.json` and waits for the next hour (`once` exits non-zero). The file, not `status.json`, holds the guard, so the run's own status write does not lift it. A restore also creates the file, before it drops the database, so a restore that fails after that point blocks the next backups the same way until a restore succeeds. It is lifted (the file removed) by a missing repository folder or one with no snapshot files (a first install, which then backs up as before), by a successful restore, or by the operator replacing `status.json` with `{}` (to start empty on purpose, or when only the status file was lost and the database is intact, never after a failed restore, where it would lift the guard over a half-restored database; a file without `checked_at`, which `backup.sh` always writes; command in `deploy/README.md` section 10). It fails closed: while the file exists, a repository whose config or snapshot list cannot be read blocks the run the same way, with "copy: <first line of stderr>". Snapshots are counted as snapshot files (`restic list snapshots`), because `restic snapshots` skips a file it cannot read and answers an empty list with exit 0. The status screen shows only the red line ("Respaldo con problema"); the backup log has an English line starting `guard:`, and the Spanish reason is only in `status.json` (`last_error`).
 2.  Then, if the last successful backup is less than 24 h old, stop here.
 3.  After that, run `pg_dump -Fc` to `/backup-status/work/db.dump`. The dump is taken before the media copy in step 4, and photos are never hard-deleted, so a restore can have extra photo files without a row, but never a row without its file.
 4.  Then run `restic backup` on `db.dump` and `/media` into the repository at `/target/restic`, tagged `app=<APP_VERSION>` (and `pre-upgrade` when given), with the fixed `--host open-customer-backup`. The repository is encrypted with `RESTIC_PASSWORD`. The host is fixed because restic groups snapshots by host name, and every `docker compose run` container gets a new one; without it, old groups would never be pruned.
@@ -813,9 +815,13 @@ A failed step never ends the script early: its error goes to `status.json` (step
 | Run outcome | What changes |
 | --- | --- |
 | Marker missing (step 1) | `checked_at`; `last_error` = "Disco de respaldo no visible" and `last_error_at` |
+| New volumes and the repository has snapshots (step 1, the guard) | `checked_at`; `last_error` = "Hay respaldos anteriores: restaure primero" and `last_error_at` |
+| New volumes and the repository's config or snapshot list cannot be read (step 1, the guard fails closed) | `checked_at`; `last_error` = "copy: <first line of stderr>" and `last_error_at` |
 | Last backup less than 24 h old (step 2) | `checked_at`; `last_error` and `last_error_at` cleared |
-| `pg_dump` fails | `checked_at`; `last_error` = "dump: <first line of stderr>" |
-| `restic backup` or `forget` fails | `checked_at`, `last_dump_at`; `last_error` = "copy: <first line of stderr>" |
+| `pg_dump` fails | `checked_at`; `last_error` = "dump: <first line of stderr>" and `last_error_at` |
+| `restic backup` or `forget` fails | `checked_at`, `last_dump_at`; `last_error` = "copy: <first line of stderr>" and `last_error_at` |
+| TERM or INT during a run (after the running step finishes) | `checked_at`; `last_error` = "interrupted" and `last_error_at` |
+| The loop cannot take the lock for a reason other than another run holding it | `checked_at`; `last_error` = "lock: <first line of stderr>" and `last_error_at` |
 | Success | every time field, `last_snapshot_id`; `last_error` and `last_error_at` cleared |
 
 The time fields not listed keep their old values. The status screen shows the backup line red when `last_copy_at` is missing or more than 48 h old, when `last_error` is set, or when `checked_at` is more than 2 h old (the backup container is not running). Because the check runs every hour, an unplugged disk turns the line red at the next hourly check (at most 60 min). A missing or unreadable file shows "desconocido" in red.
@@ -838,16 +844,16 @@ Notes:
     2.  the database's goose version is above 0, so at least one migration was applied before (a fresh database has no tables yet, so the first start always migrates; reading `users` there would fail);
     3.  `last_copy_at` in `BACKUP_STATUS_FILE` is missing or older than 60 minutes.
 
-    Then `serve` exits with "Pending migrations and no recent backup. Run scripts/upgrade.sh." This catches an upgrade done without `upgrade.sh`, for example editing `.env` by hand and running `docker compose up -d`. If the USB disk is unplugged on upgrade day, the backup fails and the upgrade stops before the guard is reached. `ALLOW_MIGRATE_WITHOUT_BACKUP=true` overrides it, for development or an emergency.
+    Then `serve` exits with "Pending migrations and no recent backup. Run scripts/upgrade.sh." This catches an upgrade done without `upgrade.sh`, for example editing `.env` by hand and running `docker compose up -d`. If the backup target is missing on upgrade day (a removable disk unplugged), the backup fails and the upgrade stops before the guard is reached. `ALLOW_MIGRATE_WITHOUT_BACKUP=true` overrides it, for development or an emergency.
 *   Migrations only move forward. Rollback is a restore of the snapshot taken before the upgrade. A rollback drops everything she entered after the upgrade, so the author upgrades outside her working hours.
 *   Every snapshot is tagged with the app version that was running (`restic backup --tag app=<APP_VERSION>`). The `backup` service gets `APP_VERSION` from `.env`.
 *   **Restore** (`scripts/restore.sh <snapshot-id|latest>`):
     1.  First, runs `docker compose --profile restore run --rm restore snapshot-info <snapshot-id|latest>`, which prints the snapshot's ID, time and `app=` tag as one JSON line. The `restore` service mounts `/target` read-only, so `snapshot-info` and `restore` run restic with the global `--no-lock` flag (restic cannot write a lock file there). It asks for confirmation, showing the time and that version.
     2.  Then stops `app` and `backup` (`docker compose stop app backup`), so nothing writes to the database and no hourly backup starts.
-    3.  After that, runs the `restore` service (`docker compose --profile restore run --rm restore restore <snapshot-id>`). It is the backup image with `media` mounted read-write. It takes the backup lock, restores the snapshot to a temporary folder, drops and recreates the database (`dropdb --force --if-exists`, then `createdb`), loads `db.dump` with `pg_restore`, replaces the media volume content, and runs `chown -R 65532:65532 /media`, so `app` can still write new photos. Dropping the whole database also removes tables that newer migrations added, which `pg_restore --clean` would leave behind.
+    3.  After that, runs the `restore` service (`docker compose --profile restore run --rm restore restore <snapshot-id>`). It is the backup image with `media` mounted read-write. It takes the backup lock, restores the snapshot to a temporary folder, creates `/backup-status/restore-first` (the new-volumes guard of step 1 in "Backups", so a restore that fails from here on leaves no backup of a half-restored database), drops and recreates the database (`dropdb --force --if-exists`, then `createdb`), loads `db.dump` with `pg_restore`, replaces the media volume content, and runs `chown -R 65532:65532 /media`, so `app` can still write new photos. Last, it removes `/backup-status/restore-first` and writes `status.json` (`checked_at`, `last_snapshot_id` = the restored snapshot, `last_error` and `last_error_at` cleared; the dump and copy times keep their values, null on new volumes, because no copy was made), so the hourly backups resume. On new volumes `last_copy_at` is null, so the next loop check backs up; after a rollback on a working install it is still the recent pre-upgrade copy, so the loop skips for up to 24 h: run `scripts/backup-now.sh` after the restore to back up the restored data now (`deploy/README.md` section 10). Dropping the whole database also removes tables that newer migrations added, which `pg_restore --clean` would leave behind.
     4.  Then sets `APP_VERSION` in `.env` to the snapshot's tag, so the restored schema and the app version match.
     5.  Finally, runs `docker compose up -d`. This starts `app` on the restored version, and recreates `backup` with that `APP_VERSION`, so later snapshots carry the right tag. No migration is pending, so the guard does not block it.
-*   **The USB disk at boot:** the PC must boot without the disk, and the backup must never write to the PC's own disk instead. If the disk is missing, the mount point is an empty folder; the marker check (step 1 in "Backups") stops any write there, and the status line turns red with "Disco de respaldo no visible". Plugging the disk in later is picked up by the next hourly check without a container restart. The mount options are in items 81 and 83.
+*   **A removable backup disk at boot (optional):** `BACKUP_TARGET` is any host folder the owner chooses; for now it is a folder on the PC itself. If she later uses a removable disk, the PC must boot without it, and the backup must never write to the PC's own disk instead. If the disk is missing, the mount point is an empty folder; the marker check (step 1 in "Backups") stops any write there, and the status line turns red with "Disco de respaldo no visible". Plugging the disk in later is picked up by the next hourly check without a container restart. The mount options are in items 81 and 83. A folder on the PC's own disk does not survive that disk dying; `deploy/README.md` says so and suggests a second disk.
 *   API changes inside `/api/v1` are additive only, so an older cached SPA keeps working until it reloads.
 
 ### Configuration (`.env`)
@@ -862,7 +868,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME`, `DB_SSLMODE` | app, Compose | no | Defaults `db`, `5432`, `open_customer`, `open_customer`, `disable` (traffic stays on the Compose network). Compose passes them to `app` as is, to `db` as `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and to `backup` and `restore` as `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`. |
 | `TUNNEL_TOKEN` | Compose (`cloudflared`) | yes | cloudflared token. |
 | `VAPID_SUBJECT` | app | yes | `mailto:` contact for Web Push. |
-| `BACKUP_TARGET` | Compose (`backup` bind) | yes | Host path of the USB or second-disk folder. |
+| `BACKUP_TARGET` | Compose (`backup` bind) | yes | Host path of any folder the owner chooses (a USB or second disk is optional). The marker file `.open-customer-backup-target` must exist in it. |
 | `RESTIC_PASSWORD` | `backup` | yes | Backup encryption key. |
 | `TRUSTED_PROXY_CIDRS` | app | no | Default: the private ranges `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`, which include any Docker network. Only these peers' `CF-Connecting-IP` is trusted. This is safe because `app` publishes no port: only containers on the Compose network can reach it. A self-hoster who publishes a port sets this to their proxy's address. |
 | `MEDIA_DIR` | app | no | Default `/data/media` (the `media` volume mount). |
@@ -896,7 +902,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 
 ### Accepted risks
 
-*   **One person and one PC.** If the author is away or the PC breaks, nobody can upgrade, restore or reset her password. Her data survives in the USB backups, but reading them needs the restic password, which the author holds; the handover checklist (item 83) gives her a sealed copy to keep. The export helps only if she downloaded one recently: it needs the server running.
+*   **One person and one PC.** If the author is away or the PC breaks, nobody can upgrade, restore or reset her password. Her data survives in the backups, but reading them needs the restic password, which the author holds; the handover checklist (item 83) gives her a sealed copy to keep. The export helps only if she downloaded one recently: it needs the server running.
 *   **The PC is off at times.** No push, no writes, no backups while it is off. She agreed to this. Two effects follow:
     *   A "before" reminder can be missed. If the PC stays off from the item's due day until the appointment starts, the item is never shown, because it is hidden after `starts_at`. Today's appointments are still in the cache, so she can message the client by hand.
     *   A quiet day and a day with the PC off look the same: no push on either. When she opens the app, the "server off" banner tells them apart.
@@ -904,7 +910,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 *   **Anyone who knows her username can slow her logins.** The per-username delay (up to 30 s between attempts, for 15 min after the last failure) applies to everyone trying that name, her included. An attacker can keep her waiting but cannot get in. Her existing sessions are not affected, so she only notices it if she has to log in again during an attack.
 *   **Cached data stays readable on a phone with a closed session** until that phone makes its next request, which clears the cache (see "Phone cache and offline behavior"). A lost phone is protected by its own screen lock until then.
 *   **The tunnel reaches the home network.** A bug in `app` could expose the Compose network on the author's PC. `app` runs as non-root in a distroless image, and no container publishes a port.
-*   **Backups stay in the same house.** Fire or theft can take the PC and the USB disk together. Off-site backup is a future improvement.
+*   **Backups stay in the same house.** Fire or theft can take the PC and its backup disk together. Off-site backup is a future improvement.
 *   **Cloudflare sees decrypted traffic** at its edge, because TLS ends there. Accepted for the reference install and written in `deploy/README.md`.
 *   **A dead push subscription shows only on "Estado del sistema".** The re-subscribe check fixes most cases on the next open. Otherwise she notices it as the missing morning notification.
 *   **The overlap check is not race-safe.** It takes no lock and has no exclusion constraint, and an edit reads then writes. One owner is effectively one writer, so the cost is a rare double booking when two of her devices save at the same moment; she sees both appointments in the day view and can move one.
@@ -918,7 +924,7 @@ Each of these is handled in the section named; the mechanism is not repeated her
 | --- | --- |
 | The VAPID key pair is lost, so every push subscription stops working | "Data model" (keys in the database, covered by the backup) |
 | A push subscription expires or is deleted | "Daily push" (re-subscribe on open) and "Status screen" (red line) |
-| The USB disk is unplugged or not mounted, or a backup fails | "Backups" (marker check, red line at the next hourly check) and "Status screen" (the same red state also shows on "Hoy", where she looks every day) |
+| The backup target is missing (a removable disk unplugged or not mounted), or a backup fails | "Backups" (marker check, red line at the next hourly check) and "Status screen" (the same red state also shows on "Hoy", where she looks every day) |
 | An upgrade breaks the schema | "Upgrades and the migration guard" (pre-upgrade snapshot, guard, restore) |
 | Cloudflare upload size and response timeout limits | "Photos" (phone-side resize) and "Export" (streamed ZIP); the current limits are an Open Question |
 | iOS clears the PWA's storage | "Phone cache and offline behavior" (the cache is rebuilt from `/bootstrap` on the next open) |
@@ -926,7 +932,7 @@ Each of these is handled in the section named; the mechanism is not repeated her
 
 ## Alternatives Considered
 
-Grouped by area. Each alternative was rejected or narrowed during the brainstorm (see [concepts_brief.md](../../concepts_brief.md)) or during this draft. Choices kept unchanged from the SAD (Go, pgx + sqlc, one binary, goose, sessions in Postgres, the own template renderer, Web Push) keep the alternatives and reasons written in the [SAD's ADRs](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md); the status of each ADR is in item 13.
+Grouped by area. Each alternative was rejected or narrowed during the brainstorm (see [concepts_brief.md](history/concepts_brief.md)) or during this draft. Choices kept unchanged from the SAD (Go, pgx + sqlc, one binary, goose, sessions in Postgres, the own template renderer, Web Push) keep the alternatives and reasons written in the [SAD's ADRs](history/sad-original.md); the status of each ADR is in item 13.
 
 ### Product: build vs use an existing tool
 
@@ -940,7 +946,7 @@ Grouped by area. Each alternative was rejected or narrowed during the brainstorm
 
 *   **Pros**: Open source and free. Mature calendars.
 *   **Cons**: Built around a public booking page. Heavy to run (Cal.com and Odoo need much more than one small container). Weak support for custom fields inside messages. Not designed for one-hand iPhone use.
-*   **Reason for Rejection**: The work to adapt them is larger than building the narrow app she needs. The PRD claim that "no free self-hosted option exists" is wrong. The PRD will say instead that these tools exist and do not fit.
+*   **Reason for Rejection**: The work to adapt them is larger than building the narrow app she needs. The original PRD claimed that "no free self-hosted option exists", which was wrong; the PRD now says these tools exist and do not fit.
 
 #### Alternative A3: General CRMs (Twenty, EspoCRM)
 
@@ -1024,7 +1030,7 @@ Grouped by area. Each alternative was rejected or narrowed during the brainstorm
 
 #### Alternative E5: Skip come-back only for a future booking "of that service" (PRD FR-R7)
 
-*   **Pros**: Matches the PRD's wording. An unrelated later visit (a pedicure after an acrylic set) no longer drops the come-back, which the earlier "any later active appointment" rule did wrongly.
+*   **Pros**: Matches the original PRD's wording. An unrelated later visit (a pedicure after an acrylic set) no longer drops the come-back, which the earlier "any later active appointment" rule did wrongly.
 *   **Cons**: Taken literally, the rule is on "Acrílico" but the next booking is "Relleno", so a client who already rebooked would still get the come-back reminder.
 *   **Outcome** (chosen in a modified form): the rule names a return service (empty = its own service), and only a later booking that includes it skips the item. The return service fixes the Acrílico → Relleno problem; the same-service check fixes the pedicure problem. A future booking without the return service turns the item into a booking prompt for her, so she can add the service to that appointment instead of messaging a client who is already coming.
 *   **Rejected with it**: a list of return services per rule. One nullable column covers acrylic → refill; a list can be added later (a join table, filled from the column) without rewriting stored data.
@@ -1246,9 +1252,9 @@ Each line points to the section that holds the detail.
 
 ## Additional Resources
 
-*   [concepts_brief.md](../../concepts_brief.md) — decisions from the brainstorm.
-*   [goldfish_brainstorm_findings.md](../../goldfish_brainstorm_findings.md) — the full review of the PRD and SAD (9 Blocker, 31 Major, 14 Nit).
-*   [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md) and [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md) — the original documents.
+*   [concepts_brief.md](history/concepts_brief.md) — decisions from the brainstorm.
+*   [goldfish_brainstorm_findings.md](history/goldfish_brainstorm_findings.md) — the full review of the PRD and SAD (9 Blocker, 31 Major, 14 Nit).
+*   [PRD](../prd.md) (updated for release 1) and the [original SAD](history/sad-original.md); the SAD's ADR index is [docs/sad.md](../sad.md).
 *   [PostgreSQL 19 RC 1 announcement](https://www.postgresql.org/about/news/postgresql-19-rc-1-3409/) — source for the version decision.
 
 ## Future Improvements
@@ -1357,11 +1363,12 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `cover` | `web-stub`, then `go test -tags db -coverprofile` for each package in `COVER_PKGS`; writes `coverage-<name>.out` and fails, naming the package, if any package's total (`go tool cover -func`) is below `COVER_FLOOR` (90.0). `COVER_PKGS` grows by phase: `auth` (P2); `attributes`, `appointments`, `templates` (P3); `reminders` (P4) |
     | `dev` | `web-stub`, then Docker Postgres (`PG_IMAGE`) in the container `open-customer-dev` on host port `DEV_PG_PORT` (default `5433`; started or reused, password `devpassword`, dev only), the binary built to `bin/dev/open-customer` running `serve` on `:8080` in the background, and the Vite dev server on `:5173` in the foreground with the proxy from item 63. A `trap` stops `serve` when Vite exits; it runs the built binary, not `go run`, because `go run` does not pass SIGTERM on to the server. Env and the Origin rule are below the table. |
     | `image` | `docker build --build-arg VERSION=$(VERSION)` of the app image |
+    | `test-deploy` | Runs `scripts/test-deploy.sh`: builds `deploy/backup` as `open-customer-backup:test`, starts `$(PG_IMAGE)` as `oc-deploy-pg` on a new network `oc-deploy-net` (no published port), runs `deploy/tests/backup_test.sh` inside the backup image (entrypoint overridden, `deploy/` mounted read-only) against it, and removes the containers (with their anonymous volumes, `docker rm -f -v`) and the network in a `trap`, pass or fail. Then it runs `deploy/tests/scripts_test.sh` on the host: each operator script runs from a temp copy of `deploy/` with its own `.env` and a fake `docker` first on `PATH` that logs each call and answers from `FAKE_APP_VERSION`, `FAKE_SNAPSHOT_JSON` and `FAKE_FAIL_ON`; only its `compose config is valid` test uses the real `docker compose config`, which starts nothing. The backup tests run for real, not against stubs, because `backup.sh` owns the outcome table, the marker rule and the restore, and a stub would not catch a wrong restic flag |
 
     *   **`dev` env:** the Go server gets `PUBLIC_URL=http://localhost:5173`, `DB_HOST=localhost`, `DB_PORT=$(DEV_PG_PORT)` and `DB_PASSWORD=devpassword` for the container, `VAPID_SUBJECT=mailto:dev@localhost` and `ALLOW_MIGRATE_WITHOUT_BACKUP=true` (there is no backup status file in dev). The browser's `Origin` is `http://localhost:5173`, and the Vite proxy forwards it unchanged, so the Origin check passes.
     *   `VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)`. The same value goes to `-ldflags`, the web build and `make image`; the release workflow sets it from the tag.
     *   `GO_PKGS := $(shell go list -e ./... | grep -v /node_modules/)`. Every Go target uses it instead of a bare `./...`, so Go never walks into `web/node_modules` (some npm packages ship `.go` files). golangci-lint takes directories, not import paths, so `lint` uses `GO_DIRS` (the same list as `./`-relative folders). `go build` refuses a package with only test files (`internal/guards`), so the cross-OS builds in `lint` use `GO_BUILD_PKGS` (the same list, kept to packages with non-test files).
-    *   **Targets by phase:** P0 has `check-pins`, `node-check`, `web-stub`, `web`, `build`, `test`, `vuln`, `lint` and `image`. `generate` and `check-generated` come in P1, `test-db` in P1, `cover` in P2, `dev` in P1 (it needs `serve`), `e2e` in P6.
+    *   **Targets by phase:** P0 has `check-pins`, `node-check`, `web-stub`, `web`, `build`, `test`, `vuln`, `lint` and `image`. `generate` and `check-generated` come in P1, `test-db` in P1, `cover` in P2, `dev` in P1 (it needs `serve`), `e2e` in P6, `test-deploy` in P7.
     *   Why `web-stub`: `web/embed.go` has `//go:embed all:build`, and `web/build` is gitignored. On a clean checkout the embed has no files, so every Go command fails to compile. The stub gives the embed one file without running Node. A plain `go build` without `make` on a clean checkout still fails, with the embed error; `README.md` says to use `make`.
 
     Why: one command set for the author and for CI.
@@ -1369,7 +1376,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 3. `README.md` (Create)
 
 *   **Type / Scope**: Documentation.
-*   **Proposed Changes**: What the app is, who it is for, a link to `deploy/README.md` for install, the `make` targets for development (and that Go commands must go through `make` on a clean checkout, because of `web-stub`), and a link to `docs/designs/release-1.md` and `docs/sad.md`. It states that the license is not chosen yet.
+*   **Proposed Changes**: What the app is, who it is for, a link to `deploy/README.md` for install, the `make` targets for development (and that Go commands must go through `make` on a clean checkout, because of `web-stub`), and links to `docs/designs/release-1.md`, `docs/sad.md` and `docs/prd.md`. It states that the license is not chosen yet.
 
 ##### 4. `.gitignore` (Create)
 
@@ -1428,13 +1435,14 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `make check-generated` | P1 (the first phase with a spec) |
     | `make test-db` (Docker is available on GitHub runners) | P1 |
     | `make cover` | P2 (the first gated package) |
+    | `make test-deploy` (after `make test-db`) | P7 |
     | `make build` | P0 (runs after every check above, so they run with only the stub; see "Clean checkout" in the Verification Plan) |
     | `pnpm exec playwright install --with-deps webkit`, then `make e2e` against the built binary + a `postgres:18.<minor>-alpine` service container (the pinned tag, user, password and database `open_customer`/`e2e`/`open_customer`, `pg_isready` health check), with `E2E_DATABASE_URL=postgres://open_customer:e2e@localhost:5432/open_customer_e2e`. `make e2e` uses the runner's preinstalled `psql` client (seen in run 42097441087). On failure `web/test-results/` is uploaded as an artifact | P6 |
 
 ##### 9. `.github/workflows/release.yml` (Create)
 
 *   **Type / Scope**: Release.
-*   **Proposed Changes**: On tag `v*`, build and push the `app` image (root `Dockerfile`) and the `backup` image (`deploy/backup/Dockerfile`) to GHCR, both tagged with the version. `amd64` only (multi-arch is a non-goal).
+*   **Proposed Changes**: On tag `v*`, build and push the `app` image (root `Dockerfile`) and the `backup` image (`deploy/backup/Dockerfile`, a second `docker/build-push-action` step with `context: deploy/backup`, pushed as `ghcr.io/jnaranj09/open-customer-backup:<version>`) to GHCR, both tagged with the version. `amd64` only (multi-arch is a non-goal).
     *   **Version:** the tag without its `v` (`v1.2.3` → `1.2.3`, from `${GITHUB_REF_NAME#v}`). That value is the image tag, the `APP_VERSION` in `.env`, and the `--build-arg VERSION` of the app image.
     *   **Login:** `docker/login-action` to `ghcr.io` with `GITHUB_TOKEN`. The workflow sets `permissions: {contents: read, packages: write}`.
 
@@ -1474,7 +1482,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   **NFRs:**
         *   NFR-1 (API read p95 < 50 ms): replaced by the iPhone "Hoy < 1 s" check.
         *   NFR-4 (install from zero in < 10 min), NFR-5 (1 vCPU, 1 GB RAM) and NFR-9 (repo ready for contributors): moved to the product Phase 3 gate (not build phase P3).
-        *   NFR-6 (daily automatic backups): daily backup + copy to a second disk.
+        *   NFR-6 (daily automatic backups): daily backup + copy to a folder chosen at install (`BACKUP_TARGET`; a second disk is optional).
         *   NFR-7 (full export as JSON + CSV): CSV + JSON without photos.
         *   NFR-8 (mandatory HTTPS with automatic TLS): "HTTPS through the chosen ingress".
         *   NFR-3 (client search < 100 ms per keystroke): kept; met by the phone-only search over the cache.
@@ -1485,7 +1493,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 13. `docs/sad.md` (Create, a short index) and `docs/designs/history/sad-original.md` (Create, moved from `SAD — Sistema de citas para emprendimientos.md`; the root file is deleted)
 
 *   **Type / Scope**: Architecture index (Spanish).
-*   **Proposed Changes**: The old SAD is moved unchanged to `docs/designs/history/sad-original.md`, because the project has no git history yet that would keep it. Its body is not copied into `docs/sad.md`: `docs/designs/release-1.md` is the only source of architecture detail, so there is no second copy to keep in sync. `docs/sad.md` keeps:
+*   **Proposed Changes**: The old SAD is moved unchanged to `docs/designs/history/sad-original.md`, so its full ADR text stays in the repo next to the index. Its body is not copied into `docs/sad.md`: `docs/designs/release-1.md` is the only source of architecture detail, so there is no second copy to keep in sync. `docs/sad.md` keeps:
     *   **Intro:** three or four Spanish sentences: what the system is, where it runs (home PC + Cloudflare Tunnel, four containers), and a link to `docs/designs/release-1.md`.
     *   **ADR index:** the table below, plus a fourth column in the written file that links each ADR that is not superseded (including the new 018–025, which have no separate file) to the section of `docs/designs/release-1.md` that holds its detail.
 
@@ -1728,7 +1736,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   One Go value per row of the error table in item 15: `Validation{Errors []FieldError}`, `NotFound`, `Unauthorized`, `InvalidCredentials`, `MustChangePassword`, `ForbiddenOrigin`, `SetupClosed`, `SetupTokenInvalid`, `Conflict{Name string, Extra map[string]any}` (for `overlap`, `duplicate-phone` and `invalid-transition`; `httpapi/conflicts.go` fills `Extra` with `appointments` or `clients` as `gen` types from the typed module errors `appointments.OverlapError` and `clients.DuplicatePhoneError`, which unwrap to a `Conflict` with no `Extra`, because modules cannot import `gen`), `PayloadTooLarge`, `UnsupportedMediaType`, `RateLimited{RetryAfter}`. Any other error is `internal`.
     *   `Write(w, r, err)`: picks the row, writes `application/problem+json` with the status, the Spanish `title` and the extension fields, and logs `internal` errors with the request ID.
-    *   Handlers write these errors with `problem.Write`. A JSON body that cannot be decoded is `validation` (the shared `decodeJSON` helper, item 32). Path and query binding errors (a bad UUID in `{id}`, a bad `from` date) are raised by the generated wrapper, and `StdHTTPServerOptions.ErrorHandlerFunc` (item 32) maps them to `validation`. Middleware (item 34) calls `problem.Write` for 401, 403 and the panic 500. `auth.Login` and `status.LogClientError` return `RateLimited`, and their handlers write the 429.
+    *   Handlers write these errors with `problem.Write`. A JSON body that cannot be decoded is `validation` (the shared `decodeJSON` helper, item 32). Path and query binding errors (a bad UUID in `{id}`, a bad `from` date) are raised by the generated wrapper, and `StdHTTPServerOptions.ErrorHandlerFunc` (item 32) maps them to `validation`. Middleware (item 34) calls `problem.Write` for 401, 403 and the panic 500. `auth.BeginLogin`, `auth.BeginPasswordChange` and `status.LogClientError` return `RateLimited`, and their handlers write the 429.
     *   For `RateLimited`, `problem.Write` also sets the `Retry-After` header.
     *   `messages.go` holds the Spanish `errors[].message` texts as named constants (OP14), for example `MsgUsernameInvalid` and `MsgPasswordTooShort`. Modules build `Validation` errors with these constants; no field message is written inline.
 
@@ -1809,7 +1817,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
     | Module | Methods |
     | --- | --- |
-    | `auth` | `SetupNeeded() bool`; `NewSetupToken() string`; `CompleteSetup(SetupInput) (Me, token)` (the handler opens the transaction); `Login(LoginInput, ip) (Me, token)` (an unknown username is still verified, against a fixed dummy hash, so the response time does not reveal which usernames exist; OP17); `Logout(session)` (the session middleware step 6 loaded, so the cookie is parsed only there); `Authenticate(token) (Me, Session, refreshed bool)` (`refreshed` tells the middleware to re-send the cookie); `ChangePassword(session, current, new)` (keeps that session, revokes the others, clears `must_change_password`; a wrong `current` counts toward the per-username delay, item 41); `ResetPassword(username) tempPassword` |
+    | `auth` | `SetupNeeded() bool`; `NewSetupToken() string`; `CompleteSetup(SetupInput) (Me, token)` (the handler opens the transaction); `BeginLogin(LoginInput, ip) LoginAttempt` (no `ctx` or `q`: the rate limits of item 41, in memory, before the handler opens the transaction); `Login(LoginAttempt, password) (Me, token)` (only an attempt `BeginLogin` returned; the attempt holds no password, so logging it cannot leak one; an unknown username is still verified, against a fixed dummy hash, so the response time does not reveal which usernames exist; OP17); `Logout(session)` (the session middleware step 6 loaded, so the cookie is parsed only there); `Authenticate(token) (Me, Session, refreshed bool)` (`refreshed` tells the middleware to re-send the cookie); `BeginPasswordChange(me) PasswordChangeAttempt` (no `ctx` or `q`: the per-username delay, before the transaction); `ChangePassword(session, PasswordChangeAttempt, current, new)` (keeps that session, revokes the others, clears `must_change_password`; a wrong `current` counts toward the per-username delay, item 41); `ResetPassword(username) tempPassword` |
     | `settings` | `Get() Settings`; `Create(SettingsInput) Settings` (called only through `auth` setup; `cmd` wraps it in a closure that drops the returned `Settings`, to match the creator type in item 40); `Update(SettingsPatch) Settings`; `SetIcons(icon512, icon180 []byte)`; `Manifest() []byte`; `Icon(size) ([]byte, updatedAt)`. `Countries() []string` is a package-level function with no `q`, not a method. |
     | `attributes` | `List() []Attribute`; `Create(AttributeInput) Attribute`; `Update(id, AttributePatch) Attribute`; `AddOption(attrID, OptionInput) Option`; `UpdateOption(attrID, optionID, OptionPatch) Option`; `Validate(scope, stored, request, isCreate) (attrs, error)` |
     | `clients` | `List(archived bool) []Client` (`List(false)` is the active list); `Get(id) Client`; `Create(ClientInput, region) Client`; `Update(id, ClientPatch, region) Client` (`region` is `settings.country_code`, read by the handler) |
@@ -1889,7 +1897,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 38. `internal/auth/password.go` (Create)
 
 *   **Type / Scope**: Password hashing.
-*   **Proposed Changes**: Argon2id (m=64 MiB, t=3, p=1, 16-byte salt, 32-byte key) in PHC string format: `$argon2id$v=19$m=65536,t=3,p=1$<salt>$<hash>`, with salt and hash in unpadded standard base64 (`base64.RawStdEncoding`). Verification parses the stored parameters, recomputes, and compares with `crypto/subtle.ConstantTimeCompare`. Minimum password length is 8.
+*   **Proposed Changes**: Argon2id (m=64 MiB, t=3, p=1, 16-byte salt, 32-byte key) in PHC string format: `$argon2id$v=19$m=65536,t=3,p=1$<salt>$<hash>`, with salt and hash in unpadded standard base64 (`base64.RawStdEncoding`). Verification parses the stored parameters, recomputes, and compares with `crypto/subtle.ConstantTimeCompare`. At most two hashes or verifies run at once (`maxConcurrentHashes`, a buffered channel; item 41); the rest wait for a slot, and one whose `ctx` ends first returns the `ctx` error without hashing. Minimum password length is 8.
 
 ##### 39. `internal/auth/sessions.go` (Create)
 
@@ -1911,10 +1919,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Login protection.
 *   **Proposed Changes**:
-    *   An `x/time/rate` limiter per client IP on `POST /auth/login` only (5/min, burst 5), with idle entries removed after 10 min.
+    *   An `x/time/rate` limiter per client IP on `POST /auth/login` only (5/min, burst 5), with idle entries removed after 10 min. An IPv4 address (an IPv4-mapped IPv6 address is unmapped first) has its own bucket; an IPv6 address counts against its /64, because one client usually holds a whole /64 and could otherwise change address on every attempt. A peer address that did not parse gets one bucket shared by all such requests.
     *   A per-username delay: after the first failure the next attempt must wait 1 s, doubling after each failure up to 30 s. An attempt that comes too early gets 429 `rate-limited` with `Retry-After`; the server never sleeps. It resets on success. Entries expire 15 min after the last failure, so the map holds only names that failed in the last 15 min; there is no size cap.
     *   `POST /auth/password` shares the per-username delay: `ChangePassword` counts the attempt for the session user's username before it checks `current_password` and clears the delay when it is right, so a stolen session cannot guess the current password without limit. A wrong one is still 422 on `current_password`; a try that comes too early is 429 `rate-limited`, and so is a login for that username until the delay has passed. The per-IP limiter does not apply to it.
-    *   **Open risk (P7 hardening).** Each argon2id hash or verify takes 64 MiB and runs inside the handler's open `db.WithTx`, and nothing caps how many run at once: a burst of logins (one per username, each under its own delay) can hold that much memory and that many transactions together (the per-IP bucket caps only what one address sends). The IP bucket is keyed by the full address (`netip.Addr`, a /128 for IPv6), so one IPv6 client gets a fresh bucket per address of its /64. Planned in P7: a semaphore around hash and verify, the limiter checks before `db.WithTx` opens the transaction, and IPv6 addresses grouped by /64 for the IP bucket.
+    *   **The limits run before the transaction.** The handlers call `auth.BeginLogin` (username format, IP bucket, per-username delay) and `auth.BeginPasswordChange` (the delay, for the session's username) before `db.WithTx`, so a 429 opens no transaction of its own (`POST /auth/password` still has the session step's, item 34 step 6). They count the attempt as before; `Login` and `ChangePassword` take only the attempt value a `Begin` call returned, and refuse the zero value or an attempt for another user as a 500 (`errAttemptNotBegun`), so no caller can skip the limits.
+    *   **Hashing is capped.** Each argon2id hash or verify takes 64 MiB, so at most two run at once (item 38); a burst of logins for different usernames, each under its own delay, waits for a slot instead of holding that much memory per request. A verify still runs inside the handler's transaction, so a login waiting for a slot holds its transaction (and a pool connection) while it waits.
 
 ##### 42. `internal/auth/*_test.go` (Create)
 
@@ -1928,6 +1937,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `reset-password` sets `must_change_password`.
     *   Username: " Ana " logs in as "ana"; a name with a space inside, or under 3 characters, is rejected.
     *   A wrong current password on `ChangePassword` is a `validation` error, not `unauthorized`.
+    *   Login hardening (item 41): `TestHashConcurrencyIsCapped`, `TestHashWaitsReturnsOnCtxDone`, `TestIPv6SameSlash64SharesBucket`, `TestIPv6OtherSlash64HasOwnBucket`, `TestIPv4MappedIsIPv4`, `TestLoginWithoutBeginLoginFailsClosed`, `TestChangePasswordAttemptForAnotherUserFailsClosed`; in httpapi, `TestLoginRateLimitedOpensNoTransaction` and `TestChangePasswordRateLimitedOpensOnlyTheSessionTransaction`.
 
 #### Domain modules
 
@@ -2403,10 +2413,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   The four services in "Deployment", with no `ports:`.
     *   Named volumes `pgdata`, `media` and `backup-status`.
-    *   `${BACKUP_TARGET}:/target` on `backup` in the long bind syntax with `bind.propagation: rslave`, so a USB disk mounted or unmounted on the host after the container started is seen inside it. `APP_VERSION` is passed to it for snapshot tags.
-    *   A `restore` service under `profiles: ["restore"]`: the backup image, `media` read-write, `backup-status`, `/target` read-only. It never starts with `up`.
-    *   `depends_on` with healthchecks.
-    *   `restart: unless-stopped`.
+    *   `${BACKUP_TARGET}:/target` on `backup` in the long bind syntax with `bind.propagation: rslave`, so a removable disk mounted or unmounted on the host after the container started is seen inside it (`BACKUP_TARGET` may be any host folder). `APP_VERSION` is passed to it for snapshot tags.
+    *   A `restore` service under `profiles: ["restore"]`: the backup image, `media` read-write, `backup-status` read-write (the restore takes the backup lock and unpacks into `/backup-status/work`), `/target` read-only. It never starts with `up`.
+    *   Environment as in "Configuration (`.env`)": the optional variables with `${VAR:-default}`, the required ones with `${VAR:?<VAR> is required in .env}`. The app's own optional variables (`TRUSTED_PROXY_CIDRS`, `MEDIA_DIR`, `BACKUP_STATUS_FILE`, `ALLOW_MIGRATE_WITHOUT_BACKUP`, `LOG_LEVEL`) are passed as `${VAR:-}`: empty means the app's default, so each default has one owner.
+    *   `depends_on` with healthchecks (`app` and `backup` on a healthy `db`, `cloudflared` on a healthy `app`).
+    *   `restart: unless-stopped` on the four long-running services; `restore` has none (it only runs with `run --rm`).
     *   The `app` healthcheck in exec form: `test: ["CMD", "/usr/local/bin/open-customer", "healthcheck"]`.
     *   `stop_signal: SIGTERM` on `backup` and `restore` (the `postgres` base image sets `SIGINT`).
     *   `pgdata` mounted at `/var/lib/postgresql` on `db` (see "Deployment").
@@ -2423,7 +2434,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     1.  Requirements.
     2.  Create the tunnel and the public hostname.
     3.  Cloudflare settings (the list in "Deployment").
-    4.  Prepare the backup target: an `/etc/fstab` entry with `nofail` at the path in `BACKUP_TARGET` (so the PC boots without the disk), then `touch .open-customer-backup-target` on the disk.
+    4.  Prepare the backup target: pick any host folder for `BACKUP_TARGET` and `touch .open-customer-backup-target` in it once. Only for a removable disk, also add an `/etc/fstab` entry with `nofail` at that path (so the PC boots without the disk). Say plainly that a folder on the same disk does not survive a dead disk, and suggest a second disk later.
     5.  `.env`.
     6.  First start + the setup link.
     7.  The in-person handover checklist (wizard → install → login → allow notifications → give her a sealed paper copy of `RESTIC_PASSWORD` and say what it is for).
@@ -2437,7 +2448,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 84. `deploy/backup/Dockerfile` (Create)
 
 *   **Type / Scope**: Backup image.
-*   **Proposed Changes**: `FROM postgres:18.<minor>-alpine` (the pin in "Pins"), `apk add bash restic jq`, plus the package that provides `flock` if the image's busybox lacks it (checked at P7), copies `backup.sh`, creates `/media` owned by `65532:65532` (see "Volume ownership"), `ENTRYPOINT ["/backup.sh"]`.
+*   **Proposed Changes**: `FROM postgres:18.<minor>-alpine` (the pin in "Pins"), `apk add bash restic jq` (checked at P7: the image's busybox already has `flock` with `-n`, so no other package), copies `backup.sh`, creates `/media` empty and owned by `65532:65532` (see "Volume ownership"; Alpine ships `/media/cdrom`, `floppy` and `usb`, which Docker would copy into an empty volume, so the folder is removed and made again), `ENTRYPOINT ["/backup.sh"]` and `CMD []` (the base image's `CMD ["postgres"]` would otherwise become the mode).
 
 ##### 85. `deploy/backup/backup.sh` (Create)
 
@@ -2446,20 +2457,27 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   Arguments: none (the hourly loop), `once [--tag pre-upgrade]`, `snapshot-info <snapshot-id|latest>` and `restore <snapshot-id>`.
     *   The lock: `flock /backup-status/backup.lock`. `once` and `restore` wait for it.
     *   `snapshot-info` prints `{"id", "time", "app"}` from `restic --no-lock snapshots --json`.
-    *   `restore` unpacks the snapshot into `/backup-status/work/restore` (on the `backup-status` volume, not the container layer) and uses `pg_restore` without `--clean`, because the database was just recreated empty.
+    *   `restore` unpacks the snapshot into `/backup-status/work/restore` (on the `backup-status` volume, not the container layer) and uses `pg_restore` without `--clean`, because the database was just recreated empty. Without `--no-owner` either, so it relies on `PGUSER` owning the objects in the dump: changing `DB_USER` between a backup and its restore needs care.
+    *   The new-volumes guard of step 1 in "Backups": the state is the file `/backup-status/restore-first`; the snapshot count comes from `restic --no-lock list snapshots` (snapshot files, so a corrupt one still counts). Tests: `fresh volumes with an existing repository take no snapshot` (also: it holds on later runs, across a marker-missing run, and in the loop), `restore lets backups resume`, `a failed restore blocks the next backup` (a failing `pg_restore`), `an empty status file allows a fresh start`, `the guard fails closed when the snapshots cannot be counted` (a corrupt snapshot file; a failing listing).
     *   Runs `restic init` on the first run if the repository is missing. "Missing" means `restic cat config` fails and `/target/restic` does not exist; if the folder exists but `cat config` fails, it reports an error instead of creating a new repository.
     *   `#!/usr/bin/env bash` (the image adds `bash`). A `trap` on `TERM` and `INT` lets the running step finish or writes "interrupted" to `status.json`, then exits; bash as PID 1 ignores signals it does not trap.
-    *   The hourly loop takes the lock with `flock -n`: if a `once` run or a restore holds it, that hour is skipped.
+    *   The hourly loop takes the lock with `flock -n`: if a `once` run or a restore holds it, that hour is skipped. Busybox `flock` exits 1 both on contention and on a real error; only a real error prints to stderr, so the loop records that one in `status.json` ("lock: …") instead of skipping silently. A lock file that cannot be opened, or a failed blocking `flock` in `once` or `restore`, exits 1 with one line naming the lock file; nothing runs without the lock.
     *   Time math (the 24 h check) uses `jq` (`now`, `fromdateiso8601`) on the `status.json` times, not busybox `date -d`.
     *   `set -uo pipefail`, without `-e`: each step's exit code is checked by hand, so a failure reaches `status.json` (see "Backups"). Each step logs one line to stdout.
+    *   The loop and `once` share one function (`run_backup`), which always writes `status.json` before it returns; the step 2 skip happens only in the loop. A wrong mode or argument exits 2 with one line; a missing variable exits 2 naming it.
+    *   `status.json` is written mode `0644`, because `app` reads it as user 65532 and the backup container runs as root. A failed step also sets `last_error_at` (see the outcome table in "Backups").
+    *   One test-only knob, default off: `BACKUP_INTERVAL_SECONDS` (default 3600), the wait between two loop checks, so `make test-deploy` does not wait an hour. It is documented at the top of the script.
 
-##### 86. `deploy/scripts/backup-now.sh`, `deploy/scripts/upgrade.sh`, `deploy/scripts/restore.sh` (Create)
+##### 86. `deploy/scripts/backup-now.sh`, `deploy/scripts/upgrade.sh`, `deploy/scripts/restore.sh`, `deploy/scripts/lib.sh` (Create)
 
 *   **Type / Scope**: Operator scripts.
 *   **Proposed Changes**: As in "Backups" and "Upgrades and the migration guard".
     *   `backup-now.sh [--tag pre-upgrade]`: see the notes in "Backups".
-    *   `upgrade.sh <version>`: `set -euo pipefail`; the five steps in "Upgrades and the migration guard".
-    *   `restore.sh <snapshot|latest>`: the five steps in "Upgrades and the migration guard". It stops on any failure and leaves `app` and `backup` stopped, with a message.
+    *   `upgrade.sh <version>`: `set -euo pipefail`; the five steps in "Upgrades and the migration guard". The version must match `^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$`.
+    *   `restore.sh <snapshot|latest>`: the five steps in "Upgrades and the migration guard". The argument is `latest` or a hex snapshot ID. It asks `Restore snapshot <id> from <time> (app <version>)? [y/N]` and reads one line; anything but `y` exits 1 with nothing stopped, and so does a snapshot without an `app=` tag. After the stop it stops on any failure and leaves `app` and `backup` stopped, with a message naming them.
+    *   Each script does `cd "$(dirname "$0")/.."`, so it works from any folder and `.env` is `deploy/.env`. `upgrade.sh` and `restore.sh` rewrite only the `APP_VERSION` line of `.env`, in place.
+    *   `lib.sh` (sourced by `upgrade.sh` and `restore.sh`, never run): the `.env` checks (it exists, exactly one `APP_VERSION=` line) and `set_app_version`, which writes a temp copy `.env.XXXXXX` (mode 0600) and copies it over `.env`, and returns non-zero when `.env` was not changed (a failed write included), so the caller stops before `up -d`. A temp copy without the new `APP_VERSION=` line (an empty one included) never replaces `.env` (test `an empty temp copy never replaces .env`). An `EXIT` trap removes the temp copy, also on INT or TERM; `.gitignore` covers `deploy/.env.*` (except `.env.example`) for a copy a SIGKILL leaves.
+    *   Tests: `deploy/tests/scripts_test.sh` (item 2, `make test-deploy`).
 
 #### Files deleted from the repo root
 
@@ -2486,9 +2504,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 ### Verification Plan
 
-*   **Compilation/Build**: `make build` (web build + `CGO_ENABLED=0` Go build). `make image` builds the app image. The backup image is built in the release workflow.
+*   **Compilation/Build**: `make build` (web build + `CGO_ENABLED=0` Go build). `make image` builds the app image. The backup image is built by `make test-deploy` and in the release workflow.
 *   **Unit Tests**: `make test` (`go test $(GO_PKGS)` + `pnpm test`).
 *   **Database Tests**: `make test-db` (`go test -tags db $(GO_PKGS)` with testcontainers Postgres 18).
+*   **Deploy Tests**: `make test-deploy` (`deploy/tests/backup_test.sh` in the backup image against a throwaway Postgres, then `deploy/tests/scripts_test.sh` on the host; item 2).
 *   **Static Analysis & Linting**: `make lint` (golangci-lint with the `depguard` module rules, the darwin and windows `go build`, `deadcode`, shellcheck, `pnpm check` (svelte-check), `pnpm lint` (eslint, prettier, knip, jscpd)) and `make vuln` (govulncheck). CI adds gitleaks and `pnpm audit --audit-level high`.
 *   **Clean checkout:** CI runs on a fresh clone, and `make build` is its last step before e2e (item 8), so `make lint`, `make test`, `make vuln` and `make test-db` passing first shows the targets compile with only the stub present.
 *   **Generated Code**: `make check-generated` must show no diff.
@@ -2500,7 +2519,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     3.  "Hoy" opens in under 1 s over LTE (Goal 6). Method: close the app from the app switcher, start a screen recording, tap the Home Screen icon, and count the time from the tap to the first appointment row painted, using the recording's frames. Pass: 3 of 3 runs under 1 s.
     4.  With the server stopped: the app opens from the cache with the banner (CUJ 6).
     5.  The restore drill: back up, wipe the volumes, restore, confirm data + photos (CUJ 7), then upload one new photo to confirm `app` can still write to the restored media volume.
-    6.  Unplug the USB target: the status screen shows the red backup line by the next hourly check (at most 60 min), and nothing was written to the mount point.
+    6.  Remove the marker file from the target (or unplug the target, if it is a removable disk): the status screen shows the red backup line by the next hourly check (at most 60 min), and nothing was written to the target folder.
     7.  Goal 2: time CUJ 3 steps 1–4 with a stopwatch on her iPhone, three times with an existing client. Pass: 3 of 3 under 30 s.
     8.  CUJ 3 step 5 on her iPhone: attach a photo from the camera and one from the library. Both upload, show on the appointment and in the client's gallery, and the stored file has no EXIF GPS data.
     9.  "¿Lo enviaste?" after iOS closes the app: tap "Enviar", close the PWA from the app switcher while in WhatsApp, reopen it. The sheet shows for that client.

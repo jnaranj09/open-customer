@@ -58,7 +58,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -129,6 +129,12 @@ generate: web-stub node-check
 check-generated: generate
 	@out=$$(git status --porcelain -- internal/httpapi/gen internal/db/sqlc web/src/lib/api/schema.d.ts); \
 	if [ -n "$$out" ]; then echo "generated files differ from the committed ones (run make generate and commit):" >&2; echo "$$out" >&2; exit 1; fi
+
+# Design doc item 2 (P7): the backup image and deploy/tests/backup_test.sh against a throwaway
+# Postgres, then deploy/tests/scripts_test.sh on the host; needs Docker, publishes no host port,
+# and removes its oc-deploy-* containers.
+test-deploy:
+	PG_IMAGE=$(PG_IMAGE) scripts/test-deploy.sh
 
 check-pins:
 	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) scripts/check-pins.sh

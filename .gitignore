@@ -3,6 +3,9 @@ web/node_modules
 web/.svelte-kit
 web/.eslintcache
 deploy/.env
+# A temp copy upgrade.sh or restore.sh left when killed (it holds every secret).
+deploy/.env.*
+!deploy/.env.example
 bin/
 coverage*
 .claude/settings.local.json

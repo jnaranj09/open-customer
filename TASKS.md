@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit, P6 exit)
+## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit, P6 exit, P7 exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -151,6 +151,21 @@ once by breaking what they protect, then restored.
   NOT RUN: WebKit through `make e2e` on the author's host; real Safari on an iPhone; the install
   step and push notifications; the cold open with the server off through the service worker
   (manual check in the Verification Plan); CUJ 7 (P7).
+- **P7 exit** (2026-11-06). CI run 42275161287 on branch p7 at 1bce327: gate success. Two earlier
+  runs on p7 failed and were fixed: 42274188479 (gitleaks `generic-api-key` false positive on the
+  variable name `argonIDKey`; fixed by a `.gitleaksignore` entry in f0b9f76) and 42274446831
+  (shellcheck SC2015 on six `A && B || C` lines: the CI runner's shellcheck is older than 0.11;
+  fixed in 1bce327 with `if` statements). Ran: `make check-pins lint test vuln build
+  check-generated test-db cover test-deploy` exits 0 on a fresh clone of p7 (and again on the tree
+  after the new-volumes guard fix); `make test-deploy`; the restore drill on the dev PC with locally
+  built 0.0.0-drill images and no cloudflared (D6): check 5 (setup, client, appointment and photo
+  through the API, backup, `down -v`, `restore.sh latest`, old login works, photo bytes identical,
+  new photo upload works), check 6 simulated (marker removed: `backup-now.sh` exits non-zero,
+  "Disco de respaldo no visible", status line red, nothing written) and the Goal 7 grep (check 10).
+  NOT RUN: the release workflow and `upgrade.sh` end to end (both need a `v*` tag; D6); Verification
+  Plan checks 1-4 and 7-9 on her iPhone through the tunnel; a real removable-disk unplug and a
+  `nofail` boot (not used yet: D8); the Ley 8968 check. The owner repeats check 5 on the home PC
+  before real data (deploy/README.md section 8).
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
@@ -180,4 +195,8 @@ own change.
   skill would not use. Kept by owner decision.
 - `make vuln` lists 3 known vulnerabilities in kin-openapi and golang.org/x/crypto that our code
   does not call (govulncheck passes).
-- Design doc item 87's root-file deletions (design_draft.md and the others) are still pending.
+- `scripts/check-pins.sh` accepts a non-numeric postgres tag (`postgres:latest` passed); found
+  before P7, not fixed in P7.
+- shellcheck is not pinned: CI uses the runner's version and the local gate whatever is installed,
+  so the two can disagree (seen on p7: SC2015 only in CI).
+- gitleaks runs only in CI, not in the local gate, so a false positive shows up only after a push.
