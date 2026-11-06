@@ -460,5 +460,9 @@
 	"export_body": "Un archivo ZIP con tus clientas, citas, servicios, atributos, plantillas y recordatorios, en CSV y JSON.",
 	"export_offline": "Necesitas conexión con el sistema para descargar",
 	"export_button": "Descargar mis datos",
-	"archived_heading_masculine": "Archivados"
+	"archived_heading_masculine": "Archivados",
+	"page_title_app": "Agenda",
+	"page_title_client": "Clienta",
+	"page_title_template": "Plantilla",
+	"page_title_login": "Entrar"
 }

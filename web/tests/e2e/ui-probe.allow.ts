@@ -13,13 +13,6 @@ function entries(route: string, check: string, states: string[], common: Common)
 }
 
 export const ALLOW: readonly Allow[] = [
-	{
-		route: '*',
-		witness: '/',
-		check: 'axe:document-title',
-		why: 'no page has a <title>',
-		bug: 'UIP-L1'
-	},
 	// /
 	...entries('/', 'axe:scrollable-region-focusable', ['agenda empty'], {
 		width: 'compact',

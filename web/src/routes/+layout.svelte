@@ -30,6 +30,7 @@
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
 	import { syncLine } from '../lib/nav';
+	import { pageTitle } from '../lib/titles';
 	import { clock } from '../lib/clock.svelte';
 	import { createReporter } from '../lib/report';
 	import { pushControl } from '../lib/pushControl.svelte';
@@ -218,6 +219,10 @@
 		cache.lastError !== null && !cache.offline ? errorText(cache.lastError) : null
 	);
 </script>
+
+<svelte:head>
+	<title>{pageTitle(page.route.id)}</title>
+</svelte:head>
 
 {#snippet content()}
 	<div class="mx-auto flex w-full max-w-360 flex-col gap-4">
