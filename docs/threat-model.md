@@ -121,6 +121,7 @@ dashboard and settings (Cloudflare or any other).
 | T93 | the build | A package already in the lockfile is malicious with no CVE | go.sum, web/pnpm-lock.yaml | accepted: no tool finds a malicious package that has no CVE, so the controls are the lockfiles and review of each Dependabot bump |
 | T76 | the build | A GitHub Action is swapped under its tag, or a workflow has too-wide permissions or script injection | .github/workflows | file:.github/workflows/ci.yml; gap: Task 4 |
 | T77 | the build | A secret is committed to the repo | git history | make:secrets; ci:ci.yml/gate |
+| T94 | the build | A token for an outside design tool is committed in the design file | design/soft-glass.pen | accepted: Pencil's fileToken is likely a document id, and even if it is a token it reaches only this design, which is public in this repo and holds no PII, and the value is already in public history, which is never rewritten (owner decision, 2026-11-06); file:.gitleaksignore |
 | T78 | the build | A release ships images nobody can verify, with no list of what is in them | release workflow | gap: Task 7 |
 | T79 | the build | A change reaches main without a green CI run | GitHub settings | gap: Task 10 |
 | T80 | the host | The OS, the disk, the Docker daemon, deploy/.env at rest and docker logs (which hold the setup link) | the host machine | out of scope: the deployer who owns the host |

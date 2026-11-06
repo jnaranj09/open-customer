@@ -5,3 +5,5 @@ a65d7fa64b782b4b3daa6cae7c3149982b6c6307:internal/auth/password_change.go:generi
 6c4156fc64186e4ed5ad234048674fb4f063ac5d:internal/auth/password_test.go:generic-api-key:68
 # The variable name argonIDKey (password.go) holds the function argon2.IDKey, not a key.
 caaa93f68f398d49d1847bfc124493a6192dd200:internal/auth/password.go:generic-api-key:50
+# design/soft-glass.pen: Pencil's fileToken. Likely a document id; even if it is a token it reaches only this design, which is public here and holds no PII (owner decision, 2026-11-06).
+548c380bc17a579810c42dba65785e9966e3ca53:design/soft-glass.pen:generic-api-key:4523
