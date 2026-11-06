@@ -18,6 +18,9 @@ readonly MARKER=/target/.open-customer-backup-target
 readonly REPO=/target/restic
 readonly STATUS_DIR=/backup-status
 readonly STATUS=$STATUS_DIR/status.json
+# Present while these volumes must be restored before any backup (see fresh_volumes_guard).
+readonly RESTORE_FIRST=$STATUS_DIR/restore-first
+readonly RESTORE_FIRST_ERROR="Hay respaldos anteriores: restaure primero"
 readonly LOCK=$STATUS_DIR/backup.lock
 readonly WORK=$STATUS_DIR/work
 readonly DUMP=$WORK/db.dump
@@ -131,11 +134,49 @@ backup_recent() {
     "$STATUS" >/dev/null 2>&1
 }
 
+# fresh_volumes_guard: true when this run must take no snapshot. A run that starts without
+# status.json is on new volumes (a new PC, or `docker compose down --volumes`); if the repository
+# already has snapshots, backing up the empty database would make it `latest` and its forget
+# could drop the day's real snapshot. The state is kept in $RESTORE_FIRST, because the run's own
+# status.json write must not lift it. It is lifted by a missing or empty repository (a first
+# install), by a successful restore, and by the operator replacing status.json with `{}` (a file
+# without checked_at, which backup.sh always writes). An unreadable repository leaves it set and
+# lets the run go on to the copy step, which reports that error.
+fresh_volumes_guard() {
+  if [ ! -e "$RESTORE_FIRST" ]; then
+    return 1
+  fi
+  if [ -f "$STATUS" ] && ! jq -e 'has("checked_at")' "$STATUS" >/dev/null 2>&1; then
+    rm -f "$RESTORE_FIRST"
+    return 1
+  fi
+  local count
+  if ! restic -r "$REPO" cat config >/dev/null 2>&1; then
+    if [ ! -e "$REPO" ]; then
+      rm -f "$RESTORE_FIRST"
+    fi
+    return 1
+  fi
+  if ! count=$(restic -r "$REPO" --no-lock snapshots --json 2>/dev/null | jq -e length); then
+    return 1
+  fi
+  if [ "$count" -eq 0 ]; then
+    rm -f "$RESTORE_FIRST"
+    return 1
+  fi
+  return 0
+}
+
 # run_backup <check-age|always> [tag]: one run. The loop passes check-age (step 2 exists only
 # there); once passes always. It returns the run's result and has always written status.json.
 run_backup() {
   local age=$1 tag=${2:-} dump_at snapshot_id
   in_run=1
+
+  # No status.json: new volumes. Recorded before step 1, so a missing target does not lose it.
+  if [ ! -e "$STATUS" ]; then
+    : >"$RESTORE_FIRST"
+  fi
 
   # Step 1: the marker proves the target folder is the backup disk, not an empty mount point.
   if [ ! -e "$MARKER" ]; then
@@ -145,6 +186,14 @@ run_backup() {
     return 1
   fi
   log "marker: ok"
+
+  # Step 1b: earlier backups and new volumes; restore first.
+  if fresh_volumes_guard; then
+    log "guard: the repository has snapshots and these volumes have none; restore first"
+    fail_status "$RESTORE_FIRST_ERROR"
+    in_run=0
+    return 1
+  fi
 
   # Step 2.
   if [ "$age" = check-age ] && backup_recent; then
@@ -352,6 +401,12 @@ mode_restore() {
   fi
   log "restore: media replaced, owned by 65532:65532"
   rm -rf "$out"
+  # The hourly backups resume: the guard is lifted and status.json names the restored snapshot.
+  # The dump and copy times keep their values (null on new volumes): no copy was made here.
+  rm -f "$RESTORE_FIRST"
+  if ! write_status "last_snapshot_id=$id" last_error=null last_error_at=null; then
+    restore_fail "the data is restored, but $STATUS cannot be written"
+  fi
   log "restore: done"
 }
 

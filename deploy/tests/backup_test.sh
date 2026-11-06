@@ -301,6 +301,97 @@ test_restore() {
   [ ! -e /backup-status/work/restore ] || fail "/backup-status/work/restore was not removed"
 }
 
+GUARD_ERROR="Hay respaldos anteriores: restaure primero"
+GUARD_FILE=/backup-status/restore-first
+
+# fresh_volumes_with_repo: a repository with one snapshot, then the backup-status volume emptied
+# (a new PC, or `docker compose down --volumes`), with the database emptied too.
+fresh_volumes_with_repo() {
+  fresh
+  touch "$MARKER"
+  "$BACKUP" once >"$LOGS/out" 2>&1 || fail "the first once failed"
+  find /backup-status -mindepth 1 -delete
+  dropdb --force "$PGDATABASE"
+  createdb "$PGDATABASE"
+}
+
+test_fresh_volumes_guard() {
+  fresh_volumes_with_repo
+  local before rc=0
+  before=$(snapshots | jq -c '[.[].id]')
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_ne "once exit code" 0 "$rc"
+  assert_eq "last_error" "$GUARD_ERROR" "$(field last_error)"
+  assert_ne "last_error_at" null "$(field last_error_at)"
+  assert_ne "checked_at" null "$(field checked_at)"
+  assert_eq "snapshots" "$before" "$(snapshots | jq -c '[.[].id]')"
+  grep -q '^guard: ' "$LOGS/out" || fail "no guard line in the output"
+
+  # It holds on later runs too: the status file it wrote does not lift it, nor does a run with
+  # the target missing in between.
+  rc=0
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_ne "second once exit code" 0 "$rc"
+  rm "$MARKER"
+  "$BACKUP" once >"$LOGS/out" 2>&1 || true
+  assert_eq "last_error without the marker" "Disco de respaldo no visible" "$(field last_error)"
+  touch "$MARKER"
+  rc=0
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_ne "once after the marker is back" 0 "$rc"
+  assert_eq "last_error after the marker is back" "$GUARD_ERROR" "$(field last_error)"
+
+  # The loop waits for the next hour instead of exiting, and takes no snapshot either.
+  seed_status "$(jq '.checked_at = "2000-01-01T00:00:00Z"' "$STATUS")"
+  BACKUP_INTERVAL_SECONDS=1 "$BACKUP" >"$LOGS/loop" 2>&1 &
+  local pid=$!
+  wait_until 30 checked_at_changed
+  kill -0 "$pid" 2>/dev/null || fail "the loop exited"
+  kill -TERM "$pid"
+  wait_until 10 exited "$pid"
+  assert_eq "loop last_error" "$GUARD_ERROR" "$(field last_error)"
+  assert_eq "snapshots after the loop" "$before" "$(snapshots | jq -c '[.[].id]')"
+}
+
+test_restore_resumes() {
+  fresh_volumes_with_repo
+  local id
+  id=$(snapshots | jq -r '.[0].id')
+  "$BACKUP" once >"$LOGS/out" 2>&1 || true
+  assert_eq "last_error before the restore" "$GUARD_ERROR" "$(field last_error)"
+  local rc=0
+  "$BACKUP" restore "$id" >"$LOGS/out" 2>&1 || rc=$?
+  assert_eq "restore exit code" 0 "$rc"
+  assert_eq "last_snapshot_id after the restore" "$id" "$(field last_snapshot_id)"
+  assert_eq "last_error after the restore" null "$(field last_error)"
+  assert_eq "last_error_at after the restore" null "$(field last_error_at)"
+  assert_ne "checked_at after the restore" null "$(field checked_at)"
+  rc=0
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_eq "once after the restore" 0 "$rc"
+  assert_eq "snapshots" 2 "$(snapshots | jq length)"
+}
+
+test_empty_status_fresh_start() {
+  fresh_volumes_with_repo
+  "$BACKUP" once >"$LOGS/out" 2>&1 || true
+  assert_eq "last_error before the reset" "$GUARD_ERROR" "$(field last_error)"
+  echo '{}' >"$STATUS"
+  local rc=0
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_eq "once after the reset" 0 "$rc"
+  assert_eq "last_error" null "$(field last_error)"
+  assert_eq "snapshots" 2 "$(snapshots | jq length)"
+  [ ! -e "$GUARD_FILE" ] || fail "$GUARD_FILE is still there"
+  # A later failed run does not bring the guard back.
+  rc=0
+  PGHOST=oc-no-such-host.invalid "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_prefix "last_error after a failed run" "dump: " "$(field last_error)"
+  rc=0
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_eq "once after the failed run" 0 "$rc"
+}
+
 # exits_2 <args...>: the mode exits 2 with one output line.
 exits_2() {
   local rc=0 out
@@ -330,5 +421,8 @@ t "an unusable lock file stops once and the loop" test_lock_unusable
 t "TERM during a run writes interrupted" test_term_interrupted
 t "snapshot-info prints id, time and app" test_snapshot_info
 t "restore recreates the database and hands media to 65532" test_restore
+t "fresh volumes with an existing repository take no snapshot" test_fresh_volumes_guard
+t "restore lets backups resume" test_restore_resumes
+t "an empty status file allows a fresh start" test_empty_status_fresh_start
 t "bad args exit 2" test_bad_args
 finish

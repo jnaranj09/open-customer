@@ -102,6 +102,9 @@ Never commit `.env`. After first setup, `scripts/upgrade.sh` and `scripts/restor
 
 ## 6. First start and the setup link
 
+Restoring onto a new PC, or after the volumes were lost? Do sections 1 to 5, then section 10. Do
+not run this section.
+
 1. Start the stack. On a first start the `backup` service sees no earlier backup and runs one:
 
    ```sh
@@ -202,9 +205,8 @@ Use made-up data. This wipes the volumes of this install, so do it before real u
    docker compose up -d db
    ```
 
-   Do not start `backup` or the whole stack yet. On empty volumes `backup` sees no earlier backup
-   and backs up the empty database at once: that snapshot becomes `latest`, and its `forget` step
-   can drop the snapshot taken earlier the same day.
+   Starting the whole stack here is also safe: on empty volumes `backup` sees the earlier
+   snapshots and takes none until the restore (section 10).
 
 5. Restore the newest snapshot. Read the snapshot line and answer the prompt by typing `y`
    yourself; piped input is not supported:
@@ -212,6 +214,9 @@ Use made-up data. This wipes the volumes of this install, so do it before real u
    ```sh
    scripts/restore.sh latest
    ```
+
+   At the end it runs `docker compose up -d`, which starts the whole stack, `cloudflared`
+   included.
 
 6. Open the app. Confirm the client, the appointment and the photo are back.
 7. Upload one new photo, to confirm `app` can still write to the restored media volume.
@@ -253,11 +258,19 @@ backup. Run scripts/upgrade.sh."
 Use it after data loss, or to roll back an upgrade (restore the `pre-upgrade` snapshot). Migrations
 only move forward, so a rollback is always a restore.
 
-After the volumes were lost (a new PC, or `docker compose down --volumes`), start only `db`
-(`docker compose up -d db`) and restore before anything else, as in section 8. A `backup` service
-started on empty volumes backs up the empty database at once, so `latest` is then that empty
-snapshot, and the snapshot taken earlier that day can be gone. If that already happened, pick the
-id of the last good snapshot by its time instead of `latest`.
+After the volumes were lost (a new PC, or `docker compose down --volumes`), restore before her
+data goes in again. Until then `backup` takes no snapshot: it finds earlier snapshots in the
+backup folder but no `status.json` on the new volumes, so a backup now would hold an empty
+database, become `latest`, and could push the day's real snapshot out. The status screen and "Hoy"
+show the backup line red with "Hay respaldos anteriores: restaure primero", and
+`scripts/backup-now.sh` exits non-zero. A restore lifts it and the hourly backups go on.
+
+To start empty on purpose and keep the old snapshots (no restore), replace the status file with an
+empty one; the next backup then runs:
+
+```sh
+docker compose run --rm --entrypoint sh backup -c 'echo {} > /backup-status/status.json'
+```
 
 1. Find the snapshot id. From this folder:
 
@@ -266,7 +279,11 @@ id of the last good snapshot by its time instead of `latest`.
    ```
 
    prints one JSON line with the id, time and app version of the newest snapshot. To list them
-   all, run restic yourself against the folder in `BACKUP_TARGET`.
+   all, with their times and tags:
+
+   ```sh
+   docker compose --profile restore run --rm --entrypoint restic restore -r /target/restic --no-lock snapshots
+   ```
 2. Run the restore with an id, or `latest`:
 
    ```sh
