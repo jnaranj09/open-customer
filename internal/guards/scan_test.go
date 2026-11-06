@@ -1,6 +1,7 @@
 // Package guards holds repo-wide structural tests (TASKS.md T6). Each guard reads the repo, parses Go
-// with go/parser (never a regex over raw text), and fails when a rule is broken. Spec: the
-// dev-project-bootstrap guards.md. Every guard was seen red once by breaking what it protects.
+// with go/parser (never a regex over Go source; docs, JSON, the Makefile and workflows are read as
+// text), and fails when a rule is broken. Spec: the dev-project-bootstrap guards.md. Every guard
+// was seen red once by breaking what it protects.
 package guards
 
 import (

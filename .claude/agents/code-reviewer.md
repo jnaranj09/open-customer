@@ -73,6 +73,11 @@ match).
     it. A new token or reusable component starts in `design/soft-glass.pen`. No new entry in
     `eslint-suppressions.json`, no allow-list growth in `design-tokens` / `design-parity`. Ask for
     the 393 × 852 and 1440 × 900 screenshots of the changed screens.
+17. **Threat model** (`docs/threat-model.md`, `docs/designs/devsecops.md`). A change that adds or
+    changes an entry point (a route, an upload, a header, a script argument, an image, a workflow)
+    or a security check, fix or scan adds or updates its row in the same change; a row names the
+    test that fails when the defence breaks, never a nearby one. No new `security/allow.json` entry
+    or later `expires` date without the owner's agreement written in the commit message.
 
 ## Output
 

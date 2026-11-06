@@ -1,6 +1,7 @@
 # open-customer — Security pipeline
 
-Status: approved by the owner (2026-11-06). Not built.
+Status: approved by the owner (2026-11-06). Being built: the threat model and the allow-list exist;
+the scans do not yet.
 
 ## Intent
 
@@ -65,8 +66,15 @@ rule names its sensor") applied to security.
   the API, the backup and restore scripts, the images, CI and the release workflow, dependencies.
 - Out-of-scope items (host, Cloudflare dashboard) are rows too, marked `out of scope:` with who owns
   them, so the list is visibly complete.
-- A guard test fails when a row has neither a check nor `accepted:`/`out of scope:`, or names a test
-  or file that does not exist.
+- The "Covered by" cell holds typed references, separated by `; `: `test:<GoTestName>` (a `Test`
+  or `Fuzz` function some `_test.go` declares), `file:<repo path>`, `make:<target>`,
+  `ci:<workflow>/<job>`, `accepted: <reason>`, `out of scope: <who owns it>`, `manual: <what and how
+  often>` (GitHub settings), and `gap: Task <N>` for a threat a later task of the build plan closes
+  (allowed only while the pipeline is being built; its last task removes the word from the guard).
+  The allow-list is not a check, so it is never a reference.
+- The guard `TestThreatModel` (`internal/guards`, run by `make test`) fails on a row with an empty
+  "Covered by", a reference of another type, a test no `_test.go` declares, a file that does not
+  exist, a make target the Makefile lacks, a CI job the workflow lacks, or a duplicate ID.
 - The one-time manual audit (section 8) adds rows.
 
 ### 2. Code scan (Semgrep)
@@ -155,9 +163,14 @@ rule names its sensor") applied to security.
 - **Third-party images** (`postgres`, `cloudflared`): on push and PR they report only, so an
   upstream CVE with no new image tag yet cannot turn every unrelated push red. The release and the
   weekly run block on them. Our own images (app, backup) block on push. My call.
-- **Allow-list:** one file per tool or one shared file (builder's call). Each entry has the finding
-  id, a one-line reason and an expiry date; a guard fails on an entry missing any of the three and
-  on an expired entry. A new entry or a later expiry date needs the owner's agreement, written in
+- **Allow-list:** one shared file, `security/allow.json`: an array of `{"tool", "id", "reason",
+  "expires"}`, where `tool` is one of `trivy`, `trivy-config`, `zizmor`, `semgrep`, `zap`, `nuclei`,
+  `gitleaks` and `expires` is `YYYY-MM-DD`. It starts as `[]`. The guard `TestSecurityAllowList`
+  (`internal/guards`) fails on a missing field, an unknown tool, a bad date, an expired date, a date
+  more than 180 days ahead, or a duplicate `(tool, id)`. `scripts/security/allow.sh <tool>` prints
+  that tool's live ids (expiry today or later, UTC), one per line, and each scan wrapper turns them
+  into the tool's own ignore form. gitleaks keeps its `.gitleaksignore` of fingerprints, which this
+  guard does not cover. A new entry or a later expiry date needs the owner's agreement, written in
   the commit message, like `ui-probe.allow.ts` (`.claude/rules/ui.md`). The default answer to a
   finding is a code change. My call.
 - CI uploads SARIF to the repo's Security tab where the tool supports it.
@@ -195,6 +208,5 @@ separate `make dast`, like `make e2e`.
 
 - Exact tool versions, images and flags (verified against each tool's docs; pinned per "Pins").
 - Checkov vs Trivy config, and the Actions-specific scanner.
-- The allow-list file format and location.
 - The phase split and order, with the image scan and the running-app scan (with the headers fix)
   first, because they close the two gaps found today.

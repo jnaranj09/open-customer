@@ -11,8 +11,9 @@ clients, appointments and hand-sent WhatsApp reminders.
 **Designing or choosing without the owner?** Read `technical-taste.md` first. **Setting up?** Work
 through `TASKS.md` in order.
 
-**Architecture source:** `docs/designs/release-1.md` is the only one. Build it phase by phase (its
-"Build order"). A change that makes the doc false fixes the doc in the same change.
+**Architecture source:** `docs/designs/release-1.md` for the app; build it phase by phase (its
+"Build order"). `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
+every threat and its check. A change that makes a doc false fixes the doc in the same change.
 
 ## Never commit
 
@@ -95,9 +96,10 @@ A check that could not run is reported as NOT RUN, never as passing.
   `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noImplicitReturns`; typescript-eslint
   `strictTypeChecked`. Never loosen a flag; fix the consumer.
 - Guard tests in `internal/guards` (Go: agent-context, nolint budget, catch-blocks, test-hygiene,
-  forbid-only) and `web/tests/guards` (Vitest: layers, catch-blocks, test-hygiene, forbid-only,
-  raw-colors, design-tokens, design-parity, ui-lint, eslint suppression budget, bulk file and inline
-  comments). Allow-lists only shrink.
+  forbid-only, threat-model, security-allow-list for `security/allow.json`) and `web/tests/guards`
+  (Vitest: layers, catch-blocks, test-hygiene, forbid-only, raw-colors, design-tokens,
+  design-parity, ui-lint, eslint suppression budget, bulk file and inline comments). Allow-lists
+  only shrink.
 - Lint suppressions: a pinned total that only falls (guard `suppression-budget`, `svelte-ignore`
   included).
 - UI pipeline (`rules/ui.md`): tokens and components follow `design/soft-glass.pen` (guards
