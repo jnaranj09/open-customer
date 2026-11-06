@@ -3,7 +3,7 @@
 // probe) and `why` says what the bug is. Only shrinks: an entry that matches nothing on the screen
 // it is scoped to fails, so a fix removes its entries in the same change. A new entry needs the
 // owner's yes.
-import { LONG_NAME, type Allow, type Width } from './probe';
+import type { Allow, Width } from './probe';
 
 type Common = { width?: Width; target?: string; why: string; bug: string };
 
@@ -19,7 +19,6 @@ export const ALLOW: readonly Allow[] = [
 		why: 'the wide week view says nothing for an empty week',
 		bug: 'UIP-N2'
 	}),
-	// /ajustes/atributos
 	// /ajustes/plantillas/[id]
 	...entries('/ajustes/plantillas/[id]', 'busy', ['template busy'], {
 		width: 'compact',
@@ -42,34 +41,10 @@ export const ALLOW: readonly Allow[] = [
 		why: 'the compact template editor is blank while the templates load',
 		bug: 'UIP-N5'
 	}),
-	// /ajustes/recordatorios
-	// /ajustes/servicios
 	// /citas/[id]
 	...entries('/citas/[id]', 'busy', ['photos busy'], {
 		why: 'the photo section shows no loading line while the photos load',
 		bug: 'UIP-N4'
-	}),
-	...entries('/citas/[id]', 'scroll', ['base', 'photos empty', 'photos error'], {
-		width: 'compact',
-		why: 'a one-word 60-letter name pushes the page wider than the screen',
-		bug: 'UIP-M5'
-	}),
-	...entries('/citas/[id]', 'text-overflow', ['base', 'photos empty', 'photos error'], {
-		target: `h2 "${LONG_NAME}"`,
-		why: 'a one-word 60-letter name does not wrap and spills out of its box',
-		bug: 'UIP-M5'
-	}),
-	// /citas/nueva
-	// /clientas
-	...entries('/clientas', 'scroll', ['base'], {
-		width: 'compact',
-		why: 'a one-word 60-letter name pushes the page wider than the screen',
-		bug: 'UIP-M5'
-	}),
-	...entries('/clientas', 'text-overflow', ['base'], {
-		target: `span "${LONG_NAME}"`,
-		why: 'a one-word 60-letter name does not wrap and spills out of its box',
-		bug: 'UIP-M5'
 	}),
 	// /clientas/[id]
 	...entries('/clientas/[id]', 'busy', ['reminder log busy'], {
@@ -80,60 +55,6 @@ export const ALLOW: readonly Allow[] = [
 		why: 'the photo section shows no loading line while the photos load',
 		bug: 'UIP-N4'
 	}),
-	...entries(
-		'/clientas/[id]',
-		'scroll',
-		['archive', 'base', 'photos empty', 'photos error', 'reminder log empty', 'reminder log error'],
-		{ why: 'a one-word 60-letter name pushes the page wider than the screen', bug: 'UIP-M5' }
-	),
-	...entries(
-		'/clientas/[id]',
-		'target-size',
-		['archive', 'base', 'photos empty', 'photos error', 'reminder log empty', 'reminder log error'],
-		{
-			width: 'compact',
-			target: 'a "Volver"',
-			why: 'the client page back button shrinks to 22 px beside a long name',
-			bug: 'UIP-M6'
-		}
-	),
-	...entries(
-		'/clientas/[id]',
-		'text-overflow',
-		['archive', 'base', 'photos empty', 'photos error'],
-		{
-			width: 'compact',
-			target: `span "Hola ${LONG_NAME}, te esperamos hoy."`,
-			why: 'a one-word 60-letter name does not wrap and spills out of its box',
-			bug: 'UIP-M5'
-		}
-	),
-	...entries(
-		'/clientas/[id]',
-		'text-overflow',
-		[
-			'archive',
-			'base',
-			'client error',
-			'photos empty',
-			'photos error',
-			'reminder log empty',
-			'reminder log error'
-		],
-		{
-			width: 'wide',
-			target: `span "${LONG_NAME}"`,
-			why: 'a one-word 60-letter name does not wrap and spills out of its box',
-			bug: 'UIP-M5'
-		}
-	),
-	// /clientas/nueva
-	...entries('/clientas/nueva', 'text-overflow', ['base'], {
-		width: 'wide',
-		target: `span "${LONG_NAME}"`,
-		why: 'a one-word 60-letter name does not wrap and spills out of its box',
-		bug: 'UIP-M5'
-	}),
 	// /enviar
 	...entries('/enviar', 'busy', ['sent log busy'], {
 		why: 'the reminder log shows no loading line while it loads',
@@ -142,33 +63,5 @@ export const ALLOW: readonly Allow[] = [
 	...entries('/enviar', 'busy', ['due list busy'], {
 		why: 'Enviar shows no loading line while the due list loads',
 		bug: 'UIP-N3'
-	}),
-	...entries('/enviar', 'clip', ['base', 'due list empty', 'due list error'], {
-		target: `span "Hola ${LONG_NAME}, te esperamos hoy."`,
-		why: 'a message with a one-word 60-letter name is cut in its row',
-		bug: 'UIP-M5'
-	}),
-	...entries('/enviar', 'clip', ['base', 'sent log empty', 'sent log error'], {
-		width: 'wide',
-		target: `span "Hola ${LONG_NAME}, te esperamos mañana."`,
-		why: 'a message with a one-word 60-letter name is cut in its row',
-		bug: 'UIP-M5'
-	}),
-	...entries('/enviar', 'scroll', ['base', 'sent log empty', 'sent log error'], {
-		width: 'compact',
-		why: 'a one-word 60-letter name pushes the page wider than the screen',
-		bug: 'UIP-M5'
-	}),
-	...entries('/enviar', 'text-overflow', ['base', 'sent log empty', 'sent log error'], {
-		width: 'compact',
-		target: `h2 "${LONG_NAME}"`,
-		why: 'a one-word 60-letter name does not wrap and spills out of its box',
-		bug: 'UIP-M5'
-	}),
-	...entries('/enviar', 'text-overflow', ['base', 'sent log empty', 'sent log error'], {
-		width: 'compact',
-		target: `p "Hola ${LONG_NAME}, te esperamos mañana."`,
-		why: 'a one-word 60-letter name does not wrap and spills out of its box',
-		bug: 'UIP-M5'
 	})
 ];

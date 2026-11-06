@@ -198,7 +198,7 @@
 			href={resolve('/clientas')}
 			class="lg:hidden"
 		/>
-		<h1 class="text-3xl font-extrabold text-ink">
+		<h1 class="min-w-0 text-3xl font-extrabold text-ink">
 			{editing ? t('client_edit_title') : (client?.name ?? '')}
 		</h1>
 	</header>

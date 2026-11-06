@@ -38,9 +38,11 @@
 	pad="lg"
 	class="fixed inset-y-0 left-0 z-30 flex w-64 flex-col gap-6 border-y-0 border-l-0"
 >
-	<div class="flex items-center gap-3">
+	<!-- The name gets the sidebar's full width under the icon, and a word too long for it breaks
+	     at a syllable with a hyphen (the page is lang="es"), not at any letter. -->
+	<div class="flex flex-col gap-3">
 		<BusinessIcon custom={customIcon} class="size-10 shrink-0 rounded-md" />
-		<p class="min-w-0 text-xl font-extrabold wrap-break-word text-ink">{name}</p>
+		<p class="text-xl font-extrabold hyphens-auto text-ink">{name}</p>
 	</div>
 
 	<WriteLink href={resolve(`/citas/nueva?dia=${newDay}` as const)} variant="strong">

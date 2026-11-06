@@ -80,8 +80,11 @@ html {
 	font-family: var(--font-sans);
 }
 
-/* The soft glows sit behind every screen and stay put while the content scrolls. */
+/* The soft glows sit behind every screen and stay put while the content scrolls. A word too long
+   for its line (a client typed as one 60-letter word, a pasted link) breaks instead of pushing the
+   screen wider; a flex item that holds such text also needs min-w-0. */
 body {
+	overflow-wrap: break-word;
 	min-height: 100dvh;
 	background:
 		radial-gradient(60rem 40rem at 0% 0%, var(--glow-blush), transparent 70%),
