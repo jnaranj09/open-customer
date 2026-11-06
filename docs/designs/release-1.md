@@ -2457,7 +2457,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 84. `deploy/backup/Dockerfile` (Create)
 
 *   **Type / Scope**: Backup image.
-*   **Proposed Changes**: `FROM postgres:18.<minor>-alpine` (the pin in "Pins"), `apk add bash restic jq` (checked at P7: the image's busybox already has `flock` with `-n`, so no other package), copies `backup.sh`, creates `/media` empty and owned by `65532:65532` (see "Volume ownership"; Alpine ships `/media/cdrom`, `floppy` and `usb`, which Docker would copy into an empty volume, so the folder is removed and made again), `ENTRYPOINT ["/backup.sh"]` and `CMD []` (the base image's `CMD ["postgres"]` would otherwise become the mode).
+*   **Proposed Changes**: `FROM postgres:18.<minor>-alpine` (the pin in "Pins"), `apk add bash restic jq` (checked at P7: the image's busybox already has `flock` with `-n`, so no other package), removes the base image's `gosu` (used only by the base `docker-entrypoint.sh`, which this image never runs; its Go stdlib CVEs made `make image-scan` block), copies `backup.sh`, creates `/media` empty and owned by `65532:65532` (see "Volume ownership"; Alpine ships `/media/cdrom`, `floppy` and `usb`, which Docker would copy into an empty volume, so the folder is removed and made again), `ENTRYPOINT ["/backup.sh"]` and `CMD []` (the base image's `CMD ["postgres"]` would otherwise become the mode).
 
 ##### 85. `deploy/backup/backup.sh` (Create)
 

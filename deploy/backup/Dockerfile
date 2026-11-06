@@ -5,6 +5,10 @@ FROM postgres:18.6-alpine
 
 RUN apk add --no-cache bash restic jq
 
+# The base image's gosu is only used by its docker-entrypoint.sh, which this image never runs
+# (ENTRYPOINT is backup.sh); it carries Go stdlib CVEs the image scan blocks on.
+RUN rm /usr/local/bin/gosu
+
 # The media volume's mount folder, owned by the app user (design doc "Volume ownership"). Alpine
 # ships /media/cdrom, floppy and usb; Docker would copy them into an empty media volume, so the
 # folder is made again, empty.

@@ -200,3 +200,13 @@ own change.
   before P7, not fixed in P7.
 - shellcheck is not pinned: CI uses the runner's version and the local gate whatever is installed,
   so the two can disagree (seen on p7: SC2015 only in CI).
+- `postgres:18.6-alpine` ships `gosu` built with Go 1.24.6, with Go stdlib CVEs (CVE-2025-68121
+  critical, and more); found by `make image-scan` (devsecops). Third-party: it only reports on a
+  push, and blocks a release and the weekly rescan until upstream rebuilds it or the owner
+  allow-lists the CVEs. Our backup image removes its copy of `gosu`.
+- `cloudflare/cloudflared:2026.10.7` has CVE-2026-78661 (golang.org/x/net, fixed in 0.62.0); found
+  by `make image-scan`. It only reports on a push, and blocks a release and the weekly rescan until
+  a cloudflared tag with the fix is pinned.
+- gitleaks flags the `"fileToken"` value in `design/soft-glass.pen` (`generic-api-key`, commit
+  548c380, on main). The owner is deciding whether it is a secret (rotate it) or not (a
+  `.gitleaksignore` entry with its reason); until then `make secrets` and the CI `gate` job are red.
