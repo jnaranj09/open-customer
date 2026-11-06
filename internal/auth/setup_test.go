@@ -3,7 +3,10 @@
 package auth_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"reflect"
 	"strings"
@@ -130,6 +133,22 @@ func TestNewSetupTokenReplacesOld(t *testing.T) {
 	wantSetupTokenInvalid(t, err)
 	if _, _, err := f.auth.CompleteSetup(t.Context(), f.pool, validSetupInput(second)); err != nil {
 		t.Fatalf("CompleteSetup with the new token: %v", err)
+	}
+}
+
+func TestSetupTokenStoredAsHash(t *testing.T) {
+	f := newSetupFixture(t)
+	raw, err := base64.RawURLEncoding.DecodeString(f.token)
+	if err != nil || len(raw) != 32 {
+		t.Fatalf("token decodes to %d bytes, %v; want 32, nil", len(raw), err)
+	}
+	var stored []byte
+	if err := f.pool.QueryRow(t.Context(), `SELECT token_hash FROM setup_tokens`).Scan(&stored); err != nil {
+		t.Fatalf("read token_hash: %v", err)
+	}
+	sum := sha256.Sum256(raw)
+	if bytes.Equal(stored, raw) || !bytes.Equal(stored, sum[:]) {
+		t.Fatalf("token_hash = %x; want sha256 of the raw token %x, not the raw bytes", stored, sum)
 	}
 }
 

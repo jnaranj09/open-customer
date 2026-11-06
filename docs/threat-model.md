@@ -44,7 +44,7 @@ dashboard and settings (Cloudflare or any other).
 | T02 | client data | A new route is made public by mistake in the spec | api/openapi.yaml | test:TestPublicOperationsAreExactlyTheSetupLoginAndPushKeyOnes; test:TestPublicOperationsRejectsSecurityStep7CannotCheck |
 | T03 | the session | A forged or garbage session cookie is accepted | session cookie | test:TestMeWithGarbageCookieIs401; test:TestAuthenticateBadToken |
 | T04 | the session | An expired session still works | session cookie | test:TestAuthenticateExpired; test:TestMeWithExpiredSessionIs401 |
-| T05 | the session | A database leak gives working session or setup tokens | sessions table | test:TestTokenStoredAsHash |
+| T05 | the session | A database leak gives working session or setup tokens | sessions and setup_tokens tables | test:TestTokenStoredAsHash; test:TestSetupTokenStoredAsHash |
 | T06 | the session | The cookie is readable by script, sent cross-site or sent over plain http | session cookie | test:TestSessionCookieAttributes; test:TestPostSetupCookieIsSecureOnHTTPS |
 | T07 | the session | Logout leaves the session usable | POST /auth/logout | test:TestLogoutRevokes; test:TestLogoutExpiresCookieAndRevokes |
 | T08 | the session | A lost phone keeps its session after a password change or reset | POST /auth/password, reset-password | test:TestChangePasswordRevokesOtherSessions; test:TestResetPasswordSetsMustChangeAndRevokesAll |
@@ -56,6 +56,7 @@ dashboard and settings (Cloudflare or any other).
 | T14 | the account | Login timing tells which usernames exist | POST /auth/login | test:TestLoginUnknownUserVerifiesAgainstTheDummyHash; test:TestDummyHashUsesDefaultParams |
 | T15 | the account | A stolen database gives readable passwords | users table | test:TestHashFormatIsPHC; test:TestHashUsesAFreshSalt; test:TestVerifyHonoursStoredParams |
 | T16 | the account | Guessing the current password through the change-password form | POST /auth/password | test:TestChangePasswordWrongCurrentDelaysTheNextTry; test:TestChangePasswordWrongCurrentDelaysTheUsername |
+| T90 | the account | A weak or short password is accepted (setup, change, reset) | POST /setup, POST /auth/password, reset-password | test:TestSetupShortPassword; test:TestPasswordTooShort; test:TestChangePasswordTooShort; test:TestTempPasswordAlphabetAndLength |
 | T17 | the account | Password-only login on the public internet | POST /auth/login | accepted: no second factor, mitigated only by Argon2id, the login rate limit and the per-username delay (release-1 Accepted risks) |
 | T18 | the account | Anyone who knows her username can slow her logins | POST /auth/login | accepted: the per-username delay applies to everyone, an attacker can keep her waiting but cannot get in, and her open sessions are not affected (release-1 Accepted risks) |
 | T19 | the whole app | Someone else completes setup before the owner | POST /setup | test:TestSetupTokenGarbage; test:TestPostSetupBadTokenIs410; test:TestSetupTokenExpired |
@@ -115,6 +116,9 @@ dashboard and settings (Cloudflare or any other).
 | T73 | the home network | The tunnel reaches the home network, so a bug in the app exposes the Compose network | deploy/compose.yaml | accepted: the app runs as non-root in a distroless image and no container publishes a port (release-1 Accepted risks); gap: Task 4 |
 | T74 | the build | A dependency with a known vulnerability (Go) | go.mod | make:vuln; ci:ci.yml/gate; file:.github/dependabot.yml |
 | T75 | the build | A dependency with a known vulnerability (npm) | web/package.json | ci:ci.yml/gate; file:.github/dependabot.yml |
+| T91 | the build | A base image is swapped under its tag (no CVE): only the distroless runtime stage is pinned by digest today, not node, golang, postgres or cloudflared | Dockerfile, deploy/backup/Dockerfile, deploy/compose.yaml | file:Dockerfile; gap: Task 4 |
+| T92 | the build | A Go or npm dependency is swapped for a different version or content | go.sum, web/pnpm-lock.yaml | file:go.sum; file:web/pnpm-lock.yaml; file:Dockerfile; ci:ci.yml/gate |
+| T93 | the build | A package already in the lockfile is malicious with no CVE | go.sum, web/pnpm-lock.yaml | accepted: no tool finds a malicious package that has no CVE, so the controls are the lockfiles and review of each Dependabot bump |
 | T76 | the build | A GitHub Action is swapped under its tag, or a workflow has too-wide permissions or script injection | .github/workflows | file:.github/workflows/ci.yml; gap: Task 4 |
 | T77 | the build | A secret is committed to the repo | git history | ci:ci.yml/gate; gap: Task 2 |
 | T78 | the build | A release ships images nobody can verify, with no list of what is in them | release workflow | gap: Task 7 |
