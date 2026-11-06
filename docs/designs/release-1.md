@@ -34,7 +34,7 @@ Priorities when goals conflict, in order:
 5.  Generic and self-hostable by others.
 
 This document replaces the architecture parts of the SAD for release 1. The SAD is reduced to a Spanish ADR index ([docs/sad.md](../sad.md)) that links here (item 13), so architecture detail lives in one place.
-The PRD ([docs/prd.md](../prd.md)) keeps the "what" and "why"; it will be updated to match this document (see [Detailed Implementation Plan](#detailed-implementation-plan), item 12).
+The PRD ([docs/prd.md](../prd.md)) keeps the "what" and "why", updated to match this document (see [Detailed Implementation Plan](#detailed-implementation-plan), item 12).
 
 ### Terms used in this document
 
@@ -1250,7 +1250,7 @@ Each line points to the section that holds the detail.
 
 *   [concepts_brief.md](history/concepts_brief.md) — decisions from the brainstorm.
 *   [goldfish_brainstorm_findings.md](history/goldfish_brainstorm_findings.md) — the full review of the PRD and SAD (9 Blocker, 31 Major, 14 Nit).
-*   [PRD](../prd.md) and the [original SAD](history/sad-original.md); the SAD's ADR index is [docs/sad.md](../sad.md).
+*   [PRD](../prd.md) (updated for release 1) and the [original SAD](history/sad-original.md); the SAD's ADR index is [docs/sad.md](../sad.md).
 *   [PostgreSQL 19 RC 1 announcement](https://www.postgresql.org/about/news/postgresql-19-rc-1-3409/) — source for the version decision.
 
 ## Future Improvements
@@ -1478,7 +1478,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   **NFRs:**
         *   NFR-1 (API read p95 < 50 ms): replaced by the iPhone "Hoy < 1 s" check.
         *   NFR-4 (install from zero in < 10 min), NFR-5 (1 vCPU, 1 GB RAM) and NFR-9 (repo ready for contributors): moved to the product Phase 3 gate (not build phase P3).
-        *   NFR-6 (daily automatic backups): daily backup + copy to a second disk.
+        *   NFR-6 (daily automatic backups): daily backup + copy to a folder chosen at install (`BACKUP_TARGET`; a second disk is optional).
         *   NFR-7 (full export as JSON + CSV): CSV + JSON without photos.
         *   NFR-8 (mandatory HTTPS with automatic TLS): "HTTPS through the chosen ingress".
         *   NFR-3 (client search < 100 ms per keystroke): kept; met by the phone-only search over the cache.
