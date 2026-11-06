@@ -23,9 +23,9 @@ import {
 } from '../api/schemas';
 
 /** The Dexie version of the stores below. A version whose cached rows change shape clears only the
- *  copied server data in its upgrade, so the next start refreshes from `/bootstrap`; drafts and
- *  meta (the pending send confirmation, the logged ids, the last `Me`) are the phone's own and
- *  stay. A row that still fails its schema on read clears the whole cache (see `guarded`).
+ *  copied server data in its upgrade (and sets `lastSyncAt` to null), so the next start refreshes
+ *  from `/bootstrap`; drafts and the rest of meta (the pending send confirmation, the logged ids,
+ *  the last `Me`) are the phone's own and stay. A row that still fails its schema on read clears the whole cache (see `guarded`).
  *  2: due rows became `{id, position, item}`. */
 export const SCHEMA_VERSION = 2;
 export const DB_NAME = 'open-customer';
@@ -109,6 +109,15 @@ db.version(SCHEMA_VERSION)
 		for (const name of DATA_TABLES) {
 			await tx.table(name).clear();
 		}
+		// The data is gone, so the sync line must not claim a time for it.
+		await tx
+			.table<Keyed, string>('meta')
+			.toCollection()
+			.modify((row) => {
+				if (typeof row.value === 'object' && row.value !== null) {
+					Reflect.set(row.value, 'lastSyncAt', null);
+				}
+			});
 	});
 
 const t = {

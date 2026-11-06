@@ -22,7 +22,7 @@ const V1_STORES = {
 };
 
 describe('upgrading the cache from version 1', () => {
-	it('clears the copied server data and keeps the pending confirmation and drafts', async () => {
+	it('clears the copied server data and its sync time, and keeps the pending confirmation and drafts', async () => {
 		const data = bootstrap(1);
 		const v1 = new Dexie(DB_NAME);
 		v1.version(1).stores(V1_STORES);
@@ -51,6 +51,8 @@ describe('upgrading the cache from version 1', () => {
 		const meta = await cache.readMeta();
 		expect(meta.pending).toEqual(PENDING);
 		expect(meta.logged).toEqual(['a:1']);
+		// The cached data is gone, so no sync time is claimed for it.
+		expect(meta.lastSyncAt).toBeNull();
 		expect(await cache.getDraft('clienta:new', z.object({ name: z.string() }))).toEqual({
 			name: 'Lucía Rojas'
 		});

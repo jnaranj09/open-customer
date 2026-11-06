@@ -150,6 +150,42 @@ const BYPASSES: Probe[] = [
 		rule: SYNTAX
 	},
 	{
+		name: 'a class string in $derived',
+		file: ROUTE,
+		code: svelte('<p class={look}>x</p>', "\tconst look = $derived('rounded-xl');\n"),
+		rule: RESTRICTED
+	},
+	{
+		name: 'a class string in a $derived ternary',
+		file: ROUTE,
+		code: svelte(
+			'<p class={look}>x</p>',
+			"\tlet on = $state(true);\n\tconst look = $derived(on ? 'flex rounded-xl' : 'flex');\n"
+		),
+		rule: RESTRICTED
+	},
+	{
+		name: 'a class string in a $derived template',
+		file: ROUTE,
+		code: svelte(
+			'<p class={look}>x</p>',
+			"\tlet on = $state(true);\n\tconst look = $derived(`flex ${on ? 'glass-card' : ''}`);\n"
+		),
+		rule: RESTRICTED
+	},
+	{
+		name: 'a class string in $derived.by',
+		file: ROUTE,
+		code: svelte('<p class={look}>x</p>', "\tconst look = $derived.by(() => 'shadow-raised');\n"),
+		rule: RESTRICTED
+	},
+	{
+		name: 'a spread on a Card',
+		file: ROUTE,
+		code: svelte('<Card {...extra}>x</Card>', "\tconst extra = { role: 'note' };\n"),
+		rule: SYNTAX
+	},
+	{
 		name: 'a <style> block',
 		file: ROUTE,
 		code: svelte('<p>x</p>\n<style>p { border-radius: 4px; }</style>'),

@@ -40,7 +40,13 @@ const PRIMITIVE_ONLY = [
 /** The plugin's selectors plus every string in any script variable or object value. */
 const EVERY_CLASS_STRING = [
 	...getDefaultSelectors(),
-	{ kind: 'variable', name: '.*', match: [{ type: 'strings' }, { type: 'objectValues' }] }
+	{ kind: 'variable', name: '.*', match: [{ type: 'strings' }, { type: 'objectValues' }] },
+	{
+		kind: 'callee',
+		name: '^\\$derived$',
+		path: '^\\$derived(\\.by)?$',
+		match: [{ type: 'strings' }, { type: 'anonymousFunctionReturn', match: [{ type: 'strings' }] }]
+	}
 ];
 const CARD_CLASS =
 	"SvelteElement[kind='component'][name.name='Card'] > SvelteStartTag > SvelteAttribute[key.name='class']";
@@ -108,6 +114,12 @@ export default defineConfig(
 					selector: `${CARD_CLASS} > SvelteMustacheTag`,
 					message:
 						'A Card class is a plain string (layout only), so lint can read it; state goes in a prop (ui.md stage 4).'
+				},
+				{
+					selector:
+						"SvelteElement[kind='component'][name.name='Card'] > SvelteStartTag > SvelteSpreadAttribute",
+					message:
+						'No spread on a Card: lint cannot read spread classes; pass variant, pad and class (ui.md stage 4).'
 				},
 				{
 					selector: 'SvelteStyleElement',
