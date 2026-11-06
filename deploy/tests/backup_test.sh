@@ -125,16 +125,19 @@ test_unreadable_repo() {
   assert_ne "last_dump_at" "2000-01-01T00:00:00Z" "$(field last_dump_at)"
 }
 
-# restic init itself refuses a folder that has a config, so the guard is seen only on a broken
-# repository whose config is gone.
+# restic init itself refuses a folder that has a config, so the check is seen only on a broken
+# repository whose config is gone. An earlier status.json, so the fresh-volumes guard lets the run
+# through to the copy step (the new last_dump_at shows it got there).
 test_broken_repo() {
   fresh
   touch "$MARKER"
+  seed_status "$old_status"
   mkdir -p /target/restic/data
   local rc=0
   "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
   assert_ne "exit code" 0 "$rc"
   assert_prefix "last_error" "copy: " "$(field last_error)"
+  assert_ne "last_dump_at" "2000-01-01T00:00:00Z" "$(field last_dump_at)"
   assert_eq "files under /target/restic" "/target/restic/data" "$(find /target/restic -mindepth 1)"
 }
 
@@ -372,6 +375,32 @@ test_restore_resumes() {
   assert_eq "snapshots" 2 "$(snapshots | jq length)"
 }
 
+# A restore that fails after the database was dropped leaves it empty; the next backup must not
+# save that as `latest`. Here pg_restore fails (a fake first on PATH).
+test_failed_restore_blocks_backup() {
+  fresh
+  touch "$MARKER"
+  rows "CREATE TABLE clients (name text); INSERT INTO clients VALUES ('Cliente Uno')"
+  "$BACKUP" once >"$LOGS/out" 2>&1 || fail "the first once failed"
+  local id before rc=0
+  id=$(field last_snapshot_id)
+  before=$(snapshots | jq -c '[.[].id]')
+  mkdir -p "$LOGS/bin"
+  printf '#!/bin/sh\necho "made-up pg_restore failure" >&2\nexit 1\n' >"$LOGS/bin/pg_restore"
+  chmod +x "$LOGS/bin/pg_restore"
+  PATH="$LOGS/bin:$PATH" "$BACKUP" restore "$id" >"$LOGS/out" 2>&1 || rc=$?
+  assert_ne "restore exit code" 0 "$rc"
+  grep -q 'made-up pg_restore failure' "$LOGS/out" || fail "the restore error is not shown"
+  rc=0
+  "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_ne "once after the failed restore" 0 "$rc"
+  assert_eq "last_error" "$GUARD_ERROR" "$(field last_error)"
+  assert_eq "snapshots" "$before" "$(snapshots | jq -c '[.[].id]')"
+  # A restore that succeeds lifts it.
+  "$BACKUP" restore "$id" >"$LOGS/out" 2>&1 || fail "the second restore failed"
+  "$BACKUP" once >"$LOGS/out" 2>&1 || fail "once after a good restore failed"
+}
+
 test_empty_status_fresh_start() {
   fresh_volumes_with_repo
   "$BACKUP" once >"$LOGS/out" 2>&1 || true
@@ -463,6 +492,7 @@ t "snapshot-info prints id, time and app" test_snapshot_info
 t "restore recreates the database and hands media to 65532" test_restore
 t "fresh volumes with an existing repository take no snapshot" test_fresh_volumes_guard
 t "restore lets backups resume" test_restore_resumes
+t "a failed restore blocks the next backup" test_failed_restore_blocks_backup
 t "an empty status file allows a fresh start" test_empty_status_fresh_start
 t "the guard fails closed when the snapshots cannot be counted" test_guard_fails_closed
 t "bad args exit 2" test_bad_args

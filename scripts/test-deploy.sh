@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # make test-deploy (design doc item 2): builds the backup image from deploy/backup and runs
 # deploy/tests/backup_test.sh inside it, against a throwaway Postgres (PG_IMAGE) on a private
-# network, then deploy/tests/scripts_test.sh (the operator scripts, with a fake docker) on the host. No host port is published. The containers and the network are named oc-deploy-* and
+# network, then deploy/tests/scripts_test.sh (the operator scripts, with a fake docker) on the
+# host. No host port is published. The containers and the network are named oc-deploy-* and
 # removed on exit, pass or fail, with their anonymous volumes: the Postgres image (and so the
 # backup image) declares VOLUME /var/lib/postgresql, and `docker rm -f` alone would leave one
 # volume behind per container and run.

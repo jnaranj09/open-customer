@@ -55,7 +55,8 @@ filled by mistake.
 **A folder on the PC's own disk does not survive that disk dying.** It protects against a bad
 upgrade or a deleted photo, not against a failed disk, theft or fire. Add a second disk or a USB
 disk later: only the `BACKUP_TARGET` value in `.env` changes, then run
-`docker compose up -d` so the `backup` service picks it up.
+`docker compose up -d` so the `backup` service picks it up, and `scripts/backup-now.sh` so the new
+folder gets a backup now (the hourly check skips for up to 24 h after the last one).
 
 Only for a removable disk (optional): mount it at the target folder by an `/etc/fstab` line with
 `nofail`, so the PC still boots when the disk is missing. Use your own UUID and path:
@@ -261,9 +262,12 @@ only move forward, so a rollback is always a restore.
 After the volumes were lost (a new PC, or `docker compose down --volumes`), restore before her
 data goes in again. Until then `backup` takes no snapshot: it finds earlier snapshots in the
 backup folder but no `status.json` on the new volumes, so a backup now would hold an empty
-database, become `latest`, and could push the day's real snapshot out. The status screen and "Hoy"
-show the backup line red ("Respaldo con problema"), and `scripts/backup-now.sh` exits non-zero.
-The reason, "Hay respaldos anteriores: restaure primero", is in the backup log and the status file:
+database and become `latest`, and `scripts/restore.sh latest` would then restore nothing. Once the
+folder holds 14 days of snapshots, that backup's clean-up would also drop the day's real snapshot.
+The status screen and "Hoy" show the backup line red ("Respaldo con problema"), and
+`scripts/backup-now.sh` exits non-zero. The backup log has an English line starting `guard:`; the
+Spanish reason, "Hay respaldos anteriores: restaure primero", is only in the status file
+(`last_error`):
 
 ```sh
 docker compose logs backup | tail -n 5
@@ -306,8 +310,13 @@ scripts/backup-now.sh
    folder (owned by `65532:65532`, so `app` can write photos), sets `APP_VERSION` in `.env` to the
    snapshot's version, and runs `docker compose up -d`.
 
+After a rollback on a working install, the hourly check still sees the recent pre-upgrade backup
+and skips for up to 24 h. Run `scripts/backup-now.sh` after the restore to back up the restored
+data now. On new volumes the next hourly check backs up by itself.
+
 If it fails after the stop, `app` and `backup` stay stopped on purpose, and the message says so.
-Fix the cause and run `scripts/restore.sh` again.
+Fix the cause and run `scripts/restore.sh` again. Until a restore succeeds, `backup` takes no
+snapshot (the same guard as above), so a half-restored database never becomes `latest`.
 
 ## 11. Password reset
 

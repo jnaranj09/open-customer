@@ -47,6 +47,16 @@ exec "$real_sed" "\$@"
 SED
 chmod +x "$ROOT/sigbin/sed"
 
+# A sed that writes nothing and exits 0 for the APP_VERSION edit, for the empty-temp-file test;
+# it is first on PATH only in that test.
+mkdir -p "$ROOT/emptybin"
+cat >"$ROOT/emptybin/sed" <<SED
+#!/usr/bin/env bash
+case "\$*" in "s/^APP_VERSION=.*/"*) exit 0 ;; esac
+exec "$real_sed" "\$@"
+SED
+chmod +x "$ROOT/emptybin/sed"
+
 env_file='APP_VERSION=1.0.0
 PUBLIC_URL=https://example.test
 DB_PASSWORD=test-only
@@ -186,6 +196,19 @@ test_upgrade_term_leaves_no_temp() {
   no_temp_left
 }
 
+test_upgrade_empty_temp_never_replaces_env() {
+  setup
+  local before rc=0
+  before=$(cat "$W/deploy/.env")
+  FAKE_APP_VERSION=1.0.0 PATH="$ROOT/emptybin:$PATH" run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" ||
+    rc=$?
+  assert_ne "exit code" 0 "$rc"
+  assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+  no_call "up -d"
+  grep -q "cannot set APP_VERSION" "$W/err" || fail "no message about .env: $(cat "$W/err")"
+  no_temp_left
+}
+
 test_restore_stops_on_no() {
   setup
   local before rc=0
@@ -275,6 +298,7 @@ t "upgrade stops when the pre-upgrade backup fails" test_upgrade_backup_fails
 t "upgrade happy path order" test_upgrade_happy_path
 t "upgrade stops when .env cannot be written" test_upgrade_env_not_writable
 t "a TERM during the .env edit leaves no temp copy" test_upgrade_term_leaves_no_temp
+t "an empty temp copy never replaces .env" test_upgrade_empty_temp_never_replaces_env
 t "restore asks first and stops on no" test_restore_stops_on_no
 t "restore failure leaves app and backup stopped" test_restore_failure_leaves_stopped
 t "restore stops with app and backup stopped when .env cannot be written" test_restore_env_not_writable

@@ -180,3 +180,5 @@ own change.
   skill would not use. Kept by owner decision.
 - `make vuln` lists 3 known vulnerabilities in kin-openapi and golang.org/x/crypto that our code
   does not call (govulncheck passes).
+- `scripts/check-pins.sh` accepts a non-numeric postgres tag (`postgres:latest` passed); found
+  before P7, not fixed in P7.

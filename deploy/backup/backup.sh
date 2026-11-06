@@ -136,14 +136,17 @@ backup_recent() {
 
 # fresh_volumes_guard: whether this run may go on. A run that starts without status.json is on new
 # volumes (a new PC, or `docker compose down --volumes`); if the repository already has snapshots,
-# backing up the empty database would make it `latest` and its forget could drop the day's real
-# snapshot. The state is kept in $RESTORE_FIRST, because the run's own status.json write must not
-# lift it. It is lifted by a missing repository folder or one with no snapshot files (a first
-# install), by a successful restore, and by the operator replacing status.json with `{}` (a file
-# without checked_at, which backup.sh always writes). It fails closed: a repository whose config
-# or snapshot list cannot be read keeps it and blocks the run with that error. The count is the
-# snapshot files (`restic list snapshots`), not `restic snapshots`, which skips a file it cannot
-# read and answers [] with exit 0.
+# backing up the empty database would make that empty snapshot `latest`, so `restore.sh latest`
+# would restore nothing, and once the repository holds 14 days its forget would also drop that
+# day's real snapshot. The state is kept in $RESTORE_FIRST, because the run's own status.json
+# write must not lift it. A restore also sets it before it drops the database, so a restore that
+# fails after that point blocks the next backup of the half-restored data. It is lifted by a
+# missing repository folder or one with no snapshot files (a first install), by a successful
+# restore, and by the operator replacing status.json with `{}` (a file without checked_at, which
+# backup.sh always writes). It fails closed: a repository whose config or snapshot list cannot be
+# read keeps it and blocks the run with that error. The count is the snapshot files
+# (`restic list snapshots`), not `restic snapshots`, which skips a file it cannot read and answers
+# [] with exit 0.
 # Returns 0 (go on), 1 (blocked by the guard) or 2 (blocked, the restic error in $WORK/copy.err).
 fresh_volumes_guard() {
   if [ ! -e "$RESTORE_FIRST" ]; then
@@ -394,12 +397,19 @@ mode_restore() {
   fi
   log "restore: snapshot $id unpacked"
 
+  # From here the database may be empty or half loaded: no backup may run until a restore
+  # succeeds (fresh_volumes_guard), or the next one would save that as `latest`.
+  if ! { : >"$RESTORE_FIRST"; } 2>"$WORK/restore.err"; then
+    restore_fail "cannot create $RESTORE_FIRST: $(first_line "$WORK/restore.err")"
+  fi
   # Dropping the whole database also removes tables newer migrations added, which
   # pg_restore --clean would leave behind; the new database is empty, so no --clean.
   if ! dropdb --force --if-exists "$PGDATABASE" 2>"$WORK/restore.err" ||
     ! createdb "$PGDATABASE" 2>>"$WORK/restore.err"; then
     restore_fail "database: $(first_line "$WORK/restore.err")"
   fi
+  # No --no-owner: it relies on PGUSER owning the objects in the dump, so changing DB_USER
+  # between a backup and its restore needs care.
   if ! pg_restore --single-transaction -d "$PGDATABASE" "$out$DUMP" 2>"$WORK/restore.err"; then
     restore_fail "pg_restore: $(first_line "$WORK/restore.err")"
   fi
