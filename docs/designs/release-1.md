@@ -1357,11 +1357,12 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `cover` | `web-stub`, then `go test -tags db -coverprofile` for each package in `COVER_PKGS`; writes `coverage-<name>.out` and fails, naming the package, if any package's total (`go tool cover -func`) is below `COVER_FLOOR` (90.0). `COVER_PKGS` grows by phase: `auth` (P2); `attributes`, `appointments`, `templates` (P3); `reminders` (P4) |
     | `dev` | `web-stub`, then Docker Postgres (`PG_IMAGE`) in the container `open-customer-dev` on host port `DEV_PG_PORT` (default `5433`; started or reused, password `devpassword`, dev only), the binary built to `bin/dev/open-customer` running `serve` on `:8080` in the background, and the Vite dev server on `:5173` in the foreground with the proxy from item 63. A `trap` stops `serve` when Vite exits; it runs the built binary, not `go run`, because `go run` does not pass SIGTERM on to the server. Env and the Origin rule are below the table. |
     | `image` | `docker build --build-arg VERSION=$(VERSION)` of the app image |
+    | `test-deploy` | Runs `scripts/test-deploy.sh`: builds `deploy/backup` as `open-customer-backup:test`, starts `$(PG_IMAGE)` as `oc-deploy-pg` on a new network `oc-deploy-net` (no published port), runs `deploy/tests/backup_test.sh` inside the backup image (entrypoint overridden, `deploy/` mounted read-only) against it, and removes the containers and the network in a `trap`, pass or fail. The backup tests run for real, not against stubs, because `backup.sh` owns the outcome table, the marker rule and the restore, and a stub would not catch a wrong restic flag |
 
     *   **`dev` env:** the Go server gets `PUBLIC_URL=http://localhost:5173`, `DB_HOST=localhost`, `DB_PORT=$(DEV_PG_PORT)` and `DB_PASSWORD=devpassword` for the container, `VAPID_SUBJECT=mailto:dev@localhost` and `ALLOW_MIGRATE_WITHOUT_BACKUP=true` (there is no backup status file in dev). The browser's `Origin` is `http://localhost:5173`, and the Vite proxy forwards it unchanged, so the Origin check passes.
     *   `VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)`. The same value goes to `-ldflags`, the web build and `make image`; the release workflow sets it from the tag.
     *   `GO_PKGS := $(shell go list -e ./... | grep -v /node_modules/)`. Every Go target uses it instead of a bare `./...`, so Go never walks into `web/node_modules` (some npm packages ship `.go` files). golangci-lint takes directories, not import paths, so `lint` uses `GO_DIRS` (the same list as `./`-relative folders). `go build` refuses a package with only test files (`internal/guards`), so the cross-OS builds in `lint` use `GO_BUILD_PKGS` (the same list, kept to packages with non-test files).
-    *   **Targets by phase:** P0 has `check-pins`, `node-check`, `web-stub`, `web`, `build`, `test`, `vuln`, `lint` and `image`. `generate` and `check-generated` come in P1, `test-db` in P1, `cover` in P2, `dev` in P1 (it needs `serve`), `e2e` in P6.
+    *   **Targets by phase:** P0 has `check-pins`, `node-check`, `web-stub`, `web`, `build`, `test`, `vuln`, `lint` and `image`. `generate` and `check-generated` come in P1, `test-db` in P1, `cover` in P2, `dev` in P1 (it needs `serve`), `e2e` in P6, `test-deploy` in P7.
     *   Why `web-stub`: `web/embed.go` has `//go:embed all:build`, and `web/build` is gitignored. On a clean checkout the embed has no files, so every Go command fails to compile. The stub gives the embed one file without running Node. A plain `go build` without `make` on a clean checkout still fails, with the embed error; `README.md` says to use `make`.
 
     Why: one command set for the author and for CI.
@@ -1428,13 +1429,14 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `make check-generated` | P1 (the first phase with a spec) |
     | `make test-db` (Docker is available on GitHub runners) | P1 |
     | `make cover` | P2 (the first gated package) |
+    | `make test-deploy` (after `make test-db`) | P7 |
     | `make build` | P0 (runs after every check above, so they run with only the stub; see "Clean checkout" in the Verification Plan) |
     | `pnpm exec playwright install --with-deps webkit`, then `make e2e` against the built binary + a `postgres:18.<minor>-alpine` service container (the pinned tag, user, password and database `open_customer`/`e2e`/`open_customer`, `pg_isready` health check), with `E2E_DATABASE_URL=postgres://open_customer:e2e@localhost:5432/open_customer_e2e`. `make e2e` uses the runner's preinstalled `psql` client (seen in run 42097441087). On failure `web/test-results/` is uploaded as an artifact | P6 |
 
 ##### 9. `.github/workflows/release.yml` (Create)
 
 *   **Type / Scope**: Release.
-*   **Proposed Changes**: On tag `v*`, build and push the `app` image (root `Dockerfile`) and the `backup` image (`deploy/backup/Dockerfile`) to GHCR, both tagged with the version. `amd64` only (multi-arch is a non-goal).
+*   **Proposed Changes**: On tag `v*`, build and push the `app` image (root `Dockerfile`) and the `backup` image (`deploy/backup/Dockerfile`, a second `docker/build-push-action` step with `context: deploy/backup`, pushed as `ghcr.io/jnaranj09/open-customer-backup:<version>`) to GHCR, both tagged with the version. `amd64` only (multi-arch is a non-goal).
     *   **Version:** the tag without its `v` (`v1.2.3` → `1.2.3`, from `${GITHUB_REF_NAME#v}`). That value is the image tag, the `APP_VERSION` in `.env`, and the `--build-arg VERSION` of the app image.
     *   **Login:** `docker/login-action` to `ghcr.io` with `GITHUB_TOKEN`. The workflow sets `permissions: {contents: read, packages: write}`.
 
@@ -2437,7 +2439,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 84. `deploy/backup/Dockerfile` (Create)
 
 *   **Type / Scope**: Backup image.
-*   **Proposed Changes**: `FROM postgres:18.<minor>-alpine` (the pin in "Pins"), `apk add bash restic jq`, plus the package that provides `flock` if the image's busybox lacks it (checked at P7), copies `backup.sh`, creates `/media` owned by `65532:65532` (see "Volume ownership"), `ENTRYPOINT ["/backup.sh"]`.
+*   **Proposed Changes**: `FROM postgres:18.<minor>-alpine` (the pin in "Pins"), `apk add bash restic jq` (checked at P7: the image's busybox already has `flock` with `-n`, so no other package), copies `backup.sh`, creates `/media` empty and owned by `65532:65532` (see "Volume ownership"; Alpine ships `/media/cdrom`, `floppy` and `usb`, which Docker would copy into an empty volume, so the folder is removed and made again), `ENTRYPOINT ["/backup.sh"]` and `CMD []` (the base image's `CMD ["postgres"]` would otherwise become the mode).
 
 ##### 85. `deploy/backup/backup.sh` (Create)
 
@@ -2452,6 +2454,9 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   The hourly loop takes the lock with `flock -n`: if a `once` run or a restore holds it, that hour is skipped.
     *   Time math (the 24 h check) uses `jq` (`now`, `fromdateiso8601`) on the `status.json` times, not busybox `date -d`.
     *   `set -uo pipefail`, without `-e`: each step's exit code is checked by hand, so a failure reaches `status.json` (see "Backups"). Each step logs one line to stdout.
+    *   The loop and `once` share one function (`run_backup`), which always writes `status.json` before it returns; the step 2 skip happens only in the loop. A wrong mode or argument exits 2 with one line; a missing variable exits 2 naming it.
+    *   `status.json` is written mode `0644`, because `app` reads it as user 65532 and the backup container runs as root. A failed step also sets `last_error_at`.
+    *   One test-only knob, default off: `BACKUP_INTERVAL_SECONDS` (default 3600), the wait between two loop checks, so `make test-deploy` does not wait an hour. It is documented at the top of the script.
 
 ##### 86. `deploy/scripts/backup-now.sh`, `deploy/scripts/upgrade.sh`, `deploy/scripts/restore.sh` (Create)
 
@@ -2486,9 +2491,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 ### Verification Plan
 
-*   **Compilation/Build**: `make build` (web build + `CGO_ENABLED=0` Go build). `make image` builds the app image. The backup image is built in the release workflow.
+*   **Compilation/Build**: `make build` (web build + `CGO_ENABLED=0` Go build). `make image` builds the app image. The backup image is built by `make test-deploy` and in the release workflow.
 *   **Unit Tests**: `make test` (`go test $(GO_PKGS)` + `pnpm test`).
 *   **Database Tests**: `make test-db` (`go test -tags db $(GO_PKGS)` with testcontainers Postgres 18).
+*   **Deploy Tests**: `make test-deploy` (`deploy/tests/backup_test.sh` in the backup image against a throwaway Postgres; item 2).
 *   **Static Analysis & Linting**: `make lint` (golangci-lint with the `depguard` module rules, the darwin and windows `go build`, `deadcode`, shellcheck, `pnpm check` (svelte-check), `pnpm lint` (eslint, prettier, knip, jscpd)) and `make vuln` (govulncheck). CI adds gitleaks and `pnpm audit --audit-level high`.
 *   **Clean checkout:** CI runs on a fresh clone, and `make build` is its last step before e2e (item 8), so `make lint`, `make test`, `make vuln` and `make test-db` passing first shows the targets compile with only the stub present.
 *   **Generated Code**: `make check-generated` must show no diff.

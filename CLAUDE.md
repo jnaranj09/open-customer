@@ -42,11 +42,14 @@ with fnm, `fnm use` in web/).
   app Docker image.
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
+- `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
+  a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db cover`. CI
-(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e` (after `make build`).
+`make check-pins lint test vuln build check-generated test-db cover test-deploy`. CI
+(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e`
+(after `make build`).
 
 A check that could not run is reported as NOT RUN, never as passing.
 
