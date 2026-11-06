@@ -22,9 +22,12 @@ import {
 	type Settings
 } from '../api/schemas';
 
-/** The Dexie version of the stores below. There is no upgrade step: a version bump keeps the old
- *  rows, and an old row is dropped only when it fails its schema on read (see `guarded`). */
-export const SCHEMA_VERSION = 1;
+/** The Dexie version of the stores below. A version whose cached rows change shape clears only the
+ *  copied server data in its upgrade, so the next start refreshes from `/bootstrap`; drafts and
+ *  meta (the pending send confirmation, the logged ids, the last `Me`) are the phone's own and
+ *  stay. A row that still fails its schema on read clears the whole cache (see `guarded`).
+ *  2: due rows became `{id, position, item}`. */
+export const SCHEMA_VERSION = 2;
 export const DB_NAME = 'open-customer';
 
 const PendingSendSchema = z.object({
@@ -74,8 +77,18 @@ export type CacheSnapshot = Pick<
 type Keyed = { key: string; value: unknown };
 type DraftRow = { key: string; value: unknown };
 
-const db = new Dexie(DB_NAME);
-db.version(SCHEMA_VERSION).stores({
+/** The tables that hold a copy of `/bootstrap`; an upgrade may clear them, never drafts or meta. */
+const DATA_TABLES = [
+	'settings',
+	'attributes',
+	'services',
+	'templates',
+	'rules',
+	'clients',
+	'appointments',
+	'due'
+] as const;
+const STORES = {
 	settings: 'key',
 	attributes: 'id',
 	services: 'id',
@@ -86,7 +99,17 @@ db.version(SCHEMA_VERSION).stores({
 	due: 'id',
 	drafts: 'key',
 	meta: 'key'
-});
+};
+
+const db = new Dexie(DB_NAME);
+db.version(1).stores(STORES);
+db.version(SCHEMA_VERSION)
+	.stores(STORES)
+	.upgrade(async (tx) => {
+		for (const name of DATA_TABLES) {
+			await tx.table(name).clear();
+		}
+	});
 
 const t = {
 	settings: db.table<Keyed, string>('settings'),
@@ -106,8 +129,7 @@ const SINGLE = 'only';
 
 /** A cached due row: the item and its place in the server's list. The table is keyed by `id`, and
  *  Dexie reads rows back in key order, so the server's order (due date, then name) is kept as
- *  `position`. A row stored in the older shape (the bare item) fails this schema, which clears the
- *  cache and refreshes it. */
+ *  `position`. Version 2 cleared the rows of the older shape (the bare item). */
 const DueRowSchema = z.object({
 	id: z.string(),
 	position: z.number().int().nonnegative(),
