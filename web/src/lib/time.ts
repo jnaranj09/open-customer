@@ -81,10 +81,16 @@ export function weekStart(day: string): string {
 	return addDays(day, -sinceMonday);
 }
 
+/** `HH:MM` on a 24-hour clock: the one time format of the app (design/soft-glass.pen), also in the
+ *  messages the server renders (`locale.Time`). Every shown time goes through it. */
+export function clockText(hour: number, minute: number): string {
+	return `${pad(hour)}:${pad(minute)}`;
+}
+
 /** The wall time `HH:MM` of an RFC 3339 instant in `zone`. */
 export function formatTime(iso: string, zone: string): string {
 	const w = wallParts(new Date(iso), zone);
-	return `${pad(w['hour'] ?? 0)}:${pad(w['minute'] ?? 0)}`;
+	return clockText(w['hour'] ?? 0, w['minute'] ?? 0);
 }
 
 const WEEKDAYS: readonly MessageKey[] = [

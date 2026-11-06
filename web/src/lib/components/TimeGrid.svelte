@@ -4,7 +4,7 @@
 	import type { Appointment } from '../api/schemas';
 	import { layoutDay, scrollHour, type Placed } from '../agenda';
 	import { t } from '../i18n';
-	import { formatDayShort, formatTime, formatWeekdayShort } from '../time';
+	import { clockText, formatDayShort, formatTime, formatWeekdayShort } from '../time';
 
 	let {
 		days,
@@ -89,7 +89,7 @@
 						class="absolute right-2 -translate-y-1/2 text-xs text-ink-muted"
 						style="top: calc({i} * var(--hour))"
 					>
-						{String(hour).padStart(2, '0')}:00
+						{clockText(hour, 0)}
 					</p>
 				{/each}
 			</div>

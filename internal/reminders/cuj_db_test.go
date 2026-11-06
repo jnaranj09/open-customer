@@ -37,7 +37,7 @@ func TestDueListCUJ4AndCUJ5(t *testing.T) {
 	}
 	anaItem, luciaItem, martaItem := items[0], items[1], items[2]
 
-	wantText := "Hola Ana, te esperamos viernes 23 de octubre a las 3:00 p. m."
+	wantText := "Hola Ana, te esperamos viernes 23 de octubre a las 15:00"
 	if anaItem.Kind != KindBefore || anaItem.AppointmentID != anaTomorrow.ID || anaItem.Text != wantText {
 		t.Fatalf("first item = %+v; want Ana's before item %q", anaItem, wantText)
 	}

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { components } from './api/schema';
 import type { Appointment, AttrOption, Attribute, Service } from './api/schemas';
 import type { MessageKey } from './i18n';
-import { formatDayLong, formatTime, todayIn, zonedToUtc } from './time';
+import { clockText, formatDayLong, formatTime, todayIn, zonedToUtc } from './time';
 
 type Schemas = components['schemas'];
 
@@ -43,7 +43,7 @@ function minutesOf(time: string): number {
 
 function timeOf(minutes: number): string {
 	const wrapped = ((minutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-	return `${String(Math.floor(wrapped / 60)).padStart(2, '0')}:${String(wrapped % 60).padStart(2, '0')}`;
+	return clockText(Math.floor(wrapped / 60), wrapped % 60);
 }
 
 /** The end time (`HH:MM`) of a booking that starts at `startLocal`: the sum of the durations. A

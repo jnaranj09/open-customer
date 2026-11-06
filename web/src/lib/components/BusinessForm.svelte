@@ -19,6 +19,7 @@
 	import IconFileInput from './IconFileInput.svelte';
 	import SelectField from './ui/SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
+	import { clockText } from '../time';
 
 	// The Negocio form: name, time zone, color and the hour of the daily notice, saved together.
 	// The icon is its own card, because it is a separate upload. Currency, country and language are
@@ -39,7 +40,7 @@
 	);
 	const hours = Array.from({ length: LAST_PUSH_HOUR + 1 }, (_, h) => ({
 		id: String(h),
-		label: `${String(h).padStart(2, '0')}:00`
+		label: clockText(h, 0)
 	}));
 
 	// Shows the color as she picks it, and puts the saved one back when she leaves without saving.
