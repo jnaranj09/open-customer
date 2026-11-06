@@ -43,19 +43,34 @@
 	let phone = $state('');
 	let failure = $state<ApiError | null>(null);
 	let busy = $state(false);
+	// After a save tap the name is checked here, so an empty one says so under the field (as in
+	// ClientForm) without a request; a field the server rejects shows under that field too.
+	let attempted = $state(false);
 
 	const sharing = $derived(sharingNames(failure));
+	const nameError = $derived.by(() => {
+		if (attempted && name.trim() === '') {
+			return t('client_name_needed');
+		}
+		return failure?.kind === 'problem' ? failure.fields['name'] : undefined;
+	});
+	const phoneError = $derived(failure?.kind === 'problem' ? failure.fields['phone'] : undefined);
 
 	function openAdd(): void {
 		name = query.trim();
 		phone = '';
 		failure = null;
+		attempted = false;
 		adding = true;
 	}
 
 	const save = submitOnce(
 		async (allowDuplicate: boolean) => {
+			attempted = true;
 			failure = null;
+			if (name.trim() === '') {
+				return;
+			}
 			const trimmed = phone.trim();
 			const result = await api.createClient({
 				name: name.trim(),
@@ -134,8 +149,14 @@
 		adding = false;
 	}}
 >
-	<TextField label={t('client_name')} autocomplete="off" bind:value={name} />
-	<TextField label={t('client_phone')} type="tel" autocomplete="off" bind:value={phone} />
+	<TextField label={t('client_name')} autocomplete="off" bind:value={name} error={nameError} />
+	<TextField
+		label={t('client_phone')}
+		type="tel"
+		autocomplete="off"
+		bind:value={phone}
+		error={phoneError}
+	/>
 	{#if sharing !== null}
 		<DuplicatePhone
 			names={sharing}
