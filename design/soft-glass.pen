@@ -92,7 +92,7 @@
               "id": "nW210",
               "name": "Button/Strong",
               "reusable": true,
-              "fill": "$rose-700",
+              "fill": "$accent-fill",
               "cornerRadius": "$radius-pill",
               "effect": [
                 {
@@ -649,7 +649,7 @@
               "reusable": true,
               "width": 56,
               "height": 56,
-              "fill": "$rose-700",
+              "fill": "$accent-fill",
               "cornerRadius": "$radius-pill",
               "effect": [
                 {
@@ -4785,6 +4785,10 @@
     "rose-700": {
       "type": "color",
       "value": "#a14d64"
+    },
+    "accent-fill": {
+      "type": "color",
+      "value": "#9f566a"
     },
     "sage-200": {
       "type": "color",

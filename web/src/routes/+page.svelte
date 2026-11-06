@@ -228,7 +228,7 @@
 						type="button"
 						aria-pressed={view === v.id}
 						class="min-h-tap rounded-pill px-4 text-sm font-bold {view === v.id
-							? 'bg-accent text-on-accent'
+							? 'bg-accent-fill text-on-accent'
 							: 'text-ink-muted hover:bg-accent-100'}"
 						onclick={() => {
 							pickedView = v.id;

@@ -49,7 +49,7 @@
 		<Icon name={icon} />
 		{label}
 		{#if count > 0}
-			<span class="ml-auto rounded-pill bg-accent px-2 py-0.5 text-xs text-on-accent">
+			<span class="ml-auto rounded-pill bg-accent-fill px-2 py-0.5 text-xs text-on-accent">
 				{count}
 			</span>
 		{/if}

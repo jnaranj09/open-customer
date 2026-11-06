@@ -2,12 +2,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+	AA_TEXT,
 	DEFAULT_ACCENT,
 	INK_LUMINANCE,
+	accentFill,
 	applyAccent,
+	contrast,
 	isHexColor,
 	luminance,
-	onAccent,
 	swatches
 } from './color';
 
@@ -20,17 +22,42 @@ function fakeRoot(): { root: HTMLElement; vars: Map<string, string> } {
 	return { root, vars };
 }
 
-describe('onAccent', () => {
-	it('picks dark text on a light accent', () => {
-		expect(onAccent('#f6e7a1')).toBe('dark');
+/** The contrast of the label on the fill `accentFill` gives for `hex`. */
+function labelContrast(hex: string): number {
+	const { fill, text } = accentFill(hex);
+	return contrast(text === 'light' ? 1 : INK_LUMINANCE, luminance(fill));
+}
+
+describe('accentFill', () => {
+	it('gives the default accent a fill white text reaches AA on (white on it is 3.57:1)', () => {
+		expect(accentFill(DEFAULT_ACCENT).text).toBe('light');
+		expect(labelContrast(DEFAULT_ACCENT)).toBeGreaterThanOrEqual(AA_TEXT);
 	});
 
-	it('picks light text on a dark accent', () => {
-		expect(onAccent('#a14d64')).toBe('light');
+	it('picks ink text on a light yellow accent', () => {
+		expect(accentFill('#f6e7a1').text).toBe('dark');
+		expect(labelContrast('#f6e7a1')).toBeGreaterThanOrEqual(AA_TEXT);
 	});
 
-	it('picks light text on the default accent', () => {
-		expect(onAccent(DEFAULT_ACCENT)).toBe('light');
+	it('darkens a mid-tone accent past its 700 shade until white text reaches AA', () => {
+		// #a0a0a0 at the 700 shade (#808080) gives white 3.95:1 and ink 2.89:1.
+		expect(accentFill('#a0a0a0')).toEqual({ fill: '#707070', text: 'light' });
+	});
+
+	it('keeps a dark accent with white text', () => {
+		expect(accentFill('#000000')).toEqual({ fill: '#000000', text: 'light' });
+	});
+
+	it('reaches AA for every accent on a grid of the color cube', () => {
+		const steps = ['00', '33', '66', '99', 'cc', 'ff'];
+		const all = steps.flatMap((r) => steps.flatMap((g) => steps.map((b) => `#${r}${g}${b}`)));
+		const low = [...all, ...swatches()].filter((hex) => labelContrast(hex) < AA_TEXT);
+		expect(low).toEqual([]);
+	});
+
+	it('matches the --accent-fill default in app.css', () => {
+		const css = readFileSync(join(import.meta.dirname, '../app.css'), 'utf8');
+		expect(/--accent-fill:\s*(#[0-9a-f]{6})/i.exec(css)?.[1]).toBe(accentFill(DEFAULT_ACCENT).fill);
 	});
 });
 
@@ -71,11 +98,12 @@ describe('DEFAULT_ACCENT', () => {
 });
 
 describe('applyAccent', () => {
-	it('sets --accent and --on-accent from a valid color', () => {
+	it('sets --accent, --accent-fill and --on-accent from a valid color', () => {
 		const { root, vars } = fakeRoot();
 		applyAccent(root, '#f6e7a1');
 		expect(Object.fromEntries(vars)).toEqual({
 			'--accent': '#f6e7a1',
+			'--accent-fill': accentFill('#f6e7a1').fill,
 			'--on-accent': 'var(--ink)'
 		});
 	});

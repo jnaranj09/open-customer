@@ -39,7 +39,7 @@
 	}: Props = $props();
 
 	const LOOK: Record<IconButtonVariant, string> = {
-		add: 'size-14 rounded-pill bg-accent text-on-accent shadow-raised',
+		add: 'size-14 rounded-pill bg-accent-fill text-on-accent shadow-raised',
 		plain: 'size-11 rounded-pill text-ink hover:bg-accent-100',
 		muted: 'size-11 rounded-pill text-ink-muted hover:bg-accent-100',
 		glass: 'glass-card size-11 rounded-pill text-ink hover:bg-accent-100',
@@ -56,7 +56,7 @@
 	};
 	const classes = $derived(
 		`grid place-items-center ${LOOK[variant]} ${
-			variant === 'add' && !inert ? 'hover:bg-accent-700' : ''
+			variant === 'add' && !inert ? 'hover:opacity-90' : ''
 		} ${inert ? 'opacity-60' : ''} ${placeClass}`
 	);
 </script>

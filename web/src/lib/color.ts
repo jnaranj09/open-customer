@@ -28,24 +28,59 @@ export function luminance(hex: string): number {
 	);
 }
 
-const contrast = (a: number, b: number): number =>
+/** WCAG contrast ratio of two relative luminances, 1 to 21. */
+export const contrast = (a: number, b: number): number =>
 	(Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 
-/** The text color for a filled accent button: `light` is white, `dark` is `ink`; whichever has the
- *  higher WCAG contrast against the accent, so a pale accent she picks stays readable. */
-export function onAccent(hex: string): 'light' | 'dark' {
-	const l = luminance(hex);
-	return contrast(1, l) >= contrast(INK_LUMINANCE, l) ? 'light' : 'dark';
+/** WCAG AA for normal text: what every label on an accent fill must reach. */
+export const AA_TEXT = 4.5;
+
+/** How much darker than the accent a filled control is: the mockup fills Button/Strong with
+ *  rose-700, the accent a fifth of the way to black. */
+const FILL_DARKEN = 0.2;
+/** The further step when neither text color reaches AA on that fill. */
+const FILL_STEP = 0.05;
+
+/** `hex` moved `by` (0 to 1) of the way to black, channel by channel. */
+function darken(hex: string, by: number): string {
+	const n = Number.parseInt(hex.slice(1), 16);
+	const ch = (shift: number): string =>
+		Math.round(((n >> shift) & 0xff) * (1 - by))
+			.toString(16)
+			.padStart(2, '0');
+	return `#${ch(16)}${ch(8)}${ch(0)}`;
 }
 
-/** Sets `--accent` and `--on-accent` on `root`; null or an invalid color gives the default. */
+/** The fill of a filled accent control (strong button, the "+", a selected toggle, a count badge)
+ *  and its text color: `light` is white, `dark` is `ink`. The fill is the accent's 700 shade;
+ *  the text is whichever of the two has the higher contrast on it. When neither reaches AA (a
+ *  mid-tone accent), the fill darkens further until white does, so any accent she picks gives
+ *  readable labels. */
+export function accentFill(hex: string): { fill: string; text: 'light' | 'dark' } {
+	const base = darken(hex, FILL_DARKEN);
+	const l = luminance(base);
+	const light = contrast(1, l);
+	const dark = contrast(INK_LUMINANCE, l);
+	if (Math.max(light, dark) >= AA_TEXT) {
+		return { fill: base, text: light >= dark ? 'light' : 'dark' };
+	}
+	let by = FILL_DARKEN;
+	let fill = base;
+	while (contrast(1, luminance(fill)) < AA_TEXT) {
+		by = Math.min(1, by + FILL_STEP);
+		fill = darken(hex, by);
+	}
+	return { fill, text: 'light' };
+}
+
+/** Sets `--accent`, `--accent-fill` and `--on-accent` on `root`; null or an invalid color gives
+ *  the default. */
 export function applyAccent(root: HTMLElement, hex: string | null): void {
 	const accent = hex !== null && isHexColor(hex) ? hex : DEFAULT_ACCENT;
+	const { fill, text } = accentFill(accent);
 	root.style.setProperty('--accent', accent);
-	root.style.setProperty(
-		'--on-accent',
-		onAccent(accent) === 'light' ? 'var(--on-strong)' : 'var(--ink)'
-	);
+	root.style.setProperty('--accent-fill', fill);
+	root.style.setProperty('--on-accent', text === 'light' ? 'var(--on-strong)' : 'var(--ink)');
 }
 
 const SWATCH_HUES: readonly number[] = [14, 38, 140, 185, 215, 265, 305];

@@ -20,14 +20,6 @@ export const ALLOW: readonly Allow[] = [
 		why: 'no page has a <title>',
 		bug: 'UIP-L1'
 	},
-	{
-		route: '*',
-		witness: '/',
-		check: 'axe:color-contrast',
-		detail: 'foreground color: #ffffff, background color: #c76b85',
-		why: 'white text on the default accent fill is 3.57:1, under the 4.5:1 of WCAG AA',
-		bug: 'UIP-N1'
-	},
 	// /
 	...entries('/', 'axe:scrollable-region-focusable', ['agenda empty'], {
 		width: 'compact',
