@@ -3,14 +3,17 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
 	AA_TEXT,
-	BG_LUMINANCE,
+	BG_100_RGB,
 	DEFAULT_ACCENT,
+	GLASS_TINT_ALPHA,
 	INK_LUMINANCE,
 	accent100,
+	accent300,
 	accentFill,
 	accentText,
 	applyAccent,
 	contrast,
+	glassTint,
 	isHexColor,
 	luminance,
 	swatches
@@ -36,10 +39,18 @@ function labelContrast(hex: string, on: 'fill' | 'hover' = 'fill'): number {
 	return contrast(r.text === 'light' ? 1 : INK_LUMINANCE, luminance(r[on]));
 }
 
-/** The lower contrast of `accentText(hex)` on the page background and on `--accent-100`. */
+const BG_100 = `#${BG_100_RGB.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+
+/** The lowest contrast of `accentText(hex)` on the surfaces accent text sits on: the page
+ *  background, `--accent-100`, `--accent-300` (a ghost or accent icon button's hover) and the glass
+ *  tint (a status chip). */
 function textContrast(hex: string): number {
 	const l = luminance(accentText(hex));
-	return Math.min(contrast(BG_LUMINANCE, l), contrast(luminance(accent100(hex)), l));
+	return Math.min(
+		...[BG_100, accent100(hex), accent300(hex), glassTint(hex)].map((s) =>
+			contrast(luminance(s), l)
+		)
+	);
 }
 
 const CSS = (): string => readFileSync(join(import.meta.dirname, '../app.css'), 'utf8');
@@ -85,7 +96,7 @@ describe('accentFill', () => {
 
 describe('accentText', () => {
 	it.each(['#c76b85', '#f6e7a1', '#ffff00'])(
-		'reaches AA on the page background and the pale accent tint for %s',
+		'reaches AA on the page, the accent tints, the ghost hover and the glass tint for %s',
 		(hex) => {
 			expect(textContrast(hex)).toBeGreaterThanOrEqual(AA_TEXT);
 		}
@@ -106,9 +117,49 @@ describe('accent100', () => {
 	});
 });
 
-describe('BG_LUMINANCE', () => {
+describe('accent300', () => {
+	it('mixes 45% of the accent into white, as color-mix in oklab does', () => {
+		expect([accent300('#ffffff'), accent300('#808080')]).toEqual(['#ffffff', '#c4c4c4']);
+	});
+
+	it('mixes less of a near-black accent in, so black text keeps AA on the hover fill', () => {
+		expect(contrast(0, luminance(accent300('#000000')))).toBeGreaterThanOrEqual(AA_TEXT);
+	});
+});
+
+describe('glassTint', () => {
+	it('paints a white accent-300 at 35% over the page as the page itself', () => {
+		expect(glassTint('#ffffff')).toBe(over35('#ffffff'));
+	});
+
+	it('paints a grey accent-300 at 35% over the page, channel by channel', () => {
+		expect(glassTint('#808080')).toBe(over35('#c4c4c4'));
+	});
+});
+
+/** `top` at 35% over --bg-100, worked out apart from the code. */
+function over35(top: string): string {
+	const t = [1, 3, 5].map((i) => Number.parseInt(top.slice(i, i + 2), 16));
+	return `#${BG_100_RGB.map((b, i) =>
+		Math.round((t[i] ?? 0) * 0.35 + b * 0.65)
+			.toString(16)
+			.padStart(2, '0')
+	).join('')}`;
+}
+
+describe('BG_100_RGB', () => {
 	it('matches the --bg-100 token in app.css', () => {
-		expect(BG_LUMINANCE).toBeCloseTo(luminance(cssColor('bg-100') ?? ''), 6);
+		expect(BG_100).toBe(cssColor('bg-100'));
+	});
+});
+
+describe('GLASS_TINT_ALPHA', () => {
+	it('matches the share of --accent-300 in the --glass-tint token in app.css', () => {
+		const share =
+			/--glass-tint:\s*color-mix\(in oklab, var\(--accent-300\) (\d+)%, transparent\);/.exec(
+				CSS()
+			)?.[1];
+		expect(Number(share) / 100).toBe(GLASS_TINT_ALPHA);
 	});
 });
 
@@ -149,7 +200,7 @@ describe('DEFAULT_ACCENT', () => {
 });
 
 describe('applyAccent', () => {
-	it('sets --accent, --accent-fill and --on-accent from a valid color', () => {
+	it('sets --accent and every color derived from it in code from a valid color', () => {
 		const { root, vars } = fakeRoot();
 		applyAccent(root, '#f6e7a1');
 		expect(Object.fromEntries(vars)).toEqual({
@@ -157,7 +208,8 @@ describe('applyAccent', () => {
 			'--accent-fill': accentFill('#f6e7a1').fill,
 			'--accent-fill-hover': accentFill('#f6e7a1').hover,
 			'--on-accent': 'var(--ink)',
-			'--accent-text': accentText('#f6e7a1')
+			'--accent-text': accentText('#f6e7a1'),
+			'--accent-300': accent300('#f6e7a1')
 		});
 	});
 

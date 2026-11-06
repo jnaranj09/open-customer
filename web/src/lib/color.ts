@@ -8,8 +8,13 @@ export const DEFAULT_ACCENT = '#c76b85';
  *  no second copy of the color lives in code. */
 export const INK_LUMINANCE = 0.041973526925469073;
 
-/** Relative luminance of `--bg-100` (app.css), the page background; a test keeps it in sync. */
-export const BG_LUMINANCE = 0.9222485011760946;
+/** The red, green and blue of `--bg-100` (app.css), the page background; a test keeps them in
+ *  sync. Channels, not a luminance: the glass tint is composed over it. */
+export const BG_100_RGB: readonly [number, number, number] = [251, 245, 242];
+
+/** The alpha of `--glass-tint` (app.css: `color-mix(in oklab, var(--accent-300) 35%,
+ *  transparent)`); a test keeps it in sync. */
+export const GLASS_TINT_ALPHA = 0.35;
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -136,22 +141,68 @@ function fromOklab([L, A, B]: Lab): string {
 		.join('')}`;
 }
 
-/** `--accent-100` (app.css: `color-mix(in oklab, var(--accent) 15%, white)`) for `hex`. */
-export function accent100(hex: string): string {
+/** `share` (0 to 1) of `hex` mixed into white in OKLab, as `color-mix(in oklab, …, white)` does. */
+function mixWhite(hex: string, share: number): string {
 	const [L, A, B] = toOklab(hex);
 	// White is L 1, a 0, b 0 in OKLab.
-	return fromOklab([0.15 * L + 0.85, 0.15 * A, 0.15 * B]);
+	return fromOklab([share * L + (1 - share), share * A, share * B]);
+}
+
+/** `--accent-100` (app.css: `color-mix(in oklab, var(--accent) 15%, white)`) for `hex`. */
+export function accent100(hex: string): string {
+	return mixWhite(hex, 0.15);
+}
+
+/** The share of the accent in `--accent-300` (app.css: `color-mix(in oklab, var(--accent) 45%,
+ *  white)`), and the step it falls by for a near-black accent. */
+const SHARE_300 = 0.45;
+const SHARE_STEP = 0.05;
+
+/** `--accent-300` for `hex`: the accent mixed 45% into white, as app.css does. It is a hover fill
+ *  under accent text, so for a near-black accent, where even black text would miss AA on that mix,
+ *  the share falls until black reaches AA; `applyAccent` sets the result. */
+export function accent300(hex: string): string {
+	let share = SHARE_300;
+	let mix = mixWhite(hex, share);
+	while (contrast(0, luminance(mix)) < AA_TEXT && share > 0) {
+		share = Math.max(0, share - SHARE_STEP);
+		mix = mixWhite(hex, share);
+	}
+	return mix;
+}
+
+const rgbHex = (rgb: readonly number[]): string =>
+	`#${rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+
+/** What a browser paints for `top` at `alpha` over the opaque `bottom`: source-over, channel by
+ *  channel, in sRGB. */
+function over(top: string, alpha: number, bottom: string): string {
+	const t = Number.parseInt(top.slice(1), 16);
+	const b = Number.parseInt(bottom.slice(1), 16);
+	return rgbHex([16, 8, 0].map((s) => ((t >> s) & 0xff) * alpha + ((b >> s) & 0xff) * (1 - alpha)));
+}
+
+/** The `bg-glass-tint` surface (a status chip, the archived badge, the offline banner) as it is
+ *  painted for `hex`: color-mix with `transparent` keeps `--accent-300` at 35% alpha, drawn here
+ *  over the bare page background. A glass card under the chip only lightens it, so this is the
+ *  darkest case for dark text. */
+export function glassTint(hex: string): string {
+	return over(accent300(hex), GLASS_TINT_ALPHA, rgbHex(BG_100_RGB));
 }
 
 /** The accent as text on a light surface (a ghost button, a text button, a selected chip, a status
- *  chip, the times in the grid): the accent's 700 shade, darkened until it reaches AA on both
- *  the page background (`--bg-100`) and the pale accent tint (`--accent-100`). */
+ *  chip, the times in the grid): the accent's 700 shade, darkened until it reaches AA on each
+ *  surface it sits on: the page background (`--bg-100`), the pale accent tint (`--accent-100`),
+ *  the hover fill of a ghost button and an accent icon button (`--accent-300`) and the glass tint
+ *  (`glassTint`). */
 export function accentText(hex: string): string {
-	const tint = luminance(accent100(hex));
+	const surfaces = [rgbHex(BG_100_RGB), accent100(hex), accent300(hex), glassTint(hex)].map(
+		luminance
+	);
 	let by = FILL_DARKEN;
 	let text = darken(hex, by);
 	const enough = (c: string): boolean =>
-		contrast(BG_LUMINANCE, luminance(c)) >= AA_TEXT && contrast(tint, luminance(c)) >= AA_TEXT;
+		surfaces.every((s) => contrast(s, luminance(c)) >= AA_TEXT);
 	while (!enough(text) && by < 1) {
 		by = Math.min(1, by + FILL_STEP);
 		text = darken(hex, by);
@@ -160,7 +211,8 @@ export function accentText(hex: string): string {
 }
 
 /** Sets `--accent` and the colors derived from it in code (`--accent-fill`, its hover, the
- *  `--on-accent` label and `--accent-text`) on `root`; null or an invalid color gives the default. */
+ *  `--on-accent` label, `--accent-text` and `--accent-300`) on `root`; null or an invalid color
+ *  gives the default. */
 export function applyAccent(root: HTMLElement, hex: string | null): void {
 	const accent = hex !== null && isHexColor(hex) ? hex : DEFAULT_ACCENT;
 	const { fill, hover, text } = accentFill(accent);
@@ -169,6 +221,7 @@ export function applyAccent(root: HTMLElement, hex: string | null): void {
 	root.style.setProperty('--accent-fill-hover', hover);
 	root.style.setProperty('--on-accent', text === 'light' ? 'var(--on-strong)' : 'var(--ink)');
 	root.style.setProperty('--accent-text', accentText(accent));
+	root.style.setProperty('--accent-300', accent300(accent));
 }
 
 /** The soft hues the picker offers after the default, each with the name a screen reader says

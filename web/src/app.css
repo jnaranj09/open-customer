@@ -6,7 +6,8 @@
    `--accent-fill-hover` and `--on-accent` (a filled accent control, its hover and its label) and
    `--accent-text` (the accent as text on a light surface) are computed there too, so text keeps
    WCAG AA contrast for any accent; the values here are the default accent's (a test keeps them in
-   sync). */
+   sync). applyAccent also sets `--accent-300`: the same mix as below, with less accent for a
+   near-black one, so accent text keeps AA on that hover fill. */
 :root {
 	--bg-100: #fbf5f2;
 	--bg-200: #f6ece8;
@@ -26,7 +27,7 @@
 	--accent: #c76b85;
 	--accent-fill: #9f566a;
 	--accent-fill-hover: #8b4b5d;
-	--accent-text: #955064;
+	--accent-text: #774050;
 	--on-accent: var(--on-strong);
 	--accent-100: color-mix(in oklab, var(--accent) 15%, white);
 	--accent-300: color-mix(in oklab, var(--accent) 45%, white);
