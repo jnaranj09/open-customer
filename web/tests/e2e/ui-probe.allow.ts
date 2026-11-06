@@ -14,25 +14,10 @@ function entries(route: string, check: string, states: string[], common: Common)
 
 export const ALLOW: readonly Allow[] = [
 	// /
-	...entries('/', 'axe:scrollable-region-focusable', ['agenda empty'], {
-		width: 'compact',
-		why: 'the empty day grid scrolls but holds nothing focusable',
-		bug: 'UIP-N7'
-	}),
-	...entries('/', 'clip', ['base'], {
-		target: `a "10:00 ${LONG_NAME} Acrílico"`,
-		why: 'a 30-minute appointment box in the day grid cuts its three lines',
-		bug: 'UIP-M1'
-	}),
 	...entries('/', 'empty', ['agenda empty'], {
 		width: 'wide',
 		why: 'the wide week view says nothing for an empty week',
 		bug: 'UIP-N2'
-	}),
-	...entries('/', 'target-size', ['base'], {
-		target: `a "10:00 ${LONG_NAME} Acrílico"`,
-		why: 'a 30-minute appointment box in the day grid is 28 px tall',
-		bug: 'UIP-M1'
 	}),
 	// /ajustes/atributos
 	// /ajustes/plantillas/[id]

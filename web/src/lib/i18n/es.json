@@ -136,6 +136,7 @@
 	"agenda_view": "Vista",
 	"agenda_today_short": "Hoy · {date}",
 	"agenda_empty_day": "No hay citas este día",
+	"agenda_grid_label": "Horario",
 	"agenda_needs_connection": "Necesitas conexión con el sistema para ver otros días",
 	"agenda_loading": "Cargando citas…",
 	"status_scheduled": "Agendada",

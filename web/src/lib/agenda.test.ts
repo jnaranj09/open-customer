@@ -140,11 +140,47 @@ describe('scrollHour', () => {
 	});
 
 	it('is the hour of the earliest start, early or late', () => {
-		const late = { id: 'b', col: 0, cols: 1, startMin: 20 * 60, endMin: 21 * 60 + 15 };
+		const late = {
+			id: 'b',
+			col: 0,
+			cols: 1,
+			startMin: 20 * 60,
+			endMin: 21 * 60 + 15,
+			continued: false
+		};
 		expect(scrollHour([late])).toBe(20);
 		expect(
-			scrollHour([late, { id: 'a', col: 0, cols: 1, startMin: 6 * 60 + 30, endMin: 7 * 60 }])
+			scrollHour([
+				late,
+				{ id: 'a', col: 0, cols: 1, startMin: 6 * 60 + 30, endMin: 7 * 60, continued: false }
+			])
 		).toBe(6);
+	});
+
+	it('skips the after-midnight tail of an appointment from the day before', () => {
+		// 23:30 to 00:30 local: the next day shows its tail from 00:00.
+		const tail = layoutDay(
+			[
+				item('night', '2026-11-04T05:30:00Z', '2026-11-04T06:30:00Z'),
+				item('morning', '2026-11-04T16:00:00Z', '2026-11-04T17:00:00Z')
+			],
+			ZONE,
+			DAY
+		);
+		expect(tail.map((p) => [p.id, p.continued])).toEqual([
+			['night', true],
+			['morning', false]
+		]);
+		expect(scrollHour(tail)).toBe(10);
+	});
+
+	it('opens at the opening hour when the only item is a tail from the day before', () => {
+		const tail = layoutDay(
+			[item('night', '2026-11-04T05:30:00Z', '2026-11-04T06:30:00Z')],
+			ZONE,
+			DAY
+		);
+		expect(scrollHour(tail)).toBe(8);
 	});
 });
 

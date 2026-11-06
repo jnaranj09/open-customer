@@ -14,8 +14,16 @@ export type AgendaItem = {
 };
 
 /** One appointment in a day's grid: the column it takes among `cols` side by side, and its span in
- *  minutes since local midnight (clipped to the day). */
-export type Placed = { id: string; col: number; cols: number; startMin: number; endMin: number };
+ *  minutes since local midnight (clipped to the day). `continued` is true for the tail of one that
+ *  started on an earlier day (it shows from 00:00). */
+export type Placed = {
+	id: string;
+	col: number;
+	cols: number;
+	startMin: number;
+	endMin: number;
+	continued: boolean;
+};
 
 export type AgendaView = 'day' | 'week';
 
@@ -41,7 +49,8 @@ export function layoutDay(items: AgendaItem[], zone: string, day: string): Place
 		.map((i) => ({
 			id: i.id,
 			startMin: minuteOn(i.starts_at, zone, dayStart, dayEnd),
-			endMin: minuteOn(i.ends_at, zone, dayStart, dayEnd)
+			endMin: minuteOn(i.ends_at, zone, dayStart, dayEnd),
+			continued: Date.parse(i.starts_at) < dayStart
 		}))
 		.filter((s) => s.endMin > s.startMin)
 		.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
@@ -88,14 +97,16 @@ export function viewRange(view: AgendaView, day: string): { from: string; to: st
 	return { from, to: addDays(from, 6) };
 }
 
-const DEFAULT_SCROLL_HOUR = 8;
+/** The business opening hour: there is no business-hours setting, so the grid assumes 08:00. */
+const OPENING_HOUR = 8;
 
-/** The hour a grid scrolls to when it opens: the one that holds the earliest start, or 08:00 on
- *  an empty day. The grid always holds the whole day; this is only where it starts. */
+/** The hour a grid scrolls to when it opens: the one that holds the earliest start, or the opening
+ *  hour when nothing starts on the shown days. The tail of an appointment that crossed midnight
+ *  (`continued`) does not count: it would open the whole week at 00:00. The grid always holds the
+ *  whole day; this is only where it starts. */
 export function scrollHour(placed: Placed[]): number {
-	return placed.length === 0
-		? DEFAULT_SCROLL_HOUR
-		: Math.min(...placed.map((p) => Math.floor(p.startMin / 60)));
+	const starts = placed.filter((p) => !p.continued).map((p) => Math.floor(p.startMin / 60));
+	return starts.length === 0 ? OPENING_HOUR : Math.min(...starts);
 }
 
 /** What to remember of a day she picked: nothing (`null`, follow the business day) when it is
