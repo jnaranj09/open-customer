@@ -5,7 +5,7 @@ its clients, appointments and reminder messages. The owner sends reminders by ha
 WhatsApp; the app tells her who is due and writes the message. It is one Go binary that serves a
 SvelteKit PWA, with PostgreSQL, meant to run on a home PC behind a Cloudflare Tunnel.
 
-- Install and operate: deploy/README.md (written in P7).
+- Install and operate: [deploy/README.md](deploy/README.md).
 - Architecture and build plan: [docs/designs/release-1.md](docs/designs/release-1.md).
 - License: not chosen yet.
 

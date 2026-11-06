@@ -224,7 +224,7 @@ Each goal has a check. Release 1 is done when all checks pass.
 
 ### CUJ 7: Backup, upgrade and restore
 
-*   **Given**: The USB backup disk is mounted on the PC and has the target marker file.
+*   **Given**: The backup folder (a removable disk, if the owner uses one, mounted) exists and has the target marker file.
 *   **When**: The PC has been off for two days and is turned on. Later, the author upgrades the app.
 *   **Then**:
     *   As soon as the backup container starts, it sees that the last backup is older than 24 h and runs one.
@@ -255,7 +255,7 @@ flowchart LR
     bk["<b>backup</b><br/>postgres:18-alpine + restic<br/>check at start + hourly"]
     media[("media volume")]
     status[("backup-status volume")]
-    usb[("USB / 2nd disk<br/>restic repository")]
+    usb[("Backup folder<br/>restic repository")]
   end
   push["Web Push service<br/>(Apple)"]
   wa["WhatsApp app<br/>on her phone"]
@@ -796,7 +796,7 @@ Cloudflare settings the author sets once (documented in `deploy/README.md`):
 
 A failed step never ends the script early: its error goes to `status.json` (step 6) first. In loop mode the script then waits for the next hour instead of exiting, because `restart: unless-stopped` would otherwise restart it against a broken disk again and again. `once` exits non-zero after writing the status.
 
-1.  First, check that `/target/.open-customer-backup-target` exists. If it does not, the USB disk is not mounted. Write the error to `status.json`, do not write to `/target`, and wait for the next hour.
+1.  First, check that `/target/.open-customer-backup-target` exists. If it does not, the target is not there (for a removable disk: not mounted). Write the error to `status.json`, do not write to `/target`, and wait for the next hour.
 2.  Then, if the last successful backup is less than 24 h old, stop here.
 3.  After that, run `pg_dump -Fc` to `/backup-status/work/db.dump`. The dump is taken before the media copy in step 4, and photos are never hard-deleted, so a restore can have extra photo files without a row, but never a row without its file.
 4.  Then run `restic backup` on `db.dump` and `/media` into the repository at `/target/restic`, tagged `app=<APP_VERSION>` (and `pre-upgrade` when given), with the fixed `--host open-customer-backup`. The repository is encrypted with `RESTIC_PASSWORD`. The host is fixed because restic groups snapshots by host name, and every `docker compose run` container gets a new one; without it, old groups would never be pruned.
@@ -840,7 +840,7 @@ Notes:
     2.  the database's goose version is above 0, so at least one migration was applied before (a fresh database has no tables yet, so the first start always migrates; reading `users` there would fail);
     3.  `last_copy_at` in `BACKUP_STATUS_FILE` is missing or older than 60 minutes.
 
-    Then `serve` exits with "Pending migrations and no recent backup. Run scripts/upgrade.sh." This catches an upgrade done without `upgrade.sh`, for example editing `.env` by hand and running `docker compose up -d`. If the USB disk is unplugged on upgrade day, the backup fails and the upgrade stops before the guard is reached. `ALLOW_MIGRATE_WITHOUT_BACKUP=true` overrides it, for development or an emergency.
+    Then `serve` exits with "Pending migrations and no recent backup. Run scripts/upgrade.sh." This catches an upgrade done without `upgrade.sh`, for example editing `.env` by hand and running `docker compose up -d`. If the backup target is missing on upgrade day (a removable disk unplugged), the backup fails and the upgrade stops before the guard is reached. `ALLOW_MIGRATE_WITHOUT_BACKUP=true` overrides it, for development or an emergency.
 *   Migrations only move forward. Rollback is a restore of the snapshot taken before the upgrade. A rollback drops everything she entered after the upgrade, so the author upgrades outside her working hours.
 *   Every snapshot is tagged with the app version that was running (`restic backup --tag app=<APP_VERSION>`). The `backup` service gets `APP_VERSION` from `.env`.
 *   **Restore** (`scripts/restore.sh <snapshot-id|latest>`):
@@ -849,7 +849,7 @@ Notes:
     3.  After that, runs the `restore` service (`docker compose --profile restore run --rm restore restore <snapshot-id>`). It is the backup image with `media` mounted read-write. It takes the backup lock, restores the snapshot to a temporary folder, drops and recreates the database (`dropdb --force --if-exists`, then `createdb`), loads `db.dump` with `pg_restore`, replaces the media volume content, and runs `chown -R 65532:65532 /media`, so `app` can still write new photos. Dropping the whole database also removes tables that newer migrations added, which `pg_restore --clean` would leave behind.
     4.  Then sets `APP_VERSION` in `.env` to the snapshot's tag, so the restored schema and the app version match.
     5.  Finally, runs `docker compose up -d`. This starts `app` on the restored version, and recreates `backup` with that `APP_VERSION`, so later snapshots carry the right tag. No migration is pending, so the guard does not block it.
-*   **The USB disk at boot:** the PC must boot without the disk, and the backup must never write to the PC's own disk instead. If the disk is missing, the mount point is an empty folder; the marker check (step 1 in "Backups") stops any write there, and the status line turns red with "Disco de respaldo no visible". Plugging the disk in later is picked up by the next hourly check without a container restart. The mount options are in items 81 and 83.
+*   **A removable backup disk at boot (optional):** `BACKUP_TARGET` is any host folder the owner chooses; for now it is a folder on the PC itself. If she later uses a removable disk, the PC must boot without it, and the backup must never write to the PC's own disk instead. If the disk is missing, the mount point is an empty folder; the marker check (step 1 in "Backups") stops any write there, and the status line turns red with "Disco de respaldo no visible". Plugging the disk in later is picked up by the next hourly check without a container restart. The mount options are in items 81 and 83. A folder on the PC's own disk does not survive that disk dying; `deploy/README.md` says so and suggests a second disk.
 *   API changes inside `/api/v1` are additive only, so an older cached SPA keeps working until it reloads.
 
 ### Configuration (`.env`)
@@ -864,7 +864,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME`, `DB_SSLMODE` | app, Compose | no | Defaults `db`, `5432`, `open_customer`, `open_customer`, `disable` (traffic stays on the Compose network). Compose passes them to `app` as is, to `db` as `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and to `backup` and `restore` as `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`. |
 | `TUNNEL_TOKEN` | Compose (`cloudflared`) | yes | cloudflared token. |
 | `VAPID_SUBJECT` | app | yes | `mailto:` contact for Web Push. |
-| `BACKUP_TARGET` | Compose (`backup` bind) | yes | Host path of the USB or second-disk folder. |
+| `BACKUP_TARGET` | Compose (`backup` bind) | yes | Host path of any folder the owner chooses (a USB or second disk is optional). The marker file `.open-customer-backup-target` must exist in it. |
 | `RESTIC_PASSWORD` | `backup` | yes | Backup encryption key. |
 | `TRUSTED_PROXY_CIDRS` | app | no | Default: the private ranges `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`, which include any Docker network. Only these peers' `CF-Connecting-IP` is trusted. This is safe because `app` publishes no port: only containers on the Compose network can reach it. A self-hoster who publishes a port sets this to their proxy's address. |
 | `MEDIA_DIR` | app | no | Default `/data/media` (the `media` volume mount). |
@@ -898,7 +898,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 
 ### Accepted risks
 
-*   **One person and one PC.** If the author is away or the PC breaks, nobody can upgrade, restore or reset her password. Her data survives in the USB backups, but reading them needs the restic password, which the author holds; the handover checklist (item 83) gives her a sealed copy to keep. The export helps only if she downloaded one recently: it needs the server running.
+*   **One person and one PC.** If the author is away or the PC breaks, nobody can upgrade, restore or reset her password. Her data survives in the backups, but reading them needs the restic password, which the author holds; the handover checklist (item 83) gives her a sealed copy to keep. The export helps only if she downloaded one recently: it needs the server running.
 *   **The PC is off at times.** No push, no writes, no backups while it is off. She agreed to this. Two effects follow:
     *   A "before" reminder can be missed. If the PC stays off from the item's due day until the appointment starts, the item is never shown, because it is hidden after `starts_at`. Today's appointments are still in the cache, so she can message the client by hand.
     *   A quiet day and a day with the PC off look the same: no push on either. When she opens the app, the "server off" banner tells them apart.
@@ -906,7 +906,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 *   **Anyone who knows her username can slow her logins.** The per-username delay (up to 30 s between attempts, for 15 min after the last failure) applies to everyone trying that name, her included. An attacker can keep her waiting but cannot get in. Her existing sessions are not affected, so she only notices it if she has to log in again during an attack.
 *   **Cached data stays readable on a phone with a closed session** until that phone makes its next request, which clears the cache (see "Phone cache and offline behavior"). A lost phone is protected by its own screen lock until then.
 *   **The tunnel reaches the home network.** A bug in `app` could expose the Compose network on the author's PC. `app` runs as non-root in a distroless image, and no container publishes a port.
-*   **Backups stay in the same house.** Fire or theft can take the PC and the USB disk together. Off-site backup is a future improvement.
+*   **Backups stay in the same house.** Fire or theft can take the PC and its backup disk together. Off-site backup is a future improvement.
 *   **Cloudflare sees decrypted traffic** at its edge, because TLS ends there. Accepted for the reference install and written in `deploy/README.md`.
 *   **A dead push subscription shows only on "Estado del sistema".** The re-subscribe check fixes most cases on the next open. Otherwise she notices it as the missing morning notification.
 *   **The overlap check is not race-safe.** It takes no lock and has no exclusion constraint, and an edit reads then writes. One owner is effectively one writer, so the cost is a rare double booking when two of her devices save at the same moment; she sees both appointments in the day view and can move one.
@@ -2407,7 +2407,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Proposed Changes**:
     *   The four services in "Deployment", with no `ports:`.
     *   Named volumes `pgdata`, `media` and `backup-status`.
-    *   `${BACKUP_TARGET}:/target` on `backup` in the long bind syntax with `bind.propagation: rslave`, so a USB disk mounted or unmounted on the host after the container started is seen inside it. `APP_VERSION` is passed to it for snapshot tags.
+    *   `${BACKUP_TARGET}:/target` on `backup` in the long bind syntax with `bind.propagation: rslave`, so a removable disk mounted or unmounted on the host after the container started is seen inside it (`BACKUP_TARGET` may be any host folder). `APP_VERSION` is passed to it for snapshot tags.
     *   A `restore` service under `profiles: ["restore"]`: the backup image, `media` read-write, `backup-status` read-write (the restore takes the backup lock and unpacks into `/backup-status/work`), `/target` read-only. It never starts with `up`.
     *   Environment as in "Configuration (`.env`)": the optional variables with `${VAR:-default}`, the required ones with `${VAR:?<VAR> is required in .env}`. The app's own optional variables (`TRUSTED_PROXY_CIDRS`, `MEDIA_DIR`, `BACKUP_STATUS_FILE`, `ALLOW_MIGRATE_WITHOUT_BACKUP`, `LOG_LEVEL`) are passed as `${VAR:-}`: empty means the app's default, so each default has one owner.
     *   `depends_on` with healthchecks (`app` and `backup` on a healthy `db`, `cloudflared` on a healthy `app`).
@@ -2428,7 +2428,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     1.  Requirements.
     2.  Create the tunnel and the public hostname.
     3.  Cloudflare settings (the list in "Deployment").
-    4.  Prepare the backup target: an `/etc/fstab` entry with `nofail` at the path in `BACKUP_TARGET` (so the PC boots without the disk), then `touch .open-customer-backup-target` on the disk.
+    4.  Prepare the backup target: pick any host folder for `BACKUP_TARGET` and `touch .open-customer-backup-target` in it once. Only for a removable disk, also add an `/etc/fstab` entry with `nofail` at that path (so the PC boots without the disk). Say plainly that a folder on the same disk does not survive a dead disk, and suggest a second disk later.
     5.  `.env`.
     6.  First start + the setup link.
     7.  The in-person handover checklist (wizard → install → login → allow notifications → give her a sealed paper copy of `RESTIC_PASSWORD` and say what it is for).
@@ -2512,7 +2512,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     3.  "Hoy" opens in under 1 s over LTE (Goal 6). Method: close the app from the app switcher, start a screen recording, tap the Home Screen icon, and count the time from the tap to the first appointment row painted, using the recording's frames. Pass: 3 of 3 runs under 1 s.
     4.  With the server stopped: the app opens from the cache with the banner (CUJ 6).
     5.  The restore drill: back up, wipe the volumes, restore, confirm data + photos (CUJ 7), then upload one new photo to confirm `app` can still write to the restored media volume.
-    6.  Unplug the USB target: the status screen shows the red backup line by the next hourly check (at most 60 min), and nothing was written to the mount point.
+    6.  Remove the marker file from the target (or unplug the target, if it is a removable disk): the status screen shows the red backup line by the next hourly check (at most 60 min), and nothing was written to the target folder.
     7.  Goal 2: time CUJ 3 steps 1–4 with a stopwatch on her iPhone, three times with an existing client. Pass: 3 of 3 under 30 s.
     8.  CUJ 3 step 5 on her iPhone: attach a photo from the camera and one from the library. Both upload, show on the appointment and in the client's gallery, and the stored file has no EXIF GPS data.
     9.  "¿Lo enviaste?" after iOS closes the app: tap "Enviar", close the PWA from the app switcher while in WhatsApp, reopen it. The sheet shows for that client.
