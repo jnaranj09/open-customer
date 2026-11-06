@@ -40,7 +40,7 @@ function minuteOn(iso: string, zone: string, dayStart: number, dayEnd: number): 
 
 /** The minutes a box's 44 px tap height (`min-h-tap`) covers in the grid (TimeGrid: one hour is
  *  `--hour: 4rem`, 64 px), rounded up. A shorter appointment is drawn this tall. */
-export const TAP_MINUTES = Math.ceil((44 / 64) * 60);
+const TAP_MINUTES = Math.ceil((44 / 64) * 60);
 
 /** Places the day's appointments in the time grid. Cancelled ones are left out; "no vino" ones stay
  *  (the view greys them). Columns follow the drawn span: a box is at least `TAP_MINUTES` tall, so
