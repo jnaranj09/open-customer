@@ -3,3 +3,5 @@
 a65d7fa64b782b4b3daa6cae7c3149982b6c6307:internal/auth/password_change.go:generic-api-key:20
 # A made-up test fixture (password_test.go): base64 of "saltsaltsaltsalt" and 32 zero bytes, not a secret.
 6c4156fc64186e4ed5ad234048674fb4f063ac5d:internal/auth/password_test.go:generic-api-key:68
+# The variable name argonIDKey (password.go) holds the function argon2.IDKey, not a key.
+caaa93f68f398d49d1847bfc124493a6192dd200:internal/auth/password.go:generic-api-key:50
