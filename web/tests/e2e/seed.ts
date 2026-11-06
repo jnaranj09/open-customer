@@ -82,14 +82,15 @@ export async function insertClient(c: {
 type ServiceRow = { id: string; name: string; price_cents: string | null; duration_min: number };
 
 /** Inserts an appointment of `clientId` with the active services named in `services` (in order;
- *  a name may repeat), their name, price and duration copied in. It ends after the sum of the
- *  durations and costs the sum of the prices. Returns its id. */
+ *  a name may repeat), their name, price and duration copied in. It ends after `minutes`, by
+ *  default the sum of the durations, and costs the sum of the prices. Returns its id. */
 export async function insertAppointment(a: {
 	clientId: string;
 	services: string[];
 	startsAt: string;
 	createdAt?: string;
 	status?: 'scheduled' | 'cancelled' | 'no_show';
+	minutes?: number;
 }): Promise<string> {
 	const found = await db().query<ServiceRow>(
 		'SELECT id, name, price_cents, duration_min FROM services WHERE name = ANY($1) AND archived_at IS NULL',
@@ -103,7 +104,7 @@ export async function insertAppointment(a: {
 		}
 		return s;
 	});
-	const minutes = lines.reduce((sum, s) => sum + s.duration_min, 0);
+	const minutes = a.minutes ?? lines.reduce((sum, s) => sum + s.duration_min, 0);
 	// bigint arrives as a string.
 	const total = lines.reduce((sum, s) => sum + Number(s.price_cents ?? 0), 0);
 	const startsMs = Date.parse(a.startsAt);
