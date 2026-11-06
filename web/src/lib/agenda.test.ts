@@ -134,6 +134,51 @@ describe('viewRange', () => {
 	});
 });
 
+describe('layoutDay with short appointments', () => {
+	it('puts back-to-back 15-minute items side by side, since each is drawn 44 px tall', () => {
+		const placed = layoutDay(
+			[
+				item('a', '2026-11-04T15:00:00Z', '2026-11-04T15:15:00Z'),
+				item('b', '2026-11-04T15:15:00Z', '2026-11-04T15:30:00Z'),
+				item('c', '2026-11-04T15:30:00Z', '2026-11-04T15:45:00Z')
+			],
+			ZONE,
+			DAY
+		);
+		expect(placed.map((p) => [p.id, p.col, p.cols])).toEqual([
+			['a', 0, 3],
+			['b', 1, 3],
+			['c', 2, 3]
+		]);
+	});
+
+	it('gives a 1-minute item a side column next to the one that starts under its box', () => {
+		const placed = layoutDay(
+			[
+				item('blip', '2026-11-04T17:00:00Z', '2026-11-04T17:01:00Z'),
+				item('next', '2026-11-04T17:30:00Z', '2026-11-04T18:30:00Z')
+			],
+			ZONE,
+			DAY
+		);
+		expect(placed.map((p) => [p.id, p.col, p.cols])).toEqual([
+			['blip', 0, 2],
+			['next', 1, 2]
+		]);
+	});
+
+	it('keeps a 1-minute item alone the full width', () => {
+		const placed = layoutDay(
+			[item('blip', '2026-11-04T17:00:00Z', '2026-11-04T17:01:00Z')],
+			ZONE,
+			DAY
+		);
+		expect(placed.map((p) => [p.id, p.col, p.cols, p.endMin - p.startMin])).toEqual([
+			['blip', 0, 1, 1]
+		]);
+	});
+});
+
 describe('scrollHour', () => {
 	it('is 08:00 for an empty day', () => {
 		expect(scrollHour([])).toBe(8);

@@ -34,8 +34,8 @@
 		height: p.endMin - p.startMin
 	});
 	// At most this long, a box (32 px at 4rem an hour) has room for one line, not three: the time
-	// and the name share it. Every box is at least a 44 px tap target, so a short one overlaps the
-	// slot below a little; the later appointment is drawn on top.
+	// and the name share it. Every box is at least a 44 px tap target; `layoutDay` places columns
+	// by that drawn height (`TAP_MINUTES`), so a short box never covers the next one.
 	const ONE_LINE_MIN = 30;
 
 	let scroller = $state<HTMLDivElement>();
@@ -66,9 +66,9 @@
 	} as const;
 </script>
 
-<!-- One hour is 4rem tall; a minute is a sixtieth of it. The scroll area takes focus, so a
-     keyboard can scroll it even on a day with no appointment to tab to. The hour column stays put
-     while the week scrolls sideways. -->
+<!-- One hour is 4rem tall (TAP_MINUTES in lib/agenda.ts counts on it); a minute is a sixtieth
+     of it. The scroll area takes focus, so a keyboard can scroll it even on a day with no
+     appointment to tab to. The hour column stays put while the week scrolls sideways. -->
 <Card
 	bind:ref={scroller}
 	tabindex={0}
@@ -142,7 +142,8 @@
 									>
 										{#if box.height <= ONE_LINE_MIN}
 											<p class="truncate text-sm font-bold text-ink">
-												<span class="text-xs text-accent-text">{formatTime(a.starts_at, zone)}</span>
+												<span class="text-xs text-accent-text">{formatTime(a.starts_at, zone)}</span
+												>
 												{#if a.status === 'no_show'}
 													<span class="text-xs text-ink-muted">· {t('status_no_show')}</span>
 												{:else if a.status === 'confirmed'}

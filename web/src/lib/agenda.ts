@@ -38,9 +38,15 @@ function minuteOn(iso: string, zone: string, dayStart: number, dayEnd: number): 
 	return Number(h) * 60 + Number(m);
 }
 
+/** The minutes a box's 44 px tap height (`min-h-tap`) covers in the grid (TimeGrid: one hour is
+ *  `--hour: 4rem`, 64 px), rounded up. A shorter appointment is drawn this tall. */
+export const TAP_MINUTES = Math.ceil((44 / 64) * 60);
+
 /** Places the day's appointments in the time grid. Cancelled ones are left out; "no vino" ones stay
- *  (the view greys them). Overlapping ones (`a.start < b.end && a.end > b.start`) share the width
- *  in side-by-side columns; back-to-back ones do not overlap. */
+ *  (the view greys them). Columns follow the drawn span: a box is at least `TAP_MINUTES` tall, so
+ *  an item ends, for the layout, at `max(end, start + TAP_MINUTES)`. Items whose drawn spans
+ *  overlap share the width in side-by-side columns, so a short box never covers the next one;
+ *  back-to-back items of at least `TAP_MINUTES` do not overlap. */
 export function layoutDay(items: AgendaItem[], zone: string, day: string): Placed[] {
 	const dayStart = Date.parse(zonedToUtc(day, '00:00', zone));
 	const dayEnd = Date.parse(zonedToUtc(addDays(day, 1), '00:00', zone));
@@ -71,12 +77,13 @@ export function layoutDay(items: AgendaItem[], zone: string, day: string): Place
 		if (group.length > 0 && s.startMin >= groupEnd) {
 			close();
 		}
+		const drawnEnd = Math.max(s.endMin, s.startMin + TAP_MINUTES);
 		let col = columnEnds.findIndex((end) => end <= s.startMin);
 		if (col === -1) {
 			col = columnEnds.length;
 		}
-		columnEnds[col] = s.endMin;
-		groupEnd = Math.max(groupEnd, s.endMin);
+		columnEnds[col] = drawnEnd;
+		groupEnd = Math.max(groupEnd, drawnEnd);
 		group.push({ ...s, col, cols: 0 });
 	}
 	close();
