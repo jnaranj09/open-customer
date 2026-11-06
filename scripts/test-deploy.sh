@@ -2,7 +2,9 @@
 # make test-deploy (design doc item 2): builds the backup image from deploy/backup and runs
 # deploy/tests/backup_test.sh inside it, against a throwaway Postgres (PG_IMAGE) on a private
 # network. No host port is published. The containers and the network are named oc-deploy-* and
-# removed on exit, pass or fail.
+# removed on exit, pass or fail, with their anonymous volumes: the Postgres image (and so the
+# backup image) declares VOLUME /var/lib/postgresql, and `docker rm -f` alone would leave one
+# volume behind per container and run.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -17,7 +19,7 @@ runner=oc-deploy-backup-test
 pg_password=test-only
 
 cleanup() {
-  docker rm -f "$runner" "$pg" >/dev/null 2>&1 || true
+  docker rm -f -v "$runner" "$pg" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT

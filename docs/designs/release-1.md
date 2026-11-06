@@ -814,8 +814,10 @@ A failed step never ends the script early: its error goes to `status.json` (step
 | --- | --- |
 | Marker missing (step 1) | `checked_at`; `last_error` = "Disco de respaldo no visible" and `last_error_at` |
 | Last backup less than 24 h old (step 2) | `checked_at`; `last_error` and `last_error_at` cleared |
-| `pg_dump` fails | `checked_at`; `last_error` = "dump: <first line of stderr>" |
-| `restic backup` or `forget` fails | `checked_at`, `last_dump_at`; `last_error` = "copy: <first line of stderr>" |
+| `pg_dump` fails | `checked_at`; `last_error` = "dump: <first line of stderr>" and `last_error_at` |
+| `restic backup` or `forget` fails | `checked_at`, `last_dump_at`; `last_error` = "copy: <first line of stderr>" and `last_error_at` |
+| TERM or INT during a run (after the running step finishes) | `checked_at`; `last_error` = "interrupted" and `last_error_at` |
+| The loop cannot take the lock for a reason other than another run holding it | `checked_at`; `last_error` = "lock: <first line of stderr>" and `last_error_at` |
 | Success | every time field, `last_snapshot_id`; `last_error` and `last_error_at` cleared |
 
 The time fields not listed keep their old values. The status screen shows the backup line red when `last_copy_at` is missing or more than 48 h old, when `last_error` is set, or when `checked_at` is more than 2 h old (the backup container is not running). Because the check runs every hour, an unplugged disk turns the line red at the next hourly check (at most 60 min). A missing or unreadable file shows "desconocido" in red.
@@ -1357,7 +1359,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `cover` | `web-stub`, then `go test -tags db -coverprofile` for each package in `COVER_PKGS`; writes `coverage-<name>.out` and fails, naming the package, if any package's total (`go tool cover -func`) is below `COVER_FLOOR` (90.0). `COVER_PKGS` grows by phase: `auth` (P2); `attributes`, `appointments`, `templates` (P3); `reminders` (P4) |
     | `dev` | `web-stub`, then Docker Postgres (`PG_IMAGE`) in the container `open-customer-dev` on host port `DEV_PG_PORT` (default `5433`; started or reused, password `devpassword`, dev only), the binary built to `bin/dev/open-customer` running `serve` on `:8080` in the background, and the Vite dev server on `:5173` in the foreground with the proxy from item 63. A `trap` stops `serve` when Vite exits; it runs the built binary, not `go run`, because `go run` does not pass SIGTERM on to the server. Env and the Origin rule are below the table. |
     | `image` | `docker build --build-arg VERSION=$(VERSION)` of the app image |
-    | `test-deploy` | Runs `scripts/test-deploy.sh`: builds `deploy/backup` as `open-customer-backup:test`, starts `$(PG_IMAGE)` as `oc-deploy-pg` on a new network `oc-deploy-net` (no published port), runs `deploy/tests/backup_test.sh` inside the backup image (entrypoint overridden, `deploy/` mounted read-only) against it, and removes the containers and the network in a `trap`, pass or fail. The backup tests run for real, not against stubs, because `backup.sh` owns the outcome table, the marker rule and the restore, and a stub would not catch a wrong restic flag |
+    | `test-deploy` | Runs `scripts/test-deploy.sh`: builds `deploy/backup` as `open-customer-backup:test`, starts `$(PG_IMAGE)` as `oc-deploy-pg` on a new network `oc-deploy-net` (no published port), runs `deploy/tests/backup_test.sh` inside the backup image (entrypoint overridden, `deploy/` mounted read-only) against it, and removes the containers (with their anonymous volumes, `docker rm -f -v`) and the network in a `trap`, pass or fail. The backup tests run for real, not against stubs, because `backup.sh` owns the outcome table, the marker rule and the restore, and a stub would not catch a wrong restic flag |
 
     *   **`dev` env:** the Go server gets `PUBLIC_URL=http://localhost:5173`, `DB_HOST=localhost`, `DB_PORT=$(DEV_PG_PORT)` and `DB_PASSWORD=devpassword` for the container, `VAPID_SUBJECT=mailto:dev@localhost` and `ALLOW_MIGRATE_WITHOUT_BACKUP=true` (there is no backup status file in dev). The browser's `Origin` is `http://localhost:5173`, and the Vite proxy forwards it unchanged, so the Origin check passes.
     *   `VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)`. The same value goes to `-ldflags`, the web build and `make image`; the release workflow sets it from the tag.
@@ -2451,11 +2453,11 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `restore` unpacks the snapshot into `/backup-status/work/restore` (on the `backup-status` volume, not the container layer) and uses `pg_restore` without `--clean`, because the database was just recreated empty.
     *   Runs `restic init` on the first run if the repository is missing. "Missing" means `restic cat config` fails and `/target/restic` does not exist; if the folder exists but `cat config` fails, it reports an error instead of creating a new repository.
     *   `#!/usr/bin/env bash` (the image adds `bash`). A `trap` on `TERM` and `INT` lets the running step finish or writes "interrupted" to `status.json`, then exits; bash as PID 1 ignores signals it does not trap.
-    *   The hourly loop takes the lock with `flock -n`: if a `once` run or a restore holds it, that hour is skipped.
+    *   The hourly loop takes the lock with `flock -n`: if a `once` run or a restore holds it, that hour is skipped. Busybox `flock` exits 1 both on contention and on a real error; only a real error prints to stderr, so the loop records that one in `status.json` ("lock: …") instead of skipping silently. A lock file that cannot be opened, or a failed blocking `flock` in `once` or `restore`, exits 1 with one line naming the lock file; nothing runs without the lock.
     *   Time math (the 24 h check) uses `jq` (`now`, `fromdateiso8601`) on the `status.json` times, not busybox `date -d`.
     *   `set -uo pipefail`, without `-e`: each step's exit code is checked by hand, so a failure reaches `status.json` (see "Backups"). Each step logs one line to stdout.
     *   The loop and `once` share one function (`run_backup`), which always writes `status.json` before it returns; the step 2 skip happens only in the loop. A wrong mode or argument exits 2 with one line; a missing variable exits 2 naming it.
-    *   `status.json` is written mode `0644`, because `app` reads it as user 65532 and the backup container runs as root. A failed step also sets `last_error_at`.
+    *   `status.json` is written mode `0644`, because `app` reads it as user 65532 and the backup container runs as root. A failed step also sets `last_error_at` (see the outcome table in "Backups").
     *   One test-only knob, default off: `BACKUP_INTERVAL_SECONDS` (default 3600), the wait between two loop checks, so `make test-deploy` does not wait an hour. It is documented at the top of the script.
 
 ##### 86. `deploy/scripts/backup-now.sh`, `deploy/scripts/upgrade.sh`, `deploy/scripts/restore.sh` (Create)

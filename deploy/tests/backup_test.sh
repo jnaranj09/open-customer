@@ -214,6 +214,27 @@ test_lock() {
   assert_eq "snapshots" 1 "$(snapshots | jq length)"
 }
 
+# A lock file that cannot be opened (here a folder in its place) stops every mode that needs it:
+# without the lock, two runs could touch the dump and the repository at once.
+test_lock_unusable() {
+  fresh
+  touch "$MARKER"
+  mkdir /backup-status/backup.lock
+  local mode rc out
+  for mode in once loop; do
+    rc=0
+    if [ "$mode" = once ]; then
+      out=$("$BACKUP" once 2>&1) || rc=$?
+    else
+      out=$(BACKUP_INTERVAL_SECONDS=1 timeout 20 "$BACKUP" 2>&1) || rc=$?
+    fi
+    assert_eq "$mode exit code" 1 "$rc"
+    assert_eq "$mode output" "backup.sh: cannot open the lock file /backup-status/backup.lock" "$out"
+  done
+  [ ! -e /target/restic ] || fail "a run went ahead without the lock"
+  [ ! -e "$STATUS" ] || fail "a run went ahead without the lock"
+}
+
 # The slow step: the restic copy of a 64 MB media file. TERM goes in when once logs its dump
 # line, so restic init, backup and forget (seconds) are still ahead; the trap must let the running
 # step finish and then write "interrupted".
@@ -305,6 +326,7 @@ t "a repository folder without a config is never re-initialised" test_broken_rep
 t "dump failure is recorded" test_dump_failure
 t "the loop skips a recent backup and clears the error" test_loop_skips_recent
 t "the loop skips while the lock is held; once waits" test_lock
+t "an unusable lock file stops once and the loop" test_lock_unusable
 t "TERM during a run writes interrupted" test_term_interrupted
 t "snapshot-info prints id, time and app" test_snapshot_info
 t "restore recreates the database and hands media to 65532" test_restore

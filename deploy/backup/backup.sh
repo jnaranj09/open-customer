@@ -224,11 +224,38 @@ run_backup() {
 
 # --- modes --------------------------------------------------------------------------------------
 
-# take_lock: waits for the lock on fd 9, saying so when another run holds it.
+# try_lock: takes the lock on fd 9 without waiting. Busybox flock exits 1 both when another run
+# holds the lock and on a real error; only a real error prints to stderr, so that tells them
+# apart. Returns 0 (taken), 1 (held by another run) or 2 (error, first stderr line in lock_error).
+lock_error=
+try_lock() {
+  if flock -n 9 2>"$STATUS_DIR/lock.err"; then
+    return 0
+  fi
+  if [ -s "$STATUS_DIR/lock.err" ]; then
+    lock_error=$(first_line "$STATUS_DIR/lock.err")
+    return 2
+  fi
+  return 1
+}
+
+# take_lock: waits for the lock on fd 9, saying so when another run holds it. Exits non-zero when
+# the lock cannot be taken, so once and restore never run without it.
 take_lock() {
-  if ! flock -n 9; then
+  local rc=0
+  try_lock || rc=$?
+  if [ "$rc" -eq 1 ]; then
     log "lock: another backup or restore is running, waiting"
-    flock 9
+    flock 9 2>"$STATUS_DIR/lock.err" || rc=2
+    if [ "$rc" -eq 2 ]; then
+      lock_error=$(first_line "$STATUS_DIR/lock.err")
+    else
+      rc=0
+    fi
+  fi
+  if [ "$rc" -ne 0 ]; then
+    echo "lock: cannot take $LOCK: $lock_error" >&2
+    exit 1
   fi
 }
 
@@ -242,12 +269,21 @@ mode_loop() {
   in_loop=1
   while true; do
     # A once run or a restore holds the lock: this hour is skipped, status.json untouched.
-    if flock -n 9; then
-      run_backup check-age
-      flock -u 9
-    else
-      log "lock held by another run, skipping this check"
-    fi
+    local rc=0
+    try_lock || rc=$?
+    case "$rc" in
+      0)
+        run_backup check-age
+        flock -u 9
+        ;;
+      1)
+        log "lock held by another run, skipping this check"
+        ;;
+      *)
+        log "lock: cannot take $LOCK"
+        fail_status "lock: $lock_error"
+        ;;
+    esac
     sleep "$interval" &
     sleep_pid=$!
     wait "$sleep_pid"
@@ -350,8 +386,15 @@ esac
 
 case "$mode" in
   loop | once | restore)
-    mkdir -p "$STATUS_DIR"
-    exec 9>"$LOCK"
+    if ! mkdir -p "$STATUS_DIR" 2>/dev/null; then
+      echo "backup.sh: cannot create $STATUS_DIR" >&2
+      exit 1
+    fi
+    # Without the lock file nothing may run: two runs could touch the dump and the repository.
+    if ! { exec 9>"$LOCK"; } 2>/dev/null; then
+      echo "backup.sh: cannot open the lock file $LOCK" >&2
+      exit 1
+    fi
     ;;
 esac
 
