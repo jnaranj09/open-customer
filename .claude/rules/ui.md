@@ -14,22 +14,30 @@ paths:
 - **2. Tokens follow the design.** Each `.pen` variable `x` is one CSS token `--x` in `app.css`,
   same value; a different name goes in `design/design-map.json` (`tokens`). A token derived at run
   time from the accent is on the guard's allow-list with a reason. Sensor: guard `design-tokens`.
+  The allow-lists of both design guards only shrink: a stale entry fails the guard, a new entry is
+  prose only (the reviewer rejects it unless the owner agreed).
 - **3. Components follow the design.** Each reusable `.pen` component maps to one primitive in
   `web/src/lib/components/ui/` and each primitive maps back: `Button/Primary` is primitive
   `Button`, variant `primary`; a name that breaks that default gets a `components` entry in the
   design map in the same change. Sensor: guard `design-parity`.
 - **4. Only primitives style.** Surface classes (`glass-card`, `glass-panel`, `bg-glass`,
-  `bg-glass-strong`, `bg-glass-tint`, `shadow-*`, `backdrop-*`) and radius classes (`rounded-*`)
-  appear only in `components/ui/`; routes and feature components compose primitives. A glass
-  surface is a `Card` with a `variant`, `pad` and `radius`; its `class` is layout only, never
-  padding. Arbitrary values (`-[…]`, `[prop:value]`) appear nowhere: add a token or an `@utility`
-  in `app.css`. Layout (flex, grid, gap, width, margin, position) and padding on other elements
-  stay allowed outside `ui/`: they are not enforceable without layout primitives. Sensor:
-  `eslint-plugin-better-tailwindcss` `no-restricted-classes` (two blocks in `eslint.config.js`),
-  `no-restricted-syntax` for padding in a `<Card class>`, and its correctness rules
-  (`no-unknown-classes`, `no-conflicting-classes`, `no-concatenated-classes`); the classes that
-  existed when the rule landed are in `eslint-suppressions.json`, pinned by guard
-  `suppression-budget`.
+  `bg-glass-strong`, `bg-glass-tint`, any `*shadow-*`, `backdrop-*`) and radius classes
+  (`rounded-*`), with or without the `!` modifier, appear only in `components/ui/`, in markup and
+  in any script string (a `const look = '…'` included); routes and feature components compose
+  primitives. A glass surface is a `Card` with a `variant`, `pad` and `radius`; its `class` is a
+  plain string of layout classes, never padding and never an expression (a state such as
+  `selected` is a prop). No `<style>` block outside `ui/`. Arbitrary values (`-[…]`,
+  `[prop:value]`) appear nowhere: add a token or an `@utility` in `app.css`. Layout (flex, grid,
+  gap, width, margin, position) and padding on other elements stay allowed outside `ui/`: they are
+  not enforceable without layout primitives. Sensor: `eslint-plugin-better-tailwindcss`
+  `no-restricted-classes` (two blocks in `eslint.config.js`), `no-restricted-syntax` (padding or an
+  expression in a `<Card class>`, a `<style>` block) and the plugin's correctness rules
+  (`no-unknown-classes`, `no-conflicting-classes`, `no-concatenated-classes`); guard `ui-lint` runs
+  the real config on a probe for each bypass (`!`, variants, script strings, Card padding and
+  expressions, `<style>`, drop and inset shadows) and on legitimate layout. The classes that existed
+  when the rule landed are in `eslint-suppressions.json`, pinned by guard `suppression-budget`. An
+  inline `style=` that sets a radius, shadow or surface is prose only: positioning needs `style=`
+  (the time grid), so it cannot be banned.
 - **5. Compose, don't configure.** A primitive takes a `variant` (one prop with named values), not
   a pile of boolean props; content goes in as children / snippets, not as config props; a
   primitive is never copied into a feature folder (wrap or extend it). Copies: jscpd and guard

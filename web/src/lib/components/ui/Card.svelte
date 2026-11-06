@@ -27,6 +27,8 @@
 		class?: string;
 		href?: HTMLAnchorAttributes['href'];
 		type?: 'button' | 'submit';
+		/** The picked one of a list: an accent outline (a state, not a look). */
+		selected?: boolean;
 		/** The rendered element, for a caller that scrolls or measures it. */
 		ref?: HTMLElement | undefined;
 		children: Snippet;
@@ -38,6 +40,7 @@
 		radius = 'lg',
 		as = 'div',
 		class: layoutClass = '',
+		selected = false,
 		ref = $bindable(),
 		children,
 		...rest
@@ -72,7 +75,9 @@
 	this={as}
 	bind:this={ref}
 	{...rest}
-	class="{SURFACE[variant]} {RADIUS[radius]} {PAD[pad]} {layoutClass}"
+	class="{SURFACE[variant]} {RADIUS[radius]} {PAD[pad]} {selected
+		? 'outline-2 outline-accent'
+		: ''} {layoutClass}"
 >
 	{@render children()}
 </svelte:element>
