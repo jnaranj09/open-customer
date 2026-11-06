@@ -602,7 +602,7 @@ sequenceDiagram
 *   **On demand:** a client's full history and photos outside the window are fetched when she opens that client, online only.
 *   **Detecting "offline":** "server off" means a network error, or a response without the `X-App-Version` header. The app sets that header on every response, so its absence means the answer came from Cloudflare (530, 502, 524), not from the app. The content type is not used, because 204s, problem errors, the ZIP and JPEGs are normal answers. Details in item 66.
 *   **While offline:**
-    *   A banner shows the time of the last successful refresh.
+    *   A banner shows the time of the last successful refresh, with its day when that was not today ("Datos del 4/11 a las 18:42"); the wide sidebar's sync line says it the same way (`syncedWhen` in `lib/time.ts`, shared by both).
     *   Create and edit actions show "Necesitas conexión con el sistema para guardar": every button that writes (`WriteButton`; `SaveButton` and `ActionButton` are built on it) and every link to a create screen (`WriteLink`: "Nueva cita" in the sidebar, "Nueva clienta", "Nueva plantilla") is visibly disabled with that reason, and the floating "+" on Hoy is faded. The offline banner (`OfflineBanner`) carries the same sentence under its sync line, so a faded control always has its reason on screen and no note floats over the content. When the server answers again, the session is checked again (see item 71), so the shell leaves the offline state without a reload.
     *   Open forms are saved as drafts in Dexie, keyed by form, and restored when she returns.
     *   Search works the same as online, because it always runs on the cached clients (see "Clients and search").

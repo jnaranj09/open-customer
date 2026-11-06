@@ -232,7 +232,7 @@
 	<div class="mx-auto flex w-full max-w-360 flex-col gap-4">
 		<UpdatePrompt />
 		{#if cache.offline}
-			<OfflineBanner lastSyncAt={cache.meta.lastSyncAt} {zone} />
+			<OfflineBanner lastSyncAt={cache.meta.lastSyncAt} {zone} today={clock.today(zone)} />
 		{/if}
 		{#if failure !== null}
 			<Card as="p" role="alert" pad="message" class="text-base text-error">{failure}</Card>
@@ -258,7 +258,7 @@
 			pathname={path}
 			dueCount={cache.shownDue.length}
 			newDay={shownDay.current ?? clock.today(zone)}
-			sync={syncLine(cache.meta.lastSyncAt, zone, cache.offline)}
+			sync={syncLine(cache.meta.lastSyncAt, zone, cache.offline, clock.today(zone))}
 		/>
 		<main class="ml-64 p-8">{@render content()}</main>
 	{:else}

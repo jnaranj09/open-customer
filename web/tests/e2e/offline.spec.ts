@@ -32,9 +32,13 @@ test.beforeEach(async ({ page }) => {
 
 test.afterAll(closePool);
 
-/** The banner text with any HH:MM time. */
+const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The banner text for a sync today, at any HH:MM time. */
 const BANNER = new RegExp(
-	`^${es.offline_banner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{time\\}', '\\d{2}:\\d{2}')}$`
+	`^${escape(es.offline_banner).replace(
+		'\\{when\\}',
+		escape(es.synced_today).replace('\\{time\\}', '\\d{2}:\\d{2}')
+	)}$`
 );
 
 /** Every API call answers like Cloudflare when the PC is off. */

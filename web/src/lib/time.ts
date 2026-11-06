@@ -158,3 +158,14 @@ export function formatDayWithYear(day: string, today: string): string {
 	const { y } = parseDay(day);
 	return y === parseDay(today).y ? formatDayShort(day) : `${formatDayShort(day)}/${String(y)}`;
 }
+
+/** When the data was synced, as the end of "Datos …": `de las 18:42` on `today`, else `del 4/11 a
+ *  las 18:42` (with the year when it is another one). The offline banner and the sidebar share it,
+ *  so a sync from yesterday never reads as today's. */
+export function syncedWhen(iso: string, zone: string, today: string): string {
+	const time = formatTime(iso, zone);
+	const day = todayIn(zone, new Date(iso));
+	return day === today
+		? t('synced_today', { time })
+		: t('synced_day', { day: formatDayWithYear(day, today), time });
+}

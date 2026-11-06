@@ -1,15 +1,16 @@
 <script lang="ts">
 	import { t } from '../../i18n';
 	import { OFFLINE_REASON_ID } from './offlineReason';
-	import { formatTime } from '../../time';
+	import { syncedWhen } from '../../time';
 	import Icon from '../icons/Icon.svelte';
 
-	let { lastSyncAt, zone }: { lastSyncAt: string | null; zone: string } = $props();
+	let { lastSyncAt, zone, today }: { lastSyncAt: string | null; zone: string; today: string } =
+		$props();
 
 	const message = $derived(
 		lastSyncAt === null
 			? t('offline_banner_no_data')
-			: t('offline_banner', { time: formatTime(lastSyncAt, zone) })
+			: t('offline_banner', { when: syncedWhen(lastSyncAt, zone, today) })
 	);
 </script>
 
