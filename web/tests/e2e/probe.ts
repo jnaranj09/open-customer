@@ -179,14 +179,17 @@ export function layout(page: Page): Promise<Finding[]> {
 	return page.evaluate(measureInPage, { target: TARGET_PX, font: FIELD_FONT_PX });
 }
 
-/** With a dialog open, everything outside it must be inert (or hidden from assistive tech). */
+/** With a dialog open, everything outside it must be inert (or hidden from assistive tech), except
+ *  a `data-live-layer` layer (the toast, whose "Deshacer" stays usable over a sheet). */
 function behindInPage(): Finding[] {
 	const dialog = document.querySelector('[role="dialog"]');
 	if (dialog === null) {
 		return [{ check: 'inert', target: 'dialog', detail: 'no open dialog' }];
 	}
 	return [...document.body.children]
-		.filter((el) => !el.contains(dialog) && el.tagName !== 'SCRIPT')
+		.filter(
+			(el) => !el.contains(dialog) && el.tagName !== 'SCRIPT' && !el.matches('[data-live-layer]')
+		)
 		.filter(
 			(el) =>
 				!(el instanceof HTMLElement && el.inert) && el.closest('[aria-hidden="true"]') === null

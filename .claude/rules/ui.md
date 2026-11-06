@@ -56,9 +56,10 @@ paths:
   probe: no sideways scroll, no control under 44 × 44 px, no field font under 16 px, no text cut
   by `overflow: hidden` (an ellipsis on a `nowrap` line is allowed) or spilling out of its box, with a
   60-letter one-word client name seeded. Each opened sheet gets the same checks, and the page
-  behind it must be inert. Each data feed of a screen is answered with no rows, a 500 and no
-  answer: the screen shows its empty text, an alert and a busy status. A new route, sheet or feed
-  gets an entry in the spec's table in the same change. Sensor: `web/tests/e2e/ui-probe.spec.ts`
+  behind it must be inert (only a `data-live-layer` layer, the toast, stays live). Each data feed
+  of a screen is answered with no rows, a 500 and no answer: the screen shows its empty text, an
+  alert and a busy status. A new route, sheet or feed gets an entry in the spec's table in the
+  same change. Sensor: `web/tests/e2e/ui-probe.spec.ts`
   (fails on a route on disk with no entry); known findings are in `ui-probe.allow.ts`, each with
   its `UIP-` id and a `why`, and that list only shrinks (an entry that matches nothing, or names
   a route or state the spec does not probe, fails).
@@ -101,5 +102,6 @@ paths:
   stretched (owner rule). Prose only; the exit pass checks both.
 - **Accessibility and touch basics**: every control has an accessible name, tap targets are at least
   44 px, focus moves into an opened sheet and back on close, and the page behind an open sheet is
-  inert. Sensor: stage 7 (axe for names and WCAG rules, the layout probe for 44 px and the inert
-  page); focus moving back on close is prose only.
+  inert; a `data-live-layer` layer (the toast) stays live and in the sheet's Tab cycle. Sensor:
+  stage 7 (axe for names and WCAG rules, the layout probe for 44 px and the inert page); focus
+  moving back on close is prose only.

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	import { inertBehind, type Layer } from '../../inert';
+	import { LIVE_LAYER, inertBehind, type Layer } from '../../inert';
 	import { createSheetStack } from '../../sheetStack';
 
 	// Every open sheet, shared by all instances: one page lock, one top sheet for Escape and Tab,
@@ -52,8 +52,19 @@
 	let dragY = $state(0);
 	let dragStart: number | null = null;
 
+	// The controls of a live layer (the toast's "Deshacer") stay out of the inert page, so the Tab
+	// cycle reaches them too, after the sheet's own.
+	const LIVE_FOCUSABLE = FOCUSABLE.split(', ')
+		.map((sel) => `[${LIVE_LAYER}] ${sel}`)
+		.join(', ');
+
 	function focusables(): HTMLElement[] {
-		return panel === undefined ? [] : Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
+		return panel === undefined
+			? []
+			: [
+					...panel.querySelectorAll<HTMLElement>(FOCUSABLE),
+					...document.querySelectorAll<HTMLElement>(LIVE_FOCUSABLE)
+				];
 	}
 
 	// Focus moves into the sheet when it opens and back to what had it when it closes.
