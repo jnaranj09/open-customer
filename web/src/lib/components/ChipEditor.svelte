@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fieldClasses } from './ui/fieldStyle';
 	import { untrack } from 'svelte';
 	import type { Attribute } from '../api/schemas';
 	import {
@@ -26,10 +27,10 @@
 		syncSentinel
 	} from '../chipsDom';
 	import { t, type MessageKey } from '../i18n';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import TemplatePreview from './TemplatePreview.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// The message editor (design doc item 70): a contenteditable field where each variable is a
 	// chip that cannot be edited inside, a row of chips to insert variables, a tap on a chip to
@@ -206,10 +207,9 @@
 			contenteditable="true"
 			spellcheck="true"
 			data-placeholder={t('template_message_placeholder')}
-			class="min-h-40 w-full rounded-sm border bg-glass-strong px-4 py-3 text-base leading-loose wrap-break-word whitespace-pre-wrap text-ink empty:before:text-ink-muted empty:before:content-[attr(data-placeholder)] {error ===
-				undefined && problems.length === 0
-				? 'border-accent'
-				: 'border-error'}"
+			class="{fieldClasses(
+				error !== undefined || problems.length > 0
+			)} min-h-40 w-full px-4 py-3 leading-loose wrap-break-word whitespace-pre-wrap text-ink empty:before:text-ink-muted empty:before:content-placeholder"
 			{onbeforeinput}
 			{onpaste}
 			oninput={changed}
@@ -250,7 +250,7 @@
 				<li>
 					<button
 						type="button"
-						class="min-h-tap rounded-pill border border-accent-300 bg-accent-100 px-4 text-sm font-bold text-accent-700 hover:bg-accent-300"
+						class="min-h-tap rounded-pill border border-accent-300 bg-accent-100 px-4 text-sm font-bold text-accent-text hover:bg-accent-300"
 						onpointerdown={(event) => {
 							// Keeps the caret in the field while the chip is inserted.
 							event.preventDefault();
@@ -284,6 +284,6 @@
 		error={draftError === null ? undefined : t('template_fallback_quote')}
 		bind:value={draft}
 	/>
-	<Button variant="primary" onclick={saveFallback}>{t('template_fallback_done')}</Button>
+	<Button variant="strong" onclick={saveFallback}>{t('template_fallback_done')}</Button>
 	<Button variant="ghost" onclick={dropChip}>{t('template_chip_remove')}</Button>
 </BottomSheet>

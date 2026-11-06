@@ -7,8 +7,8 @@
 	import { confirmSent, notYet, pendingToAsk } from '../pending';
 	import { submitOnce } from '../submit';
 	import { systemNow } from '../time';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 
 	// "¿Lo enviaste a …?" (design doc "Sending flow"). Mounted once in the app shell, so it opens
 	// first on any app start while a confirmation is stored. It reads the stored confirmation and
@@ -102,8 +102,7 @@
 	{#if error !== null}
 		<p role="alert" class="text-sm text-error">{error}</p>
 	{/if}
-	<Button variant="primary" {busy} onclick={() => void yes.run()}>{t('due_confirm_yes')}</Button>
-	<Button variant="secondary" {busy} onclick={() => void later.run()}
-		>{t('due_confirm_not_yet')}</Button
+	<Button variant="strong" {busy} onclick={() => void yes.run()}>{t('due_confirm_yes')}</Button>
+	<Button variant="glass" {busy} onclick={() => void later.run()}>{t('due_confirm_not_yet')}</Button
 	>
 </BottomSheet>

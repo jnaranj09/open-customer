@@ -8,10 +8,10 @@
 </script>
 
 <div role="group" aria-label={t('color_group')} class="flex flex-wrap items-center gap-3">
-	{#each choices as hex (hex)}
+	{#each choices as { hex, name } (hex)}
 		<button
 			type="button"
-			aria-label={t('color_swatch', { hex })}
+			aria-label={t('color_swatch', { name: t(name) })}
 			aria-pressed={value.toLowerCase() === hex}
 			onclick={() => {
 				value = hex;

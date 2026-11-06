@@ -1,14 +1,13 @@
 <script lang="ts">
+	import Card from '../../../lib/components/ui/Card.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { setContext, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import type { Template } from '../../../lib/api/schemas';
 	import { cache } from '../../../lib/cache/store.svelte';
-	import EmptyState from '../../../lib/components/EmptyState.svelte';
-	import ListRow from '../../../lib/components/ListRow.svelte';
-	import Toast from '../../../lib/components/Toast.svelte';
+	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
+	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import { t } from '../../../lib/i18n';
-	import { createToaster } from '../../../lib/toaster.svelte';
 	import WriteLink from '../../../lib/components/WriteLink.svelte';
 
 	// Ajustes → Plantillas (design doc item 77): the list of message templates, with the open
@@ -18,9 +17,6 @@
 	// layout frames it.
 	let { children }: { children: Snippet } = $props();
 
-	const toaster = createToaster();
-	setContext('templates-toaster', toaster);
-
 	const templates = $derived(cache.snapshot?.templates ?? []);
 	const active = $derived(templates.filter((x) => !x.archived));
 	const archived = $derived(templates.filter((x) => x.archived));
@@ -28,7 +24,7 @@
 </script>
 
 {#snippet rows(list: Template[])}
-	<ul class="glass-card flex flex-col gap-1 rounded-lg p-2">
+	<Card as="ul" pad="list" class="flex flex-col gap-1">
 		{#each list as template (template.id)}
 			<li>
 				<ListRow
@@ -38,7 +34,7 @@
 				/>
 			</li>
 		{/each}
-	</ul>
+	</Card>
 {/snippet}
 
 <div class="@container">
@@ -50,7 +46,7 @@
 		>
 			<header class="flex min-h-12 items-center justify-between gap-3">
 				<h1 class="text-3xl font-extrabold text-ink">{t('templates_title')}</h1>
-				<WriteLink href={resolve('/ajustes/plantillas/nueva')} variant="primary" width="w-44">
+				<WriteLink href={resolve('/ajustes/plantillas/nueva')} variant="strong" width="w-44">
 					{t('templates_new')}
 				</WriteLink>
 			</header>
@@ -58,9 +54,9 @@
 			{#if cache.snapshot === null}
 				<p role="status" class="px-2 text-base text-ink-muted">{t('templates_loading')}</p>
 			{:else if templates.length === 0}
-				<div class="glass-card rounded-lg">
+				<Card>
 					<EmptyState title={t('templates_empty_title')} body={t('templates_empty_body')} />
-				</div>
+				</Card>
 			{:else}
 				{@render rows(active)}
 				{#if archived.length > 0}
@@ -74,9 +70,3 @@
 		</div>
 	</div>
 </div>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	addDays,
+	clockText,
 	formatDayLong,
 	formatDayShort,
 	formatDayWithYear,
@@ -126,5 +127,15 @@ describe('formatDayWithYear', () => {
 
 	it('adds the year for a day in another year', () => {
 		expect(formatDayWithYear('2025-03-10', '2026-11-04')).toBe('10/3/2025');
+	});
+});
+
+describe('clockText', () => {
+	it('writes a time on a 24-hour clock with two digits each', () => {
+		expect([clockText(9, 5), clockText(15, 0), clockText(0, 0)]).toEqual([
+			'09:05',
+			'15:00',
+			'00:00'
+		]);
 	});
 });

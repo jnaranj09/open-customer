@@ -3,6 +3,7 @@ import {
 	canSync,
 	guard,
 	hasShell,
+	leavesSetup,
 	needsRecheck,
 	recoversSession,
 	verdictFor,
@@ -73,6 +74,18 @@ describe('guard, online', () => {
 
 	it('sends /setup to / while logged in', () => {
 		expect(guard('/setup', online())).toEqual({ kind: 'redirect', to: '/' });
+	});
+
+	it('keeps /setup while logged in when the wizard still has its last steps', () => {
+		expect(guard('/setup', online(), true)).toEqual({ kind: 'stay' });
+	});
+
+	it('still sends /login to / while the wizard has its last steps', () => {
+		expect(guard('/login', online(), true)).toEqual({ kind: 'redirect', to: '/' });
+	});
+
+	it('passes the wizard state through verdictFor', () => {
+		expect(verdictFor(online(), '/setup', '/setup', true)).toEqual({ kind: 'stay' });
 	});
 
 	it('stays on an app page while logged in', () => {
@@ -194,5 +207,19 @@ describe('recoversSession', () => {
 
 	it('is false before the first answer', () => {
 		expect(recoversSession(null, true)).toBe(false);
+	});
+});
+
+describe('leavesSetup', () => {
+	it('is true when the guard sends her away from /setup', () => {
+		expect(leavesSetup('/setup', guard('/setup', online({ me: null }), true))).toBe(true);
+	});
+
+	it('is false while the wizard stays', () => {
+		expect(leavesSetup('/setup', guard('/setup', online(), true))).toBe(false);
+	});
+
+	it('is false for a redirect from another page', () => {
+		expect(leavesSetup('/login', guard('/login', online()))).toBe(false);
 	});
 });

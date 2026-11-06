@@ -6,12 +6,12 @@
 	import { api } from '../../lib/api/app';
 	import { errorText } from '../../lib/api/errors';
 	import AuthCard from '../../lib/components/AuthCard.svelte';
-	import Button from '../../lib/components/Button.svelte';
+	import Button from '../../lib/components/ui/Button.svelte';
 	import ColorPicker from '../../lib/components/ColorPicker.svelte';
 	import IconFileInput from '../../lib/components/IconFileInput.svelte';
 	import InstallGuide from '../../lib/components/InstallGuide.svelte';
-	import SelectField from '../../lib/components/SelectField.svelte';
-	import TextField from '../../lib/components/TextField.svelte';
+	import SelectField from '../../lib/components/ui/SelectField.svelte';
+	import TextField from '../../lib/components/ui/TextField.svelte';
 	import { applyAccent, DEFAULT_ACCENT } from '../../lib/color';
 	import { t } from '../../lib/i18n';
 	import { needsInstallGuide } from '../../lib/install';
@@ -19,6 +19,9 @@
 	import {
 		countryOptions,
 		currencyOptions,
+		finishingStep,
+		rememberFinishing,
+		sessionStore,
 		stepForField,
 		STEPS,
 		timeZoneOptions,
@@ -37,7 +40,9 @@
 	let countries = $state<Option[]>([]);
 	let optionsError = $state<string | null>(null);
 
-	let step = $state<WizardStep>('business');
+	// After `POST /setup` the step is kept in the tab's session storage: a reload comes back to it.
+	const store = sessionStore();
+	let step = $state<WizardStep>(finishingStep(store) ?? 'business');
 	let name = $state('');
 	let timezone = $state(browserZone);
 	let currency = $state('');
@@ -72,6 +77,9 @@
 	function go(to: WizardStep, error: string | null = null): void {
 		step = to;
 		stepError = error;
+		if (to === 'icon' || to === 'install') {
+			rememberFinishing(store, to);
+		}
 	}
 
 	/** The value the current step asks for, for the "is it filled" check. */
@@ -179,6 +187,7 @@
 
 	function finish(): void {
 		// The layout asks the server again on the new path and shows the app.
+		rememberFinishing(store, null);
 		void goto(resolve('/'));
 	}
 </script>
@@ -186,7 +195,7 @@
 {#snippet back()}
 	{#if index > 0}
 		<Button
-			variant="secondary"
+			variant="glass"
 			onclick={() => {
 				go(STEPS[index - 1] ?? 'business');
 			}}>{t('form_back')}</Button
@@ -199,9 +208,7 @@
 	title={t('setup_title')}
 	caption={t('setup_progress', { n: index + 1, total: STEPS.length })}
 >
-	{#if token === null}
-		<p role="alert" class="text-base text-error">{t('setup_no_token')}</p>
-	{:else if step === 'icon'}
+	{#if step === 'icon'}
 		<form
 			class="flex flex-col gap-4"
 			onsubmit={(e) => {
@@ -212,7 +219,7 @@
 			<h2 class="text-xl font-bold text-ink">{t('setup_icon_title')}</h2>
 			<p class="text-base text-ink-muted">{t('setup_icon_hint')}</p>
 			<IconFileInput
-				onpick={(file: File | null) => {
+				onpick={(file: File) => {
 					iconFile = file;
 				}}
 			/>
@@ -220,14 +227,14 @@
 				<p role="alert" class="text-sm text-error">{stepError}</p>
 			{/if}
 			{#if iconFile === null}
-				<Button variant="primary" type="submit" disabled disabledReason={t('setup_icon_none')}
+				<Button variant="strong" type="submit" disabled disabledReason={t('setup_icon_none')}
 					>{t('setup_icon_upload')}</Button
 				>
 			{:else}
-				<Button variant="primary" type="submit" {busy}>{t('setup_icon_upload')}</Button>
+				<Button variant="strong" type="submit" {busy}>{t('setup_icon_upload')}</Button>
 			{/if}
 			<Button
-				variant="secondary"
+				variant="glass"
 				onclick={() => {
 					go('install');
 				}}>{t('setup_icon_skip')}</Button
@@ -241,8 +248,10 @@
 				<h2 class="text-xl font-bold text-ink">{t('setup_done_title')}</h2>
 				<p class="text-base text-ink-muted">{t('setup_done_body')}</p>
 			{/if}
-			<Button variant="primary" onclick={finish}>{t('setup_enter')}</Button>
+			<Button variant="strong" onclick={finish}>{t('setup_enter')}</Button>
 		</div>
+	{:else if token === null}
+		<p role="alert" class="text-base text-error">{t('setup_no_token')}</p>
 	{:else}
 		<form
 			class="flex flex-col gap-4"
@@ -324,7 +333,7 @@
 					error={stepError ?? undefined}
 				/>
 			{/if}
-			<Button variant="primary" type="submit" {busy}>
+			<Button variant="strong" type="submit" {busy}>
 				{creating ? t('setup_create') : t('form_next')}
 			</Button>
 			{@render back()}

@@ -1,11 +1,19 @@
+<script lang="ts" module>
+	/** The .pen DueCard variants, picked by the item's mode: the message to send, or the booking
+	 *  prompt (CUJ 5). */
+	export type DueCardVariant = 'message' | 'bookingPrompt';
+</script>
+
 <script lang="ts">
+	import Callout from './Callout.svelte';
 	import { resolve } from '$app/paths';
-	import type { DueItem } from '../api/schemas';
-	import { t } from '../i18n';
-	import { canSend, type Sendable } from '../pending';
-	import { formatDayShort, todayIn } from '../time';
+	import type { DueItem } from '../../api/schemas';
+	import { t } from '../../i18n';
+	import { canSend, type Sendable } from '../../pending';
+	import { formatDayShort, todayIn } from '../../time';
 	import Button from './Button.svelte';
-	import WriteButton from './WriteButton.svelte';
+	import { OFFLINE_REASON_ID } from './offlineReason';
+	import WriteButton from '../WriteButton.svelte';
 	import { buttonClasses } from './buttonStyle';
 
 	// A due item with its actions: the client, the full message and Enviar / Omitir, or the booking
@@ -17,6 +25,7 @@
 		offline,
 		busy,
 		skipBlocked,
+		skipReasonId,
 		onsend,
 		onskip,
 		onadd
@@ -27,12 +36,17 @@
 		busy: boolean;
 		/** Another "Omitir" is still inside its "Deshacer" window. */
 		skipBlocked: boolean;
+		/** The id of the screen's one line that says why "Omitir" waits (`due_skip_wait`). */
+		skipReasonId: string;
 		onsend: (item: Sendable) => void;
 		onskip: (item: DueItem) => void;
 		onadd: (item: DueItem) => void;
 	} = $props();
 
-	const prompt = $derived(item.mode === 'booking_prompt' ? item.prompt : null);
+	const variant: DueCardVariant = $derived(
+		item.mode === 'booking_prompt' ? 'bookingPrompt' : 'message'
+	);
+	const prompt = $derived(variant === 'bookingPrompt' ? item.prompt : null);
 	const promptText = $derived(
 		prompt === null
 			? null
@@ -44,13 +58,15 @@
 				})
 	);
 
-	// A button she must not use says why (ui.md): offline first, then a skip still undoable. Enviar
-	// and the booking button are `WriteButton`s, which say the offline reason themselves.
+	// A button she must not use says why (ui.md): offline first, then a skip still undoable. The
+	// reason is said once per screen, not under every card of the list: offline the banner's line,
+	// while a skip waits the screen's own line (`skipReasonId`). Enviar and the booking button are
+	// `WriteButton`s pointing at the banner the same way.
 	const skipOff = $derived(
 		offline
-			? { disabled: true as const, disabledReason: t('offline_cannot_save') }
+			? { disabled: true as const, reasonId: OFFLINE_REASON_ID }
 			: skipBlocked
-				? { disabled: true as const, disabledReason: t('due_skip_wait') }
+				? { disabled: true as const, reasonId: skipReasonId }
 				: {}
 	);
 </script>
@@ -58,14 +74,15 @@
 <article class="flex flex-col gap-4">
 	<h2 class="text-xl font-bold text-ink">{item.client_name}</h2>
 	{#if promptText !== null}
-		<p class="rounded-md bg-glass-tint px-4 py-3 text-base font-bold text-ink">{promptText}</p>
+		<Callout as="p" class="text-base font-bold">{promptText}</Callout>
 	{/if}
 	<p class="text-base whitespace-pre-wrap text-ink">{item.text}</p>
 	<div class="flex flex-wrap items-start gap-3">
 		{#if prompt !== null}
 			<div class="min-w-40 flex-1">
 				<WriteButton
-					variant="primary"
+					variant="strong"
+					sharedOfflineReason
 					{busy}
 					onclick={() => {
 						onadd(item);
@@ -78,7 +95,8 @@
 		<div class="min-w-40 flex-1">
 			{#if canSend(item)}
 				<WriteButton
-					variant={prompt === null ? 'primary' : 'secondary'}
+					variant={prompt === null ? 'strong' : 'glass'}
+					sharedOfflineReason
 					{busy}
 					onclick={() => {
 						onsend(item);
@@ -89,7 +107,7 @@
 			{:else}
 				<a
 					href={resolve('/clientas/[id]', { id: item.client_id })}
-					class="{buttonClasses('secondary')} w-full"
+					class="{buttonClasses('glass')} w-full"
 				>
 					{t('due_add_phone')}
 				</a>

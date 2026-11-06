@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Rule, Service, Template } from './api/schemas';
 import {
-	asksOverdue,
+	overdueChoice,
 	offsetText,
 	ruleRequest,
 	rulePatch,
@@ -69,45 +69,65 @@ describe('offsetText', () => {
 	});
 });
 
-describe('asksOverdue', () => {
-	it('is true for a new rule', () => {
+describe('overdueChoice', () => {
+	it('asks for a new come-back rule', () => {
 		expect(
-			asksOverdue(null, { kind: 'before_appointment', offset_days: 1, template_id: OTHER })
-		).toBe(true);
+			overdueChoice(null, {
+				kind: 'come_back',
+				offset_days: 21,
+				template_id: OTHER,
+				service_id: ACRYLIC
+			})
+		).toBe('ask');
 	});
-	it('is true when the offset changes', () => {
-		expect(asksOverdue(rule(), { offset_days: 14 })).toBe(true);
+	it('includes without asking for a new before rule', () => {
+		expect(
+			overdueChoice(null, { kind: 'before_appointment', offset_days: 1, template_id: OTHER })
+		).toBe('include');
 	});
-	it('is false when the offset is sent unchanged', () => {
-		expect(asksOverdue(rule(), { offset_days: 21 })).toBe(false);
+	it('includes without asking when a before rule changes its offset', () => {
+		expect(
+			overdueChoice(rule({ kind: 'before_appointment', service_id: null }), { offset_days: 2 })
+		).toBe('include');
 	});
-	it('is true when the effective return service changes', () => {
-		expect(asksOverdue(rule(), { return_service_id: PEDICURE })).toBe(true);
+	it('needs nothing when a before rule changes nothing that adds items', () => {
+		expect(
+			overdueChoice(rule({ kind: 'before_appointment', service_id: null }), { archived: true })
+		).toBe('none');
 	});
-	it('is true when a null return becomes another service', () => {
-		expect(asksOverdue(rule({ return_service_id: null }), { return_service_id: REFILL })).toBe(
-			true
+	it('asks when the offset changes', () => {
+		expect(overdueChoice(rule(), { offset_days: 14 })).toBe('ask');
+	});
+	it('needs nothing when the offset is sent unchanged', () => {
+		expect(overdueChoice(rule(), { offset_days: 21 })).toBe('none');
+	});
+	it('asks when the effective return service changes', () => {
+		expect(overdueChoice(rule(), { return_service_id: PEDICURE })).toBe('ask');
+	});
+	it('asks when a null return becomes another service', () => {
+		expect(overdueChoice(rule({ return_service_id: null }), { return_service_id: REFILL })).toBe(
+			'ask'
 		);
 	});
-	it("is false for setting return to null when it was the rule's own service", () => {
-		expect(asksOverdue(rule({ return_service_id: ACRYLIC }), { return_service_id: null })).toBe(
-			false
+	it("needs nothing for setting return to null when it was the rule's own service", () => {
+		expect(overdueChoice(rule({ return_service_id: ACRYLIC }), { return_service_id: null })).toBe(
+			'none'
 		);
 	});
-	it('is true for setting return to null when it was another service', () => {
-		expect(asksOverdue(rule(), { return_service_id: null })).toBe(true);
+	it('asks for setting return to null when it was another service', () => {
+		expect(overdueChoice(rule(), { return_service_id: null })).toBe('ask');
 	});
-	it('is false for a template change when the old template is active', () => {
-		expect(asksOverdue(rule(), { template_id: OTHER })).toBe(false);
+	it('needs nothing for a template change when the old template is active', () => {
+		expect(overdueChoice(rule(), { template_id: OTHER })).toBe('none');
 	});
-	it('is true for a template change when the old template is archived', () => {
-		expect(asksOverdue(rule(), { template_id: OTHER }, new Set([REMINDER]))).toBe(true);
+	it('asks for a template change when the old template is archived', () => {
+		expect(overdueChoice(rule(), { template_id: OTHER }, new Set([REMINDER]))).toBe('ask');
 	});
-	it('is true when an archived rule is restored', () => {
-		expect(asksOverdue(rule({ archived: true }), { archived: false })).toBe(true);
+	it('asks when an archived rule is restored', () => {
+		expect(overdueChoice(rule({ archived: true }), { archived: false })).toBe('ask');
 	});
-	it('is false when a rule is archived', () => {
-		expect(asksOverdue(rule(), { archived: true })).toBe(false);
+	it('needs nothing when a rule is archived', () => {
+		expect(overdueChoice(rule(), { archived: true })).toBe('none');
 	});
 });
 

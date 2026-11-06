@@ -1,13 +1,15 @@
 <script lang="ts">
+	import Callout from './ui/Callout.svelte';
+	import TextButton from './ui/TextButton.svelte';
+	import IconButton from './ui/IconButton.svelte';
 	import { tick } from 'svelte';
 	import type { AttrOption } from '../api/schemas';
 	import { cache } from '../cache/store.svelte';
 	import { indexAtY, levelOf, reorder, type Positioned } from '../attributes';
 	import { t } from '../i18n';
-	import Button from './Button.svelte';
+	import Button from './ui/Button.svelte';
 	import WriteButton from './WriteButton.svelte';
-	import Icon from './icons/Icon.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// The options of a select attribute (design doc item 77): one list per level with "+ Agregar
 	// opción" at the end of each, a handle to drag a row, and a menu per row. The same moves work
@@ -144,24 +146,25 @@
 </script>
 
 {#snippet inlineForm(label: string, confirm: string)}
-	<form
-		class="flex flex-col gap-2 rounded-md bg-glass-tint p-3"
-		onsubmit={(e) => {
+	<Callout
+		as="form"
+		class="flex flex-col gap-2"
+		onsubmit={(e: SubmitEvent) => {
 			e.preventDefault();
 			void submit();
 		}}
 	>
 		<TextField {label} bind:value={text} autocomplete="off" error={formError} />
 		<div class="grid grid-cols-2 gap-2">
-			<WriteButton variant="primary" type="submit" busy={working}>{confirm}</WriteButton>
+			<WriteButton variant="strong" type="submit" busy={working}>{confirm}</WriteButton>
 			<Button
-				variant="secondary"
+				variant="glass"
 				onclick={() => {
 					form = null;
 				}}>{t('cancel')}</Button
 			>
 		</div>
-	</form>
+	</Callout>
 {/snippet}
 
 {#snippet level(parent: string | null)}
@@ -178,14 +181,14 @@
 							? 'border-accent bg-accent-100'
 							: 'border-glass-edge bg-glass'}"
 					>
-						<button
-							type="button"
+						<IconButton
+							variant="square"
+							icon="grip-vertical"
+							label={t('option_drag', { label: option.label })}
+							class="cursor-grab touch-none"
 							data-handle={option.id}
-							title={t('option_drag', { label: option.label })}
-							aria-label={t('option_drag', { label: option.label })}
 							disabled={off}
-							class="grid size-11 shrink-0 cursor-grab touch-none place-items-center rounded-md text-ink-muted hover:bg-accent-100"
-							onpointerdown={(e) => {
+							onpointerdown={(e: PointerEvent) => {
 								dragStart(e, option.id);
 							}}
 							onpointermove={dragMove}
@@ -195,67 +198,57 @@
 							onpointercancel={() => {
 								drag = null;
 							}}
-							onkeydown={(e) => {
+							onkeydown={(e: KeyboardEvent) => {
 								key(e, parent, option.id, i);
 							}}
-						>
-							<Icon name="grip-vertical" class="size-5" />
-						</button>
+						/>
 						<span class="min-w-0 flex-1 truncate text-base text-ink">{option.label}</span>
-						<button
-							type="button"
-							title={t('option_menu', { label: option.label })}
-							aria-label={t('option_menu', { label: option.label })}
+						<IconButton
+							variant="square"
+							icon="ellipsis"
+							label={t('option_menu', { label: option.label })}
 							aria-expanded={menu === option.id}
 							disabled={working}
-							class="grid size-11 shrink-0 place-items-center rounded-md text-ink-muted hover:bg-accent-100"
 							onclick={() => {
 								menu = menu === option.id ? null : option.id;
 							}}
-						>
-							<Icon name="ellipsis" class="size-5" />
-						</button>
+						/>
 					</div>
 					{#if menu === option.id}
 						<div role="group" aria-label={option.label} class="mt-1 flex flex-wrap gap-1 pl-2">
-							<button
-								type="button"
+							<TextButton
+								variant="accent"
 								disabled={off || i === 0}
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100 disabled:opacity-40"
 								onclick={() => {
 									void move(parent, option.id, i - 1);
-								}}>{t('option_up')}</button
+								}}>{t('option_up')}</TextButton
 							>
-							<button
-								type="button"
+							<TextButton
+								variant="accent"
 								disabled={off || i === siblings.length - 1}
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100 disabled:opacity-40"
 								onclick={() => {
 									void move(parent, option.id, i + 1);
-								}}>{t('option_down')}</button
+								}}>{t('option_down')}</TextButton
 							>
-							<button
-								type="button"
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+							<TextButton
+								variant="accent"
 								onclick={() => {
 									openForm({ kind: 'rename', id: option.id }, option.label);
-								}}>{t('option_rename')}</button
+								}}>{t('option_rename')}</TextButton
 							>
-							<button
-								type="button"
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+							<TextButton
+								variant="accent"
 								onclick={() => {
 									openForm({ kind: 'add', parent: option.id }, '');
-								}}>{t('option_add_inside')}</button
+								}}>{t('option_add_inside')}</TextButton
 							>
-							<button
-								type="button"
+							<TextButton
+								variant="danger"
 								disabled={off}
-								class="min-h-tap rounded-pill px-4 text-sm font-bold text-error hover:bg-accent-100"
 								onclick={() => {
 									menu = null;
 									void work(() => onarchive(option.id));
-								}}>{t('option_archive')}</button
+								}}>{t('option_archive')}</TextButton
 							>
 						</div>
 					{/if}
@@ -275,12 +268,12 @@
 	{#if adding(parent)}
 		{@render inlineForm(t('option_label'), t('option_add_confirm'))}
 	{:else}
-		<button
-			type="button"
-			class="mt-1 min-h-tap self-start rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+		<TextButton
+			variant="accent"
 			onclick={() => {
 				openForm({ kind: 'add', parent }, '');
-			}}>{t('option_add')}</button
+			}}
+			class="mt-1 self-start">{t('option_add')}</TextButton
 		>
 	{/if}
 {/snippet}

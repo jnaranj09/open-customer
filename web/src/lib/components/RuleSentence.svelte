@@ -2,7 +2,7 @@
 	import type { Rule, Service, Template } from '../api/schemas';
 	import { t } from '../i18n';
 	import { ruleSentence, ruleWarnings } from '../rules';
-	import ListRow from './ListRow.svelte';
+	import ListRow from './ui/ListRow.svelte';
 
 	// One reminder rule as a sentence ("Enviar Relleno 21 días después de Acrílico, para agendar
 	// Relleno"), with a warning under it while its template, service or return service is archived.

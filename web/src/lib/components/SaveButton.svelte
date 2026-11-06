@@ -6,6 +6,6 @@
 	let { busy, children }: { busy: boolean; children: Snippet } = $props();
 </script>
 
-<WriteButton variant="primary" type="submit" {busy}>
+<WriteButton variant="strong" type="submit" {busy}>
 	{@render children()}
 </WriteButton>

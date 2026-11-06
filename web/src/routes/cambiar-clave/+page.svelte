@@ -5,9 +5,9 @@
 	import { errorText } from '../../lib/api/errors';
 	import { cache } from '../../lib/cache/store.svelte';
 	import AuthCard from '../../lib/components/AuthCard.svelte';
-	import Button from '../../lib/components/Button.svelte';
-	import { buttonClasses } from '../../lib/components/buttonStyle';
-	import TextField from '../../lib/components/TextField.svelte';
+	import Button from '../../lib/components/ui/Button.svelte';
+	import { buttonClasses } from '../../lib/components/ui/buttonStyle';
+	import TextField from '../../lib/components/ui/TextField.svelte';
 	import { t } from '../../lib/i18n';
 	import { submitOnce } from '../../lib/submit';
 
@@ -73,9 +73,9 @@
 		{#if error !== null}
 			<p role="alert" class="text-sm text-error">{error}</p>
 		{/if}
-		<Button variant="primary" type="submit" {busy}>{t('password_save')}</Button>
+		<Button variant="strong" type="submit" {busy}>{t('password_save')}</Button>
 		{#if !forced}
-			<a href={resolve('/ajustes')} class={buttonClasses('secondary')}>{t('password_back')}</a>
+			<a href={resolve('/ajustes')} class={buttonClasses('glass')}>{t('password_back')}</a>
 		{/if}
 	</form>
 </AuthCard>

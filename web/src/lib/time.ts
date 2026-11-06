@@ -81,10 +81,17 @@ export function weekStart(day: string): string {
 	return addDays(day, -sinceMonday);
 }
 
+/** `HH:MM` on a 24-hour clock: the one time format of the screens (design/soft-glass.pen); every
+ *  time a screen shows goes through it. Client messages are the server's (`locale.Time`, 12-hour,
+ *  "3:00 p. m."), by design. */
+export function clockText(hour: number, minute: number): string {
+	return `${pad(hour)}:${pad(minute)}`;
+}
+
 /** The wall time `HH:MM` of an RFC 3339 instant in `zone`. */
 export function formatTime(iso: string, zone: string): string {
 	const w = wallParts(new Date(iso), zone);
-	return `${pad(w['hour'] ?? 0)}:${pad(w['minute'] ?? 0)}`;
+	return clockText(w['hour'] ?? 0, w['minute'] ?? 0);
 }
 
 const WEEKDAYS: readonly MessageKey[] = [
@@ -157,4 +164,15 @@ export function zonedToUtc(day: string, time: string, zone: string): string {
 export function formatDayWithYear(day: string, today: string): string {
 	const { y } = parseDay(day);
 	return y === parseDay(today).y ? formatDayShort(day) : `${formatDayShort(day)}/${String(y)}`;
+}
+
+/** When the data was synced, as the end of "Datos …": `de las 18:42` on `today`, else `del 4/11 a
+ *  las 18:42` (with the year when it is another one). The offline banner and the sidebar share it,
+ *  so a sync from yesterday never reads as today's. */
+export function syncedWhen(iso: string, zone: string, today: string): string {
+	const time = formatTime(iso, zone);
+	const day = todayIn(zone, new Date(iso));
+	return day === today
+		? t('synced_today', { time })
+		: t('synced_day', { day: formatDayWithYear(day, today), time });
 }

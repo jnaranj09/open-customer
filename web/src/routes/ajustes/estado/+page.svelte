@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from '../../../lib/components/ui/Card.svelte';
 	import { onMount } from 'svelte';
 	import { api } from '../../../lib/api/app';
 	import type { ApiError } from '../../../lib/api/errors';
@@ -48,14 +49,14 @@
 	{:else if lines.length === 0}
 		<p role="status" class="px-2 text-base text-ink-muted">{t('status_loading')}</p>
 	{:else}
-		<ul class="glass-card flex flex-col rounded-lg px-4 py-2">
+		<Card as="ul" pad="note" class="flex flex-col">
 			{#each lines as line, i (line.label)}
 				{#if i > 0}
 					<li class="h-px bg-glass-edge" aria-hidden="true"></li>
 				{/if}
 				<li><StatusRow label={t(line.label)} value={line.value} red={line.red} /></li>
 			{/each}
-		</ul>
+		</Card>
 	{/if}
 	<PushActivate />
 </div>

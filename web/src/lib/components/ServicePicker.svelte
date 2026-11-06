@@ -3,7 +3,9 @@
 	import type { Service } from '../api/schemas';
 	import { removeService, tapService, type Line } from '../booking';
 	import { t } from '../i18n';
-	import EmptyState from './EmptyState.svelte';
+	import Chip from './ui/Chip.svelte';
+	import EmptyState from './ui/EmptyState.svelte';
+	import IconButton from './ui/IconButton.svelte';
 
 	// The services chips (CUJ 3): a tap picks a service, a second tap adds a copy (shown "×2"), and
 	// the minus beside a picked chip takes one copy away. A service archived since the booking shows
@@ -30,38 +32,29 @@
 		<div role="group" aria-labelledby={labelId} class="flex flex-wrap gap-2">
 			{#each shown as service (service.id)}
 				{@const count = countOf(service.id)}
-				<div
-					class="inline-flex min-h-tap items-center rounded-pill border {count > 0
-						? 'border-accent bg-accent-100'
-						: 'border-glass-edge bg-glass-strong'}"
+				<Chip
+					variant={count > 0 ? 'selected' : 'default'}
+					onclick={() => {
+						lines = tapService(lines, service.id);
+					}}
 				>
-					<button
-						type="button"
-						aria-pressed={count > 0}
-						class="min-h-tap rounded-pill px-4 text-sm font-bold text-ink hover:bg-accent-100"
-						onclick={() => {
-							lines = tapService(lines, service.id);
-						}}
-					>
-						{service.name}
-						{#if count > 1}
-							<span class="text-accent-700">{t('appointment_service_count', { count })}</span>
-						{/if}
-					</button>
-					{#if count > 0}
-						<button
-							type="button"
-							title={t('appointment_service_remove', { name: service.name })}
-							aria-label={t('appointment_service_remove', { name: service.name })}
-							class="grid size-11 place-items-center rounded-pill text-accent-700 hover:bg-accent-300"
-							onclick={() => {
-								lines = removeService(lines, service.id);
-							}}
-						>
-							<span aria-hidden="true" class="text-lg leading-none">−</span>
-						</button>
+					{service.name}
+					{#if count > 1}
+						<span class="text-accent-text">{t('appointment_service_count', { count })}</span>
 					{/if}
-				</div>
+					{#snippet trailing()}
+						{#if count > 0}
+							<IconButton
+								variant="accent"
+								icon="minus"
+								label={t('appointment_service_remove', { name: service.name })}
+								onclick={() => {
+									lines = removeService(lines, service.id);
+								}}
+							/>
+						{/if}
+					{/snippet}
+				</Chip>
 			{/each}
 		</div>
 	{/if}

@@ -78,6 +78,23 @@ test('warns on an overlap and books with Agendar igual', async ({ page }) => {
 	await expect(page.getByRole('link', { name: /Marta Solano/ })).toBeVisible();
 });
 
+test('the status chip reads "Estado: Agendada" from its own text, with no aria-label', async ({
+	page
+}) => {
+	const appointment = await insertAppointment({
+		clientId: anaId,
+		services: ['Acrílico'],
+		startsAt: at(1, '10:00')
+	});
+	await page.goto(`/citas/${appointment}`);
+
+	const chip = page.getByText(`${es.appointment_status_label}: ${es.status_scheduled}`, {
+		exact: true
+	});
+	await expect(chip).toBeVisible();
+	await expect(chip).not.toHaveAttribute('aria-label');
+});
+
 test('the stored photo has no Exif data', async ({ page }) => {
 	// The fixture does carry Exif with GPS, so a clean stored file means the app removed it.
 	expect(readFileSync(PHOTO).includes(EXIF)).toBe(true);
@@ -89,7 +106,10 @@ test('the stored photo has no Exif data', async ({ page }) => {
 
 	await page.goto(`/citas/${appointment}`);
 	await expect(page.getByText(es.photos_empty, { exact: true })).toBeVisible();
-	await page.getByLabel(es.photo_add).setInputFiles(PHOTO);
+	// "Agregar foto" is an app button that opens the chooser (the browser's file box is hidden).
+	const chooser = page.waitForEvent('filechooser');
+	await page.getByRole('button', { name: es.photo_add }).click();
+	await (await chooser).setFiles(PHOTO);
 	const photo = page.getByRole('img', { name: es.photo_alt });
 	await expect(photo).toBeVisible();
 
@@ -102,4 +122,28 @@ test('the stored photo has no Exif data', async ({ page }) => {
 
 	await page.goto(`/clientas/${anaId}`);
 	await expect(page.getByRole('img', { name: es.photo_alt })).toBeVisible();
+});
+
+test('the quick-add sheet says the name is missing under the name field', async ({ page }) => {
+	await page.goto('/citas/nueva');
+	await page.getByRole('button', { name: es.client_add, exact: true }).click();
+	const sheet = page.getByRole('dialog', { name: es.client_add_title });
+	const name = sheet.getByLabel(es.client_name, { exact: true });
+	await name.fill('');
+
+	await sheet.getByRole('button', { name: es.client_save }).click();
+
+	await expect(name).toHaveAccessibleDescription(es.client_name_needed);
+	await expect(sheet).toBeVisible();
+});
+
+test('a phone shows grouped by its country on the client page and in the list', async ({
+	page
+}) => {
+	await page.goto(`/clientas/${anaId}`);
+
+	// Her phone in the facts list (the hidden client list holds it too).
+	await expect(page.getByRole('definition').filter({ hasText: /^\+506 8888 7777$/ })).toBeVisible();
+	await page.goto('/clientas');
+	await expect(page.getByRole('link', { name: /\+506 8888 7777/ })).toBeVisible();
 });

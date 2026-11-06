@@ -1,16 +1,19 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { resolve } from '$app/paths';
+	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Client } from '../api/schemas';
 	import { cache } from '../cache/store.svelte';
 	import { visibleClients } from '../clients';
 	import { t } from '../i18n';
+	import { formatPhone } from '../phone';
 	import { submitOnce } from '../submit';
-	import Button from './Button.svelte';
-	import EmptyState from './EmptyState.svelte';
-	import ListRow from './ListRow.svelte';
-	import TextField from './TextField.svelte';
+	import Button from './ui/Button.svelte';
+	import EmptyState from './ui/EmptyState.svelte';
+	import ListRow from './ui/ListRow.svelte';
+	import TextField from './ui/TextField.svelte';
 	import WriteLink from './WriteLink.svelte';
 
 	// The client list (design doc item 76): the search box over the cached clients, online and
@@ -48,6 +51,28 @@
 		}
 	);
 
+	// Syncs with the server: an archive or a restore refreshes the cache, so while the archived
+	// list shows, each new snapshot reads it again (a restored client leaves it, an archived one
+	// joins it). The list stays on screen until the answer comes; a failure shows under it.
+	let archivedRun = 0;
+	$effect(() => {
+		if (cache.snapshot === null || !untrack(() => showArchived)) {
+			return;
+		}
+		const run = ++archivedRun;
+		void api.listClients({ archived: true }).then((result) => {
+			if (run !== archivedRun) {
+				return;
+			}
+			if (result.ok) {
+				archived = result.data;
+				archivedError = null;
+			} else {
+				archivedError = result.error;
+			}
+		});
+	});
+
 	const failure = $derived(
 		archivedError === null
 			? null
@@ -61,7 +86,7 @@
 </script>
 
 {#snippet archivedBadge()}
-	<span class="rounded-pill bg-glass-tint px-3 py-1 text-xs font-bold text-accent-700">
+	<span class="rounded-pill bg-glass-tint px-3 py-1 text-xs font-bold text-accent-text">
 		{t('clients_archived_badge')}
 	</span>
 {/snippet}
@@ -85,7 +110,7 @@
 	{#if cache.snapshot === null}
 		<p role="status" class="px-2 text-base text-ink-muted">{t('clients_loading')}</p>
 	{:else if noneAtAll}
-		<div class="glass-card rounded-lg">
+		<Card>
 			<EmptyState
 				title={t('clients_empty_title')}
 				body={t('clients_empty_body')}
@@ -93,15 +118,15 @@
 				href={resolve('/clientas/nueva')}
 				creates
 			/>
-		</div>
+		</Card>
 	{:else}
-		<ul class="glass-card flex flex-col divide-y divide-glass-edge rounded-lg px-1 py-1">
+		<Card as="ul" pad="list" class="flex flex-col divide-y divide-glass-edge">
 			{#each rows as client (client.id)}
 				<li>
 					<ListRow
 						href={resolve('/clientas/[id]', { id: client.id })}
 						title={client.name}
-						{...client.phone_e164 === null ? {} : { subtitle: client.phone_e164 }}
+						{...client.phone_e164 === null ? {} : { subtitle: formatPhone(client.phone_e164) }}
 						selected={client.id === selectedId}
 						{...client.archived ? { trailing: archivedBadge } : {}}
 					/>
@@ -113,14 +138,14 @@
 						: t('client_no_results')}
 				</li>
 			{/each}
-		</ul>
+		</Card>
 	{/if}
 
 	{#if failure !== null}
 		<p role="alert" class="text-sm text-error">{failure}</p>
 	{/if}
 	<Button
-		variant="secondary"
+		variant="glass"
 		busy={loading}
 		{...cache.offline && !showArchived
 			? { disabled: true as const, disabledReason: t('clients_archived_offline') }

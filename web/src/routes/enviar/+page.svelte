@@ -1,23 +1,26 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
+	import { page } from '$app/state';
 	import { api } from '../../lib/api/app';
 	import { errorText, type ApiError } from '../../lib/api/errors';
 	import type { Appointment, DueItem, LogItem } from '../../lib/api/schemas';
 	import { appBadge } from '../../lib/cache/refresh';
 	import { cache } from '../../lib/cache/store.svelte';
 	import { clock } from '../../lib/clock.svelte';
-	import DueItemDetail from '../../lib/components/DueItemDetail.svelte';
+	import Card from '../../lib/components/ui/Card.svelte';
+	import DueCard from '../../lib/components/ui/DueCard.svelte';
 	import DueItemRow from '../../lib/components/DueItemRow.svelte';
 	import NoRulesState from '../../lib/components/NoRulesState.svelte';
 	import OverlapSheet from '../../lib/components/OverlapSheet.svelte';
-	import Toast from '../../lib/components/Toast.svelte';
 	import { addToBooking, groupDue, nextAfter } from '../../lib/due';
 	import { t } from '../../lib/i18n';
 	import { layout } from '../../lib/layout';
 	import { skipItem, startSend, type Sendable } from '../../lib/pending';
 	import { submitOnce } from '../../lib/submit';
+	import { toaster } from '../../lib/toaster.svelte';
 	import { formatTime, systemNow } from '../../lib/time';
-	import { UNDO_MS, delayed } from '../../lib/undo';
+	import { UNDO_MS, delayed, onPageLeave } from '../../lib/undo';
 
 	const zone = $derived(
 		cache.snapshot?.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -30,7 +33,6 @@
 	// An "Omitir" waits UNDO_MS for "Deshacer" before its POST; the item is out of the list meanwhile.
 	let skipping = $state<{
 		id: string;
-		name: string;
 		undo: () => void;
 		flush: () => Promise<unknown>;
 	} | null>(null);
@@ -40,9 +42,10 @@
 	const groups = $derived(groupDue(items));
 	const ordered = $derived([...groups.late, ...groups.today]);
 
-	// Wide: the item on the right. After a send or skip the item leaves the list and the one that
-	// followed it takes the pane; with nothing chosen it is the first item.
-	let selectedId = $state<string | null>(null);
+	// Wide: the item on the right. It opens on `?item=<id>` (an "Enviar" on the Hoy rail), else on
+	// the first item; an id not in the list also falls back to the first. After a send or skip the
+	// item leaves the list and the one that followed it takes the pane.
+	let selectedId = $state<string | null>(page.url.searchParams.get('item'));
 	let successorId = $state<string | null>(null);
 	const selected = $derived(
 		ordered.find((i) => i.id === selectedId) ??
@@ -76,7 +79,9 @@
 		actionError = null;
 		select(item.id);
 		// On a phone the link unloads this page, which would lose a skip still waiting for its
-		// "Deshacer": send it now and wait for it. Its failure shows through the skip's own handler.
+		// "Deshacer": send it now and wait for it. Its failure shows through the skip's own handler
+		// only while this page stays (wide); once the link unloads it, a failed skip is not shown,
+		// and the item comes back on the next refresh because the server never logged it.
 		await skipping?.flush().catch(() => undefined);
 		const started = await startSend(item, openLink, { store: cache, now: systemNow });
 		if (!started.ok) {
@@ -103,14 +108,21 @@
 		}, UNDO_MS);
 		skipping = {
 			id: item.id,
-			name: item.client_name,
 			undo: () => {
 				pending.cancel();
 			},
 			flush: () => pending.flush()
 		};
+		// The app's one toast; it goes once the skip is sent or undone, so its "Deshacer" never
+		// outlives the skip.
+		const shown = toaster.say(
+			'due_skipped',
+			{ label: 'due_undo', run: () => skipping?.undo() },
+			{ name: item.client_name }
+		);
 		pending.done.then(
 			() => {
+				toaster.dismiss(shown);
 				skipping = null;
 				if (failure !== null) {
 					actionError = errorText(failure);
@@ -118,11 +130,24 @@
 			},
 			() => {
 				console.warn('code=skip_failed');
+				toaster.dismiss(shown);
 				skipping = null;
 				actionError = t('error_internal');
 			}
 		);
 	}
+
+	// A skip still waiting for "Deshacer" is sent now when she leaves: another page
+	// (`beforeNavigate`, which also runs before a reload), `pagehide`, or the app sent to the
+	// background, which iOS may kill without a `pagehide`. Otherwise the toast said "Omitido" and
+	// nothing was sent. A reload or a closed tab can still cancel the request in flight (seen in
+	// WebKit). A failure after she has left is not shown (the page is gone); the item comes back
+	// on the next refresh because the server never logged it.
+	function flushSkip(): void {
+		void skipping?.flush().catch(() => undefined);
+	}
+	beforeNavigate(flushSkip);
+	$effect(() => onPageLeave(flushSkip, window, document));
 
 	// "Agregar a la cita": the future appointment gets the return service; a 409 asks first.
 	let overlap = $state<{ item: DueItem; appointments: Appointment[] } | null>(null);
@@ -179,6 +204,10 @@
 	const sentFailure = $derived(
 		sentError !== null && sentError.kind !== 'offline' ? errorText(sentError) : null
 	);
+	// While a skip waits for "Deshacer", the other "Omitir" buttons are off: this one line says why
+	// (the buttons point at it), not one under every card.
+	const skipReasonId = $props.id();
+
 	const count = $derived(
 		items.length === 1 ? t('due_count_one') : t('due_count_other', { count: items.length })
 	);
@@ -197,19 +226,20 @@
 			/>
 		</li>
 	{:else}
-		<li class="glass-card rounded-lg p-5">
+		<Card as="li" pad="md">
 			{@render detail(item)}
-		</li>
+		</Card>
 	{/if}
 {/snippet}
 
 {#snippet detail(item: DueItem)}
-	<DueItemDetail
+	<DueCard
 		{item}
 		{zone}
 		offline={cache.offline}
 		{busy}
 		skipBlocked={skipping !== null}
+		{skipReasonId}
 		onsend={(sendable: Sendable) => void send.run(sendable)}
 		onskip={skip}
 		onadd={(due: DueItem) => void addToAppointment.run(due, false)}
@@ -230,10 +260,15 @@
 {/snippet}
 
 {#snippet lists()}
-	{@render group(t('due_overdue_heading'), groups.late)}
-	{@render group(t('today_title'), groups.today)}
-	{#if items.length === 0}
-		<p class="glass-card rounded-lg px-5 py-4 text-base text-ink">{t('due_today_none')}</p>
+	{#if cache.snapshot === null}
+		<!-- No cache yet (the first open): the due list comes with the first refresh. -->
+		<p role="status" class="px-2 text-base text-ink-muted">{t('due_loading')}</p>
+	{:else}
+		{@render group(t('due_overdue_heading'), groups.late)}
+		{@render group(t('today_title'), groups.today)}
+		{#if items.length === 0}
+			<Card as="p" pad="message" class="text-base text-ink">{t('due_today_none')}</Card>
+		{/if}
 	{/if}
 	<section class="flex flex-col gap-3">
 		<h2 class="text-sm font-bold text-ink-muted">{t('due_sent_heading')}</h2>
@@ -243,7 +278,9 @@
 			<p role="alert" class="text-sm text-error">{sentFailure}</p>
 		{:else if sent !== null && sent.length === 0}
 			<p class="text-sm text-ink-muted">{t('due_sent_empty')}</p>
-		{:else if sent !== null}
+		{:else if sent === null}
+			<p role="status" class="px-2 text-base text-ink-muted">{t('due_sent_loading')}</p>
+		{:else}
 			<ul class="flex flex-col gap-3">
 				{#each sent as row (row.id)}
 					<li>
@@ -262,11 +299,16 @@
 <div class="flex flex-col gap-4">
 	<header class="flex flex-col gap-0.5">
 		<h1 class="text-3xl font-extrabold text-ink">{t('due_today_heading')}</h1>
-		<p class="text-sm text-ink-muted">{count}</p>
+		{#if cache.snapshot !== null}
+			<p class="text-sm text-ink-muted">{count}</p>
+		{/if}
 	</header>
 
 	{#if actionError !== null}
-		<p role="alert" class="glass-card rounded-lg px-5 py-3 text-base text-error">{actionError}</p>
+		<Card as="p" role="alert" pad="message" class="text-base text-error">{actionError}</Card>
+	{/if}
+	{#if skipping !== null && !cache.offline}
+		<p id={skipReasonId} class="px-2 text-sm text-ink-muted">{t('due_skip_wait')}</p>
 	{/if}
 
 	{#if !hasRules}
@@ -275,25 +317,15 @@
 		<div class="flex items-start gap-6">
 			<div class="flex w-105 shrink-0 flex-col gap-4">{@render lists()}</div>
 			{#if selected !== null}
-				<section class="glass-card min-w-0 flex-1 rounded-lg p-6">
+				<Card as="section" pad="lg" class="min-w-0 flex-1">
 					{@render detail(selected)}
-				</section>
+				</Card>
 			{/if}
 		</div>
 	{:else}
 		{@render lists()}
 	{/if}
 </div>
-
-{#if skipping !== null}
-	{#key skipping.id}
-		<Toast
-			message={t('due_skipped', { name: skipping.name })}
-			actionLabel={t('due_undo')}
-			onaction={skipping.undo}
-		/>
-	{/key}
-{/if}
 
 <OverlapSheet
 	open={overlap !== null}

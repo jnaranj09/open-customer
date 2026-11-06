@@ -14,8 +14,16 @@ export type AgendaItem = {
 };
 
 /** One appointment in a day's grid: the column it takes among `cols` side by side, and its span in
- *  minutes since local midnight (clipped to the day). */
-export type Placed = { id: string; col: number; cols: number; startMin: number; endMin: number };
+ *  minutes since local midnight (clipped to the day). `continued` is true for the tail of one that
+ *  started on an earlier day (it shows from 00:00). */
+export type Placed = {
+	id: string;
+	col: number;
+	cols: number;
+	startMin: number;
+	endMin: number;
+	continued: boolean;
+};
 
 export type AgendaView = 'day' | 'week';
 
@@ -30,9 +38,15 @@ function minuteOn(iso: string, zone: string, dayStart: number, dayEnd: number): 
 	return Number(h) * 60 + Number(m);
 }
 
+/** The minutes a box's 44 px tap height (`min-h-tap`) covers in the grid (TimeGrid: one hour is
+ *  `--hour: 4rem`, 64 px), rounded up. A shorter appointment is drawn this tall. */
+const TAP_MINUTES = Math.ceil((44 / 64) * 60);
+
 /** Places the day's appointments in the time grid. Cancelled ones are left out; "no vino" ones stay
- *  (the view greys them). Overlapping ones (`a.start < b.end && a.end > b.start`) share the width
- *  in side-by-side columns; back-to-back ones do not overlap. */
+ *  (the view greys them). Columns follow the drawn span: a box is at least `TAP_MINUTES` tall, so
+ *  an item ends, for the layout, at `max(end, start + TAP_MINUTES)`. Items whose drawn spans
+ *  overlap share the width in side-by-side columns, so a short box never covers the next one;
+ *  back-to-back items of at least `TAP_MINUTES` do not overlap. */
 export function layoutDay(items: AgendaItem[], zone: string, day: string): Placed[] {
 	const dayStart = Date.parse(zonedToUtc(day, '00:00', zone));
 	const dayEnd = Date.parse(zonedToUtc(addDays(day, 1), '00:00', zone));
@@ -41,7 +55,8 @@ export function layoutDay(items: AgendaItem[], zone: string, day: string): Place
 		.map((i) => ({
 			id: i.id,
 			startMin: minuteOn(i.starts_at, zone, dayStart, dayEnd),
-			endMin: minuteOn(i.ends_at, zone, dayStart, dayEnd)
+			endMin: minuteOn(i.ends_at, zone, dayStart, dayEnd),
+			continued: Date.parse(i.starts_at) < dayStart
 		}))
 		.filter((s) => s.endMin > s.startMin)
 		.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
@@ -62,12 +77,13 @@ export function layoutDay(items: AgendaItem[], zone: string, day: string): Place
 		if (group.length > 0 && s.startMin >= groupEnd) {
 			close();
 		}
+		const drawnEnd = Math.max(s.endMin, s.startMin + TAP_MINUTES);
 		let col = columnEnds.findIndex((end) => end <= s.startMin);
 		if (col === -1) {
 			col = columnEnds.length;
 		}
-		columnEnds[col] = s.endMin;
-		groupEnd = Math.max(groupEnd, s.endMin);
+		columnEnds[col] = drawnEnd;
+		groupEnd = Math.max(groupEnd, drawnEnd);
 		group.push({ ...s, col, cols: 0 });
 	}
 	close();
@@ -88,14 +104,16 @@ export function viewRange(view: AgendaView, day: string): { from: string; to: st
 	return { from, to: addDays(from, 6) };
 }
 
-const DEFAULT_SCROLL_HOUR = 8;
+/** The business opening hour: there is no business-hours setting, so the grid assumes 08:00. */
+const OPENING_HOUR = 8;
 
-/** The hour a grid scrolls to when it opens: the one that holds the earliest start, or 08:00 on
- *  an empty day. The grid always holds the whole day; this is only where it starts. */
+/** The hour a grid scrolls to when it opens: the one that holds the earliest start, or the opening
+ *  hour when nothing starts on the shown days. The tail of an appointment that crossed midnight
+ *  (`continued`) does not count: it would open the whole week at 00:00. The grid always holds the
+ *  whole day; this is only where it starts. */
 export function scrollHour(placed: Placed[]): number {
-	return placed.length === 0
-		? DEFAULT_SCROLL_HOUR
-		: Math.min(...placed.map((p) => Math.floor(p.startMin / 60)));
+	const starts = placed.filter((p) => !p.continued).map((p) => Math.floor(p.startMin / 60));
+	return starts.length === 0 ? OPENING_HOUR : Math.min(...starts);
 }
 
 /** What to remember of a day she picked: nothing (`null`, follow the business day) when it is

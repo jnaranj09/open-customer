@@ -33,9 +33,27 @@ export default defineConfig({
 		{ name: 'setup', testMatch: /setup\.spec\.ts/ },
 		{
 			name: 'cujs',
-			testIgnore: /setup\.spec\.ts/,
+			testIgnore: /(setup|ui-probe)\.spec\.ts/,
 			dependencies: ['setup'],
 			use: { storageState: AUTH_FILE }
+		},
+		// The UI probe (.claude/rules/ui.md stage 7) at the phone size an installed app gets (the
+		// whole 852 px screen, no browser bar) and at the main desktop size.
+		{
+			name: 'probe-compact',
+			testMatch: /ui-probe\.spec\.ts/,
+			dependencies: ['setup'],
+			use: { viewport: { width: 393, height: 852 }, storageState: AUTH_FILE }
+		},
+		{
+			name: 'probe-wide',
+			testMatch: /ui-probe\.spec\.ts/,
+			dependencies: ['setup'],
+			use: {
+				...devices['Desktop Safari'],
+				viewport: { width: 1440, height: 900 },
+				storageState: AUTH_FILE
+			}
 		}
 	],
 	// The binary applies the migrations itself on start; the database is fresh, so the migration

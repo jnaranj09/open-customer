@@ -11,15 +11,19 @@
 	import { errorText } from '../lib/api/errors';
 	import { cache } from '../lib/cache/store.svelte';
 	import { shouldRefreshOnFocus } from '../lib/cache/refresh';
+	import { retryWhileOffline } from '../lib/cache/retry';
 	import { applyAccent } from '../lib/color';
 	import ConfirmSentSheet from '../lib/components/ConfirmSentSheet.svelte';
-	import OfflineBanner from '../lib/components/OfflineBanner.svelte';
+	import OfflineBanner from '../lib/components/ui/OfflineBanner.svelte';
 	import Sidebar from '../lib/components/Sidebar.svelte';
-	import TabBar from '../lib/components/TabBar.svelte';
+	import Toast from '../lib/components/Toast.svelte';
+	import BottomNav from '../lib/components/ui/BottomNav.svelte';
+	import Card from '../lib/components/ui/Card.svelte';
 	import UpdatePrompt from '../lib/components/UpdatePrompt.svelte';
 	import {
 		canSync,
 		hasShell,
+		leavesSetup,
 		needsRecheck,
 		recoversSession,
 		verdictFor,
@@ -28,12 +32,15 @@
 	import { t } from '../lib/i18n';
 	import { layout } from '../lib/layout';
 	import { syncLine } from '../lib/nav';
+	import { pageTitle } from '../lib/titles';
 	import { clock } from '../lib/clock.svelte';
 	import { createReporter } from '../lib/report';
 	import { pushControl } from '../lib/pushControl.svelte';
 	import { resolveSession } from '../lib/session';
+	import { finishingStep, rememberFinishing, sessionStore } from '../lib/setup';
 	import { shownDay } from '../lib/shownDay.svelte';
 	import { systemNow } from '../lib/time';
+	import { toaster } from '../lib/toaster.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -47,7 +54,10 @@
 	let settleRun = 0;
 	let recoverRun = 0;
 
-	const verdict = $derived(verdictFor(session, checkedFor, path));
+	// The setup wizard's last steps survive a reload (lib/setup.ts `finishingStep`).
+	const verdict = $derived(
+		verdictFor(session, checkedFor, path, finishingStep(sessionStore()) !== null)
+	);
 
 	async function rememberMe(me: Me): Promise<void> {
 		try {
@@ -108,6 +118,9 @@
 
 	$effect(() => {
 		if (verdict?.kind === 'redirect') {
+			if (leavesSetup(path, verdict)) {
+				rememberFinishing(sessionStore(), null);
+			}
 			void goto(resolve(verdict.to), { replaceState: true });
 		}
 	});
@@ -166,6 +179,18 @@
 		};
 	});
 
+	// While the server does not answer: try again after a growing wait (2 s up to 60 s) and at once
+	// when the phone gets a connection back, so the banner clears with the app left open.
+	$effect(() => {
+		if (!syncing || !cache.offline) {
+			return;
+		}
+		return retryWhileOffline(async () => {
+			await recover((await cache.refresh()).ok);
+			return !cache.offline;
+		}, window);
+	});
+
 	// Any uncaught error or rejection goes to the server log, route and stack only (item 66).
 	const report = createReporter(sendErrorReport, () => systemNow().getTime());
 	$effect(() => {
@@ -205,14 +230,18 @@
 	);
 </script>
 
+<svelte:head>
+	<title>{pageTitle(page.route.id)}</title>
+</svelte:head>
+
 {#snippet content()}
 	<div class="mx-auto flex w-full max-w-360 flex-col gap-4">
 		<UpdatePrompt />
 		{#if cache.offline}
-			<OfflineBanner lastSyncAt={cache.meta.lastSyncAt} {zone} />
+			<OfflineBanner lastSyncAt={cache.meta.lastSyncAt} {zone} today={clock.today(zone)} />
 		{/if}
 		{#if failure !== null}
-			<p role="alert" class="glass-card rounded-lg px-5 py-3 text-base text-error">{failure}</p>
+			<Card as="p" role="alert" pad="message" class="text-base text-error">{failure}</Card>
 		{/if}
 		{@render children()}
 	</div>
@@ -220,9 +249,9 @@
 
 {#if verdict?.kind === 'offline_blank'}
 	<main class="grid min-h-dvh place-items-center p-8">
-		<p role="status" class="glass-card rounded-lg px-6 py-4 text-base text-ink">
+		<Card as="p" role="status" pad="message" class="text-base text-ink">
 			{t('error_offline')}
-		</p>
+		</Card>
 	</main>
 {:else if verdict?.kind === 'stay'}
 	{#if !hasShell(path)}
@@ -235,15 +264,27 @@
 			pathname={path}
 			dueCount={cache.shownDue.length}
 			newDay={shownDay.current ?? clock.today(zone)}
-			sync={syncLine(cache.meta.lastSyncAt, zone, cache.offline)}
+			sync={syncLine(cache.meta.lastSyncAt, zone, cache.offline, clock.today(zone))}
 		/>
 		<main class="ml-64 p-8">{@render content()}</main>
 	{:else}
 		<div class="pt-safe">
 			<main class="px-4 pt-4 pb-32">{@render content()}</main>
 		</div>
-		<TabBar pathname={path} />
+		<BottomNav pathname={path} />
 	{/if}
+{/if}
+
+<!-- The app's one toast (lib/toaster.svelte.ts): a new message replaces the one on screen. -->
+{#if toaster.current !== null}
+	{#key toaster.current.n}
+		<Toast
+			message={toaster.current.message}
+			{...toaster.current.action === undefined
+				? {}
+				: { actionLabel: toaster.current.action.label, onaction: toaster.current.action.run }}
+		/>
+	{/key}
 {/if}
 
 <!-- Opens first on any app start while a send confirmation is stored (design doc "Sending flow"). -->

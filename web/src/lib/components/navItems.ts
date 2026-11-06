@@ -1,5 +1,5 @@
 import type { MessageKey } from '../i18n';
-import type { IconName } from './icons/Icon.svelte';
+import type { IconName } from './icons/paths';
 
 export type NavItem = {
 	href: '/' | '/enviar' | '/clientas' | '/ajustes';

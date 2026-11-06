@@ -9,12 +9,13 @@
 	import { layout } from '../../../lib/layout';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import ClientForm from '../../../lib/components/ClientForm.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import { t } from '../../../lib/i18n';
 
 	// "Nueva clienta" (design doc item 76). `volver` is the screen she came from; `savedDestination`
 	// decides where saving goes. `returnTo` checked the path is inside the app; `resolve` types a
 	// path without its first slash.
+	// Save and Cancel replace this form's history entry, so Back does not open it again empty.
 	const from = $derived(page.url.searchParams.get('volver'));
 	const wide = $derived(layout.current === 'wide');
 	const toPath = (id: string): Path => savedDestination(from, wide, id).slice(1) as Path;
@@ -24,14 +25,13 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
+		<IconButton
+			variant="plain"
+			icon="chevron-left"
+			label={t('client_back')}
 			href={back}
-			title={t('client_back')}
-			aria-label={t('client_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100 lg:hidden"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+			class="lg:hidden"
+		/>
 		<h1 class="text-3xl font-extrabold text-ink">{t('client_new_title')}</h1>
 	</header>
 
@@ -41,10 +41,10 @@
 		<ClientForm
 			data={cache.snapshot}
 			onsaved={(saved: Client) => {
-				void goto(resolve(toPath(saved.id)));
+				void goto(resolve(toPath(saved.id)), { replaceState: true });
 			}}
 			oncancel={() => {
-				void goto(back);
+				void goto(back, { replaceState: true });
 			}}
 		/>
 	{/if}

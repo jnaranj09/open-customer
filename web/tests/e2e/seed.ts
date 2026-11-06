@@ -82,14 +82,15 @@ export async function insertClient(c: {
 type ServiceRow = { id: string; name: string; price_cents: string | null; duration_min: number };
 
 /** Inserts an appointment of `clientId` with the active services named in `services` (in order;
- *  a name may repeat), their name, price and duration copied in. It ends after the sum of the
- *  durations and costs the sum of the prices. Returns its id. */
+ *  a name may repeat), their name, price and duration copied in. It ends after `minutes`, by
+ *  default the sum of the durations, and costs the sum of the prices. Returns its id. */
 export async function insertAppointment(a: {
 	clientId: string;
 	services: string[];
 	startsAt: string;
 	createdAt?: string;
 	status?: 'scheduled' | 'cancelled' | 'no_show';
+	minutes?: number;
 }): Promise<string> {
 	const found = await db().query<ServiceRow>(
 		'SELECT id, name, price_cents, duration_min FROM services WHERE name = ANY($1) AND archived_at IS NULL',
@@ -103,7 +104,7 @@ export async function insertAppointment(a: {
 		}
 		return s;
 	});
-	const minutes = lines.reduce((sum, s) => sum + s.duration_min, 0);
+	const minutes = a.minutes ?? lines.reduce((sum, s) => sum + s.duration_min, 0);
 	// bigint arrives as a string.
 	const total = lines.reduce((sum, s) => sum + Number(s.price_cents ?? 0), 0);
 	const startsMs = Date.parse(a.startsAt);
@@ -136,5 +137,29 @@ export async function insertAppointment(a: {
 	} finally {
 		conn.release();
 	}
+	return id;
+}
+
+/** Logs a sent message of the active "before" rule for `appointmentId` at `actedAt`, as if she sent
+ *  it, with the client's phone digits. Returns its id. */
+export async function insertSentReminder(r: {
+	appointmentId: string;
+	body: string;
+	actedAt: string;
+}): Promise<string> {
+	const { rows } = await db().query<{ id: string }>(
+		"SELECT id FROM reminder_rules WHERE kind = 'before_appointment' AND archived_at IS NULL LIMIT 1"
+	);
+	const rule = rows[0];
+	if (rule === undefined) {
+		throw new Error('seed: no active "before" rule');
+	}
+	const id = randomUUID();
+	await db().query(
+		`INSERT INTO reminder_log (id, rule_id, appointment_id, action, body, phone_digits, acted_at)
+		 SELECT $1, $2, a.id, 'sent', $3, c.phone_digits, $4
+		 FROM appointments a JOIN clients c ON c.id = a.client_id WHERE a.id = $5`,
+		[id, rule.id, r.body, r.actedAt, r.appointmentId]
+	);
 	return id;
 }

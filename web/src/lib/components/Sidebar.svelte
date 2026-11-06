@@ -4,6 +4,8 @@
 	import { isActivePath } from '../nav';
 	import BusinessIcon from './BusinessIcon.svelte';
 	import Icon from './icons/Icon.svelte';
+	import Card from './ui/Card.svelte';
+	import NavItem from './ui/NavItem.svelte';
 	import { NAV_ITEMS } from './navItems';
 	import PushActivate from './PushActivate.svelte';
 	import WriteLink from './WriteLink.svelte';
@@ -29,37 +31,35 @@
 </script>
 
 <!-- The wide layout's shell (design doc "Screen layouts"): fixed, 256 px, no bottom bar. -->
-<aside
-	class="glass-panel fixed inset-y-0 left-0 z-30 flex w-64 flex-col gap-6 rounded-none border-y-0 border-l-0 p-6"
+<Card
+	as="aside"
+	variant="strong"
+	radius="none"
+	pad="lg"
+	class="fixed inset-y-0 left-0 z-30 flex w-64 flex-col gap-6 border-y-0 border-l-0"
 >
-	<div class="flex items-center gap-3">
+	<!-- The name gets the sidebar's full width under the icon, and a word too long for it breaks
+	     at a syllable with a hyphen (the page is lang="es"), not at any letter. -->
+	<div class="flex flex-col gap-3">
 		<BusinessIcon custom={customIcon} class="size-10 shrink-0 rounded-md" />
-		<p class="min-w-0 text-xl font-extrabold wrap-break-word text-ink">{name}</p>
+		<p class="text-xl font-extrabold hyphens-auto text-ink">{name}</p>
 	</div>
 
-	<WriteLink href={resolve(`/citas/nueva?dia=${newDay}` as const)} variant="primary">
+	<WriteLink href={resolve(`/citas/nueva?dia=${newDay}` as const)} variant="strong">
 		<Icon name="plus" />
 		{t('appointment_new')}
 	</WriteLink>
 
 	<nav aria-label={t('nav_label')} class="flex flex-col gap-1">
 		{#each NAV_ITEMS as item (item.href)}
-			{@const active = isActivePath(item.href, pathname)}
-			<a
+			<NavItem
+				variant="row"
 				href={resolve(item.href)}
-				aria-current={active ? 'page' : undefined}
-				class="flex min-h-tap items-center gap-3 rounded-pill px-4 text-sm font-bold {active
-					? 'bg-glass-tint text-accent-700'
-					: 'text-ink-muted hover:bg-accent-100'}"
-			>
-				<Icon name={item.icon} />
-				{t(item.label)}
-				{#if item.href === '/enviar' && dueCount > 0}
-					<span class="ml-auto rounded-pill bg-accent px-2 py-0.5 text-xs text-on-accent">
-						{dueCount}
-					</span>
-				{/if}
-			</a>
+				icon={item.icon}
+				label={t(item.label)}
+				active={isActivePath(item.href, pathname)}
+				count={item.href === '/enviar' ? dueCount : 0}
+			/>
 		{/each}
 	</nav>
 
@@ -67,4 +67,4 @@
 		<PushActivate />
 		<p class="text-sm text-ink-muted">{sync}</p>
 	</div>
-</aside>
+</Card>

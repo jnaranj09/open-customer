@@ -2,7 +2,7 @@
 // use the rules and templates `setup.spec.ts` creates in CUJ 2 (plan D4, D5): the 1-day "before"
 // rule with "Recordatorio de cita", and the 21-day come-back rule on Acrílico with "Relleno" and
 // the return service Relleno. This spec creates no rule of its own.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Response } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { at, businessDate, closePool, insertAppointment, insertClient, resetData } from './seed';
 import { dueItem, fill } from './steps';
@@ -76,6 +76,82 @@ test.describe('CUJ 4: morning sending', () => {
 		await expectSent();
 		await page.reload();
 		await expectSent();
+	});
+
+	test('wide: Enviar on the Hoy rail opens that item, not the first', async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/');
+		// The rail lists Ana first; Marta's "Enviar" must open Marta.
+		const rail = page
+			.getByRole('listitem')
+			.filter({ has: page.getByRole('link', { name: es.due_send, exact: true }) });
+		await expect(rail.first()).toContainText('Ana Rojas');
+		await rail
+			.filter({ hasText: 'Marta Solano' })
+			.getByRole('link', { name: es.due_send, exact: true })
+			.click();
+
+		await expect(page.getByRole('heading', { name: es.due_today_heading, level: 1 })).toBeVisible();
+		// On wide the only client heading is the selected item's pane.
+		await expect(page.getByRole('heading', { name: 'Marta Solano', level: 2 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Ana Rojas', level: 2 })).toHaveCount(0);
+	});
+
+	/** "Omitir" on Ana's item on /enviar; its toast shows. */
+	async function skipAna(page: Page): Promise<void> {
+		await page.goto('/enviar');
+		await dueItem(page, 'Ana Rojas')
+			.getByRole('button', { name: es.due_skip, exact: true })
+			.click();
+		await expect(page.getByText(fill(es.due_skipped, { name: 'Ana Rojas' }))).toBeVisible();
+	}
+
+	/** The answer to the skip's log POST. Without a flush the POST waits for the end of the 5 s
+	 *  "Deshacer", so 2 s tells a flush from the timer. */
+	function logPosted(page: Page): Promise<Response> {
+		return page.waitForResponse(
+			(r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/reminders/log'),
+			{ timeout: 2_000 }
+		);
+	}
+
+	test('Omitir is sent at once when the app goes to the background', async ({ page }) => {
+		await skipAna(page);
+		const posted = logPosted(page);
+		// iOS may kill a backgrounded app before the 5 s end. Playwright cannot background a page:
+		// the test sets the visibility the browser would report and sends its event.
+		await page.evaluate(() => {
+			Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+			document.dispatchEvent(new Event('visibilitychange'));
+		});
+		expect((await posted).ok()).toBe(true);
+
+		await page.reload();
+		await expect(dueItem(page, 'Marta Solano')).toBeVisible();
+		await expect(dueItem(page, 'Ana Rojas')).toHaveCount(0);
+	});
+
+	test('while an Omitir can be undone, the list says once why the other Omitir are off', async ({
+		page
+	}) => {
+		const lucia = await insertClient({ name: 'Lucía Mora', phone: '+50688885555' });
+		await insertAppointment({ clientId: lucia, services: ['Acrílico'], startsAt: at(1, '12:00') });
+		await skipAna(page);
+
+		for (const name of ['Marta Solano', 'Lucía Mora']) {
+			const skip = dueItem(page, name).getByRole('button', { name: es.due_skip, exact: true });
+			await expect(skip).toBeDisabled();
+			await expect(skip).toHaveAccessibleDescription(es.due_skip_wait);
+		}
+		await expect(page.getByText(es.due_skip_wait, { exact: true })).toHaveCount(1);
+	});
+
+	test('Omitir is sent at once when she goes to another page', async ({ page }) => {
+		await skipAna(page);
+		const posted = logPosted(page);
+		await page.getByRole('link', { name: es.today_title, exact: true }).first().click();
+
+		expect((await posted).ok()).toBe(true);
 	});
 });
 

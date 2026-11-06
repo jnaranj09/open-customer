@@ -1,12 +1,15 @@
 <script lang="ts">
+	import { fieldClasses } from './ui/fieldStyle';
 	import type { Attribute } from '../api/schemas';
 	import { optionPath, type AttrValue } from '../booking';
 	import { t } from '../i18n';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import Icon from './icons/Icon.svelte';
-	import SelectField from './SelectField.svelte';
-	import TextField from './TextField.svelte';
+	import IconButton from './ui/IconButton.svelte';
+	import TextButton from './ui/TextButton.svelte';
+	import SelectField from './ui/SelectField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// One attribute as an input (design doc item 70): text, number and date as plain fields, a flat
 	// select as the native `<select>`, and a nested select or any multiselect as a drill-down in a
@@ -91,10 +94,9 @@
 			type="button"
 			aria-haspopup="dialog"
 			aria-label="{attr.label}: {summary === '' ? t('attr_choose') : summary}"
-			class="flex h-12 w-full items-center gap-2 rounded-sm border bg-glass-strong px-4 text-left text-base hover:bg-accent-100 {error ===
-			undefined
-				? 'border-accent'
-				: 'border-error'}"
+			class="{fieldClasses(
+				error !== undefined
+			)} flex h-12 w-full items-center gap-2 px-4 text-left hover:bg-accent-100"
 			onclick={openSheet}
 		>
 			<span class="min-w-0 flex-1 truncate {summary === '' ? 'text-ink-muted' : 'text-ink'}">
@@ -115,16 +117,15 @@
 		}}
 	>
 		{#if parent !== undefined}
-			<button
-				type="button"
-				class="flex min-h-tap items-center gap-2 self-start rounded-pill pr-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+			<TextButton
+				variant="back"
+				class="self-start"
 				onclick={() => {
 					at = parent.parent_id;
 				}}
 			>
-				<Icon name="chevron-left" class="size-4.5" />
 				{parent.label}
-			</button>
+			</TextButton>
 		{/if}
 		<ul class="flex flex-col">
 			{#each level as option (option.id)}
@@ -140,21 +141,18 @@
 					>
 						<span class="min-w-0 flex-1">{option.label}</span>
 						{#if chosen}
-							<Icon name="check" class="size-4.5 text-accent-700" />
+							<Icon name="check" class="size-4.5 text-accent-text" />
 						{/if}
 					</button>
 					{#if hasChildren(option.id)}
-						<button
-							type="button"
-							title={t('attr_open_level', { label: option.label })}
-							aria-label={t('attr_open_level', { label: option.label })}
-							class="grid size-11 place-items-center rounded-pill text-ink-muted hover:bg-accent-100"
+						<IconButton
+							variant="muted"
+							icon="chevron-right"
+							label={t('attr_open_level', { label: option.label })}
 							onclick={() => {
 								at = option.id;
 							}}
-						>
-							<Icon name="chevron-right" class="size-4.5" />
-						</button>
+						/>
 					{/if}
 				</li>
 			{:else}
@@ -163,7 +161,7 @@
 		</ul>
 		{#if multi}
 			<Button
-				variant="primary"
+				variant="strong"
 				onclick={() => {
 					open = false;
 				}}
@@ -172,7 +170,7 @@
 			</Button>
 		{/if}
 		{#if !attr.required && ids.length > 0}
-			<Button variant="secondary" onclick={clear}>{t('attr_clear')}</Button>
+			<Button variant="glass" onclick={clear}>{t('attr_clear')}</Button>
 		{/if}
 	</BottomSheet>
 {/if}

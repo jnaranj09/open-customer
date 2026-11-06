@@ -4,7 +4,8 @@ import { createSheetStack } from './sheetStack';
 function setup() {
 	const lock = vi.fn();
 	const unlock = vi.fn();
-	return { stack: createSheetStack({ lock, unlock }), lock, unlock };
+	const showTop = vi.fn<(top: string | null) => void>();
+	return { stack: createSheetStack({ lock, unlock, showTop }), lock, unlock, showTop };
 }
 
 describe('createSheetStack', () => {
@@ -67,5 +68,20 @@ describe('createSheetStack', () => {
 		stack.remove('a');
 		stack.push('b');
 		expect(lock).toHaveBeenCalledTimes(2);
+	});
+	it('shows each new top, the one below when the top closes, and null at the end', () => {
+		const { stack, showTop } = setup();
+		stack.push('a');
+		stack.push('b');
+		stack.remove('b');
+		stack.remove('a');
+		expect(showTop.mock.calls).toEqual([['a'], ['b'], ['a'], [null]]);
+	});
+	it('keeps the top shown when a lower sheet closes first', () => {
+		const { stack, showTop } = setup();
+		stack.push('a');
+		stack.push('b');
+		stack.remove('a');
+		expect(showTop).toHaveBeenLastCalledWith('b');
 	});
 });

@@ -134,17 +134,98 @@ describe('viewRange', () => {
 	});
 });
 
+describe('layoutDay with short appointments', () => {
+	it('puts back-to-back 15-minute items side by side, since each is drawn 44 px tall', () => {
+		const placed = layoutDay(
+			[
+				item('a', '2026-11-04T15:00:00Z', '2026-11-04T15:15:00Z'),
+				item('b', '2026-11-04T15:15:00Z', '2026-11-04T15:30:00Z'),
+				item('c', '2026-11-04T15:30:00Z', '2026-11-04T15:45:00Z')
+			],
+			ZONE,
+			DAY
+		);
+		expect(placed.map((p) => [p.id, p.col, p.cols])).toEqual([
+			['a', 0, 3],
+			['b', 1, 3],
+			['c', 2, 3]
+		]);
+	});
+
+	it('gives a 1-minute item a side column next to the one that starts under its box', () => {
+		const placed = layoutDay(
+			[
+				item('blip', '2026-11-04T17:00:00Z', '2026-11-04T17:01:00Z'),
+				item('next', '2026-11-04T17:30:00Z', '2026-11-04T18:30:00Z')
+			],
+			ZONE,
+			DAY
+		);
+		expect(placed.map((p) => [p.id, p.col, p.cols])).toEqual([
+			['blip', 0, 2],
+			['next', 1, 2]
+		]);
+	});
+
+	it('keeps a 1-minute item alone the full width', () => {
+		const placed = layoutDay(
+			[item('blip', '2026-11-04T17:00:00Z', '2026-11-04T17:01:00Z')],
+			ZONE,
+			DAY
+		);
+		expect(placed.map((p) => [p.id, p.col, p.cols, p.endMin - p.startMin])).toEqual([
+			['blip', 0, 1, 1]
+		]);
+	});
+});
+
 describe('scrollHour', () => {
 	it('is 08:00 for an empty day', () => {
 		expect(scrollHour([])).toBe(8);
 	});
 
 	it('is the hour of the earliest start, early or late', () => {
-		const late = { id: 'b', col: 0, cols: 1, startMin: 20 * 60, endMin: 21 * 60 + 15 };
+		const late = {
+			id: 'b',
+			col: 0,
+			cols: 1,
+			startMin: 20 * 60,
+			endMin: 21 * 60 + 15,
+			continued: false
+		};
 		expect(scrollHour([late])).toBe(20);
 		expect(
-			scrollHour([late, { id: 'a', col: 0, cols: 1, startMin: 6 * 60 + 30, endMin: 7 * 60 }])
+			scrollHour([
+				late,
+				{ id: 'a', col: 0, cols: 1, startMin: 6 * 60 + 30, endMin: 7 * 60, continued: false }
+			])
 		).toBe(6);
+	});
+
+	it('skips the after-midnight tail of an appointment from the day before', () => {
+		// 23:30 to 00:30 local: the next day shows its tail from 00:00.
+		const tail = layoutDay(
+			[
+				item('night', '2026-11-04T05:30:00Z', '2026-11-04T06:30:00Z'),
+				item('morning', '2026-11-04T16:00:00Z', '2026-11-04T17:00:00Z')
+			],
+			ZONE,
+			DAY
+		);
+		expect(tail.map((p) => [p.id, p.continued])).toEqual([
+			['night', true],
+			['morning', false]
+		]);
+		expect(scrollHour(tail)).toBe(10);
+	});
+
+	it('opens at the opening hour when the only item is a tail from the day before', () => {
+		const tail = layoutDay(
+			[item('night', '2026-11-04T05:30:00Z', '2026-11-04T06:30:00Z')],
+			ZONE,
+			DAY
+		);
+		expect(scrollHour(tail)).toBe(8);
 	});
 });
 

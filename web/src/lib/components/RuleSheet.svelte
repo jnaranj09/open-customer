@@ -7,7 +7,7 @@
 	import { t, type MessageKey } from '../i18n';
 	import { byPosition } from '../order';
 	import {
-		asksOverdue,
+		overdueChoice,
 		rulePatch,
 		ruleRequest,
 		type RuleField,
@@ -18,17 +18,17 @@
 	import type { Option } from '../setup';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import SaveButton from './SaveButton.svelte';
-	import SelectField from './SelectField.svelte';
-	import TextField from './TextField.svelte';
+	import SelectField from './ui/SelectField.svelte';
+	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
-	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A change
-	// that can add items first asks "¿Incluir recordatorios atrasados?": the question replaces the
-	// form in the same sheet, and "Cancelar" or Escape on it goes back to the form. A rule never
-	// changes kind or service, so an open rule shows those as text.
+	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A
+	// come-back change that can add items first asks "¿Incluir recordatorios atrasados?": the
+	// question replaces the form in the same sheet, and "Cancelar" or Escape on it goes back to the
+	// form. A rule never changes kind or service, so an open rule shows those as text.
 	let {
 		rule,
 		templates,
@@ -134,16 +134,19 @@
 		node.querySelector<HTMLElement>('select, input, button')?.focus();
 	}
 
-	/** Sends `action` now, or asks the overdue question first when it can add items. */
+	/** Sends `action` now, or asks the overdue question first when it can add items to a come-back
+	 *  rule (a "before" rule includes them without asking; see `overdueChoice`). */
 	function go(action: Action): void {
-		const asks =
+		const choice =
 			'create' in action
-				? asksOverdue(null, action.create)
-				: rule !== undefined && asksOverdue(rule, action.update, archivedTemplates);
-		if (asks) {
+				? overdueChoice(null, action.create)
+				: rule === undefined
+					? 'none'
+					: overdueChoice(rule, action.update, archivedTemplates);
+		if (choice === 'ask') {
 			asking = action;
 		} else {
-			void send.run(action, undefined);
+			void send.run(action, choice === 'include' ? true : undefined);
 		}
 	}
 
@@ -245,7 +248,7 @@
 				{#if rule.archived}
 					<div class="flex">
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							{busy}
 							onclick={() => {
 								go({ update: { archived: false }, message: 'rule_restored' });
@@ -258,7 +261,7 @@
 					<p class="text-sm text-ink-muted">{t('rule_archive_body')}</p>
 					<div class="flex">
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							{busy}
 							onclick={() => {
 								go({ update: { archived: true }, message: 'rule_archived' });
@@ -275,7 +278,7 @@
 		<div class="flex flex-col gap-3" {@attach focusFirst}>
 			<p class="text-base text-ink-muted">{t('overdue_body')}</p>
 			<WriteButton
-				variant="primary"
+				variant="strong"
 				{busy}
 				onclick={() => {
 					if (asking !== null) {
@@ -284,7 +287,7 @@
 				}}>{t('overdue_from_today')}</WriteButton
 			>
 			<WriteButton
-				variant="secondary"
+				variant="glass"
 				{busy}
 				onclick={() => {
 					if (asking !== null) {

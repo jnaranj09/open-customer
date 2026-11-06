@@ -7,11 +7,12 @@
 	import { cache } from '../../../lib/cache/store.svelte';
 	import { clock } from '../../../lib/clock.svelte';
 	import AppointmentForm from '../../../lib/components/AppointmentForm.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import { t } from '../../../lib/i18n';
 
 	// "Nueva cita" (CUJ 3). `dia` is the day the link was opened from; `volver` is where "save"
-	// goes back to (Hoy by default).
+	// goes back to (Hoy by default). Save and Cancel replace this form's history entry, so Back does
+	// not open it again empty.
 	const zone = $derived(
 		cache.snapshot?.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 	);
@@ -22,14 +23,7 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
-			href={back}
-			title={t('appointment_back')}
-			aria-label={t('appointment_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+		<IconButton variant="plain" icon="chevron-left" label={t('appointment_back')} href={back} />
 		<h1 class="text-3xl font-extrabold text-ink">{t('appointment_new')}</h1>
 	</header>
 
@@ -40,10 +34,10 @@
 			data={cache.snapshot}
 			{day}
 			onsaved={() => {
-				void goto(back);
+				void goto(back, { replaceState: true });
 			}}
 			oncancel={() => {
-				void goto(back);
+				void goto(back, { replaceState: true });
 			}}
 		/>
 	{/if}

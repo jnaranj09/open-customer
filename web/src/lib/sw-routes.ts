@@ -71,3 +71,29 @@ function parseJson(text: string): unknown {
 		return null;
 	}
 }
+
+/** The part of a `WindowClient` the notification tap uses. */
+export type TapWindow = { focus: () => Promise<{ navigate: (url: string) => Promise<unknown> }> };
+
+/** What a tap on the daily notification does: focus the app's open window and move it to `path`,
+ *  or open a new window there. `navigate()` rejects for a window this worker does not control
+ *  (`matchAll` with `includeUncontrolled` returns those too, for example a tab opened before the
+ *  worker took over), and `focus()` can reject as well; the tap then opens a new window instead of
+ *  doing nothing. */
+export async function openFromTap(
+	windows: readonly TapWindow[],
+	openWindow: (url: string) => Promise<unknown>,
+	path: string
+): Promise<void> {
+	const open = windows[0];
+	if (open !== undefined) {
+		try {
+			const focused = await open.focus();
+			await focused.navigate(path);
+			return;
+		} catch {
+			console.warn('code=notification_navigate_failed');
+		}
+	}
+	await openWindow(path);
+}

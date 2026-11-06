@@ -1,19 +1,18 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import Card from '../../../lib/components/ui/Card.svelte';
 	import type { Attribute } from '../../../lib/api/schemas';
 	import { inScope, SCOPE_LABELS, TYPE_LABELS } from '../../../lib/attributes';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import AttributeSheet from '../../../lib/components/AttributeSheet.svelte';
-	import EmptyState from '../../../lib/components/EmptyState.svelte';
-	import ListRow from '../../../lib/components/ListRow.svelte';
+	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
+	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
-	import type { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Atributos (design doc item 77, CUJ 2 step 2): the attributes grouped by what they
 	// belong to (the client or each appointment), and a sheet to add one or edit the one she taps.
 	// The sheet follows the attribute by id, so the options it shows come from the refreshed cache.
-	const toaster = getContext<ReturnType<typeof createToaster>>('settings-toaster');
 
 	const data = $derived(cache.snapshot);
 	const scopes = ['client', 'appointment'] as const;
@@ -32,7 +31,7 @@
 </script>
 
 {#snippet rows(list: Attribute[])}
-	<ul class="glass-card flex flex-col gap-1 rounded-lg p-2">
+	<Card as="ul" pad="list" class="flex flex-col gap-1">
 		{#each list as attribute (attribute.id)}
 			<li>
 				<ListRow
@@ -44,7 +43,7 @@
 				/>
 			</li>
 		{/each}
-	</ul>
+	</Card>
 {/snippet}
 
 <div class="flex max-w-190 flex-col gap-4">
@@ -53,7 +52,7 @@
 		{#if data !== null}
 			<div class="w-44 shrink-0">
 				<WriteButton
-					variant="primary"
+					variant="strong"
 					onclick={() => {
 						creating = true;
 					}}>{t('attributes_new')}</WriteButton
@@ -66,9 +65,9 @@
 		<p role="status" class="px-2 text-base text-ink-muted">{t('attributes_loading')}</p>
 	{:else}
 		{#if data.attributes.length === 0}
-			<div class="glass-card rounded-lg">
+			<Card>
 				<EmptyState title={t('attributes_empty_title')} body={t('attributes_empty_body')} />
-			</div>
+			</Card>
 		{/if}
 		{#each scopes as scope (scope)}
 			{@const list = inScope(data.attributes, scope, false)}

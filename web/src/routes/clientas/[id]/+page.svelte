@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Callout from '../../../lib/components/ui/Callout.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -12,20 +13,21 @@
 	import { bootstrapWindow } from '../../../lib/cache/refresh';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import ActionButton from '../../../lib/components/ActionButton.svelte';
-	import Button from '../../../lib/components/Button.svelte';
-	import BottomSheet from '../../../lib/components/BottomSheet.svelte';
+	import Button from '../../../lib/components/ui/Button.svelte';
+	import BottomSheet from '../../../lib/components/ui/BottomSheet.svelte';
 	import ClientForm from '../../../lib/components/ClientForm.svelte';
 	import DuplicatePhone from '../../../lib/components/DuplicatePhone.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
-	import ListRow from '../../../lib/components/ListRow.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
+	import Card from '../../../lib/components/ui/Card.svelte';
+	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
-	import Toast from '../../../lib/components/Toast.svelte';
 	import { historySplit, sharingNames } from '../../../lib/clients';
 	import { t } from '../../../lib/i18n';
 	import { formatMoney } from '../../../lib/money';
+	import { formatPhone } from '../../../lib/phone';
 	import { submitOnce } from '../../../lib/submit';
-	import { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import { formatDayWithYear, formatTime, todayIn } from '../../../lib/time';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
@@ -39,7 +41,6 @@
 	let client = $state<Client | null>(null);
 	let loadError = $state<ApiError | null>(null);
 	let editing = $state(false);
-	const toaster = createToaster();
 
 	// The cached copy shows at once (an archived client is not cached); the server's answer replaces it.
 	async function load(want: string): Promise<void> {
@@ -189,15 +190,14 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
+		<IconButton
+			variant="plain"
+			icon="chevron-left"
+			label={t('client_back')}
 			href={resolve('/clientas')}
-			title={t('client_back')}
-			aria-label={t('client_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100 lg:hidden"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
-		<h1 class="text-3xl font-extrabold text-ink">
+			class="lg:hidden"
+		/>
+		<h1 class="min-w-0 text-3xl font-extrabold text-ink">
 			{editing ? t('client_edit_title') : (client?.name ?? '')}
 		</h1>
 	</header>
@@ -226,17 +226,17 @@
 		/>
 	{:else}
 		<div class="flex flex-col gap-4 lg:max-w-190">
-			<section class="glass-card flex flex-col gap-4 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-4">
 				{#if client.archived}
-					<p class="rounded-md bg-glass-tint px-4 py-3 text-sm font-bold text-ink">
+					<Callout as="p" class="text-sm font-bold">
 						{t('client_archived_note')}
-					</p>
+					</Callout>
 				{/if}
 				<dl class="flex flex-col gap-1 text-base">
 					{#if client.phone_e164 !== null}
 						<div class="flex gap-2">
 							<dt class="font-bold text-ink">{t('client_phone')}:</dt>
-							<dd class="text-ink">{client.phone_e164}</dd>
+							<dd class="text-ink">{formatPhone(client.phone_e164)}</dd>
 						</div>
 					{/if}
 					{#each facts as fact (fact.label)}
@@ -264,7 +264,7 @@
 					</ActionButton>
 					{#if client.archived}
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							{busy}
 							onclick={() => {
 								void setArchived.run(false, false);
@@ -274,7 +274,7 @@
 						</ActionButton>
 					{:else}
 						<ActionButton
-							variant="secondary"
+							variant="glass"
 							onclick={() => {
 								actionError = null;
 								asking = true;
@@ -298,15 +298,16 @@
 						<p role="alert" class="text-sm text-error">{errorText(actionError)}</p>
 					{/if}
 				{/if}
-			</section>
+			</Card>
 
-			<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 				<h2 class="text-xl font-bold text-ink">{t('client_history')}</h2>
 				<ul class="flex flex-col divide-y divide-glass-edge">
 					{#each cachedAppts as a (a.id)}
 						{@render appointmentRow(a)}
 					{:else}
-						{#if everything === null}
+						<!-- Before "Ver todas las citas", none in the cached window; after it, none at all. -->
+						{#if everything === null || others.length === 0}
 							<li class="text-sm text-ink-muted">{t('client_history_empty')}</li>
 						{/if}
 					{/each}
@@ -324,7 +325,7 @@
 				{/if}
 				{#if everything === null}
 					<Button
-						variant="secondary"
+						variant="glass"
 						busy={loadingAll}
 						{...cache.offline
 							? { disabled: true as const, disabledReason: t('client_history_more_offline') }
@@ -336,19 +337,21 @@
 						{t('client_history_more')}
 					</Button>
 				{/if}
-			</section>
+			</Card>
 
 			{#key client.id}
 				<PhotoSection clientId={client.id} empty="photos_empty_client" />
 			{/key}
 
-			<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 				<h2 class="text-xl font-bold text-ink">{t('client_reminders')}</h2>
 				{#if remindersError !== null}
 					<p role="alert" class="text-sm text-error">{remindersError}</p>
-				{:else if reminders !== null && reminders.length === 0}
+				{:else if reminders === null}
+					<p role="status" class="px-2 text-base text-ink-muted">{t('client_reminders_loading')}</p>
+				{:else if reminders.length === 0}
 					<p class="text-sm text-ink-muted">{t('client_reminders_empty')}</p>
-				{:else if reminders !== null}
+				{:else}
 					<ul class="flex flex-col divide-y divide-glass-edge">
 						{#each reminders as row (row.id)}
 							<li class="flex flex-col gap-0.5 py-3">
@@ -365,7 +368,7 @@
 						{/each}
 					</ul>
 				{/if}
-			</section>
+			</Card>
 		</div>
 	{/if}
 </div>
@@ -391,7 +394,7 @@
 		{t('client_archive')}
 	</WriteButton>
 	<Button
-		variant="secondary"
+		variant="glass"
 		onclick={() => {
 			asking = false;
 		}}
@@ -399,9 +402,3 @@
 		{t('cancel')}
 	</Button>
 </BottomSheet>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}

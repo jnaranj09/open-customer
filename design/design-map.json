@@ -1,0 +1,28 @@
+{
+  "tokens": {
+    "glass-fill": "--glass",
+    "glass-fill-strong": "--glass-strong",
+    "rose-100": "--accent-100",
+    "rose-300": "--accent-300",
+    "rose-500": "--accent",
+    "rose-700": "--accent-700"
+  },
+  "components": {
+    "GlassCard/Default": {
+      "component": "Card",
+      "variant": "default"
+    },
+    "GlassCard/Strong": {
+      "component": "Card",
+      "variant": "strong"
+    },
+    "GlassCard/Tint": {
+      "component": "Card",
+      "variant": "tint"
+    },
+    "GlassCard/Solid": {
+      "component": "Card",
+      "variant": "solid"
+    }
+  }
+}

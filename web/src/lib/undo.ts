@@ -42,3 +42,25 @@ export function delayed(
 		done
 	};
 }
+
+/** Calls `leave` when the page is about to go away: `pagehide` on `win` (a reload, a closed tab) or
+ *  `visibilitychange` to hidden on `doc` (the app sent to the background, which iOS may then kill
+ *  without a `pagehide`). Used to flush a waiting "Omitir". Returns the function that removes the
+ *  listeners. */
+export function onPageLeave(
+	leave: () => void,
+	win: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>,
+	doc: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>
+): () => void {
+	const onVisibility = (): void => {
+		if (doc.visibilityState === 'hidden') {
+			leave();
+		}
+	};
+	win.addEventListener('pagehide', leave);
+	doc.addEventListener('visibilitychange', onVisibility);
+	return () => {
+		win.removeEventListener('pagehide', leave);
+		doc.removeEventListener('visibilitychange', onVisibility);
+	};
+}

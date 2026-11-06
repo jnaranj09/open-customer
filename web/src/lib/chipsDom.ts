@@ -2,9 +2,7 @@
 // and the caret. All the rules that can be wrong are in `chips.ts` (pure, tested); this file only
 // moves between the DOM and those types, so it has no logic of its own to test without a browser.
 import { chipText, type DomNode } from './chips';
-
-const CHIP_CLASS =
-	'mx-0.5 inline-block cursor-pointer select-none rounded-pill border border-accent-300 bg-accent-100 px-3 py-0.5 align-baseline text-sm font-bold text-accent-700 hover:bg-accent-300';
+import { TOKEN_CHIP_CLASSES } from './components/ui/chipStyle';
 
 const isChip = (node: Node | null): boolean =>
 	node instanceof HTMLElement && node.dataset['chip'] !== undefined;
@@ -29,7 +27,7 @@ export function chipElement(
 	if (fallback !== null) {
 		el.dataset['fallback'] = fallback;
 	}
-	el.className = CHIP_CLASS;
+	el.className = TOKEN_CHIP_CLASSES;
 	paintChip(el, label, hint);
 	return el;
 }

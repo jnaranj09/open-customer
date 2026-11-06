@@ -1,4 +1,6 @@
 <script lang="ts">
+	import TextButton from './ui/TextButton.svelte';
+	import Card from './ui/Card.svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Client } from '../api/schemas';
@@ -6,9 +8,9 @@
 	import { sharingNames } from '../clients';
 	import { search } from '../search';
 	import { submitOnce } from '../submit';
-	import BottomSheet from './BottomSheet.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
 	import DuplicatePhone from './DuplicatePhone.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
 	// Picks the client of a booking (CUJ 3 step 2): type to search the cached clients (the one
@@ -41,19 +43,34 @@
 	let phone = $state('');
 	let failure = $state<ApiError | null>(null);
 	let busy = $state(false);
+	// After a save tap the name is checked here, so an empty one says so under the field (as in
+	// ClientForm) without a request; a field the server rejects shows under that field too.
+	let attempted = $state(false);
 
 	const sharing = $derived(sharingNames(failure));
+	const nameError = $derived.by(() => {
+		if (attempted && name.trim() === '') {
+			return t('client_name_needed');
+		}
+		return failure?.kind === 'problem' ? failure.fields['name'] : undefined;
+	});
+	const phoneError = $derived(failure?.kind === 'problem' ? failure.fields['phone'] : undefined);
 
 	function openAdd(): void {
 		name = query.trim();
 		phone = '';
 		failure = null;
+		attempted = false;
 		adding = true;
 	}
 
 	const save = submitOnce(
 		async (allowDuplicate: boolean) => {
+			attempted = true;
 			failure = null;
+			if (name.trim() === '') {
+				return;
+			}
 			const trimmed = phone.trim();
 			const result = await api.createClient({
 				name: name.trim(),
@@ -79,20 +96,15 @@
 <div class="flex flex-col gap-1.5">
 	{#if selected !== null}
 		<span class="text-sm font-bold text-ink">{t('appointment_client')}</span>
-		<div
-			class="glass-card flex min-h-tap items-center gap-3 rounded-sm py-1 pr-1 pl-4 text-base text-ink"
-		>
+		<Card radius="sm" pad="field" class="flex min-h-tap items-center gap-3 text-base text-ink">
 			<span class="min-w-0 flex-1 truncate font-bold">{selected.name}</span>
-			<button
-				type="button"
-				class="min-h-tap rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+			<TextButton
+				variant="accent"
 				onclick={() => {
 					value = null;
-				}}
+				}}>{t('client_change')}</TextButton
 			>
-				{t('client_change')}
-			</button>
-		</div>
+		</Card>
 	{:else}
 		<TextField
 			label={t('appointment_client')}
@@ -103,7 +115,7 @@
 			{error}
 		/>
 		{#if query.trim() !== ''}
-			<ul class="glass-card flex flex-col overflow-hidden rounded-sm">
+			<Card as="ul" radius="sm" class="flex flex-col overflow-hidden">
 				{#each results as client (client.id)}
 					<li>
 						<button
@@ -120,16 +132,12 @@
 				{:else}
 					<li class="px-4 py-3 text-sm text-ink-muted">{t('client_no_results')}</li>
 				{/each}
-			</ul>
+			</Card>
 		{/if}
 		{#if allowAdd}
-			<button
-				type="button"
-				class="min-h-tap self-start rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
-				onclick={openAdd}
+			<TextButton variant="accent" onclick={openAdd} class="self-start"
+				>{t('client_add')}</TextButton
 			>
-				{t('client_add')}
-			</button>
 		{/if}
 	{/if}
 </div>
@@ -141,8 +149,14 @@
 		adding = false;
 	}}
 >
-	<TextField label={t('client_name')} autocomplete="off" bind:value={name} />
-	<TextField label={t('client_phone')} type="tel" autocomplete="off" bind:value={phone} />
+	<TextField label={t('client_name')} autocomplete="off" bind:value={name} error={nameError} />
+	<TextField
+		label={t('client_phone')}
+		type="tel"
+		autocomplete="off"
+		bind:value={phone}
+		error={phoneError}
+	/>
 	{#if sharing !== null}
 		<DuplicatePhone
 			names={sharing}
@@ -157,7 +171,7 @@
 			<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
 		{/if}
 		<WriteButton
-			variant="primary"
+			variant="strong"
 			{busy}
 			onclick={() => {
 				void save.run(false);

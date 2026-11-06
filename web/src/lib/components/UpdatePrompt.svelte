@@ -1,9 +1,10 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { newVersion } from '../api/app';
 	import { t } from '../i18n';
 	import { submitOnce } from '../submit';
 	import { applyUpdate } from '../update';
-	import Button from './Button.svelte';
+	import Button from './ui/Button.svelte';
 
 	// `standalone`: a page with no shell (login, setup) floats it at the top, so it does not push
 	// the centered card down; those pages have no offline banner for it to cover.
@@ -28,14 +29,11 @@
 </script>
 
 {#snippet prompt()}
-	<div
-		role="status"
-		class="glass-card flex items-center gap-3 rounded-lg bg-glass-tint py-3 pr-3 pl-5 lg:ml-auto lg:w-96"
-	>
+	<Card role="status" variant="tint" pad="trail" class="flex items-center gap-3 lg:ml-auto lg:w-96">
 		<p class="flex-1 text-base text-ink">{t('update_available')}</p>
 		<div class="w-32 shrink-0">
 			<Button
-				variant="primary"
+				variant="strong"
 				{busy}
 				onclick={() => {
 					void update.run();
@@ -44,7 +42,7 @@
 				{t('update_apply')}
 			</Button>
 		</div>
-	</div>
+	</Card>
 {/snippet}
 
 <!-- With the shell: in the page's flow, above the offline banner (the layout places it), so neither

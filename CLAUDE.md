@@ -40,7 +40,8 @@ with fnm, `fnm use` in web/).
   `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
   app Docker image.
-- `make e2e`: build, fresh e2e database, Playwright WebKit.
+- `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
+  layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
@@ -90,8 +91,15 @@ A check that could not run is reported as NOT RUN, never as passing.
   `strictTypeChecked`. Never loosen a flag; fix the consumer.
 - Guard tests in `internal/guards` (Go: agent-context, nolint budget, catch-blocks, test-hygiene,
   forbid-only) and `web/tests/guards` (Vitest: layers, catch-blocks, test-hygiene, forbid-only,
-  eslint suppression budget, bulk file and inline comments). Allow-lists only shrink.
-- Lint suppressions: a pinned total that only falls (guard `suppression-budget`).
+  raw-colors, design-tokens, design-parity, ui-lint, eslint suppression budget, bulk file and inline
+  comments). Allow-lists only shrink.
+- Lint suppressions: a pinned total that only falls (guard `suppression-budget`, `svelte-ignore`
+  included).
+- UI pipeline (`rules/ui.md`): tokens and components follow `design/soft-glass.pen` (guards
+  `design-tokens`, `design-parity`); only `web/src/lib/components/ui/` may use surface and radius
+  classes, and no file may use an arbitrary `-[…]` value (eslint `better-tailwindcss`). Runtime:
+  `web/tests/e2e/ui-probe.spec.ts` (axe, layout probe, data states, every route); its allow-list
+  `ui-probe.allow.ts` only shrinks.
 - Coverage: `make cover` keeps a 90% floor on the gated packages (owner decision). Never write a
   test only to raise the number; mutation testing in the clean-up pass checks the tests are real.
 - `code-reviewer` subagent: a fresh reviewer re-runs the gate and fault-injects every guard.

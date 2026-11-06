@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { getContext, untrack } from 'svelte';
+	import Card from './ui/Card.svelte';
+	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Settings } from '../api/schemas';
@@ -11,20 +12,19 @@
 	import { timeZoneOptions } from '../setup';
 	import { businessPatch, LAST_PUSH_HOUR } from '../settingsPage';
 	import { submitOnce } from '../submit';
-	import type { createToaster } from '../toaster.svelte';
-	import Button from './Button.svelte';
+	import { toaster } from '../toaster.svelte';
+	import Button from './ui/Button.svelte';
 	import ColorPicker from './ColorPicker.svelte';
 	import FormCard from './FormCard.svelte';
 	import IconFileInput from './IconFileInput.svelte';
-	import SelectField from './SelectField.svelte';
-	import TextField from './TextField.svelte';
+	import SelectField from './ui/SelectField.svelte';
+	import TextField from './ui/TextField.svelte';
+	import { clockText } from '../time';
 
 	// The Negocio form: name, time zone, color and the hour of the daily notice, saved together.
 	// The icon is its own card, because it is a separate upload. Currency, country and language are
 	// fixed at setup (the API refuses them), so they are not here.
 	let { settings }: { settings: Settings } = $props();
-
-	const toaster = getContext<ReturnType<typeof createToaster>>('settings-toaster');
 
 	let name = $state(untrack(() => settings.name));
 	let timezone = $state(untrack(() => settings.timezone));
@@ -40,7 +40,7 @@
 	);
 	const hours = Array.from({ length: LAST_PUSH_HOUR + 1 }, (_, h) => ({
 		id: String(h),
-		label: `${String(h).padStart(2, '0')}:00`
+		label: clockText(h, 0)
 	}));
 
 	// Shows the color as she picks it, and puts the saved one back when she leaves without saving.
@@ -166,9 +166,12 @@
 	{/if}
 </FormCard>
 
-<form
-	class="glass-card flex flex-col gap-4 rounded-xl p-5 lg:max-w-190 lg:p-8"
-	onsubmit={(e) => {
+<Card
+	as="form"
+	radius="xl"
+	pad="section"
+	class="flex flex-col gap-4 lg:max-w-190"
+	onsubmit={(e: SubmitEvent) => {
 		e.preventDefault();
 		void uploadIcon.run();
 	}}
@@ -176,7 +179,7 @@
 	<h2 class="text-xl font-bold text-ink">{t('business_icon')}</h2>
 	<p class="text-sm text-ink-muted">{t('business_icon_hint')}</p>
 	<IconFileInput
-		onpick={(file: File | null) => {
+		onpick={(file: File) => {
 			iconFile = file;
 		}}
 	/>
@@ -185,15 +188,15 @@
 	{/if}
 	<div class="lg:w-56">
 		{#if iconFile === null}
-			<Button variant="primary" type="submit" disabled disabledReason={t('setup_icon_none')}>
+			<Button variant="strong" type="submit" disabled disabledReason={t('setup_icon_none')}>
 				{t('business_icon_upload')}
 			</Button>
 		{:else if cache.offline}
-			<Button variant="primary" type="submit" disabled disabledReason={t('offline_cannot_save')}>
+			<Button variant="strong" type="submit" disabled disabledReason={t('offline_cannot_save')}>
 				{t('business_icon_upload')}
 			</Button>
 		{:else}
-			<Button variant="primary" type="submit" busy={iconBusy}>{t('business_icon_upload')}</Button>
+			<Button variant="strong" type="submit" busy={iconBusy}>{t('business_icon_upload')}</Button>
 		{/if}
 	</div>
-</form>
+</Card>

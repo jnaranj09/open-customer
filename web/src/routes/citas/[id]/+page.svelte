@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -12,16 +13,16 @@
 	import ActionButton from '../../../lib/components/ActionButton.svelte';
 	import AppointmentForm from '../../../lib/components/AppointmentForm.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
-	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
+	import Card from '../../../lib/components/ui/Card.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import OverlapSheet from '../../../lib/components/OverlapSheet.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
-	import TextField from '../../../lib/components/TextField.svelte';
-	import Toast from '../../../lib/components/Toast.svelte';
+	import TextField from '../../../lib/components/ui/TextField.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { amountText, exponentOf, formatMoney, parseAmount } from '../../../lib/money';
 	import { submitOnce } from '../../../lib/submit';
-	import { createToaster } from '../../../lib/toaster.svelte';
+	import { toaster } from '../../../lib/toaster.svelte';
 	import { formatDayLong, formatTime, todayIn } from '../../../lib/time';
 
 	// One appointment (CUJ 3 step 5): its facts, the status buttons, the amount paid, edit mode and
@@ -31,10 +32,16 @@
 	const zone = $derived(business.zone);
 	const money = (minor: number): string => formatMoney(minor, business.currency, business.locale);
 
+	// The back arrow returns to where she came from (the client page, Hoy, Enviar): history back
+	// when this page was reached inside the app, else a link to Hoy (an opened link, a reload).
+	let cameFromApp = $state(false);
+	afterNavigate(({ from }) => {
+		cameFromApp = from !== null;
+	});
+
 	let appt = $state<Appointment | null>(null);
 	let loadError = $state<ApiError | null>(null);
 	let editing = $state(false);
-	const toaster = createToaster();
 
 	// The cached copy shows at once (and is all there is offline); the server's answer replaces it.
 	async function load(want: string): Promise<void> {
@@ -79,10 +86,10 @@
 		no_show: 'appointment_no_show'
 	};
 	const STATUS_VARIANT = {
-		scheduled: 'primary',
-		confirmed: 'primary',
+		scheduled: 'strong',
+		confirmed: 'strong',
 		cancelled: 'danger',
-		no_show: 'secondary'
+		no_show: 'glass'
 	} as const;
 	let actionError = $state<ApiError | null>(null);
 	let busy = $state(false);
@@ -117,15 +124,14 @@
 
 	// Amount paid
 	const exponent = $derived(exponentOf(business.currency || 'USD', business.locale));
-	let paid = $state('');
+	// The field starts from the stored amount and follows it only when the amount (or the
+	// appointment) changes: a status change returns a new `appt` with the same amount, and must
+	// not wipe what she typed.
+	const savedPaid = $derived(appt?.paid_cents ?? null);
+	const apptId = $derived(appt?.id ?? null);
+	let paid = $derived(apptId === null || savedPaid === null ? '' : amountText(savedPaid, exponent));
 	let paidError = $state<string | null>(null);
 	let paying = $state(false);
-	$effect(() => {
-		const a = appt;
-		untrack(() => {
-			paid = a?.paid_cents == null ? '' : amountText(a.paid_cents, exponent);
-		});
-	});
 
 	const savePaid = submitOnce(
 		async () => {
@@ -155,14 +161,23 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-2">
-		<a
-			href={resolve('/')}
-			title={t('appointment_back')}
-			aria-label={t('appointment_back')}
-			class="grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
-		>
-			<Icon name="chevron-left" class="size-5.5" />
-		</a>
+		{#if cameFromApp}
+			<IconButton
+				variant="plain"
+				icon="chevron-left"
+				label={t('appointment_back')}
+				onclick={() => {
+					history.back();
+				}}
+			/>
+		{:else}
+			<IconButton
+				variant="plain"
+				icon="chevron-left"
+				label={t('appointment_back')}
+				href={resolve('/')}
+			/>
+		{/if}
 		<h1 class="text-3xl font-extrabold text-ink">
 			{editing ? t('appointment_edit_title') : t('appointment_title')}
 		</h1>
@@ -192,7 +207,7 @@
 		/>
 	{:else}
 		<div class="flex flex-col gap-4 lg:max-w-190">
-			<section class="glass-card flex flex-col gap-4 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-4">
 				<div class="flex items-start gap-3">
 					<div class="min-w-0 flex-1">
 						<h2 class="text-xl font-bold text-ink">{appt.client_name}</h2>
@@ -203,11 +218,10 @@
 							{formatTime(appt.starts_at, zone)} – {formatTime(appt.ends_at, zone)}
 						</p>
 					</div>
-					<p
-						class="rounded-pill bg-glass-tint px-3 py-1 text-sm font-bold text-accent-700"
-						aria-label="{t('appointment_status_label')}: {t(STATUS_NAME[appt.status])}"
-					>
-						{t(STATUS_NAME[appt.status])}
+					<!-- aria-label is not allowed on a <p>: the "Estado" prefix is screen-reader text. -->
+					<p class="rounded-pill bg-glass-tint px-3 py-1 text-sm font-bold text-accent-text">
+						<span class="sr-only">{t('appointment_status_label')}:</span>
+						<span>{t(STATUS_NAME[appt.status])}</span>
 					</p>
 				</div>
 
@@ -268,9 +282,9 @@
 				{#if actionError !== null}
 					<p role="alert" class="text-sm text-error">{errorText(actionError)}</p>
 				{/if}
-			</section>
+			</Card>
 
-			<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 				<form
 					class="flex items-start gap-3"
 					onsubmit={(e) => {
@@ -287,12 +301,12 @@
 						/>
 					</div>
 					<div class="mt-7 w-40 shrink-0">
-						<WriteButton variant="secondary" type="submit" busy={paying}>
+						<WriteButton variant="glass" type="submit" busy={paying}>
 							{t('appointment_paid_save')}
 						</WriteButton>
 					</div>
 				</form>
-			</section>
+			</Card>
 		</div>
 	{/if}
 
@@ -306,12 +320,6 @@
 		</div>
 	{/if}
 </div>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}
 
 <OverlapSheet
 	open={overlapping !== null}

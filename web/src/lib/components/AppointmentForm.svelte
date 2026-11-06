@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TextButton from './ui/TextButton.svelte';
 	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
@@ -28,7 +29,7 @@
 	import ClientPicker from './ClientPicker.svelte';
 	import OverlapSheet from './OverlapSheet.svelte';
 	import ServicePicker from './ServicePicker.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// The booking form, shared by "Nueva cita" and the detail's edit mode (design doc item 75).
 	// Creating, it keeps a draft (item 67) and asks for the client; editing, the client is fixed and
@@ -192,15 +193,13 @@
 				<p class="pb-3 text-base font-bold text-ink">{t('appointment_total', { amount: total })}</p>
 			</div>
 			{#if form.end !== null && form.lines.length > 0}
-				<button
-					type="button"
-					class="min-h-tap self-start rounded-pill px-4 text-sm font-bold text-accent-700 hover:bg-accent-100"
+				<TextButton
+					variant="accent"
 					onclick={() => {
 						form.end = null;
 					}}
+					class="self-start">{t('appointment_end_auto')}</TextButton
 				>
-					{t('appointment_end_auto')}
-				</button>
 			{/if}
 		</div>
 

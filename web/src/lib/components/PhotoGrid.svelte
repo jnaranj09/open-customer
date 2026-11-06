@@ -4,9 +4,9 @@
 	import { t } from '../i18n';
 	import { layout } from '../layout';
 	import { submitOnce } from '../submit';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
-	import Icon from './icons/Icon.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
+	import IconButton from './ui/IconButton.svelte';
 	import WriteButton from './WriteButton.svelte';
 
 	// A grid of photo thumbnails: 3 columns on compact, 5 on wide. "Archivar foto" comes from a
@@ -61,7 +61,7 @@
 				alt={t('photo_alt')}
 				loading="lazy"
 				draggable="false"
-				class="size-full touch-pan-y object-cover select-none"
+				class="size-full touch-pan-y object-cover select-none touch-callout-none"
 				onpointerdown={() => {
 					press(photo);
 				}}
@@ -73,17 +73,15 @@
 				}}
 			/>
 			{#if layout.current === 'wide'}
-				<button
-					type="button"
-					title={t('photo_menu')}
-					aria-label={t('photo_archive')}
-					class="glass-card absolute top-1 right-1 grid size-11 place-items-center rounded-pill text-ink hover:bg-accent-100"
+				<IconButton
+					variant="glass"
+					icon="archive"
+					label={t('photo_archive')}
+					class="absolute top-1 right-1"
 					onclick={() => {
 						ask(photo);
 					}}
-				>
-					<Icon name="archive" class="size-4.5" />
-				</button>
+				/>
 			{/if}
 		</li>
 	{/each}
@@ -112,7 +110,7 @@
 		{t('photo_archive')}
 	</WriteButton>
 	<Button
-		variant="secondary"
+		variant="glass"
 		onclick={() => {
 			asking = null;
 		}}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Card from './ui/Card.svelte';
 	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText } from '../api/errors';
@@ -7,10 +8,10 @@
 	import { t, type MessageKey } from '../i18n';
 	import { toJpegs } from '../photos';
 	import { submitOnce } from '../submit';
-	import { createToaster } from '../toaster.svelte';
+	import { toaster } from '../toaster.svelte';
+	import FilePicker from './FilePicker.svelte';
 	import Icon from './icons/Icon.svelte';
 	import PhotoGrid from './PhotoGrid.svelte';
-	import Toast from './Toast.svelte';
 
 	// The photos of one client (the gallery) or of one of her appointments (design doc "Photos"): the
 	// list from the server, "Agregar foto" and "Archivar foto". Give it a new key when the owner
@@ -33,7 +34,6 @@
 	let listError = $state<string | null>(null);
 	let photosError = $state<string | null>(null);
 	let uploading = $state(false);
-	const toaster = createToaster();
 
 	async function load(): Promise<void> {
 		const result = await api.listClientMedia(clientId);
@@ -83,14 +83,6 @@
 		}
 	);
 
-	function picked(e: Event & { currentTarget: HTMLInputElement }): void {
-		const file = e.currentTarget.files?.[0];
-		e.currentTarget.value = '';
-		if (file !== undefined) {
-			void upload.run(file);
-		}
-	}
-
 	async function archive(photo: Media): Promise<string | null> {
 		const result = await api.archiveMedia(photo.id);
 		if (!result.ok) {
@@ -102,38 +94,30 @@
 	}
 </script>
 
-<section class="glass-card flex flex-col gap-3 rounded-xl p-5 lg:p-8">
+<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 	<div class="flex items-center gap-3">
 		<h2 class="flex-1 text-xl font-bold text-ink">{t('photos_title')}</h2>
-		<label
-			class="relative inline-flex min-h-tap items-center justify-center gap-2 rounded-pill border border-accent-300 bg-accent-100 px-6 py-3 text-sm font-bold text-accent-700 focus-within:outline-2 hover:bg-accent-300 {cache.offline ||
-			uploading
-				? 'pointer-events-none opacity-60'
-				: ''}"
-		>
-			<Icon name="plus" />
-			{uploading ? t('photo_adding') : t('photo_add')}
-			<input
-				type="file"
+		<div class="shrink-0">
+			<FilePicker
+				variant="ghost"
 				accept="image/*"
-				disabled={cache.offline || uploading}
-				onchange={picked}
-				class="absolute inset-0 size-full cursor-pointer opacity-0"
-			/>
-		</label>
+				busy={uploading}
+				disabledReason={cache.offline ? t('offline_cannot_save') : undefined}
+				onpick={(file: File) => void upload.run(file)}
+			>
+				<Icon name="plus" />
+				{uploading ? t('photo_adding') : t('photo_add')}
+			</FilePicker>
+		</div>
 	</div>
 	{#if photosError !== null || listError !== null}
 		<p role="alert" class="text-sm text-error">{photosError ?? listError}</p>
-	{:else if photos !== null && photos.length === 0}
+	{:else if photos === null}
+		<p role="status" class="px-2 text-base text-ink-muted">{t('photos_loading')}</p>
+	{:else if photos.length === 0}
 		<p class="text-sm text-ink-muted">{t(empty)}</p>
 	{/if}
 	{#if photos !== null && photos.length > 0}
 		<PhotoGrid {photos} onarchive={archive} />
 	{/if}
-</section>
-
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast message={toaster.current.message} />
-	{/key}
-{/if}
+</Card>

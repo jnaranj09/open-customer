@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ResolvedPathname } from '$app/types';
 	import type { Snippet } from 'svelte';
-	import Icon from './icons/Icon.svelte';
+	import Icon from '../icons/Icon.svelte';
 
 	// `href` is already resolved by the caller (`resolve`), so a dynamic route like
 	// `/clientas/[id]` can pass its values. With `onclick` instead of `href` the row is a button.

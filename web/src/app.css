@@ -2,7 +2,12 @@
 @import '@fontsource-variable/nunito';
 
 /* Tokens from the mockup (design/soft-glass.pen "variables"). `--accent` is the one runtime value:
-   applyAccent (lib/color.ts) sets it from settings; the shades below follow it. */
+   applyAccent (lib/color.ts) sets it from settings; the shades below follow it. `--accent-fill`,
+   `--accent-fill-hover` and `--on-accent` (a filled accent control, its hover and its label) and
+   `--accent-text` (the accent as text on a light surface) are computed there too, so text keeps
+   WCAG AA contrast for any accent; the values here are the default accent's (a test keeps them in
+   sync). applyAccent also sets `--accent-300`: the same mix as below, with less accent for a
+   near-black one, so accent text keeps AA on that hover fill. */
 :root {
 	--bg-100: #fbf5f2;
 	--bg-200: #f6ece8;
@@ -20,6 +25,9 @@
 	--error: #b3433f;
 
 	--accent: #c76b85;
+	--accent-fill: #9f566a;
+	--accent-fill-hover: #8b4b5d;
+	--accent-text: #774050;
 	--on-accent: var(--on-strong);
 	--accent-100: color-mix(in oklab, var(--accent) 15%, white);
 	--accent-300: color-mix(in oklab, var(--accent) 45%, white);
@@ -52,7 +60,9 @@
 	--color-accent: var(--accent);
 	--color-accent-100: var(--accent-100);
 	--color-accent-300: var(--accent-300);
-	--color-accent-700: var(--accent-700);
+	--color-accent-fill: var(--accent-fill);
+	--color-accent-fill-hover: var(--accent-fill-hover);
+	--color-accent-text: var(--accent-text);
 	--color-on-accent: var(--on-accent);
 	--color-sage-200: var(--sage-200);
 	--color-success: var(--success);
@@ -75,8 +85,11 @@ html {
 	font-family: var(--font-sans);
 }
 
-/* The soft glows sit behind every screen and stay put while the content scrolls. */
+/* The soft glows sit behind every screen and stay put while the content scrolls. A word too long
+   for its line (a client typed as one 60-letter word, a pasted link) breaks instead of pushing the
+   screen wider; a flex item that holds such text also needs min-w-0. */
 body {
+	overflow-wrap: break-word;
 	min-height: 100dvh;
 	background:
 		radial-gradient(60rem 40rem at 0% 0%, var(--glow-blush), transparent 70%),
@@ -97,6 +110,14 @@ body {
 	border: 1px solid var(--glass-edge);
 	backdrop-filter: blur(24px);
 	box-shadow: var(--shadow-glass);
+}
+
+/* An opaque panel for a message that floats over content (the toast): glass there lets the text
+   under it show through. */
+@utility solid-panel {
+	background: var(--bg-100);
+	border: 1px solid var(--glass-edge);
+	box-shadow: var(--shadow-sheet);
 }
 
 @utility shadow-raised {
@@ -131,4 +152,31 @@ body {
 
 @utility pr-safe {
 	padding-right: env(safe-area-inset-right);
+}
+
+/* The floating "+" on compact Hoy: above the tab bar (BottomNav: its pill plus its bottom margin)
+   and the home indicator under it. */
+@utility bottom-fab {
+	bottom: calc(--spacing(32) + env(safe-area-inset-bottom));
+}
+
+/* Named heights and generated content, so no component needs an arbitrary `-[…]` value (lint
+   rejects those; .claude/rules/ui.md "UI pipeline"). */
+@utility max-h-sheet {
+	max-height: 90dvh;
+}
+
+@utility max-h-grid {
+	max-height: 75dvh;
+}
+
+/* A photo long-pressed on iOS opens the system image menu (save, share) over the app's own
+   long-press action; this turns that menu off. */
+@utility touch-callout-none {
+	-webkit-touch-callout: none;
+}
+
+@utility content-placeholder {
+	--tw-content: attr(data-placeholder);
+	content: var(--tw-content);
 }

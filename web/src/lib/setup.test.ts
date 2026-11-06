@@ -1,12 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	countryOptions,
 	currencyOptions,
+	finishingStep,
+	rememberFinishing,
+	storeOnce,
 	stepForField,
 	STEPS,
 	timeZoneOptions,
 	tokenFromHash,
-	type IntlLike
+	type IntlLike,
+	type StepStore
 } from './setup';
 
 class FakeDateTimeFormat {
@@ -124,5 +128,78 @@ describe('stepForField', () => {
 describe('STEPS', () => {
 	it('runs from the business name to the install guide', () => {
 		expect([STEPS[0], STEPS.at(-1)]).toEqual(['business', 'install']);
+	});
+});
+
+/** A session storage stand-in: a map behind the three methods. */
+function memoryStore(): StepStore {
+	const items = new Map<string, string>();
+	return {
+		getItem: (k) => items.get(k) ?? null,
+		setItem: (k, v) => {
+			items.set(k, v);
+		},
+		removeItem: (k) => {
+			items.delete(k);
+		}
+	};
+}
+
+describe('finishing step', () => {
+	it('is null before setup made the account', () => {
+		expect(finishingStep(memoryStore())).toBeNull();
+	});
+
+	it('reads back the step the wizard stored', () => {
+		const store = memoryStore();
+		rememberFinishing(store, 'install');
+		expect(finishingStep(store)).toBe('install');
+	});
+
+	it('is null again once she entered the app', () => {
+		const store = memoryStore();
+		rememberFinishing(store, 'icon');
+		rememberFinishing(store, null);
+		expect(finishingStep(store)).toBeNull();
+	});
+
+	it('is null without storage', () => {
+		expect(finishingStep(null)).toBeNull();
+	});
+
+	it('is null when the stored value is not a finishing step', () => {
+		const store = memoryStore();
+		store.setItem('open-customer.setup-finishing', 'business');
+		expect(finishingStep(store)).toBeNull();
+	});
+
+	it('is null when the storage throws on read', () => {
+		const store = {
+			...memoryStore(),
+			getItem: (): string | null => {
+				throw new Error('denied');
+			}
+		};
+		expect(finishingStep(store)).toBeNull();
+	});
+});
+
+describe('storeOnce', () => {
+	it('tries a refused storage once and logs it once', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const open = vi.fn((): StepStore => {
+			throw new Error('denied');
+		});
+		const store = storeOnce(open);
+		expect([store(), store()]).toEqual([null, null]);
+		expect([open.mock.calls.length, warn.mock.calls.length]).toEqual([1, 1]);
+		warn.mockRestore();
+	});
+
+	it('keeps the storage it opened', () => {
+		const memory = memoryStore();
+		const open = vi.fn(() => memory);
+		const store = storeOnce(open);
+		expect([store(), store(), open.mock.calls.length]).toEqual([memory, memory, 1]);
 	});
 });

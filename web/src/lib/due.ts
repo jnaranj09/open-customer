@@ -31,7 +31,8 @@ export function shownDue(
 	return visibleDue(items, at.now, at.offline).filter((i) => !at.logged.includes(i.id));
 }
 
-/** The server's `late` flag splits the list; the order inside each group is the server's. */
+/** The server's `late` flag splits the list; the order inside each group is the server's (the
+ *  cache keeps it: `position` on each cached due row, lib/cache/db.ts). */
 export function groupDue(items: DueItem[]): { late: DueItem[]; today: DueItem[] } {
 	return { late: items.filter((i) => i.late), today: items.filter((i) => !i.late) };
 }

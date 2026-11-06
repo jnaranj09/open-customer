@@ -9,11 +9,11 @@
 	import { servicePatch, serviceRequest, type ServiceField } from '../services';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
-	import BottomSheet from './BottomSheet.svelte';
-	import Button from './Button.svelte';
+	import BottomSheet from './ui/BottomSheet.svelte';
+	import Button from './ui/Button.svelte';
 	import ColorPicker from './ColorPicker.svelte';
 	import SaveButton from './SaveButton.svelte';
-	import TextField from './TextField.svelte';
+	import TextField from './ui/TextField.svelte';
 
 	// Add or edit one service in a sheet (design doc item 77, CUJ 2 step 1). The page mounts it when
 	// she opens a service, so every opening starts from the saved values. Archiving is one tap and
@@ -171,7 +171,7 @@
 		{#if service.archived}
 			<div class="flex">
 				<ActionButton
-					variant="secondary"
+					variant="glass"
 					busy={toggling}
 					onclick={() => {
 						void setArchived.run(false);
@@ -184,7 +184,7 @@
 			<p class="text-sm text-ink-muted">{t('service_archive_body')}</p>
 			<div class="flex">
 				<ActionButton
-					variant="secondary"
+					variant="glass"
 					busy={toggling}
 					onclick={() => {
 						void setArchived.run(true);
