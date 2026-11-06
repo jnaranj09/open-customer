@@ -1,5 +1,4 @@
-/** The .pen Button variants used in code (`Button/Strong`, `/Glass`, `/Ghost`, `/Danger`). The
- *  .pen's `Button/Primary` (the pale rose fill) has no use yet. */
+/** The .pen's four Button variants: `Button/Strong`, `/Glass`, `/Ghost`, `/Danger`. */
 export type ButtonVariant = 'strong' | 'glass' | 'ghost' | 'danger';
 
 const BASE =

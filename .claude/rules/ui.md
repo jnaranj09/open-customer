@@ -44,8 +44,8 @@ paths:
   reads script variables, object values and `$derived` / `$derived.by` arguments, not those).
 - **5. Compose, don't configure.** A primitive takes a `variant` (one prop with named values), not
   a pile of boolean props; content goes in as children / snippets, not as config props; a
-  primitive is never copied into a feature folder (wrap or extend it). Copies: jscpd and guard
-  `design-parity`; the API shape is prose only (reviewer).
+  primitive is never copied into a feature folder (wrap or extend it). Copies: jscpd (10 lines or
+  more), prose only below that; the API shape is prose only (reviewer).
 - **6. Review before done.** Run the `web-design-guidelines` skill on the UI diff (these rule files
   win over its taste lines), then check the change in the running app with `agent-browser` (or
   Playwright WebKit for Safari) at 393 × 852 and 1440 × 900, with a screenshot of each. Tests
