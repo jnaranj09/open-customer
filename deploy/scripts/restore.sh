@@ -28,23 +28,10 @@ die_stopped() {
 }
 
 cd "$(dirname "$0")/.."
-[ -f .env ] || die "no .env next to compose.yaml"
-[ "$(grep -c '^APP_VERSION=' .env)" -eq 1 ] || die ".env must have exactly one APP_VERSION= line"
-
-# set_app_version <version>: rewrites the APP_VERSION line of .env in place (same file, so its
-# owner and mode stay); every other line is kept as is.
-set_app_version() {
-  local tmp
-  # Checked by hand: a caller's `||` turns `set -e` off in here, and an empty temp file must
-  # never replace .env.
-  tmp=$(umask 077 && mktemp .env.XXXXXX) || return 1
-  if ! sed "s/^APP_VERSION=.*/APP_VERSION=$1/" .env >"$tmp" || ! grep -qx "APP_VERSION=$1" "$tmp"; then
-    rm -f "$tmp"
-    return 1
-  fi
-  cat "$tmp" >.env
-  rm -f "$tmp"
-}
+# lib.sh is shellchecked on its own (make lint runs shellcheck without -x).
+# shellcheck source=/dev/null
+. scripts/lib.sh
+check_env_file
 
 # 1. One JSON line {"id","time","app"} from the backup image (jq is not needed on the host).
 info=$(docker compose --profile restore run --rm restore snapshot-info "$1") ||

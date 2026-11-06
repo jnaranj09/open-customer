@@ -2461,7 +2461,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `status.json` is written mode `0644`, because `app` reads it as user 65532 and the backup container runs as root. A failed step also sets `last_error_at` (see the outcome table in "Backups").
     *   One test-only knob, default off: `BACKUP_INTERVAL_SECONDS` (default 3600), the wait between two loop checks, so `make test-deploy` does not wait an hour. It is documented at the top of the script.
 
-##### 86. `deploy/scripts/backup-now.sh`, `deploy/scripts/upgrade.sh`, `deploy/scripts/restore.sh` (Create)
+##### 86. `deploy/scripts/backup-now.sh`, `deploy/scripts/upgrade.sh`, `deploy/scripts/restore.sh`, `deploy/scripts/lib.sh` (Create)
 
 *   **Type / Scope**: Operator scripts.
 *   **Proposed Changes**: As in "Backups" and "Upgrades and the migration guard".
@@ -2469,6 +2469,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `upgrade.sh <version>`: `set -euo pipefail`; the five steps in "Upgrades and the migration guard". The version must match `^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$`.
     *   `restore.sh <snapshot|latest>`: the five steps in "Upgrades and the migration guard". The argument is `latest` or a hex snapshot ID. It asks `Restore snapshot <id> from <time> (app <version>)? [y/N]` and reads one line; anything but `y` exits 1 with nothing stopped, and so does a snapshot without an `app=` tag. After the stop it stops on any failure and leaves `app` and `backup` stopped, with a message naming them.
     *   Each script does `cd "$(dirname "$0")/.."`, so it works from any folder and `.env` is `deploy/.env`. `upgrade.sh` and `restore.sh` rewrite only the `APP_VERSION` line of `.env`, in place.
+    *   `lib.sh` (sourced by `upgrade.sh` and `restore.sh`, never run): the `.env` checks (it exists, exactly one `APP_VERSION=` line) and `set_app_version`, which writes a temp copy `.env.XXXXXX` (mode 0600) and copies it over `.env`, and returns non-zero when `.env` was not changed (a failed write included), so the caller stops before `up -d`. An `EXIT` trap removes the temp copy, also on INT or TERM; `.gitignore` covers `deploy/.env.*` (except `.env.example`) for a copy a SIGKILL leaves.
     *   Tests: `deploy/tests/scripts_test.sh` (item 2, `make test-deploy`).
 
 #### Files deleted from the repo root

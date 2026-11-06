@@ -36,11 +36,29 @@ exit 0
 EOF
 chmod +x "$ROOT/bin/docker"
 
+# A sed that sends TERM to the script running it while it writes the temp copy of .env, for the
+# trap test; it is first on PATH only in that test.
+mkdir -p "$ROOT/sigbin"
+real_sed=$(command -v sed)
+cat >"$ROOT/sigbin/sed" <<SED
+#!/usr/bin/env bash
+case "\$*" in "s/^APP_VERSION=.*/"*) kill -TERM "\$PPID" ;; esac
+exec "$real_sed" "\$@"
+SED
+chmod +x "$ROOT/sigbin/sed"
+
 env_file='APP_VERSION=1.0.0
 PUBLIC_URL=https://example.test
 DB_PASSWORD=test-only
 # a comment line stays as is
 BACKUP_TARGET=/backup-target-for-tests'
+
+# no_temp_left: no .env.XXXXXX copy (it holds every secret) stays next to .env.
+no_temp_left() {
+  local left
+  left=$(find "$W/deploy" -maxdepth 1 -name '.env.*')
+  assert_eq "temp files left in deploy/" "" "$left"
+}
 
 # setup: a fresh copy of the deploy folder in $W with a test .env, an empty log in $LOG.
 setup() {
@@ -146,6 +164,28 @@ test_upgrade_happy_path() {
   assert_eq ".env" "$want" "$(cat "$W/deploy/.env")"
 }
 
+test_upgrade_env_not_writable() {
+  setup
+  local before rc=0
+  before=$(cat "$W/deploy/.env")
+  chmod 400 "$W/deploy/.env"
+  FAKE_APP_VERSION=1.0.0 run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call "up -d"
+  assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+  grep -q "cannot set APP_VERSION" "$W/err" || fail "no message about .env: $(cat "$W/err")"
+  no_temp_left
+}
+
+test_upgrade_term_leaves_no_temp() {
+  setup
+  local rc=0
+  FAKE_APP_VERSION=1.0.0 PATH="$ROOT/sigbin:$PATH" run upgrade.sh 1.1.0 >/dev/null 2>&1 || rc=$?
+  assert_eq "exit code" 143 "$rc"
+  no_call "up -d"
+  no_temp_left
+}
+
 test_restore_stops_on_no() {
   setup
   local before rc=0
@@ -171,6 +211,18 @@ test_restore_failure_leaves_stopped() {
   no_call "up -d"
   grep -q "app and backup are stopped" "$W/err" || fail "the message does not name the stopped services"
   assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+}
+
+test_restore_env_not_writable() {
+  setup
+  local rc=0
+  chmod 400 "$W/deploy/.env"
+  printf 'y\n' | FAKE_SNAPSHOT_JSON=$snapshot_json run restore.sh latest >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  has_call "restore restore" || fail "the restore did not run"
+  no_call "up -d"
+  grep -q "app and backup are stopped" "$W/err" || fail "the message does not name the stopped services"
+  no_temp_left
 }
 
 test_restore_happy_path() {
@@ -221,8 +273,11 @@ t "backup-now passes the tag and the exit code" test_backup_now_tag_and_code
 t "upgrade stops when .env and the running app disagree" test_upgrade_versions_disagree
 t "upgrade stops when the pre-upgrade backup fails" test_upgrade_backup_fails
 t "upgrade happy path order" test_upgrade_happy_path
+t "upgrade stops when .env cannot be written" test_upgrade_env_not_writable
+t "a TERM during the .env edit leaves no temp copy" test_upgrade_term_leaves_no_temp
 t "restore asks first and stops on no" test_restore_stops_on_no
 t "restore failure leaves app and backup stopped" test_restore_failure_leaves_stopped
+t "restore stops with app and backup stopped when .env cannot be written" test_restore_env_not_writable
 t "restore happy path sets APP_VERSION from the snapshot" test_restore_happy_path
 t "restore refuses a snapshot without an app version" test_restore_snapshot_without_version
 t "compose config is valid" test_compose_config
