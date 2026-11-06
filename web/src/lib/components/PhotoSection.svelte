@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Card from './ui/Card.svelte';
-	import { buttonClasses } from './ui/buttonStyle';
 	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText } from '../api/errors';
@@ -10,6 +9,7 @@
 	import { toJpegs } from '../photos';
 	import { submitOnce } from '../submit';
 	import { createToaster } from '../toaster.svelte';
+	import FilePicker from './FilePicker.svelte';
 	import Icon from './icons/Icon.svelte';
 	import PhotoGrid from './PhotoGrid.svelte';
 	import Toast from './Toast.svelte';
@@ -85,14 +85,6 @@
 		}
 	);
 
-	function picked(e: Event & { currentTarget: HTMLInputElement }): void {
-		const file = e.currentTarget.files?.[0];
-		e.currentTarget.value = '';
-		if (file !== undefined) {
-			void upload.run(file);
-		}
-	}
-
 	async function archive(photo: Media): Promise<string | null> {
 		const result = await api.archiveMedia(photo.id);
 		if (!result.ok) {
@@ -107,21 +99,18 @@
 <Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 	<div class="flex items-center gap-3">
 		<h2 class="flex-1 text-xl font-bold text-ink">{t('photos_title')}</h2>
-		<label
-			class="{buttonClasses('ghost')} relative focus-within:outline-2 {cache.offline || uploading
-				? 'pointer-events-none opacity-60'
-				: ''}"
-		>
-			<Icon name="plus" />
-			{uploading ? t('photo_adding') : t('photo_add')}
-			<input
-				type="file"
+		<div class="shrink-0">
+			<FilePicker
+				variant="ghost"
 				accept="image/*"
-				disabled={cache.offline || uploading}
-				onchange={picked}
-				class="absolute inset-0 size-full cursor-pointer opacity-0"
-			/>
-		</label>
+				busy={uploading}
+				disabledReason={cache.offline ? t('offline_cannot_save') : undefined}
+				onpick={(file: File) => void upload.run(file)}
+			>
+				<Icon name="plus" />
+				{uploading ? t('photo_adding') : t('photo_add')}
+			</FilePicker>
+		</div>
 	</div>
 	{#if photosError !== null || listError !== null}
 		<p role="alert" class="text-sm text-error">{photosError ?? listError}</p>

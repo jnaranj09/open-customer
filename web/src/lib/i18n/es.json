@@ -465,5 +465,7 @@
 	"page_title_app": "Agenda",
 	"page_title_client": "Clienta",
 	"page_title_template": "Plantilla",
-	"page_title_login": "Entrar"
+	"page_title_login": "Entrar",
+	"file_pick_image": "Elegir imagen",
+	"file_none": "Ninguna imagen elegida"
 }

@@ -212,7 +212,7 @@
 			<h2 class="text-xl font-bold text-ink">{t('setup_icon_title')}</h2>
 			<p class="text-base text-ink-muted">{t('setup_icon_hint')}</p>
 			<IconFileInput
-				onpick={(file: File | null) => {
+				onpick={(file: File) => {
 					iconFile = file;
 				}}
 			/>

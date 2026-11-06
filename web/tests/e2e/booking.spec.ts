@@ -89,7 +89,10 @@ test('the stored photo has no Exif data', async ({ page }) => {
 
 	await page.goto(`/citas/${appointment}`);
 	await expect(page.getByText(es.photos_empty, { exact: true })).toBeVisible();
-	await page.getByLabel(es.photo_add).setInputFiles(PHOTO);
+	// "Agregar foto" is an app button that opens the chooser (the browser's file box is hidden).
+	const chooser = page.waitForEvent('filechooser');
+	await page.getByRole('button', { name: es.photo_add }).click();
+	await (await chooser).setFiles(PHOTO);
 	const photo = page.getByRole('img', { name: es.photo_alt });
 	await expect(photo).toBeVisible();
 

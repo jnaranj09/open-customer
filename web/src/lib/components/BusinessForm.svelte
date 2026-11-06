@@ -180,7 +180,7 @@
 	<h2 class="text-xl font-bold text-ink">{t('business_icon')}</h2>
 	<p class="text-sm text-ink-muted">{t('business_icon_hint')}</p>
 	<IconFileInput
-		onpick={(file: File | null) => {
+		onpick={(file: File) => {
 			iconFile = file;
 		}}
 	/>
