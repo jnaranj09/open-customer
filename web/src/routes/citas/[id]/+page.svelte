@@ -202,10 +202,9 @@
 							{formatTime(appt.starts_at, zone)} – {formatTime(appt.ends_at, zone)}
 						</p>
 					</div>
-					<p
-						class="rounded-pill bg-glass-tint px-3 py-1 text-sm font-bold text-accent-700"
-						aria-label="{t('appointment_status_label')}: {t(STATUS_NAME[appt.status])}"
-					>
+					<!-- aria-label is not allowed on a <p>: the "Estado" prefix is screen-reader text. -->
+					<p class="rounded-pill bg-glass-tint px-3 py-1 text-sm font-bold text-accent-700">
+						<span class="sr-only">{t('appointment_status_label')}:</span>
 						{t(STATUS_NAME[appt.status])}
 					</p>
 				</div>
