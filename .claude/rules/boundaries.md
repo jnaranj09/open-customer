@@ -66,7 +66,7 @@ return { kind: 'ok', value: parsed.data };
 | Dexie rows (web cache, drafts) | zod in the web cache module | `clearCache()`, then refresh from `/bootstrap` | cache test: a bad stored row → cache cleared and refreshed (P5, item 78) |
 | Push payload (service worker) | service worker `push` handler | a generic notification text | service worker test: malformed payload → generic text (P5, item 78) |
 | Route params (web) | the route's load function | the not-found screen | route test: unknown id → not-found screen (P5, item 78) |
-| Script args and env (deploy scripts) | top of each script | exit non-zero with a one-line message | a shell test per script: missing arg → non-zero exit (P7, item 86) |
+| Script args and env (deploy scripts) | top of each script | exit non-zero with a one-line message | `deploy/tests/scripts_test.sh` (`make test-deploy`): `each script without its arg exits non-zero`, `upgrade stops when .env and the running app disagree` (P7, item 86) |
 
 - **Parse once, at the edge.** Outside input = request body, query, headers, env, config files,
   stored data, messages, CLI args, another process's output, an API response. Parse it where it

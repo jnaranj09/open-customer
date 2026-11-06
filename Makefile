@@ -131,7 +131,8 @@ check-generated: generate
 	if [ -n "$$out" ]; then echo "generated files differ from the committed ones (run make generate and commit):" >&2; echo "$$out" >&2; exit 1; fi
 
 # Design doc item 2 (P7): the backup image and deploy/tests/backup_test.sh against a throwaway
-# Postgres; needs Docker, publishes no host port, and removes its oc-deploy-* containers.
+# Postgres, then deploy/tests/scripts_test.sh on the host; needs Docker, publishes no host port,
+# and removes its oc-deploy-* containers.
 test-deploy:
 	PG_IMAGE=$(PG_IMAGE) scripts/test-deploy.sh
 

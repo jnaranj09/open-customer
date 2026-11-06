@@ -1359,7 +1359,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | `cover` | `web-stub`, then `go test -tags db -coverprofile` for each package in `COVER_PKGS`; writes `coverage-<name>.out` and fails, naming the package, if any package's total (`go tool cover -func`) is below `COVER_FLOOR` (90.0). `COVER_PKGS` grows by phase: `auth` (P2); `attributes`, `appointments`, `templates` (P3); `reminders` (P4) |
     | `dev` | `web-stub`, then Docker Postgres (`PG_IMAGE`) in the container `open-customer-dev` on host port `DEV_PG_PORT` (default `5433`; started or reused, password `devpassword`, dev only), the binary built to `bin/dev/open-customer` running `serve` on `:8080` in the background, and the Vite dev server on `:5173` in the foreground with the proxy from item 63. A `trap` stops `serve` when Vite exits; it runs the built binary, not `go run`, because `go run` does not pass SIGTERM on to the server. Env and the Origin rule are below the table. |
     | `image` | `docker build --build-arg VERSION=$(VERSION)` of the app image |
-    | `test-deploy` | Runs `scripts/test-deploy.sh`: builds `deploy/backup` as `open-customer-backup:test`, starts `$(PG_IMAGE)` as `oc-deploy-pg` on a new network `oc-deploy-net` (no published port), runs `deploy/tests/backup_test.sh` inside the backup image (entrypoint overridden, `deploy/` mounted read-only) against it, and removes the containers (with their anonymous volumes, `docker rm -f -v`) and the network in a `trap`, pass or fail. The backup tests run for real, not against stubs, because `backup.sh` owns the outcome table, the marker rule and the restore, and a stub would not catch a wrong restic flag |
+    | `test-deploy` | Runs `scripts/test-deploy.sh`: builds `deploy/backup` as `open-customer-backup:test`, starts `$(PG_IMAGE)` as `oc-deploy-pg` on a new network `oc-deploy-net` (no published port), runs `deploy/tests/backup_test.sh` inside the backup image (entrypoint overridden, `deploy/` mounted read-only) against it, and removes the containers (with their anonymous volumes, `docker rm -f -v`) and the network in a `trap`, pass or fail. Then it runs `deploy/tests/scripts_test.sh` on the host: each operator script runs from a temp copy of `deploy/` with its own `.env` and a fake `docker` first on `PATH` that logs each call and answers from `FAKE_APP_VERSION`, `FAKE_SNAPSHOT_JSON` and `FAKE_FAIL_ON`; only its `compose config is valid` test uses the real `docker compose config`, which starts nothing. The backup tests run for real, not against stubs, because `backup.sh` owns the outcome table, the marker rule and the restore, and a stub would not catch a wrong restic flag |
 
     *   **`dev` env:** the Go server gets `PUBLIC_URL=http://localhost:5173`, `DB_HOST=localhost`, `DB_PORT=$(DEV_PG_PORT)` and `DB_PASSWORD=devpassword` for the container, `VAPID_SUBJECT=mailto:dev@localhost` and `ALLOW_MIGRATE_WITHOUT_BACKUP=true` (there is no backup status file in dev). The browser's `Origin` is `http://localhost:5173`, and the Vite proxy forwards it unchanged, so the Origin check passes.
     *   `VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)`. The same value goes to `-ldflags`, the web build and `make image`; the release workflow sets it from the tag.
@@ -2408,9 +2408,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   The four services in "Deployment", with no `ports:`.
     *   Named volumes `pgdata`, `media` and `backup-status`.
     *   `${BACKUP_TARGET}:/target` on `backup` in the long bind syntax with `bind.propagation: rslave`, so a USB disk mounted or unmounted on the host after the container started is seen inside it. `APP_VERSION` is passed to it for snapshot tags.
-    *   A `restore` service under `profiles: ["restore"]`: the backup image, `media` read-write, `backup-status`, `/target` read-only. It never starts with `up`.
-    *   `depends_on` with healthchecks.
-    *   `restart: unless-stopped`.
+    *   A `restore` service under `profiles: ["restore"]`: the backup image, `media` read-write, `backup-status` read-write (the restore takes the backup lock and unpacks into `/backup-status/work`), `/target` read-only. It never starts with `up`.
+    *   Environment as in "Configuration (`.env`)": the optional variables with `${VAR:-default}`, the required ones with `${VAR:?<VAR> is required in .env}`. The app's own optional variables (`TRUSTED_PROXY_CIDRS`, `MEDIA_DIR`, `BACKUP_STATUS_FILE`, `ALLOW_MIGRATE_WITHOUT_BACKUP`, `LOG_LEVEL`) are passed as `${VAR:-}`: empty means the app's default, so each default has one owner.
+    *   `depends_on` with healthchecks (`app` and `backup` on a healthy `db`, `cloudflared` on a healthy `app`).
+    *   `restart: unless-stopped` on the four long-running services; `restore` has none (it only runs with `run --rm`).
     *   The `app` healthcheck in exec form: `test: ["CMD", "/usr/local/bin/open-customer", "healthcheck"]`.
     *   `stop_signal: SIGTERM` on `backup` and `restore` (the `postgres` base image sets `SIGINT`).
     *   `pgdata` mounted at `/var/lib/postgresql` on `db` (see "Deployment").
@@ -2465,8 +2466,10 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Type / Scope**: Operator scripts.
 *   **Proposed Changes**: As in "Backups" and "Upgrades and the migration guard".
     *   `backup-now.sh [--tag pre-upgrade]`: see the notes in "Backups".
-    *   `upgrade.sh <version>`: `set -euo pipefail`; the five steps in "Upgrades and the migration guard".
-    *   `restore.sh <snapshot|latest>`: the five steps in "Upgrades and the migration guard". It stops on any failure and leaves `app` and `backup` stopped, with a message.
+    *   `upgrade.sh <version>`: `set -euo pipefail`; the five steps in "Upgrades and the migration guard". The version must match `^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$`.
+    *   `restore.sh <snapshot|latest>`: the five steps in "Upgrades and the migration guard". The argument is `latest` or a hex snapshot ID. It asks `Restore snapshot <id> from <time> (app <version>)? [y/N]` and reads one line; anything but `y` exits 1 with nothing stopped, and so does a snapshot without an `app=` tag. After the stop it stops on any failure and leaves `app` and `backup` stopped, with a message naming them.
+    *   Each script does `cd "$(dirname "$0")/.."`, so it works from any folder and `.env` is `deploy/.env`. `upgrade.sh` and `restore.sh` rewrite only the `APP_VERSION` line of `.env`, in place.
+    *   Tests: `deploy/tests/scripts_test.sh` (item 2, `make test-deploy`).
 
 #### Files deleted from the repo root
 
@@ -2496,7 +2499,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Compilation/Build**: `make build` (web build + `CGO_ENABLED=0` Go build). `make image` builds the app image. The backup image is built by `make test-deploy` and in the release workflow.
 *   **Unit Tests**: `make test` (`go test $(GO_PKGS)` + `pnpm test`).
 *   **Database Tests**: `make test-db` (`go test -tags db $(GO_PKGS)` with testcontainers Postgres 18).
-*   **Deploy Tests**: `make test-deploy` (`deploy/tests/backup_test.sh` in the backup image against a throwaway Postgres; item 2).
+*   **Deploy Tests**: `make test-deploy` (`deploy/tests/backup_test.sh` in the backup image against a throwaway Postgres, then `deploy/tests/scripts_test.sh` on the host; item 2).
 *   **Static Analysis & Linting**: `make lint` (golangci-lint with the `depguard` module rules, the darwin and windows `go build`, `deadcode`, shellcheck, `pnpm check` (svelte-check), `pnpm lint` (eslint, prettier, knip, jscpd)) and `make vuln` (govulncheck). CI adds gitleaks and `pnpm audit --audit-level high`.
 *   **Clean checkout:** CI runs on a fresh clone, and `make build` is its last step before e2e (item 8), so `make lint`, `make test`, `make vuln` and `make test-db` passing first shows the targets compile with only the stub present.
 *   **Generated Code**: `make check-generated` must show no diff.

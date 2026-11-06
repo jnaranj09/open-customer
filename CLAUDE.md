@@ -43,7 +43,8 @@ with fnm, `fnm use` in web/).
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
-  a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit).
+  a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit), then
+  `deploy/tests/scripts_test.sh` (the operator scripts, with a fake `docker`) on the host.
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**

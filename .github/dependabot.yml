@@ -1,6 +1,6 @@
 # Design doc item 10. postgres, node and golang are bumped by hand, every copy in one commit
-# (design doc "Pins"); make check-pins keeps them equal. P7 adds /deploy/backup (docker) here and,
-# with deploy/compose.yaml, a docker-compose entry for /deploy.
+# (design doc "Pins"); make check-pins keeps them equal. The docker-compose entry bumps the other
+# image tags in deploy/compose.yaml (cloudflared); the app and backup images use ${APP_VERSION}.
 version: 2
 updates:
   - package-ecosystem: gomod
@@ -21,6 +21,14 @@ updates:
       - dependency-name: golang
   - package-ecosystem: docker
     directory: /deploy/backup
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: postgres
+      - dependency-name: node
+      - dependency-name: golang
+  - package-ecosystem: docker-compose
+    directory: /deploy
     schedule:
       interval: weekly
     ignore:

@@ -27,7 +27,7 @@ run.
 | `make check-generated` | `generate`, then fails if a generated file differs from the committed one |
 | `make test-db` | Go tests tagged `db` against a testcontainers Postgres (needs Docker) |
 | `make cover` | The `db` tests with coverage for each package in `COVER_PKGS`; fails when one is under 90% |
-| `make test-deploy` | Builds the backup image and runs `deploy/tests/backup_test.sh` in it against a throwaway Postgres on a private Docker network (needs Docker; publishes no host port; removes its `oc-deploy-*` containers and network) |
+| `make test-deploy` | Builds the backup image and runs `deploy/tests/backup_test.sh` in it against a throwaway Postgres on a private Docker network (needs Docker; publishes no host port; removes its `oc-deploy-*` containers and network), then `deploy/tests/scripts_test.sh` on the host (the operator scripts against a fake `docker`) |
 | `make vuln` | govulncheck |
 | `make build` | The web build, then `bin/open-customer` |
 | `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
