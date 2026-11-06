@@ -228,7 +228,7 @@ Each goal has a check. Release 1 is done when all checks pass.
 *   **When**: The PC has been off for two days and is turned on. Later, the author upgrades the app.
 *   **Then**:
     *   As soon as the backup container starts, it sees that the last backup is older than 24 h and runs one.
-    *   The app's status screen shows "Último respaldo: hoy 10:05 (USB)".
+    *   The app's status screen shows "Último respaldo" with the day and time of the last copy, for example "5/11 10:05" (the screen shows no disk label).
     *   During the upgrade, the upgrade script runs a backup before the new version starts.
     *   The new version will not run migrations unless a backup copy from the last 60 minutes exists.
     *   A rollback restores the snapshot taken before the upgrade and also puts back the app version that wrote it, so the old migrations are not re-run on a newer schema.
@@ -920,7 +920,7 @@ Each of these is handled in the section named; the mechanism is not repeated her
 | --- | --- |
 | The VAPID key pair is lost, so every push subscription stops working | "Data model" (keys in the database, covered by the backup) |
 | A push subscription expires or is deleted | "Daily push" (re-subscribe on open) and "Status screen" (red line) |
-| The USB disk is unplugged or not mounted, or a backup fails | "Backups" (marker check, red line at the next hourly check) and "Status screen" (the same red state also shows on "Hoy", where she looks every day) |
+| The backup target is missing (a removable disk unplugged or not mounted), or a backup fails | "Backups" (marker check, red line at the next hourly check) and "Status screen" (the same red state also shows on "Hoy", where she looks every day) |
 | An upgrade breaks the schema | "Upgrades and the migration guard" (pre-upgrade snapshot, guard, restore) |
 | Cloudflare upload size and response timeout limits | "Photos" (phone-side resize) and "Export" (streamed ZIP); the current limits are an Open Question |
 | iOS clears the PWA's storage | "Phone cache and offline behavior" (the cache is rebuilt from `/bootstrap` on the next open) |
