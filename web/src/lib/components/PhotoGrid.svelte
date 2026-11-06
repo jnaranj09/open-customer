@@ -61,7 +61,7 @@
 				alt={t('photo_alt')}
 				loading="lazy"
 				draggable="false"
-				class="size-full touch-pan-y object-cover select-none"
+				class="size-full touch-pan-y object-cover select-none touch-callout-none"
 				onpointerdown={() => {
 					press(photo);
 				}}

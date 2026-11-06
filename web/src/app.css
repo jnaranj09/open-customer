@@ -165,6 +165,12 @@ body {
 	max-height: 75dvh;
 }
 
+/* A photo long-pressed on iOS opens the system image menu (save, share) over the app's own
+   long-press action; this turns that menu off. */
+@utility touch-callout-none {
+	-webkit-touch-callout: none;
+}
+
 @utility content-placeholder {
 	--tw-content: attr(data-placeholder);
 	content: var(--tw-content);
