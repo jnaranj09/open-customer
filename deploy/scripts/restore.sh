@@ -40,7 +40,9 @@ info=$(printf '%s\n' "$info" | tail -n1)
 id=$(sed -n 's/.*"id":"\([0-9a-f]*\)".*/\1/p' <<<"$info")
 time=$(sed -n 's/.*"time":"\([0-9T:.Z+-]*\)".*/\1/p' <<<"$info")
 version=$(sed -n 's/.*"app":"\([^"]*\)".*/\1/p' <<<"$info")
-[[ $id =~ ^[0-9a-f]{8,64}$ ]] && [ -n "$time" ] || die "unexpected snapshot-info output; nothing was stopped"
+if ! [[ $id =~ ^[0-9a-f]{8,64}$ ]] || [ -z "$time" ]; then
+  die "unexpected snapshot-info output; nothing was stopped"
+fi
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] ||
   die "snapshot $id has no app version tag; nothing was stopped"
 

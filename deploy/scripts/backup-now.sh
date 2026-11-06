@@ -11,7 +11,7 @@ usage() {
 
 case $# in
   0) ;;
-  2) [ "$1" = --tag ] && [ "$2" = pre-upgrade ] || usage ;;
+  2) if [ "$1" != --tag ] || [ "$2" != pre-upgrade ]; then usage; fi ;;
   *) usage ;;
 esac
 

@@ -167,8 +167,8 @@ test_upgrade_happy_path() {
   p=$(line_of "compose pull")
   b=$(line_of "compose run --rm backup once --tag pre-upgrade")
   u=$(line_of "compose up -d")
-  [ -n "$v" ] && [ -n "$p" ] && [ -n "$b" ] && [ -n "$u" ] || fail "missing a step: $(calls)"
-  [ "$v" -lt "$p" ] && [ "$p" -lt "$b" ] && [ "$b" -lt "$u" ] || fail "wrong order: $(calls)"
+  if [ -z "$v" ] || [ -z "$p" ] || [ -z "$b" ] || [ -z "$u" ]; then fail "missing a step: $(calls)"; fi
+  if [ "$v" -ge "$p" ] || [ "$p" -ge "$b" ] || [ "$b" -ge "$u" ]; then fail "wrong order: $(calls)"; fi
   grep -qxF "compose pull | APP_VERSION=1.1.0" "$LOG" || fail "pull did not get APP_VERSION=1.1.0"
   want=$(printf '%s\n' "$env_file" | sed 's/^APP_VERSION=.*/APP_VERSION=1.1.0/')
   assert_eq ".env" "$want" "$(cat "$W/deploy/.env")"

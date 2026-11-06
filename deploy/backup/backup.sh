@@ -441,13 +441,13 @@ case "$mode" in
   once)
     case $# in
       1) once_tag= ;;
-      3) [ "$2" = --tag ] && [ "$3" = pre-upgrade ] || usage
+      3) if [ "$2" != --tag ] || [ "$3" != pre-upgrade ]; then usage; fi
          once_tag=pre-upgrade ;;
       *) usage ;;
     esac
     ;;
   snapshot-info | restore)
-    [ $# -eq 2 ] && [ -n "$2" ] || usage
+    if [ $# -ne 2 ] || [ -z "$2" ]; then usage; fi
     ;;
   *)
     usage
