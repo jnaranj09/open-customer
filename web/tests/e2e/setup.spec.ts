@@ -187,8 +187,16 @@ test.describe('logged in', () => {
 			label: 'Recordatorio de cita'
 		});
 		await sheet.getByLabel(es.rule_days_before, { exact: true }).fill('1');
+		const created = page.waitForRequest(
+			(r) => r.method() === 'POST' && r.url().endsWith('/api/v1/reminder-rules')
+		);
 		await sheet.getByRole('button', { name: es.rule_save }).click();
-		// A "before" rule never brings late messages: it saves without the overdue question.
+		// A "before" rule never brings late messages: it saves without the overdue question, and
+		// includes the visits still ahead whose message day just passed.
+		expect((await created).postDataJSON()).toMatchObject({
+			kind: 'before_appointment',
+			include_overdue: true
+		});
 		await expect(sheet).toBeHidden();
 		await expect(page.getByRole('heading', { name: es.overdue_title })).toHaveCount(0);
 		await expect(
@@ -232,4 +240,19 @@ test('the setup link does not work after setup', async ({ page }) => {
 	// Setup is done and this device has no session: the app sends her to the login screen.
 	await expect(page.getByRole('heading', { name: es.login_heading })).toBeVisible();
 	await expect(page.getByLabel(es.setup_business_label, { exact: true })).toHaveCount(0);
+});
+
+test('a wizard step left in the tab is cleared when /setup sends her away', async ({ page }) => {
+	// A tab that once held the finishing wizard, now without a session: /setup sends her to log
+	// in, and the stored step must go, so a later sign-in does not reopen the wizard.
+	await page.goto('/login');
+	await page.evaluate(() => {
+		sessionStorage.setItem('open-customer.setup-finishing', 'install');
+	});
+	await page.goto('/setup');
+	await expect(page.getByRole('heading', { name: es.login_heading })).toBeVisible();
+
+	expect(
+		await page.evaluate(() => sessionStorage.getItem('open-customer.setup-finishing'))
+	).toBeNull();
 });

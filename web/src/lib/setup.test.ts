@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	countryOptions,
 	currencyOptions,
 	finishingStep,
 	rememberFinishing,
+	storeOnce,
 	stepForField,
 	STEPS,
 	timeZoneOptions,
@@ -180,5 +181,25 @@ describe('finishing step', () => {
 			}
 		};
 		expect(finishingStep(store)).toBeNull();
+	});
+});
+
+describe('storeOnce', () => {
+	it('tries a refused storage once and logs it once', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const open = vi.fn((): StepStore => {
+			throw new Error('denied');
+		});
+		const store = storeOnce(open);
+		expect([store(), store()]).toEqual([null, null]);
+		expect([open.mock.calls.length, warn.mock.calls.length]).toEqual([1, 1]);
+		warn.mockRestore();
+	});
+
+	it('keeps the storage it opened', () => {
+		const memory = memoryStore();
+		const open = vi.fn(() => memory);
+		const store = storeOnce(open);
+		expect([store(), store(), open.mock.calls.length]).toEqual([memory, memory, 1]);
 	});
 });

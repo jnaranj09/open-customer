@@ -3,6 +3,7 @@ import {
 	canSync,
 	guard,
 	hasShell,
+	leavesSetup,
 	needsRecheck,
 	recoversSession,
 	verdictFor,
@@ -206,5 +207,19 @@ describe('recoversSession', () => {
 
 	it('is false before the first answer', () => {
 		expect(recoversSession(null, true)).toBe(false);
+	});
+});
+
+describe('leavesSetup', () => {
+	it('is true when the guard sends her away from /setup', () => {
+		expect(leavesSetup('/setup', guard('/setup', online({ me: null }), true))).toBe(true);
+	});
+
+	it('is false while the wizard stays', () => {
+		expect(leavesSetup('/setup', guard('/setup', online(), true))).toBe(false);
+	});
+
+	it('is false for a redirect from another page', () => {
+		expect(leavesSetup('/login', guard('/login', online()))).toBe(false);
 	});
 });

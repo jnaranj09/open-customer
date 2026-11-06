@@ -23,6 +23,7 @@
 	import {
 		canSync,
 		hasShell,
+		leavesSetup,
 		needsRecheck,
 		recoversSession,
 		verdictFor,
@@ -36,7 +37,7 @@
 	import { createReporter } from '../lib/report';
 	import { pushControl } from '../lib/pushControl.svelte';
 	import { resolveSession } from '../lib/session';
-	import { finishingStep, sessionStore } from '../lib/setup';
+	import { finishingStep, rememberFinishing, sessionStore } from '../lib/setup';
 	import { shownDay } from '../lib/shownDay.svelte';
 	import { systemNow } from '../lib/time';
 	import { toaster } from '../lib/toaster.svelte';
@@ -117,6 +118,9 @@
 
 	$effect(() => {
 		if (verdict?.kind === 'redirect') {
+			if (leavesSetup(path, verdict)) {
+				rememberFinishing(sessionStore(), null);
+			}
 			void goto(resolve(verdict.to), { replaceState: true });
 		}
 	});

@@ -116,15 +116,25 @@ const FINISHING_KEY = 'open-customer.setup-finishing';
 /** The slice of `Storage` the finishing step uses; a test passes a plain object. */
 export type StepStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-/** The tab's session storage, or null where the browser refuses it (private mode, settings). */
-export function sessionStore(): StepStore | null {
-	try {
-		return window.sessionStorage;
-	} catch {
-		console.warn('code=session_storage_unavailable');
-		return null;
-	}
+/** A getter that opens the storage the first time and keeps the answer, so a refused storage
+ *  (private mode, settings) is tried, and logged, once per page load. */
+export function storeOnce(open: () => StepStore): () => StepStore | null {
+	let opened: { store: StepStore | null } | undefined;
+	return () => {
+		if (opened === undefined) {
+			try {
+				opened = { store: open() };
+			} catch {
+				console.warn('code=session_storage_unavailable');
+				opened = { store: null };
+			}
+		}
+		return opened.store;
+	};
 }
+
+/** The tab's session storage, or null where the browser refuses it. */
+export const sessionStore = storeOnce(() => window.sessionStorage);
 
 /** The finishing step stored in `store`, or null when the wizard is not between its account and
  *  its end. */

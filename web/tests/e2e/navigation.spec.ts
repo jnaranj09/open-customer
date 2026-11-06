@@ -1,9 +1,9 @@
 // Moving between screens and keeping what she typed: Back after a new form (M4), the appointment's
 // back arrow (M7), a typed amount through a status change (M8), the archived list after a restore
 // (M9) and the client's history after "Ver todas las citas" (L10).
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
-import { at, closePool, insertAppointment, insertClient, resetData } from './seed';
+import { at, businessDate, closePool, insertAppointment, insertClient, resetData } from './seed';
 
 let anaId = '';
 
@@ -41,6 +41,80 @@ test('Back after cancelling a new appointment does not open the empty form again
 
 	await expect(page.getByRole('heading', { name: es.appointment_new, level: 1 })).toHaveCount(0);
 });
+
+/** The other ways out of a new form (M4): each one, then Back must not show the form again. */
+const LEAVE_NEW_FORM: {
+	name: string;
+	/** Opens the form and leaves it; returns the form's heading. */
+	leave: (page: Page) => Promise<{ name: string; level: number }>;
+}[] = [
+	{
+		name: 'saving a new template',
+		leave: async (page) => {
+			await page.goto('/ajustes/plantillas/nueva');
+			// "Zz": sorts after the setup templates, which other specs open first.
+			await page.getByLabel(es.template_name, { exact: true }).fill('Zz plantilla de prueba');
+			await page.getByRole('textbox', { name: es.template_message }).click();
+			await page.keyboard.type('Hola');
+			await page.getByRole('button', { name: es.template_save }).click();
+			await expect(
+				page.getByRole('heading', { name: 'Zz plantilla de prueba', level: 2 })
+			).toBeVisible();
+			return { name: es.templates_new_title, level: 2 };
+		}
+	},
+	{
+		name: 'cancelling a new template',
+		leave: async (page) => {
+			await page.goto('/ajustes/plantillas');
+			await page.getByRole('link', { name: es.templates_new }).click();
+			await expect(
+				page.getByRole('heading', { name: es.templates_new_title, level: 2 })
+			).toBeVisible();
+			await page.getByRole('button', { name: es.cancel, exact: true }).click();
+			await expect(page.getByRole('heading', { name: es.templates_title, level: 1 })).toBeVisible();
+			return { name: es.templates_new_title, level: 2 };
+		}
+	},
+	{
+		name: 'saving a new appointment',
+		leave: async (page) => {
+			await page.goto('/');
+			await page.getByRole('link', { name: es.appointment_new }).click();
+			await page.getByLabel(es.appointment_client, { exact: true }).fill('ana');
+			await page.getByRole('button', { name: 'Ana Rojas', exact: true }).click();
+			await page.getByRole('button', { name: 'Acrílico', exact: true }).click();
+			await page.getByLabel(es.appointment_day, { exact: true }).fill(businessDate(1));
+			await page.getByLabel(es.appointment_time, { exact: true }).fill('09:00');
+			await page.getByRole('button', { name: es.appointment_save }).click();
+			await expect(page.getByRole('heading', { name: es.today_title, level: 1 })).toBeVisible();
+			return { name: es.appointment_new, level: 1 };
+		}
+	},
+	{
+		name: 'cancelling a new client',
+		leave: async (page) => {
+			await page.goto('/clientas');
+			await page.getByRole('link', { name: es.clients_new }).first().click();
+			await expect(
+				page.getByRole('heading', { name: es.client_new_title, level: 1 })
+			).toBeVisible();
+			await page.getByRole('button', { name: es.cancel, exact: true }).click();
+			await expect(page.getByRole('heading', { name: es.nav_clients, level: 1 })).toBeVisible();
+			return { name: es.client_new_title, level: 1 };
+		}
+	}
+];
+
+for (const way of LEAVE_NEW_FORM) {
+	test(`Back after ${way.name} does not open the empty form again`, async ({ page }) => {
+		const heading = await way.leave(page);
+
+		await page.goBack();
+
+		await expect(page.getByRole('heading', heading)).toHaveCount(0);
+	});
+}
 
 test("the appointment's back arrow returns to the client page she came from", async ({ page }) => {
 	await insertAppointment({ clientId: anaId, services: ['Acrílico'], startsAt: at(1, '10:00') });

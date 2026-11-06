@@ -40,6 +40,12 @@ export function guard(path: string, s: Session, finishingSetup = false): GuardRe
 	return PUBLIC_PATHS.includes(path) ? { kind: 'redirect', to: '/' } : { kind: 'stay' };
 }
 
+/** True when `result` sends her away from the setup wizard (signed out, or setup needed again):
+ *  the wizard's finishing step must not keep `/setup` open later. */
+export function leavesSetup(path: string, result: GuardResult | null): boolean {
+	return path === '/setup' && result?.kind === 'redirect';
+}
+
 /** True for the pages that show the navigation; login, setup and the forced password change stand alone. */
 export function hasShell(path: string): boolean {
 	return !PUBLIC_PATHS.includes(path) && path !== CHANGE_PASSWORD;
