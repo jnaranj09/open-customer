@@ -26,6 +26,7 @@
 	import { historySplit, sharingNames } from '../../../lib/clients';
 	import { t } from '../../../lib/i18n';
 	import { formatMoney } from '../../../lib/money';
+	import { formatPhone } from '../../../lib/phone';
 	import { submitOnce } from '../../../lib/submit';
 	import { createToaster } from '../../../lib/toaster.svelte';
 	import { formatDayWithYear, formatTime, todayIn } from '../../../lib/time';
@@ -237,7 +238,7 @@
 					{#if client.phone_e164 !== null}
 						<div class="flex gap-2">
 							<dt class="font-bold text-ink">{t('client_phone')}:</dt>
-							<dd class="text-ink">{client.phone_e164}</dd>
+							<dd class="text-ink">{formatPhone(client.phone_e164)}</dd>
 						</div>
 					{/if}
 					{#each facts as fact (fact.label)}

@@ -123,3 +123,26 @@ test('the stored photo has no Exif data', async ({ page }) => {
 	await page.goto(`/clientas/${anaId}`);
 	await expect(page.getByRole('img', { name: es.photo_alt })).toBeVisible();
 });
+
+test('the quick-add sheet says the name is missing under the name field', async ({ page }) => {
+	await page.goto('/citas/nueva');
+	await page.getByRole('button', { name: es.client_add, exact: true }).click();
+	const sheet = page.getByRole('dialog', { name: es.client_add_title });
+	const name = sheet.getByLabel(es.client_name, { exact: true });
+	await name.fill('');
+
+	await sheet.getByRole('button', { name: es.client_save }).click();
+
+	await expect(name).toHaveAccessibleDescription(es.client_name_needed);
+	await expect(sheet).toBeVisible();
+});
+
+test('a phone shows grouped by its country on the client page and in the list', async ({
+	page
+}) => {
+	await page.goto(`/clientas/${anaId}`);
+
+	await expect(page.getByText('+506 8888 7777', { exact: true })).toBeVisible();
+	await page.goto('/clientas');
+	await expect(page.getByRole('link', { name: /\+506 8888 7777/ })).toBeVisible();
+});

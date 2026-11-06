@@ -8,6 +8,7 @@
 	import { cache } from '../cache/store.svelte';
 	import { visibleClients } from '../clients';
 	import { t } from '../i18n';
+	import { formatPhone } from '../phone';
 	import { submitOnce } from '../submit';
 	import Button from './ui/Button.svelte';
 	import EmptyState from './ui/EmptyState.svelte';
@@ -125,7 +126,7 @@
 					<ListRow
 						href={resolve('/clientas/[id]', { id: client.id })}
 						title={client.name}
-						{...client.phone_e164 === null ? {} : { subtitle: client.phone_e164 }}
+						{...client.phone_e164 === null ? {} : { subtitle: formatPhone(client.phone_e164) }}
 						selected={client.id === selectedId}
 						{...client.archived ? { trailing: archivedBadge } : {}}
 					/>
