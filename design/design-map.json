@@ -19,6 +19,10 @@
     "GlassCard/Tint": {
       "component": "Card",
       "variant": "tint"
+    },
+    "GlassCard/Solid": {
+      "component": "Card",
+      "variant": "solid"
     }
   }
 }

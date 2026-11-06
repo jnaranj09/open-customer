@@ -412,6 +412,64 @@
             },
             {
               "type": "frame",
+              "id": "sOl1d",
+              "name": "GlassCard/Solid",
+              "reusable": true,
+              "width": 260,
+              "fill": "$bg-100",
+              "cornerRadius": "$radius-lg",
+              "stroke": "$glass-edge",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "effect": [
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#a14d642e",
+                  "offset": {
+                    "x": 0,
+                    "y": 16
+                  },
+                  "blur": 64
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "inner",
+                  "color": "#ffffffe6",
+                  "offset": {
+                    "x": 0,
+                    "y": 1
+                  }
+                }
+              ],
+              "layout": "vertical",
+              "gap": "$space-2",
+              "padding": "$space-6",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "sOlT1",
+                  "name": "Title",
+                  "fill": "$ink",
+                  "content": "Foto agregada",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 19,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "sOlC1",
+                  "name": "Caption",
+                  "fill": "$ink-muted",
+                  "content": "Opaque, for a toast over content",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
               "id": "dI00a",
               "name": "GlassCard/Tint",
               "reusable": true,

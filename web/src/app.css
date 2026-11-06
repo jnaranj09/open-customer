@@ -107,6 +107,14 @@ body {
 	box-shadow: var(--shadow-glass);
 }
 
+/* An opaque panel for a message that floats over content (the toast): glass there lets the text
+   under it show through. */
+@utility solid-panel {
+	background: var(--bg-100);
+	border: 1px solid var(--glass-edge);
+	box-shadow: var(--shadow-sheet);
+}
+
 @utility shadow-raised {
 	box-shadow: var(--shadow-raised);
 }

@@ -43,7 +43,7 @@
 		class="pointer-events-none fixed inset-x-0 top-0 z-60 flex justify-center px-4 pt-safe"
 	>
 		<Card
-			variant="strong"
+			variant="solid"
 			radius="pill"
 			pad="trail"
 			class="pointer-events-auto mt-4 flex min-h-tap items-center gap-4 text-ink"

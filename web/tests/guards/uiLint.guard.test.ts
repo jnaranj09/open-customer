@@ -60,6 +60,12 @@ const BYPASSES: Probe[] = [
 		rule: RESTRICTED
 	},
 	{
+		name: 'solid-panel',
+		file: ROUTE,
+		code: svelte('<p class="solid-panel">x</p>'),
+		rule: RESTRICTED
+	},
+	{
 		name: 'a glass fill',
 		file: ROUTE,
 		code: svelte('<p class="bg-glass-tint">x</p>'),

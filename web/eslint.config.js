@@ -27,7 +27,7 @@ const PRIMITIVE_ONLY = [
 	ARBITRARY,
 	{
 		pattern:
-			'(^|:)!?(glass-card|glass-panel|bg-glass(-strong|-tint)?|([\\w]+-)?shadow(-[\\w-]+)?|backdrop-[\\w-]+)!?$',
+			'(^|:)!?(glass-card|glass-panel|solid-panel|bg-glass(-strong|-tint)?|([\\w]+-)?shadow(-[\\w-]+)?|backdrop-[\\w-]+)!?$',
 		message:
 			'Surface class "$0" outside components/ui: use Card or another primitive (ui.md stage 4).'
 	},

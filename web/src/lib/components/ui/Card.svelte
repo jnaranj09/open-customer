@@ -1,7 +1,8 @@
 <script lang="ts" module>
 	/** The .pen GlassCard variants: `default` (glass), `strong` (denser glass for dense text and
-	 *  panels), `tint` (the selected / attention tint). */
-	export type CardVariant = 'default' | 'strong' | 'tint';
+	 *  panels), `tint` (the selected / attention tint), `solid` (opaque, for a toast floating over
+	 *  content). */
+	export type CardVariant = 'default' | 'strong' | 'tint' | 'solid';
 	/** Inner spacing. `list` holds rows that bring their own padding; `note` is a short line of
 	 *  small text; `message` is one line of status or error text; `trail` is text with a trailing
 	 *  action button (`field` the same at the height of a form field); `section` grows on wide. */
@@ -49,7 +50,8 @@
 	const SURFACE: Record<CardVariant, string> = {
 		default: 'glass-card',
 		strong: 'glass-panel',
-		tint: 'glass-card bg-glass-tint'
+		tint: 'glass-card bg-glass-tint',
+		solid: 'solid-panel'
 	};
 	const PAD: Record<CardPad, string> = {
 		none: '',

@@ -22,8 +22,8 @@ paths:
   design map in the same change. A primitive with variants exports `type <Name>Variant` (a union
   of string literals, in its module script or a `ui/` `.ts` file), and that union equals the
   primitive's `.pen` variants. Sensor: guard `design-parity`.
-- **4. Only primitives style.** Surface classes (`glass-card`, `glass-panel`, `bg-glass`,
-  `bg-glass-strong`, `bg-glass-tint`, any `*shadow-*`, `backdrop-*`) and radius classes
+- **4. Only primitives style.** Surface classes (`glass-card`, `glass-panel`, `solid-panel`,
+  `bg-glass`, `bg-glass-strong`, `bg-glass-tint`, any `*shadow-*`, `backdrop-*`) and radius classes
   (`rounded-*`), with or without the `!` modifier, appear only in `components/ui/`, in markup and in
   any script string (a `const look = '…'` included); routes and feature components compose
   primitives. A glass surface is a `Card` with a `variant`, `pad` and `radius`; its `class` is a
