@@ -37,7 +37,7 @@ export default defineConfig({
 			dependencies: ['setup'],
 			use: { storageState: AUTH_FILE }
 		},
-		// The UI probe (.claude/rules/ui.md stage 8) at the phone size an installed app gets (the
+		// The UI probe (.claude/rules/ui.md stage 7) at the phone size an installed app gets (the
 		// whole 852 px screen, no browser bar) and at the main desktop size.
 		{
 			name: 'probe-compact',

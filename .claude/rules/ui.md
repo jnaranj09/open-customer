@@ -54,13 +54,14 @@ paths:
   `probe-compact` and `probe-wide`), through axe (`@axe-core/playwright`, tags `wcag2a`, `wcag2aa`,
   `wcag21a`, `wcag21aa`, `wcag22aa`; the spec fails when `target-size` did not run) and the layout
   probe: no sideways scroll, no control under 44 × 44 px, no field font under 16 px, no text cut
-  by `overflow: hidden` (a one-line ellipsis is allowed) or spilling out of its box, with a
+  by `overflow: hidden` (an ellipsis on a `nowrap` line is allowed) or spilling out of its box, with a
   60-letter one-word client name seeded. Each opened sheet gets the same checks, and the page
   behind it must be inert. Each data feed of a screen is answered with no rows, a 500 and no
   answer: the screen shows its empty text, an alert and a busy status. A new route, sheet or feed
   gets an entry in the spec's table in the same change. Sensor: `web/tests/e2e/ui-probe.spec.ts`
   (fails on a route on disk with no entry); known findings are in `ui-probe.allow.ts`, each with
-  the bug it waits on, and that list only shrinks (an entry that matches nothing fails).
+  its `UIP-` id and a `why`, and that list only shrinks (an entry that matches nothing, or names
+  a route or state the spec does not probe, fails).
 - **8. Fix the class, not the instance.** A reported visual problem is fixed in the token or the
   primitive that causes it, never with a one-off class or override in the screen where it was
   seen. The reply names the token or primitive changed and how many screens use it (count the

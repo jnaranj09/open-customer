@@ -1,31 +1,36 @@
-// The measurements behind `ui-probe.spec.ts` (.claude/rules/ui.md, stage 8): axe, and the layout
+// The measurements behind `ui-probe.spec.ts` (.claude/rules/ui.md, stage 7): axe, and the layout
 // checks no package does (sideways scroll, tap targets, input font size, cut text, the page behind
 // an open sheet). Each one returns findings; the spec drops the allow-listed ones and fails on the
 // rest, and on an allow-list entry that matched nothing.
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
+/** One word, 60 letters: the longest kind of name a layout has to hold. Made up; the probe spec
+ *  seeds it and the allow-list names the boxes it breaks. */
+export const LONG_NAME = 'Mariafernanda'.repeat(5).slice(0, 60);
+
 /** The two probed widths: the phone profile and the main desktop size. */
 export type Width = 'compact' | 'wide';
 
-/** One problem on one screen. `target` names the element (its tag and text, or axe's selector). */
+/** One problem on one screen. `target` names the element: its tag and its whole text (`span "…"`),
+ *  axe's selector, `document`, or the data feed. */
 export type Finding = { check: string; target: string; detail: string };
 
-/** A known finding that waits on a fix. `bug` is the bug-report id the fix is tracked under.
- *  Without `width`, `state`, `target` or `detail` the entry matches any. `route: '*'` allows the
- *  finding on every route; it must still show on its `witness` route (base state), or it is
- *  stale. */
+/** A known finding that waits on a fix: `bug` is its id (`UIP-…`) and `why` says what the bug
+ *  is. Without `width`, `state`, `target` or `detail` the entry matches any. `route: '*'` allows
+ *  the finding on every route and every state (it takes no `state`); it must still show on its
+ *  `witness` route (base state), or it is stale. */
 export type Allow = {
 	check: string;
 	width?: Width;
 	/** The screen state: `base`, an opened sheet's name, or a data feed's name and `error`,
 	 *  `busy` or `empty` (`sent log busy`). */
 	state?: string;
-	/** A substring of the finding's target. */
+	/** The finding's target, exactly. */
 	target?: string;
 	/** A substring of the finding's detail. */
 	detail?: string;
-	reason: string;
+	why: string;
 	bug: string;
 } & ({ route: string } | { route: '*'; witness: string });
 
@@ -62,12 +67,12 @@ const FIELD_FONT_PX = 16;
 /** The layout checks on the page as it is now. Runs in the browser: no outside names. */
 function measureInPage(limits: { target: number; font: number }): Finding[] {
 	const out: Finding[] = [];
+	const norm = (text: string): string => text.replace(/\s+/g, ' ').trim();
 	const name = (el: Element): string => {
 		const field = el instanceof HTMLInputElement || el instanceof HTMLSelectElement;
 		const fieldLabel = field ? el.labels?.[0]?.textContent : undefined;
 		const label = el.getAttribute('aria-label') ?? fieldLabel ?? el.textContent;
-		const text = label.replace(/\s+/g, ' ').trim().slice(0, 40);
-		return `${el.tagName.toLowerCase()} "${text}"`;
+		return `${el.tagName.toLowerCase()} "${norm(label)}"`;
 	};
 	// Drawn boxes only: not display:none, not visibility:hidden, not a 1 px screen-reader-only box.
 	const drawn = (el: Element): boolean => {
@@ -121,23 +126,48 @@ function measureInPage(limits: { target: number; font: number }): Finding[] {
 		const wide = el.scrollWidth > el.clientWidth + 1;
 		const tall = el.scrollHeight > el.clientHeight + 1;
 		// A one-line ellipsis is a deliberate cut: the "…" shows it.
-		const ellipsis = s.textOverflow === 'ellipsis';
+		const ellipsis =
+			s.textOverflow === 'ellipsis' &&
+			(s.whiteSpace === 'nowrap' || s.getPropertyValue('text-wrap-mode') === 'nowrap');
 		if ((cutsX && wide && !ellipsis) || (cutsY && tall)) {
 			out.push({
 				check: 'clip',
 				target: name(el),
 				detail: `content ${String(el.scrollWidth)}x${String(el.scrollHeight)} in ${String(el.clientWidth)}x${String(el.clientHeight)}`
 			});
-			continue;
 		}
-		const ownText = [...el.childNodes].some(
-			(n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim() !== ''
-		);
-		if (ownText && !cutsX && wide) {
+	}
+
+	// Text wider than the block box it sits in, inline elements included: each text node's own
+	// rectangle against its nearest block's content width. A block that clips or scrolls is left to
+	// the clip check above.
+	const blockOf = (n: Node): Element | null => {
+		let e = n.parentElement;
+		while (e !== null) {
+			const d = getComputedStyle(e).display;
+			if (d !== 'inline' && d !== 'contents') return e;
+			e = e.parentElement;
+		}
+		return null;
+	};
+	const spilled = new Set<Element>();
+	const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+	for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+		const text = norm(n.textContent ?? '');
+		const block = blockOf(n);
+		if (text === '' || block === null || spilled.has(block) || !drawn(block)) continue;
+		if (getComputedStyle(block).overflowX !== 'visible') continue;
+		const range = document.createRange();
+		range.selectNodeContents(n);
+		const r = range.getBoundingClientRect();
+		const left = block.getBoundingClientRect().left + block.clientLeft;
+		const right = left + block.clientWidth;
+		if (r.width > 0 && (r.right > right + 1 || r.left < left - 1)) {
+			spilled.add(block);
 			out.push({
 				check: 'text-overflow',
-				target: name(el),
-				detail: `text ${String(el.scrollWidth)} wide in ${String(el.clientWidth)}`
+				target: `${(n.parentElement ?? block).tagName.toLowerCase()} "${text}"`,
+				detail: `text ${String(Math.round(r.width))} wide in ${String(block.clientWidth)}`
 			});
 		}
 	}
@@ -192,7 +222,7 @@ function expected(a: Allow, s: Scope): boolean {
 function covers(a: Allow, f: Finding): boolean {
 	return (
 		a.check === f.check &&
-		(a.target === undefined || f.target.includes(a.target)) &&
+		(a.target === undefined || f.target === a.target) &&
 		(a.detail === undefined || f.detail.includes(a.detail))
 	);
 }

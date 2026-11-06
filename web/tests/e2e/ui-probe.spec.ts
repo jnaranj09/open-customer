@@ -1,21 +1,47 @@
-// UI pipeline stage 8, runtime sensors (.claude/rules/ui.md): every route of the app, at the phone
+// UI pipeline stage 7, runtime sensors (.claude/rules/ui.md): every route of the app, at the phone
 // profile (`probe-compact`, 393 x 852) and the desktop size (`probe-wide`, 1440 x 900), through axe
 // (WCAG 2.0 to 2.2 A/AA) and the layout probe (sideways scroll, 44 px tap targets, 16 px field font,
-// cut text), with a 60-letter one-word client name seeded. Every opened sheet gets the same checks
+// cut text), with a 60-letter one-word client name seeded in a client, her appointments, a sent
+// reminder and a photo. Every opened sheet gets the same checks
 // and the page behind it must be inert. Every data feed of a screen is answered empty, with a 500
 // and not at all, and the screen must show its empty text, an alert and a busy status. A route on
-// disk with no entry here fails. Known findings are in `ui-probe.allow.ts`.
-import { readdirSync } from 'node:fs';
+// disk with no entry here fails. Known findings are in `ui-probe.allow.ts`; an entry that names a
+// route or state this table does not probe fails too.
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { expect, test, type Locator, type Page, type Request, type Route } from '@playwright/test';
+import {
+	expect,
+	request,
+	test,
+	type Locator,
+	type Page,
+	type Request,
+	type Route
+} from '@playwright/test';
+import { BootstrapSchema } from '../../src/lib/api/schemas';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
-import { AUTH_FILE } from './env';
-import { axe, behindSheet, layout, sift, type Finding, type Width } from './probe';
-import { at, businessDate, closePool, insertAppointment, insertClient, resetData } from './seed';
+import { AUTH_FILE, BASE_URL } from './env';
+import {
+	axe,
+	behindSheet,
+	layout,
+	LONG_NAME,
+	sift,
+	type Allow,
+	type Finding,
+	type Width
+} from './probe';
+import {
+	at,
+	businessDate,
+	closePool,
+	insertAppointment,
+	insertClient,
+	insertSentReminder,
+	resetData
+} from './seed';
 import { ALLOW } from './ui-probe.allow';
 
-/** One word, 60 letters: the longest kind of name a layout has to hold. Made up. */
-const LONG_NAME = 'Mariafernanda'.repeat(5).slice(0, 60);
 const LOGGED_OUT = { cookies: [], origins: [] };
 /** A busy status is a `role="status"` line with one of the `*_loading` texts. */
 const LOADING = new RegExp(
@@ -178,8 +204,7 @@ const PROBES: Record<string, Probe> = {
 		open: async (page) => {
 			const day = businessDate(0);
 			const res = await page.request.get(`/api/v1/bootstrap?from=${day}&to=${day}`);
-			const body = (await res.json()) as { templates: { id: string }[] };
-			const first = body.templates[0];
+			const first = BootstrapSchema.parse(await res.json()).templates[0];
 			if (first === undefined) {
 				throw new Error('probe: setup made no template');
 			}
@@ -305,6 +330,11 @@ function stays(loc: Locator): Promise<boolean> {
 		);
 }
 
+/** Whether `loc` shows, then is still there 2 s later (a late first paint is not a miss). */
+async function showsAndStays(loc: Locator): Promise<boolean> {
+	return (await shows(loc)) && stays(loc);
+}
+
 /** Whether `loc` shows within the normal wait; a miss is a finding, not a test error. */
 function shows(loc: Locator): Promise<boolean> {
 	return loc
@@ -340,8 +370,52 @@ async function answer500(route: Route): Promise<void> {
 		response: real,
 		status: 500,
 		contentType: 'application/problem+json',
-		json: { type: 'urn:open-customer:problem:internal', title: 'Algo salió mal', status: 500 }
+		json: { type: 'urn:open-customer:problem:internal', title: es.error_internal, status: 500 }
 	});
+}
+
+/** A made-up 64 x 64 JPEG (the booking spec's fixture), sent as both the photo and its thumbnail. */
+const PHOTO = readFileSync('tests/e2e/fixtures/photo-gps.jpg');
+
+/** Adds a photo to `appointmentId` through the API, as the logged-in owner. */
+async function uploadPhoto(appointmentId: string): Promise<void> {
+	const api = await request.newContext({
+		baseURL: BASE_URL,
+		storageState: AUTH_FILE,
+		extraHTTPHeaders: { Origin: BASE_URL }
+	});
+	const jpeg = { name: 'foto.jpg', mimeType: 'image/jpeg', buffer: PHOTO };
+	const res = await api.post('/api/v1/media', {
+		multipart: { full: jpeg, thumb: jpeg, appointment_id: appointmentId }
+	});
+	await api.dispose();
+	if (res.status() !== 201) {
+		throw new Error(`probe: photo upload answered ${String(res.status())}`);
+	}
+}
+
+/** The states the table probes on `route`: `base`, each sheet, and each feed's tests. */
+function statesOf(probe: Probe): string[] {
+	const feeds = Array.isArray(probe.feeds) ? probe.feeds : [];
+	return [
+		'base',
+		...(probe.sheets ?? []).map((sheet) => sheet.name),
+		...feeds.flatMap((f) => [
+			`${f.name} error`,
+			`${f.name} busy`,
+			...('text' in f.empty ? [`${f.name} empty`] : [])
+		])
+	];
+}
+
+/** Whether `a` names a route and state this table probes (an entry that never meets its screen
+ *  could never go stale). */
+function probed(a: Allow): boolean {
+	if ('witness' in a) {
+		return a.witness in PROBES && a.state === undefined;
+	}
+	const probe = PROBES[a.route];
+	return probe !== undefined && statesOf(probe).includes(a.state ?? 'base');
 }
 
 let ids: Ids = { client: '', appointment: '' };
@@ -360,6 +434,13 @@ test.beforeEach(async () => {
 	});
 	// The 1-day "before" rule makes this one's message due today.
 	await insertAppointment({ clientId: client, services: ['Relleno'], startsAt: at(1, '11:00') });
+	// Today's sent message (Enviados, her Recordatorios) and a photo of today's visit.
+	await insertSentReminder({
+		appointmentId: appointment,
+		body: `Hola ${LONG_NAME}, te esperamos hoy.`,
+		actedAt: at(0, '08:00')
+	});
+	await uploadPhoto(appointment);
 	ids = { client, appointment };
 });
 
@@ -367,6 +448,10 @@ test.afterAll(closePool);
 
 test('every route on disk has a probe entry, and every entry a route', () => {
 	expect(Object.keys(PROBES).sort()).toEqual(routesOnDisk());
+});
+
+test('every allow-list entry names a probed route and state', () => {
+	expect(ALLOW.filter((a) => !probed(a))).toEqual([]);
 });
 
 for (const [route, probe] of Object.entries(PROBES)) {
@@ -399,7 +484,8 @@ for (const [route, probe] of Object.entries(PROBES)) {
 			test(`${feed.name}: a 500 shows an alert`, async ({ page }, info) => {
 				await page.route(feedMatch(feed), answer500);
 				await page.goto(await probe.open(page, ids));
-				const found = await whenShown(page, await shows(page.getByRole('alert')), {
+				const alert = page.getByRole('alert').filter({ hasText: es.error_internal });
+				const found = await whenShown(page, await shows(alert), {
 					check: 'error',
 					target: feed.name,
 					detail: 'no alert for a 500'
@@ -415,7 +501,8 @@ for (const [route, probe] of Object.entries(PROBES)) {
 				// Every other feed answered first, so a loading line still there is this feed's.
 				await shows(readyText(page, probe));
 				await expect.poll(others).toBe(0);
-				const busy = await stays(page.getByRole('status').filter({ hasText: LOADING }));
+				const loading = page.getByRole('status').filter({ hasText: LOADING });
+				const busy = await showsAndStays(loading);
 				await page.unrouteAll({ behavior: 'ignoreErrors' });
 
 				const found = unless(busy, {

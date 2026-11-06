@@ -139,3 +139,27 @@ export async function insertAppointment(a: {
 	}
 	return id;
 }
+
+/** Logs a sent message of the active "before" rule for `appointmentId` at `actedAt`, as if she sent
+ *  it, with the client's phone digits. Returns its id. */
+export async function insertSentReminder(r: {
+	appointmentId: string;
+	body: string;
+	actedAt: string;
+}): Promise<string> {
+	const { rows } = await db().query<{ id: string }>(
+		"SELECT id FROM reminder_rules WHERE kind = 'before_appointment' AND archived_at IS NULL LIMIT 1"
+	);
+	const rule = rows[0];
+	if (rule === undefined) {
+		throw new Error('seed: no active "before" rule');
+	}
+	const id = randomUUID();
+	await db().query(
+		`INSERT INTO reminder_log (id, rule_id, appointment_id, action, body, phone_digits, acted_at)
+		 SELECT $1, $2, a.id, 'sent', $3, c.phone_digits, $4
+		 FROM appointments a JOIN clients c ON c.id = a.client_id WHERE a.id = $5`,
+		[id, rule.id, r.body, r.actedAt, r.appointmentId]
+	);
+	return id;
+}
