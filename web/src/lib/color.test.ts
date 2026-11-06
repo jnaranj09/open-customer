@@ -6,6 +6,9 @@ import {
 	BG_100_RGB,
 	DEFAULT_ACCENT,
 	GLASS_TINT_ALPHA,
+	GLOW_BLUSH_SHARE,
+	GLOW_LILAC_RGB,
+	GLOW_PEACH_RGB,
 	INK_LUMINANCE,
 	accent100,
 	accent300,
@@ -13,7 +16,9 @@ import {
 	accentText,
 	applyAccent,
 	contrast,
+	darkestPage,
 	glassTint,
+	glowBlush,
 	isHexColor,
 	luminance,
 	swatches
@@ -41,13 +46,18 @@ function labelContrast(hex: string, on: 'fill' | 'hover' = 'fill'): number {
 
 const BG_100 = `#${BG_100_RGB.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
+const hexOf = (rgb: readonly number[]): string =>
+	`#${rgb.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+
 /** The lowest contrast of `accentText(hex)` on the surfaces accent text sits on: the page
- *  background, `--accent-100`, `--accent-300` (a ghost or accent icon button's hover) and the glass
- *  tint (a status chip). */
+ *  background and each glow center, `--accent-100`, `--accent-300` (a ghost or accent icon
+ *  button's hover), and the glass tint (a status chip) over the page and over each glow. */
 function textContrast(hex: string): number {
 	const l = luminance(accentText(hex));
+	const tintOver = (page: string): string => overHex(accent300(hex), 0.35, page);
+	const pages = [BG_100, hexOf(GLOW_PEACH_RGB), hexOf(GLOW_LILAC_RGB), glowBlush(hex)];
 	return Math.min(
-		...[BG_100, accent100(hex), accent300(hex), glassTint(hex)].map((s) =>
+		...[...pages, ...pages.map(tintOver), accent100(hex), accent300(hex)].map((s) =>
 			contrast(luminance(s), l)
 		)
 	);
@@ -128,24 +138,52 @@ describe('accent300', () => {
 });
 
 describe('glassTint', () => {
-	it('paints a white accent-300 at 35% over the page as the page itself', () => {
-		expect(glassTint('#ffffff')).toBe(over35('#ffffff'));
+	it('paints a white accent-300 at 35% over the lilac glow, the darkest page then', () => {
+		expect(glassTint('#ffffff')).toBe(overHex('#ffffff', 0.35, hexOf(GLOW_LILAC_RGB)));
 	});
 
-	it('paints a grey accent-300 at 35% over the page, channel by channel', () => {
-		expect(glassTint('#808080')).toBe(over35('#c4c4c4'));
+	it('paints a grey accent-300 at 35% over the darkest page, channel by channel', () => {
+		expect(glassTint('#808080')).toBe(overHex('#c4c4c4', 0.35, darkestPage('#808080')));
 	});
 });
 
-/** `top` at 35% over --bg-100, worked out apart from the code. */
-function over35(top: string): string {
-	const t = [1, 3, 5].map((i) => Number.parseInt(top.slice(i, i + 2), 16));
-	return `#${BG_100_RGB.map((b, i) =>
-		Math.round((t[i] ?? 0) * 0.35 + b * 0.65)
-			.toString(16)
-			.padStart(2, '0')
-	).join('')}`;
+/** `top` at `alpha` over `page`, worked out apart from the code. */
+function overHex(top: string, alpha: number, page: string): string {
+	const ch = (h: string, i: number): number => Number.parseInt(h.slice(1 + 2 * i, 3 + 2 * i), 16);
+	return hexOf([0, 1, 2].map((i) => Math.round(ch(top, i) * alpha + ch(page, i) * (1 - alpha))));
 }
+
+describe('glowBlush', () => {
+	it('mixes 25% of the accent into white, as color-mix in oklab does', () => {
+		expect([glowBlush('#ffffff'), glowBlush('#808080')]).toEqual(['#ffffff', '#dedede']);
+	});
+});
+
+describe('darkestPage', () => {
+	it('is the lilac glow for the default accent, darker than the page', () => {
+		expect(darkestPage(DEFAULT_ACCENT)).toBe(hexOf(GLOW_LILAC_RGB));
+	});
+
+	it('is the blush glow for a dark accent', () => {
+		expect(darkestPage('#000000')).toBe(glowBlush('#000000'));
+	});
+});
+
+describe('glow channels', () => {
+	it('match --glow-peach and --glow-lilac in app.css', () => {
+		expect([hexOf(GLOW_PEACH_RGB), hexOf(GLOW_LILAC_RGB)]).toEqual([
+			cssColor('glow-peach'),
+			cssColor('glow-lilac')
+		]);
+	});
+
+	it('match the share of the accent in --glow-blush in app.css', () => {
+		const share = /--glow-blush:\s*color-mix\(in oklab, var\(--accent\) (\d+)%, white\);/.exec(
+			CSS()
+		)?.[1];
+		expect(Number(share) / 100).toBe(GLOW_BLUSH_SHARE);
+	});
+});
 
 describe('BG_100_RGB', () => {
 	it('matches the --bg-100 token in app.css', () => {

@@ -12,6 +12,16 @@ export const INK_LUMINANCE = 0.041973526925469073;
  *  sync. Channels, not a luminance: the glass tint is composed over it. */
 export const BG_100_RGB: readonly [number, number, number] = [251, 245, 242];
 
+/** The red, green and blue of `--glow-peach` and `--glow-lilac` (app.css), two of the soft glows
+ *  the body background draws over `--bg-100`; a test keeps them in sync. The lilac one is darker
+ *  than the page, so a chip over it is darker too. */
+export const GLOW_PEACH_RGB: readonly [number, number, number] = [251, 225, 207];
+export const GLOW_LILAC_RGB: readonly [number, number, number] = [231, 220, 243];
+
+/** The share of the accent in `--glow-blush` (app.css: `color-mix(in oklab, var(--accent) 25%,
+ *  white)`), the third glow; a test keeps it in sync. */
+export const GLOW_BLUSH_SHARE = 0.25;
+
 /** The alpha of `--glass-tint` (app.css: `color-mix(in oklab, var(--accent-300) 35%,
  *  transparent)`); a test keeps it in sync. */
 export const GLASS_TINT_ALPHA = 0.35;
@@ -182,21 +192,39 @@ function over(top: string, alpha: number, bottom: string): string {
 	return rgbHex([16, 8, 0].map((s) => ((t >> s) & 0xff) * alpha + ((b >> s) & 0xff) * (1 - alpha)));
 }
 
+/** `--glow-blush` (app.css: `color-mix(in oklab, var(--accent) 25%, white)`) for `hex`. */
+export function glowBlush(hex: string): string {
+	return mixWhite(hex, GLOW_BLUSH_SHARE);
+}
+
+/** The darkest the page behind a surface gets for `hex`: `--bg-100` or the center of one of the
+ *  body's radial glows (peach, lilac, and the blush that follows the accent). Where glows overlap
+ *  they blend, which never goes darker than the darkest of them. */
+export function darkestPage(hex: string): string {
+	const pages = [
+		rgbHex(BG_100_RGB),
+		rgbHex(GLOW_PEACH_RGB),
+		rgbHex(GLOW_LILAC_RGB),
+		glowBlush(hex)
+	];
+	return pages.reduce((a, b) => (luminance(b) < luminance(a) ? b : a));
+}
+
 /** The `bg-glass-tint` surface (a status chip, the archived badge, the offline banner) as it is
  *  painted for `hex`: color-mix with `transparent` keeps `--accent-300` at 35% alpha, drawn here
- *  over the bare page background. A glass card under the chip only lightens it, so this is the
- *  darkest case for dark text. */
+ *  over the darkest page behind it (`darkestPage`, a glow included). A glass card between them
+ *  only lightens it, so this is the darkest case for dark text. */
 export function glassTint(hex: string): string {
-	return over(accent300(hex), GLASS_TINT_ALPHA, rgbHex(BG_100_RGB));
+	return over(accent300(hex), GLASS_TINT_ALPHA, darkestPage(hex));
 }
 
 /** The accent as text on a light surface (a ghost button, a text button, a selected chip, a status
  *  chip, the times in the grid): the accent's 700 shade, darkened until it reaches AA on each
- *  surface it sits on: the page background (`--bg-100`), the pale accent tint (`--accent-100`),
+ *  surface it sits on: the page at its darkest (`darkestPage`), the pale accent tint (`--accent-100`),
  *  the hover fill of a ghost button and an accent icon button (`--accent-300`) and the glass tint
  *  (`glassTint`). */
 export function accentText(hex: string): string {
-	const surfaces = [rgbHex(BG_100_RGB), accent100(hex), accent300(hex), glassTint(hex)].map(
+	const surfaces = [darkestPage(hex), accent100(hex), accent300(hex), glassTint(hex)].map(
 		luminance
 	);
 	let by = FILL_DARKEN;
