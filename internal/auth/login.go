@@ -25,9 +25,10 @@ type LoginInput struct {
 }
 
 // LoginAttempt is a login that passed the rate limits. Only BeginLogin makes one; Login refuses
-// the zero value (errAttemptNotBegun), so no caller can skip the limits.
+// the zero value (errAttemptNotBegun), so no caller can skip the limits. It holds no password, so
+// formatting or logging one can never leak it: Login takes the password as its own argument.
 type LoginAttempt struct {
-	username, password string
+	username string
 }
 
 // BeginLogin checks the login rate limits, in memory and before the handler opens its
@@ -35,7 +36,8 @@ type LoginAttempt struct {
 // the caller derived (httpapi decides whether to trust CF-Connecting-IP). In order: a malformed
 // username is Validation (422); a used-up IP bucket or a username still waiting out its delay is
 // RateLimited (429); otherwise the attempt counts as a failure for that username before the
-// password is checked, so parallel attempts cannot skip the delay. Login then finishes it.
+// password is checked, so parallel attempts cannot skip the delay. It reads only in.Username;
+// Login then finishes the attempt with in.Password.
 func (a *Auth) BeginLogin(in LoginInput, ip netip.Addr) (LoginAttempt, error) {
 	username, err := normalizeUsername(in.Username)
 	if err != nil {
@@ -47,14 +49,15 @@ func (a *Auth) BeginLogin(in LoginInput, ip netip.Addr) (LoginAttempt, error) {
 	if err := a.limiter.reserveName(username, a.clock.Now()); err != nil {
 		return LoginAttempt{}, err
 	}
-	return LoginAttempt{username: username, password: in.Password}, nil
+	return LoginAttempt{username: username}, nil
 }
 
-// Login checks the password of an attempt BeginLogin let through and creates a session. An
+// Login checks password for an attempt BeginLogin let through (the same request's password) and
+// creates a session. An
 // unknown username or a wrong password is InvalidCredentials (401) and the failure BeginLogin
 // counted stands; success takes it back and clears the username's delay. It returns the user and
 // the session token for the cookie. The handler runs it in db.WithTx.
-func (a *Auth) Login(ctx context.Context, q db.DBTX, attempt LoginAttempt) (Me, string, error) {
+func (a *Auth) Login(ctx context.Context, q db.DBTX, attempt LoginAttempt, password string) (Me, string, error) {
 	if attempt.username == "" {
 		return Me{}, "", errAttemptNotBegun
 	}
@@ -66,7 +69,7 @@ func (a *Auth) Login(ctx context.Context, q db.DBTX, attempt LoginAttempt) (Me, 
 	if found {
 		stored = user.PasswordHash
 	}
-	ok, err := a.verify(ctx, stored, attempt.password)
+	ok, err := a.verify(ctx, stored, password)
 	if err != nil {
 		return Me{}, "", err
 	}

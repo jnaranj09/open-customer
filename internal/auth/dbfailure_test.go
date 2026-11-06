@@ -57,7 +57,7 @@ var dbOperations = []dbOperation{
 		if err != nil {
 			t.Fatalf("BeginLogin: %v", err)
 		}
-		return f.pool, func(q db.DBTX) error { _, _, err := f.auth.Login(t.Context(), q, attempt); return err }
+		return f.pool, func(q db.DBTX) error { _, _, err := f.auth.Login(t.Context(), q, attempt, in.Password); return err }
 	}},
 	{"Authenticate with a slide", func(t *testing.T) (db.DBTX, func(q db.DBTX) error) {
 		t.Helper()

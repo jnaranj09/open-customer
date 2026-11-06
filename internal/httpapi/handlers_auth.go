@@ -94,7 +94,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	var token string
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
 		var err error
-		if me, token, err = s.auth.Login(r.Context(), tx, attempt); err != nil {
+		if me, token, err = s.auth.Login(r.Context(), tx, attempt, body.Password); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}
 		return nil

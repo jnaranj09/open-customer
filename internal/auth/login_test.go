@@ -39,7 +39,7 @@ func login(t *testing.T, f *setupFixture, in auth.LoginInput, ip netip.Addr) (au
 	if err != nil {
 		return auth.Me{}, "", err
 	}
-	return f.auth.Login(t.Context(), f.pool, attempt)
+	return f.auth.Login(t.Context(), f.pool, attempt, in.Password)
 }
 
 func wantInvalidCredentials(t *testing.T, err error) {
@@ -174,7 +174,7 @@ func TestLoginRateLimitedPerIP(t *testing.T) {
 func TestLoginWithoutBeginLoginFailsClosed(t *testing.T) {
 	f, _ := newLoginFixture(t)
 	sessions := count(t, f.pool, "sessions")
-	_, token, err := f.auth.Login(t.Context(), f.pool, auth.LoginAttempt{})
+	_, token, err := f.auth.Login(t.Context(), f.pool, auth.LoginAttempt{}, validSetupInput("").Password)
 	if !errors.Is(err, auth.ErrAttemptNotBegun) || token != "" {
 		t.Fatalf("Login(zero attempt) = %q, %v; want no token and ErrAttemptNotBegun (a 500, not a login or a 401)", token, err)
 	}
