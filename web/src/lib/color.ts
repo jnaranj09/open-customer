@@ -1,3 +1,5 @@
+import type { MessageKey } from './i18n';
+
 /** The accent before setup and when settings have none (the mockup's rose-500). Mirrors `--accent`
  *  in app.css. */
 export const DEFAULT_ACCENT = '#c76b85';
@@ -83,7 +85,17 @@ export function applyAccent(root: HTMLElement, hex: string | null): void {
 	root.style.setProperty('--on-accent', text === 'light' ? 'var(--on-strong)' : 'var(--ink)');
 }
 
-const SWATCH_HUES: readonly number[] = [14, 38, 140, 185, 215, 265, 305];
+/** The soft hues the picker offers after the default, each with the name a screen reader says
+ *  (a hex code means nothing read aloud). */
+const SWATCH_HUES: readonly { hue: number; name: MessageKey }[] = [
+	{ hue: 14, name: 'color_name_coral' },
+	{ hue: 38, name: 'color_name_gold' },
+	{ hue: 140, name: 'color_name_green' },
+	{ hue: 185, name: 'color_name_teal' },
+	{ hue: 215, name: 'color_name_blue' },
+	{ hue: 265, name: 'color_name_violet' },
+	{ hue: 305, name: 'color_name_orchid' }
+];
 
 /** `#rrggbb` of an HSL color (h in degrees, s and l in percent). */
 function hslToHex(h: number, s: number, l: number): string {
@@ -100,8 +112,12 @@ function hslToHex(h: number, s: number, l: number): string {
 	return `#${channelAt(0)}${channelAt(8)}${channelAt(4)}`;
 }
 
-/** The accent choices the color picker offers: the default accent first, then soft hues of
- *  similar weight. Built here because a literal color may not live in a component. */
-export function swatches(): string[] {
-	return [DEFAULT_ACCENT, ...SWATCH_HUES.map((h) => hslToHex(h, 45, 62))];
+/** The accent choices the color picker offers, with their color names: the default accent first,
+ *  then soft hues of similar weight. Built here because a literal color may not live in a
+ *  component. */
+export function swatches(): { hex: string; name: MessageKey }[] {
+	return [
+		{ hex: DEFAULT_ACCENT, name: 'color_name_rose' },
+		...SWATCH_HUES.map(({ hue, name }) => ({ hex: hslToHex(hue, 45, 62), name }))
+	];
 }

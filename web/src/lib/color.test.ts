@@ -12,6 +12,7 @@ import {
 	luminance,
 	swatches
 } from './color';
+import { t } from './i18n';
 
 /** A stand-in for an element: the only thing `applyAccent` touches is the style. */
 function fakeRoot(): { root: HTMLElement; vars: Map<string, string> } {
@@ -51,7 +52,9 @@ describe('accentFill', () => {
 	it('reaches AA for every accent on a grid of the color cube', () => {
 		const steps = ['00', '33', '66', '99', 'cc', 'ff'];
 		const all = steps.flatMap((r) => steps.flatMap((g) => steps.map((b) => `#${r}${g}${b}`)));
-		const low = [...all, ...swatches()].filter((hex) => labelContrast(hex) < AA_TEXT);
+		const low = [...all, ...swatches().map((s) => s.hex)].filter(
+			(hex) => labelContrast(hex) < AA_TEXT
+		);
 		expect(low).toEqual([]);
 	});
 
@@ -129,14 +132,20 @@ describe('applyAccent', () => {
 
 describe('swatches', () => {
 	it('are all #rrggbb', () => {
-		expect(swatches().every(isHexColor)).toBe(true);
+		expect(swatches().every((s) => isHexColor(s.hex))).toBe(true);
 	});
 
 	it('are all different', () => {
-		expect(new Set(swatches()).size).toBe(swatches().length);
+		expect(new Set(swatches().map((s) => s.hex)).size).toBe(swatches().length);
 	});
 
 	it('start from the default accent so her first choice is on the row', () => {
-		expect(swatches()[0]).toBe(DEFAULT_ACCENT);
+		expect(swatches()[0]?.hex).toBe(DEFAULT_ACCENT);
+	});
+
+	it('each have their own Spanish color name, not a hex code', () => {
+		const names = swatches().map((s) => t(s.name));
+		expect(new Set(names).size).toBe(names.length);
+		expect(names.filter((n) => n.includes('#'))).toEqual([]);
 	});
 });
