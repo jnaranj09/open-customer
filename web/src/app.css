@@ -138,6 +138,12 @@ body {
 	padding-right: env(safe-area-inset-right);
 }
 
+/* The floating "+" on compact Hoy: above the tab bar (BottomNav: its pill plus its bottom margin)
+   and the home indicator under it. */
+@utility bottom-fab {
+	bottom: calc(--spacing(32) + env(safe-area-inset-bottom));
+}
+
 /* Named heights and generated content, so no component needs an arbitrary `-[…]` value (lint
    rejects those; .claude/rules/ui.md "UI pipeline"). */
 @utility max-h-sheet {

@@ -272,10 +272,10 @@
 			<PushActivate />
 		</aside>
 	{:else}
-		<!-- The floating "+" of the mockup; the sidebar's "Nueva cita" does this on wide. -->
-		<div class="fixed right-4 bottom-32 z-20 flex flex-col items-end gap-2">
+		<!-- The floating "+" of the mockup; the sidebar's "Nueva cita" does this on wide. Offline it
+		     fades; the offline banner says why. It sits above the tab bar and its safe area. -->
+		<div class="fixed right-4 bottom-fab z-20">
 			{#if cache.offline}
-				<Card as="p" pad="note" class="text-sm text-ink">{t('offline_cannot_save')}</Card>
 				<IconButton variant="add" icon="plus" label={t('appointment_new')} inert />
 			{:else}
 				<IconButton

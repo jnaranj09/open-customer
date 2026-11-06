@@ -74,6 +74,16 @@ test('offline shows the cached day with the banner', async ({ page }) => {
 	await expect(page.getByRole('link', { name: /Ana Rojas/ })).toBeVisible();
 });
 
+test('offline the banner says why nothing saves, with no note floating over Hoy', async ({
+	page
+}) => {
+	await serverOff(page);
+	await page.reload();
+
+	await expect(page.getByRole('status').getByText(es.offline_cannot_save)).toBeVisible();
+	await expect(page.getByText(es.offline_cannot_save, { exact: true })).toHaveCount(1);
+});
+
 test('the banner clears when the connection comes back, with the app left open', async ({
 	page,
 	context

@@ -13,7 +13,7 @@
 
 	// A round (or square) icon-only control. `label` is its accessible name and tooltip. With
 	// `href` it is a link, with `onclick` a button. `inert` shows it faded and inactive (the
-	// offline "+"), so a reason must sit near it. `class` is for position only (`lg:hidden`,
+	// offline "+"), so a reason must be on screen (the offline banner says it for the "+"). `class` is for position only (`lg:hidden`,
 	// `absolute top-1`); other attributes (`disabled`, `aria-expanded`, pointer handlers, `data-*`)
 	// go to the button.
 	type Props = Omit<
