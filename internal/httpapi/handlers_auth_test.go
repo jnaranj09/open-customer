@@ -400,6 +400,21 @@ func TestLoginSixthAttemptIs429(t *testing.T) {
 	assertRateLimited(t, send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("nobody-else", "x"), same(0)))
 }
 
+// The limits are checked before the transaction: a refused login opens none, so a burst of
+// refused logins holds no database connection.
+func TestLoginRateLimitedOpensNoTransaction(t *testing.T) {
+	pool := dbtest.Pool(t)
+	rec := &dbtest.TxModeRecorder{Pool: pool}
+	app := newTestApp(t, testServerConfig{pool: pool, beginner: rec})
+	same := func(int) func(*http.Request) { return from("192.0.2.1:4000", "") }
+	failedLogins(t, app.handler, 5, same)
+	before := len(rec.Modes())
+	assertRateLimited(t, send(app.handler, http.MethodPost, loginPath, testOrigin, loginBody("nobody-else", "x"), same(0)))
+	if got := len(rec.Modes()) - before; got != 0 {
+		t.Fatalf("a rate-limited login opened %d transactions; want 0", got)
+	}
+}
+
 func TestLoginRateLimitTrustedVsUntrustedPeer(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("172.16.0.0/12")}
 

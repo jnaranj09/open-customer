@@ -78,19 +78,23 @@ func (s *Server) CompleteSetup(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login has no session on purpose: it is how a session is made. The rate limits are per client
-// IP (from the client-IP middleware step) and per username. The cookie and the 200 are written
-// only after the commit.
+// IP (from the client-IP middleware step) and per username, checked before the transaction, so
+// a 429 opens none. The cookie and the 200 are written only after the commit.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	var body gen.LoginInput
 	if decodeJSON(w, r, &body) != nil {
 		return
 	}
-	in := auth.LoginInput{Username: body.Username, Password: body.Password}
+	attempt, err := s.auth.BeginLogin(auth.LoginInput{Username: body.Username, Password: body.Password}, clientIP(r.Context()))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	var me auth.Me
 	var token string
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
 		var err error
-		if me, token, err = s.auth.Login(r.Context(), tx, in, clientIP(r.Context())); err != nil {
+		if me, token, err = s.auth.Login(r.Context(), tx, attempt); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}
 		return nil
@@ -126,15 +130,21 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 
 // ChangePassword changes the signed-in user's password, keeping this session and closing the
 // others. A wrong current password is 422 on current_password and counts toward the username's
-// login delay (429 when the next try comes too early).
+// login delay (429 when the next try comes too early, checked before the transaction, so it opens
+// none).
 func (s *Server) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var body gen.PasswordChange
 	if decodeJSON(w, r, &body) != nil {
 		return
 	}
-	session := mustSignedIn(r.Context()).session
+	cur := mustSignedIn(r.Context())
+	attempt, err := s.auth.BeginPasswordChange(cur.me)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
-		if err := s.auth.ChangePassword(r.Context(), tx, session, body.CurrentPassword, body.NewPassword); err != nil {
+		if err := s.auth.ChangePassword(r.Context(), tx, cur.session, attempt, body.CurrentPassword, body.NewPassword); err != nil {
 			return fmt.Errorf("change the password: %w", err)
 		}
 		return nil

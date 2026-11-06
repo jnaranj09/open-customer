@@ -34,7 +34,7 @@ const (
 // It never sleeps: a blocked attempt gets problem.RateLimited with the time left.
 type loginLimiter struct {
 	mu        sync.Mutex
-	ips       map[netip.Addr]*ipEntry
+	ips       map[netip.Prefix]*ipEntry // keyed by ipBucketKey
 	names     map[string]*nameEntry
 	lastSweep time.Time
 }
@@ -50,20 +50,38 @@ type nameEntry struct {
 }
 
 func newLoginLimiter() *loginLimiter {
-	return &loginLimiter{ips: map[netip.Addr]*ipEntry{}, names: map[string]*nameEntry{}}
+	return &loginLimiter{ips: map[netip.Prefix]*ipEntry{}, names: map[string]*nameEntry{}}
 }
 
-// allowIP takes one attempt from ip's bucket, or is problem.RateLimited until a token refills.
-// An IPv4-mapped IPv6 address (::ffff:a.b.c.d) shares the bucket of a.b.c.d.
+// ipBucketKey is the bucket ip counts against. An IPv4 address (and an IPv4-mapped IPv6 address,
+// ::ffff:a.b.c.d, unmapped first) is its own bucket. An IPv6 address counts against its /64: one
+// client usually holds a whole /64, and a bucket per address would let it change address on
+// every attempt. An address that is not valid (the zero netip.Addr of a peer that did not parse)
+// gets the zero Prefix, one bucket shared by all of them, never no limit.
+func ipBucketKey(ip netip.Addr) netip.Prefix {
+	ip = ip.Unmap().WithZone("")
+	bits := 64
+	if ip.Is4() {
+		bits = 32
+	}
+	key, err := ip.Prefix(bits)
+	if err != nil {
+		return netip.Prefix{}
+	}
+	return key
+}
+
+// allowIP takes one attempt from the bucket of ip (ipBucketKey), or is problem.RateLimited until
+// a token refills.
 func (l *loginLimiter) allowIP(ip netip.Addr, now time.Time) error {
-	ip = ip.Unmap()
+	key := ipBucketKey(ip)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.sweep(now)
-	e, ok := l.ips[ip]
+	e, ok := l.ips[key]
 	if !ok {
 		e = &ipEntry{limiter: rate.NewLimiter(rate.Every(ipRefill), ipBurst)}
-		l.ips[ip] = e
+		l.ips[key] = e
 	}
 	e.lastSeen = now
 	if e.limiter.AllowN(now, 1) {
@@ -113,9 +131,9 @@ func (l *loginLimiter) sweep(now time.Time) {
 		return
 	}
 	l.lastSweep = now
-	for ip, e := range l.ips {
+	for key, e := range l.ips {
 		if !now.Before(e.lastSeen.Add(ipIdleLimit)) {
-			delete(l.ips, ip)
+			delete(l.ips, key)
 		}
 	}
 	for name, e := range l.names {

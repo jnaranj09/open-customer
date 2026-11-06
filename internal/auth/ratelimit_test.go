@@ -74,7 +74,7 @@ func TestIPEntriesSweptAfterTenMinutes(t *testing.T) {
 	if err := l.allowIP(ipB, limitStart.Add(10*time.Minute)); err != nil {
 		t.Fatalf("other IP again: %v", err)
 	}
-	if _, kept := l.ips[ipA]; kept || len(l.ips) != 1 {
+	if _, kept := l.ips[ipBucketKey(ipA)]; kept || len(l.ips) != 1 {
 		t.Fatalf("idle 10m: entries %v; want only the other IP", l.ips)
 	}
 }
@@ -226,6 +226,58 @@ func TestIPv4MappedAddressSharesTheIPv4Bucket(t *testing.T) {
 	}
 }
 
+// burstFrom uses up ip's bucket: ipBurst attempts at limitStart, each allowed.
+func burstFrom(t *testing.T, l *loginLimiter, ip netip.Addr) {
+	t.Helper()
+	for range ipBurst {
+		if err := l.allowIP(ip, limitStart); err != nil {
+			t.Fatalf("burst from %v: %v", ip, err)
+		}
+	}
+}
+
+// One IPv6 client usually holds a whole /64, so its addresses share one bucket.
+func TestIPv6SameSlash64SharesBucket(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	burstFrom(t, l, netip.MustParseAddr("2001:db8:1:2::1"))
+	other := netip.MustParseAddr("2001:db8:1:2:ffff:ffff:ffff:fffe")
+	if got := retryAfter(t, l.allowIP(other, limitStart)); got != 12*time.Second {
+		t.Fatalf("%v after a burst from its /64: RetryAfter = %v; want 12s (one bucket)", other, got)
+	}
+}
+
+func TestIPv6OtherSlash64HasOwnBucket(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	burstFrom(t, l, netip.MustParseAddr("2001:db8:1:2::1"))
+	if err := l.allowIP(netip.MustParseAddr("2001:db8:1:3::1"), limitStart); err != nil {
+		t.Fatalf("the next /64 after a burst from 2001:db8:1:2::/64: %v; want nil (its own bucket)", err)
+	}
+}
+
+// An IPv4-mapped address is keyed as its IPv4 address, not by the /64 that every mapped address
+// shares (::ffff:0:0/96), so two IPv4 clients never share a bucket.
+func TestIPv4MappedIsIPv4(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	burstFrom(t, l, netip.AddrFrom16(ipA.As16()))
+	if err := l.allowIP(netip.AddrFrom16(ipB.As16()), limitStart); err != nil {
+		t.Fatalf("mapped %v after a burst from mapped %v: %v; want nil (its own bucket)", ipB, ipA, err)
+	}
+}
+
+// A request whose peer address could not be parsed has no address (the zero netip.Addr); all such
+// requests share one bucket rather than going unlimited.
+func TestAddressesThatDoNotParseShareOneBucket(t *testing.T) {
+	t.Parallel()
+	l := newLoginLimiter()
+	burstFrom(t, l, netip.Addr{})
+	if got := retryAfter(t, l.allowIP(netip.Addr{}, limitStart)); got != 12*time.Second {
+		t.Fatalf("no address after a burst with no address: RetryAfter = %v; want 12s", got)
+	}
+}
+
 func TestSweepRunsAtMostOncePerSecond(t *testing.T) {
 	t.Parallel()
 	l := newLoginLimiter()
@@ -239,13 +291,13 @@ func TestSweepRunsAtMostOncePerSecond(t *testing.T) {
 	if err := l.allowIP(ipB, idle); err != nil {
 		t.Fatalf("allowIP: %v", err)
 	}
-	if _, kept := l.ips[ipA]; !kept {
+	if _, kept := l.ips[ipBucketKey(ipA)]; !kept {
 		t.Fatal("500ms after the last sweep: the idle entry is gone; want the sweep skipped")
 	}
 	if err := l.allowIP(ipB, idle.Add(500*time.Millisecond)); err != nil {
 		t.Fatalf("allowIP: %v", err)
 	}
-	if _, kept := l.ips[ipA]; kept {
+	if _, kept := l.ips[ipBucketKey(ipA)]; kept {
 		t.Fatal("1s after the last sweep: the idle entry is kept; want it swept")
 	}
 }

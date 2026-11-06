@@ -102,7 +102,7 @@ func (a *Auth) CompleteSetup(ctx context.Context, q db.DBTX, in SetupInput) (Me,
 	if err := a.settingsCreator(ctx, q, in.Settings); err != nil {
 		return Me{}, "", prefixSettingsFields(err)
 	}
-	hash, err := hashPassword(in.Password)
+	hash, err := hashPassword(ctx, in.Password)
 	if err != nil {
 		return Me{}, "", err
 	}

@@ -25,13 +25,14 @@ const (
 // change it, plus the loaded Session for the fixture's token.
 type passwordFixture struct {
 	sessionFixture
+	me      Me
 	session Session
 }
 
 func newPasswordFixture(t *testing.T) passwordFixture {
 	t.Helper()
 	f := newSessionFixture(t)
-	hash, err := hashPassword(madeUpPassword)
+	hash, err := hashPassword(t.Context(), madeUpPassword)
 	if err != nil {
 		t.Fatalf("hashPassword: %v", err)
 	}
@@ -39,11 +40,22 @@ func newPasswordFixture(t *testing.T) passwordFixture {
 		`UPDATE users SET password_hash = $1, must_change_password = false WHERE id = $2`, hash, f.userID); err != nil {
 		t.Fatalf("set the password: %v", err)
 	}
-	_, sess, _, err := f.auth.Authenticate(t.Context(), f.pool, f.token)
+	me, sess, _, err := f.auth.Authenticate(t.Context(), f.pool, f.token)
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
-	return passwordFixture{sessionFixture: f, session: sess}
+	return passwordFixture{sessionFixture: f, me: me, session: sess}
+}
+
+// changePassword runs one change the way the handler does: BeginPasswordChange for the fixture's
+// user (the delay, no database), then ChangePassword on the pool with session.
+func (f passwordFixture) changePassword(t *testing.T, session Session, current, next string) error {
+	t.Helper()
+	attempt, err := f.auth.BeginPasswordChange(f.me)
+	if err != nil {
+		return err
+	}
+	return f.auth.ChangePassword(t.Context(), f.pool, session, attempt, current, next)
 }
 
 // storedUser reads the user's password hash and must_change_password flag from the table.
@@ -61,7 +73,7 @@ func (f passwordFixture) storedUser(t *testing.T) (hash string, mustChange bool)
 func (f passwordFixture) wantPasswordIs(t *testing.T, pw string) {
 	t.Helper()
 	hash, _ := f.storedUser(t)
-	ok, err := verifyPassword(hash, pw)
+	ok, err := verifyPassword(t.Context(), hash, pw)
 	if err != nil || !ok {
 		t.Fatalf("verifyPassword(stored, %q) = %v, %v; want true, nil", pw, ok, err)
 	}
@@ -94,7 +106,7 @@ func TestChangePasswordKeepsCurrentRevokesOthers(t *testing.T) {
 		}
 		others[i] = token
 	}
-	if err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, madeUpNewPassword); err != nil {
+	if err := f.changePassword(t, f.session, madeUpPassword, madeUpNewPassword); err != nil {
 		t.Fatalf("ChangePassword: %v", err)
 	}
 	if _, _, _, err := f.auth.Authenticate(t.Context(), f.pool, f.token); err != nil {
@@ -109,7 +121,7 @@ func TestChangePasswordKeepsCurrentRevokesOthers(t *testing.T) {
 
 func TestChangePasswordWrongCurrentIsValidation(t *testing.T) {
 	f := newPasswordFixture(t)
-	err := f.auth.ChangePassword(t.Context(), f.pool, f.session, "made-up-wrong-password", madeUpNewPassword)
+	err := f.changePassword(t, f.session, "made-up-wrong-password", madeUpNewPassword)
 	if errors.As(err, new(problem.Unauthorized)) {
 		t.Fatalf("err = %v; want Validation, not Unauthorized", err)
 	}
@@ -119,38 +131,37 @@ func TestChangePasswordWrongCurrentIsValidation(t *testing.T) {
 
 func TestChangePasswordWrongCurrentDelaysTheUsername(t *testing.T) {
 	f := newPasswordFixture(t)
-	wrong := f.auth.ChangePassword(t.Context(), f.pool, f.session, "made-up-wrong-password", madeUpNewPassword)
+	wrong := f.changePassword(t, f.session, "made-up-wrong-password", madeUpNewPassword)
 	wantValidationOn(t, wrong, "current_password", problem.MsgCurrentPasswordWrong)
 
 	t.Run("the next change within a second is rate limited, even with the right password", func(t *testing.T) {
-		err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, madeUpNewPassword)
+		err := f.changePassword(t, f.session, madeUpPassword, madeUpNewPassword)
 		if got := retryAfter(t, err); got != time.Second {
 			t.Fatalf("RetryAfter = %v; want 1s", got)
 		}
 		f.wantPasswordIs(t, madeUpPassword)
 	})
 	t.Run("a login for the same username shares the delay", func(t *testing.T) {
-		_, _, err := f.auth.Login(t.Context(), f.pool,
-			LoginInput{Username: "made-up-owner", Password: madeUpPassword}, ipA)
+		_, err := f.auth.BeginLogin(LoginInput{Username: "made-up-owner", Password: madeUpPassword}, ipA)
 		retryAfter(t, err)
 	})
 }
 
 func TestChangePasswordSuccessClearsTheDelay(t *testing.T) {
 	f := newPasswordFixture(t)
-	wrong := f.auth.ChangePassword(t.Context(), f.pool, f.session, "made-up-wrong-password", madeUpNewPassword)
+	wrong := f.changePassword(t, f.session, "made-up-wrong-password", madeUpNewPassword)
 	wantValidationOn(t, wrong, "current_password", problem.MsgCurrentPasswordWrong)
 	f.clock.Advance(time.Second)
-	if err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, madeUpNewPassword); err != nil {
+	if err := f.changePassword(t, f.session, madeUpPassword, madeUpNewPassword); err != nil {
 		t.Fatalf("ChangePassword after the delay: %v", err)
 	}
-	err := f.auth.ChangePassword(t.Context(), f.pool, f.session, "made-up-wrong-password", madeUpPassword)
+	err := f.changePassword(t, f.session, "made-up-wrong-password", madeUpPassword)
 	wantValidationOn(t, err, "current_password", problem.MsgCurrentPasswordWrong)
 }
 
 func TestChangePasswordTooShort(t *testing.T) {
 	f := newPasswordFixture(t)
-	err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, "short")
+	err := f.changePassword(t, f.session, madeUpPassword, "short")
 	wantValidationOn(t, err, "new_password", problem.MsgPasswordTooShort)
 	f.wantPasswordIs(t, madeUpPassword)
 }
@@ -158,7 +169,7 @@ func TestChangePasswordTooShort(t *testing.T) {
 func TestChangePasswordClearsMustChange(t *testing.T) {
 	f := newPasswordFixture(t)
 	f.setMustChange(t)
-	if err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, madeUpNewPassword); err != nil {
+	if err := f.changePassword(t, f.session, madeUpPassword, madeUpNewPassword); err != nil {
 		t.Fatalf("ChangePassword: %v", err)
 	}
 	if _, mustChange := f.storedUser(t); mustChange {
@@ -170,8 +181,33 @@ func TestChangePasswordForAGoneUserIsUnauthorized(t *testing.T) {
 	f := newPasswordFixture(t)
 	gone := f.session
 	gone.UserID = uuid.New()
-	err := f.auth.ChangePassword(t.Context(), f.pool, gone, madeUpPassword, madeUpNewPassword)
+	err := f.changePassword(t, gone, madeUpPassword, madeUpNewPassword)
 	wantUnauthorized(t, err)
+}
+
+// ChangePassword only finishes an attempt BeginPasswordChange let through; one that skipped the
+// delay fails closed and changes nothing.
+func TestChangePasswordWithoutBeginFailsClosed(t *testing.T) {
+	f := newPasswordFixture(t)
+	err := f.auth.ChangePassword(t.Context(), f.pool, f.session, PasswordChangeAttempt{}, madeUpPassword, madeUpNewPassword)
+	if !errors.Is(err, errAttemptNotBegun) {
+		t.Fatalf("ChangePassword(zero attempt) = %v; want errAttemptNotBegun", err)
+	}
+	f.wantPasswordIs(t, madeUpPassword)
+}
+
+// An attempt begun for one user cannot finish another's change: it would clear the wrong delay.
+func TestChangePasswordAttemptForAnotherUserFailsClosed(t *testing.T) {
+	f := newPasswordFixture(t)
+	attempt, err := f.auth.BeginPasswordChange(Me{ID: uuid.New(), Username: "made-up-other"})
+	if err != nil {
+		t.Fatalf("BeginPasswordChange: %v", err)
+	}
+	err = f.auth.ChangePassword(t.Context(), f.pool, f.session, attempt, madeUpPassword, madeUpNewPassword)
+	if !errors.Is(err, errAttemptNotBegun) {
+		t.Fatalf("ChangePassword(another user's attempt) = %v; want errAttemptNotBegun", err)
+	}
+	f.wantPasswordIs(t, madeUpPassword)
 }
 
 func TestChangePasswordCorruptStoredHashFailsClosed(t *testing.T) {
@@ -180,7 +216,7 @@ func TestChangePasswordCorruptStoredHashFailsClosed(t *testing.T) {
 		`UPDATE users SET password_hash = 'not-a-phc-string' WHERE id = $1`, f.userID); err != nil {
 		t.Fatalf("corrupt the hash: %v", err)
 	}
-	err := f.auth.ChangePassword(t.Context(), f.pool, f.session, madeUpPassword, madeUpNewPassword)
+	err := f.changePassword(t, f.session, madeUpPassword, madeUpNewPassword)
 	if !errors.Is(err, errMalformedHash) {
 		t.Fatalf("err = %v; want errMalformedHash (a 500, not a change and not a Validation)", err)
 	}

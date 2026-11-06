@@ -27,14 +27,17 @@ func NewForTest(t *testing.T, opts Options) *Auth {
 // DummyHash is dummyHash, for the OP17 timing test.
 const DummyHash = dummyHash
 
+// ErrAttemptNotBegun is errAttemptNotBegun, for the fail-closed Login test.
+var ErrAttemptNotBegun = errAttemptNotBegun
+
 // RecordVerifyCalls wraps a's password verifier so each call appends its stored hash to the
 // returned slice; the real verifier still runs.
 func RecordVerifyCalls(a *Auth) *[]string {
 	var stored []string
 	inner := a.verify
-	a.verify = func(s, pw string) (bool, error) {
+	a.verify = func(ctx context.Context, s, pw string) (bool, error) {
 		stored = append(stored, s)
-		return inner(s, pw)
+		return inner(ctx, s, pw)
 	}
 	return &stored
 }

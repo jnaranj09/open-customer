@@ -53,8 +53,11 @@ var dbOperations = []dbOperation{
 		t.Helper()
 		f := newPasswordFixture(t)
 		in := LoginInput{Username: "made-up-owner", Password: madeUpPassword}
-		ip := netip.MustParseAddr("192.0.2.30")
-		return f.pool, func(q db.DBTX) error { _, _, err := f.auth.Login(t.Context(), q, in, ip); return err }
+		attempt, err := f.auth.BeginLogin(in, netip.MustParseAddr("192.0.2.30"))
+		if err != nil {
+			t.Fatalf("BeginLogin: %v", err)
+		}
+		return f.pool, func(q db.DBTX) error { _, _, err := f.auth.Login(t.Context(), q, attempt); return err }
 	}},
 	{"Authenticate with a slide", func(t *testing.T) (db.DBTX, func(q db.DBTX) error) {
 		t.Helper()
@@ -71,8 +74,12 @@ var dbOperations = []dbOperation{
 	{"ChangePassword", func(t *testing.T) (db.DBTX, func(q db.DBTX) error) {
 		t.Helper()
 		f := newPasswordFixture(t)
+		attempt, err := f.auth.BeginPasswordChange(f.me)
+		if err != nil {
+			t.Fatalf("BeginPasswordChange: %v", err)
+		}
 		return f.pool, func(q db.DBTX) error {
-			return f.auth.ChangePassword(t.Context(), q, f.session, madeUpPassword, madeUpNewPassword)
+			return f.auth.ChangePassword(t.Context(), q, f.session, attempt, madeUpPassword, madeUpNewPassword)
 		}
 	}},
 	{"ResetPassword", func(t *testing.T) (db.DBTX, func(q db.DBTX) error) {
