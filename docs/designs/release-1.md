@@ -3,7 +3,7 @@
 *   **Author:** jnaranj09
 *   **Status:** Accepted. P0–P6 are built; P7 is next. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
-*   **Predecessors:** [concepts_brief.md](../../concepts_brief.md), [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md), [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md)
+*   **Predecessors:** [concepts_brief.md](history/concepts_brief.md), [PRD](../prd.md), [SAD](history/sad-original.md)
 
 --------------------------------------------------------------------------------
 
@@ -33,8 +33,8 @@ Priorities when goals conflict, in order:
 4.  Maintainable by one person.
 5.  Generic and self-hostable by others.
 
-This document replaces the architecture parts of the SAD for release 1. The SAD is reduced to a Spanish ADR index that links here (item 13), so architecture detail lives in one place.
-The PRD keeps the "what" and "why"; it will be updated to match this document (see [Detailed Implementation Plan](#detailed-implementation-plan), item 12).
+This document replaces the architecture parts of the SAD for release 1. The SAD is reduced to a Spanish ADR index ([docs/sad.md](../sad.md)) that links here (item 13), so architecture detail lives in one place.
+The PRD ([docs/prd.md](../prd.md)) keeps the "what" and "why"; it will be updated to match this document (see [Detailed Implementation Plan](#detailed-implementation-plan), item 12).
 
 ### Terms used in this document
 
@@ -52,7 +52,7 @@ The PRD keeps the "what" and "why"; it will be updated to match this document (s
 *   **"Item N"**: the numbered entry N in the [Detailed Implementation Plan](#detailed-implementation-plan).
 *   **P0–P7**: the build phases in "Build order". They are not the product Phases 1–3 above.
 *   **"Enviados"**: the list of today's sent messages, below "Para enviar hoy".
-*   **The review / the SAD bug**: the brainstorm review of the PRD and SAD ([goldfish_brainstorm_findings.md](../../goldfish_brainstorm_findings.md)). Its main reminder bug: the SAD's skip rule counted the appointment itself as a "future appointment", so every 24 h reminder was skipped.
+*   **The review / the SAD bug**: the brainstorm review of the PRD and SAD ([goldfish_brainstorm_findings.md](history/goldfish_brainstorm_findings.md)). Its main reminder bug: the SAD's skip rule counted the appointment itself as a "future appointment", so every 24 h reminder was skipped.
 *   **EGM**: the design-review workflow used to write and review this document.
 *   **FR-… and NFR-…**: functional and non-functional requirement IDs from the PRD.
 
@@ -928,7 +928,7 @@ Each of these is handled in the section named; the mechanism is not repeated her
 
 ## Alternatives Considered
 
-Grouped by area. Each alternative was rejected or narrowed during the brainstorm (see [concepts_brief.md](../../concepts_brief.md)) or during this draft. Choices kept unchanged from the SAD (Go, pgx + sqlc, one binary, goose, sessions in Postgres, the own template renderer, Web Push) keep the alternatives and reasons written in the [SAD's ADRs](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md); the status of each ADR is in item 13.
+Grouped by area. Each alternative was rejected or narrowed during the brainstorm (see [concepts_brief.md](history/concepts_brief.md)) or during this draft. Choices kept unchanged from the SAD (Go, pgx + sqlc, one binary, goose, sessions in Postgres, the own template renderer, Web Push) keep the alternatives and reasons written in the [SAD's ADRs](history/sad-original.md); the status of each ADR is in item 13.
 
 ### Product: build vs use an existing tool
 
@@ -1248,9 +1248,9 @@ Each line points to the section that holds the detail.
 
 ## Additional Resources
 
-*   [concepts_brief.md](../../concepts_brief.md) — decisions from the brainstorm.
-*   [goldfish_brainstorm_findings.md](../../goldfish_brainstorm_findings.md) — the full review of the PRD and SAD (9 Blocker, 31 Major, 14 Nit).
-*   [PRD](../../PRD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md) and [SAD](../../SAD%20—%20Sistema%20de%20citas%20para%20emprendimientos.md) — the original documents.
+*   [concepts_brief.md](history/concepts_brief.md) — decisions from the brainstorm.
+*   [goldfish_brainstorm_findings.md](history/goldfish_brainstorm_findings.md) — the full review of the PRD and SAD (9 Blocker, 31 Major, 14 Nit).
+*   [PRD](../prd.md) and the [original SAD](history/sad-original.md); the SAD's ADR index is [docs/sad.md](../sad.md).
 *   [PostgreSQL 19 RC 1 announcement](https://www.postgresql.org/about/news/postgresql-19-rc-1-3409/) — source for the version decision.
 
 ## Future Improvements
@@ -1372,7 +1372,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 3. `README.md` (Create)
 
 *   **Type / Scope**: Documentation.
-*   **Proposed Changes**: What the app is, who it is for, a link to `deploy/README.md` for install, the `make` targets for development (and that Go commands must go through `make` on a clean checkout, because of `web-stub`), and a link to `docs/designs/release-1.md` and `docs/sad.md`. It states that the license is not chosen yet.
+*   **Proposed Changes**: What the app is, who it is for, a link to `deploy/README.md` for install, the `make` targets for development (and that Go commands must go through `make` on a clean checkout, because of `web-stub`), and links to `docs/designs/release-1.md`, `docs/sad.md` and `docs/prd.md`. It states that the license is not chosen yet.
 
 ##### 4. `.gitignore` (Create)
 
@@ -1489,7 +1489,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 13. `docs/sad.md` (Create, a short index) and `docs/designs/history/sad-original.md` (Create, moved from `SAD — Sistema de citas para emprendimientos.md`; the root file is deleted)
 
 *   **Type / Scope**: Architecture index (Spanish).
-*   **Proposed Changes**: The old SAD is moved unchanged to `docs/designs/history/sad-original.md`, because the project has no git history yet that would keep it. Its body is not copied into `docs/sad.md`: `docs/designs/release-1.md` is the only source of architecture detail, so there is no second copy to keep in sync. `docs/sad.md` keeps:
+*   **Proposed Changes**: The old SAD is moved unchanged to `docs/designs/history/sad-original.md`, so its full ADR text stays in the repo next to the index. Its body is not copied into `docs/sad.md`: `docs/designs/release-1.md` is the only source of architecture detail, so there is no second copy to keep in sync. `docs/sad.md` keeps:
     *   **Intro:** three or four Spanish sentences: what the system is, where it runs (home PC + Cloudflare Tunnel, four containers), and a link to `docs/designs/release-1.md`.
     *   **ADR index:** the table below, plus a fourth column in the written file that links each ADR that is not superseded (including the new 018–025, which have no separate file) to the section of `docs/designs/release-1.md` that holds its detail.
 

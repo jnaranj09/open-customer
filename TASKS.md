@@ -180,4 +180,3 @@ own change.
   skill would not use. Kept by owner decision.
 - `make vuln` lists 3 known vulnerabilities in kin-openapi and golang.org/x/crypto that our code
   does not call (govulncheck passes).
-- Design doc item 87's root-file deletions (design_draft.md and the others) are still pending.
