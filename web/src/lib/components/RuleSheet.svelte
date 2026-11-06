@@ -7,7 +7,7 @@
 	import { t, type MessageKey } from '../i18n';
 	import { byPosition } from '../order';
 	import {
-		asksOverdue,
+		overdueChoice,
 		rulePatch,
 		ruleRequest,
 		type RuleField,
@@ -25,8 +25,8 @@
 	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
-	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A change
-	// that can add items first asks "¿Incluir recordatorios atrasados?": the question replaces the
+	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A
+	// come-back change that can add items first asks "¿Incluir recordatorios atrasados?": the question replaces the
 	// form in the same sheet, and "Cancelar" or Escape on it goes back to the form. A rule never
 	// changes kind or service, so an open rule shows those as text.
 	let {
@@ -134,16 +134,19 @@
 		node.querySelector<HTMLElement>('select, input, button')?.focus();
 	}
 
-	/** Sends `action` now, or asks the overdue question first when it can add items. */
+	/** Sends `action` now, or asks the overdue question first when it can add items to a come-back
+	 *  rule (a "before" rule includes them without asking; see `overdueChoice`). */
 	function go(action: Action): void {
-		const asks =
+		const choice =
 			'create' in action
-				? asksOverdue(null, action.create)
-				: rule !== undefined && asksOverdue(rule, action.update, archivedTemplates);
-		if (asks) {
+				? overdueChoice(null, action.create)
+				: rule === undefined
+					? 'none'
+					: overdueChoice(rule, action.update, archivedTemplates);
+		if (choice === 'ask') {
 			asking = action;
 		} else {
-			void send.run(action, undefined);
+			void send.run(action, choice === 'include' ? true : undefined);
 		}
 	}
 

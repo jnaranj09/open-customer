@@ -25,14 +25,14 @@ function effectiveReturn(rule: Pick<Rule, 'service_id' | 'return_service_id'>): 
 	return rule.return_service_id ?? rule.service_id;
 }
 
-/** True when saving `after` can make new items appear, so the app asks "¿Incluir recordatorios
- *  atrasados?" first: a new rule, a changed offset, a changed effective return service (setting it
- *  to null when it was the rule's own service changes nothing), a restore, or a new template for a
- *  rule whose old template is in `archivedTemplates`. */
-export function asksOverdue(
+/** True when saving `after` can make new items appear: a new rule, a changed offset, a changed
+ *  effective return service (setting it to null when it was the rule's own service changes
+ *  nothing), a restore, or a new template for a rule whose old template is in
+ *  `archivedTemplates`. */
+function addsItems(
 	before: Rule | null,
 	after: RuleInput | RulePatch,
-	archivedTemplates: ReadonlySet<string> = new Set()
+	archivedTemplates: ReadonlySet<string>
 ): boolean {
 	if (before === null) {
 		return true;
@@ -54,6 +54,24 @@ export function asksOverdue(
 		return (after.return_service_id ?? before.service_id) !== effectiveReturn(before);
 	}
 	return false;
+}
+
+/** What saving `after` does about overdue items. `ask`: a come-back change that can add items asks
+ *  "¿Incluir recordatorios atrasados?" first. `include`: the same change on a "before" rule asks
+ *  nothing and sends `include_overdue: true`, because its items hide at the appointment's start, so
+ *  the only ones "Incluir atrasadas" adds are for appointments still ahead whose due day just
+ *  passed (a new 2-day rule and tomorrow's visit); "Solo de hoy en adelante" would drop those.
+ *  `none`: nothing new can appear; the server ignores the flag. */
+export function overdueChoice(
+	before: Rule | null,
+	after: RuleInput | RulePatch,
+	archivedTemplates: ReadonlySet<string> = new Set()
+): 'ask' | 'include' | 'none' {
+	if (!addsItems(before, after, archivedTemplates)) {
+		return 'none';
+	}
+	const kind = before?.kind ?? ('kind' in after ? after.kind : undefined);
+	return kind === 'before_appointment' ? 'include' : 'ask';
 }
 
 /** What the rule form holds. `returnId` and `serviceId` are empty strings when not chosen. */
