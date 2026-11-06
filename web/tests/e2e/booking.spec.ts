@@ -142,7 +142,8 @@ test('a phone shows grouped by its country on the client page and in the list', 
 }) => {
 	await page.goto(`/clientas/${anaId}`);
 
-	await expect(page.getByText('+506 8888 7777', { exact: true })).toBeVisible();
+	// Her phone in the facts list (the hidden client list holds it too).
+	await expect(page.getByRole('definition').filter({ hasText: /^\+506 8888 7777$/ })).toBeVisible();
 	await page.goto('/clientas');
 	await expect(page.getByRole('link', { name: /\+506 8888 7777/ })).toBeVisible();
 });
