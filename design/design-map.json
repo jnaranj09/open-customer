@@ -19,10 +19,6 @@
     "GlassCard/Tint": {
       "component": "Card",
       "variant": "tint"
-    },
-    "SearchField": {
-      "component": "TextField",
-      "variant": "search"
     }
   }
 }

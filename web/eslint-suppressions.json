@@ -36,17 +36,12 @@
 	},
 	"src/lib/components/OptionTree.svelte": {
 		"better-tailwindcss/no-restricted-classes": {
-			"count": 4
+			"count": 2
 		}
 	},
 	"src/lib/components/PhotoGrid.svelte": {
 		"better-tailwindcss/no-restricted-classes": {
 			"count": 1
-		}
-	},
-	"src/lib/components/ServicePicker.svelte": {
-		"better-tailwindcss/no-restricted-classes": {
-			"count": 4
 		}
 	},
 	"src/lib/components/Sidebar.svelte": {

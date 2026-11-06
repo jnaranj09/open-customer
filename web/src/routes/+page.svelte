@@ -276,7 +276,7 @@
 		<div class="fixed right-4 bottom-32 z-20 flex flex-col items-end gap-2">
 			{#if cache.offline}
 				<Card as="p" pad="note" class="text-sm text-ink">{t('offline_cannot_save')}</Card>
-				<IconButton variant="add" icon="plus" label={t('appointment_new')} disabled />
+				<IconButton variant="add" icon="plus" label={t('appointment_new')} inert />
 			{:else}
 				<IconButton
 					variant="add"

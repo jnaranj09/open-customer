@@ -13,8 +13,9 @@ import { SRC, TESTS, WEB, comments, markupComments, scriptText, walk } from './s
 /** Measured when each strict rule landed (TASKS.md T4; better-tailwindcss/no-restricted-classes:
  *  69 radius and surface classes in routes and feature components when "only primitives style"
  *  landed (ui.md stage 4), 35 after TextButton, Callout, SelectField and fieldStyle took the
- *  patterns with 3 or more copies). Only ever lowered. */
-const PINNED_BULK_TOTAL = 35;
+ *  patterns with 3 or more copies, 29 after the Chip trailing control and IconButton square).
+ *  Only ever lowered. */
+const PINNED_BULK_TOTAL = 29;
 const PINNED_INLINE_TOTAL = 0;
 
 /** Sum of every `count` in an ESLint bulk-suppressions file; throws on any other shape. */

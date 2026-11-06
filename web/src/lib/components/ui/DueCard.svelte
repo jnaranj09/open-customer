@@ -1,3 +1,9 @@
+<script lang="ts" module>
+	/** The .pen DueCard variants, picked by the item's mode: the message to send, or the booking
+	 *  prompt (CUJ 5). */
+	export type DueCardVariant = 'message' | 'bookingPrompt';
+</script>
+
 <script lang="ts">
 	import Callout from './Callout.svelte';
 	import { resolve } from '$app/paths';
@@ -33,7 +39,10 @@
 		onadd: (item: DueItem) => void;
 	} = $props();
 
-	const prompt = $derived(item.mode === 'booking_prompt' ? item.prompt : null);
+	const variant: DueCardVariant = $derived(
+		item.mode === 'booking_prompt' ? 'bookingPrompt' : 'message'
+	);
+	const prompt = $derived(variant === 'bookingPrompt' ? item.prompt : null);
 	const promptText = $derived(
 		prompt === null
 			? null

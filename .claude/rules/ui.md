@@ -17,9 +17,11 @@ paths:
   The allow-lists of both design guards only shrink: a stale entry fails the guard, a new entry is
   prose only (the reviewer rejects it unless the owner agreed).
 - **3. Components follow the design.** Each reusable `.pen` component maps to one primitive in
-  `web/src/lib/components/ui/` and each primitive maps back: `Button/Primary` is primitive
-  `Button`, variant `primary`; a name that breaks that default gets a `components` entry in the
-  design map in the same change. Sensor: guard `design-parity`.
+  `web/src/lib/components/ui/` and each primitive maps back: `Button/Strong` is primitive
+  `Button`, variant `strong`; a name that breaks that default gets a `components` entry in the
+  design map in the same change. A primitive with variants exports `type <Name>Variant` (a union
+  of string literals, in its module script or a `ui/` `.ts` file), and that union equals the
+  primitive's `.pen` variants. Sensor: guard `design-parity`.
 - **4. Only primitives style.** Surface classes (`glass-card`, `glass-panel`, `bg-glass`,
   `bg-glass-strong`, `bg-glass-tint`, any `*shadow-*`, `backdrop-*`) and radius classes
   (`rounded-*`), with or without the `!` modifier, appear only in `components/ui/`, in markup and

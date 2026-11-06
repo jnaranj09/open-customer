@@ -1,55 +1,67 @@
 <script lang="ts" module>
-	/** `add` is the .pen IconButton/Add (the floating "+"); `plain` the bare round icon button (back,
-	 *  previous, next); `muted` the same in the muted ink; `glass` sits on a photo. */
-	export type IconButtonVariant = 'add' | 'plain' | 'muted' | 'glass';
+	/** The .pen IconButton variants: `add` (the floating "+"), `plain` (back, previous, next),
+	 *  `muted` (the same in the muted ink), `glass` (on a photo), `square` (a row tool: drag handle,
+	 *  menu), `accent` (inside a selected chip). */
+	export type IconButtonVariant = 'add' | 'plain' | 'muted' | 'glass' | 'square' | 'accent';
 </script>
 
 <script lang="ts">
 	import type { ResolvedPathname } from '$app/types';
+	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import Icon from '../icons/Icon.svelte';
 	import type { IconName } from '../icons/paths';
 
-	// A round icon-only control. `label` is its accessible name and tooltip. With `href` it is a
-	// link, with `onclick` a button; `disabled` shows it faded and inert (offline "+"), so it must
-	// carry a reason near it. `class` is for position only (`lg:hidden`, `absolute top-1`).
+	// A round (or square) icon-only control. `label` is its accessible name and tooltip. With
+	// `href` it is a link, with `onclick` a button. `inert` shows it faded and inactive (the
+	// offline "+"), so a reason must sit near it. `class` is for position only (`lg:hidden`,
+	// `absolute top-1`); other attributes (`disabled`, `aria-expanded`, pointer handlers, `data-*`)
+	// go to the button.
+	type Props = Omit<
+		HTMLButtonAttributes,
+		'class' | 'children' | 'title' | 'aria-label' | 'inert'
+	> & {
+		variant: IconButtonVariant;
+		icon: IconName;
+		label: string;
+		href?: ResolvedPathname;
+		inert?: boolean;
+		class?: string;
+	};
+
 	let {
 		variant,
 		icon,
 		label,
 		href,
-		onclick,
-		disabled = false,
-		class: placeClass = ''
-	}: {
-		variant: IconButtonVariant;
-		icon: IconName;
-		label: string;
-		href?: ResolvedPathname;
-		onclick?: () => void;
-		disabled?: boolean;
-		class?: string;
-	} = $props();
+		inert = false,
+		class: placeClass = '',
+		...rest
+	}: Props = $props();
 
 	const LOOK: Record<IconButtonVariant, string> = {
-		add: 'size-14 bg-accent text-on-accent shadow-raised',
-		plain: 'size-11 text-ink hover:bg-accent-100',
-		muted: 'size-11 text-ink-muted hover:bg-accent-100',
-		glass: 'glass-card size-11 text-ink hover:bg-accent-100'
+		add: 'size-14 rounded-pill bg-accent text-on-accent shadow-raised',
+		plain: 'size-11 rounded-pill text-ink hover:bg-accent-100',
+		muted: 'size-11 rounded-pill text-ink-muted hover:bg-accent-100',
+		glass: 'glass-card size-11 rounded-pill text-ink hover:bg-accent-100',
+		square: 'size-11 shrink-0 rounded-md text-ink-muted hover:bg-accent-100',
+		accent: 'size-11 rounded-pill text-accent-700 hover:bg-accent-300'
 	};
 	const ICON: Record<IconButtonVariant, string> = {
 		add: 'size-7',
 		plain: 'size-5.5',
 		muted: 'size-4.5',
-		glass: 'size-4.5'
+		glass: 'size-4.5',
+		square: 'size-5',
+		accent: 'size-4.5'
 	};
 	const classes = $derived(
-		`grid place-items-center rounded-pill ${LOOK[variant]} ${
-			variant === 'add' && !disabled ? 'hover:bg-accent-700' : ''
-		} ${disabled ? 'opacity-60' : ''} ${placeClass}`
+		`grid place-items-center ${LOOK[variant]} ${
+			variant === 'add' && !inert ? 'hover:bg-accent-700' : ''
+		} ${inert ? 'opacity-60' : ''} ${placeClass}`
 	);
 </script>
 
-{#if disabled}
+{#if inert}
 	<span class={classes} role="img" aria-label={label}
 		><Icon name={icon} class={ICON[variant]} /></span
 	>
@@ -58,7 +70,7 @@
 		<Icon name={icon} class={ICON[variant]} />
 	</a>
 {:else}
-	<button type="button" title={label} aria-label={label} {onclick} class={classes}>
+	<button type="button" title={label} aria-label={label} {...rest} class={classes}>
 		<Icon name={icon} class={ICON[variant]} />
 	</button>
 {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Callout from './ui/Callout.svelte';
 	import TextButton from './ui/TextButton.svelte';
+	import IconButton from './ui/IconButton.svelte';
 	import { tick } from 'svelte';
 	import type { AttrOption } from '../api/schemas';
 	import { cache } from '../cache/store.svelte';
@@ -8,7 +9,6 @@
 	import { t } from '../i18n';
 	import Button from './ui/Button.svelte';
 	import WriteButton from './WriteButton.svelte';
-	import Icon from './icons/Icon.svelte';
 	import TextField from './ui/TextField.svelte';
 
 	// The options of a select attribute (design doc item 77): one list per level with "+ Agregar
@@ -181,14 +181,14 @@
 							? 'border-accent bg-accent-100'
 							: 'border-glass-edge bg-glass'}"
 					>
-						<button
-							type="button"
+						<IconButton
+							variant="square"
+							icon="grip-vertical"
+							label={t('option_drag', { label: option.label })}
+							class="cursor-grab touch-none"
 							data-handle={option.id}
-							title={t('option_drag', { label: option.label })}
-							aria-label={t('option_drag', { label: option.label })}
 							disabled={off}
-							class="grid size-11 shrink-0 cursor-grab touch-none place-items-center rounded-md text-ink-muted hover:bg-accent-100"
-							onpointerdown={(e) => {
+							onpointerdown={(e: PointerEvent) => {
 								dragStart(e, option.id);
 							}}
 							onpointermove={dragMove}
@@ -198,26 +198,21 @@
 							onpointercancel={() => {
 								drag = null;
 							}}
-							onkeydown={(e) => {
+							onkeydown={(e: KeyboardEvent) => {
 								key(e, parent, option.id, i);
 							}}
-						>
-							<Icon name="grip-vertical" class="size-5" />
-						</button>
+						/>
 						<span class="min-w-0 flex-1 truncate text-base text-ink">{option.label}</span>
-						<button
-							type="button"
-							title={t('option_menu', { label: option.label })}
-							aria-label={t('option_menu', { label: option.label })}
+						<IconButton
+							variant="square"
+							icon="ellipsis"
+							label={t('option_menu', { label: option.label })}
 							aria-expanded={menu === option.id}
 							disabled={working}
-							class="grid size-11 shrink-0 place-items-center rounded-md text-ink-muted hover:bg-accent-100"
 							onclick={() => {
 								menu = menu === option.id ? null : option.id;
 							}}
-						>
-							<Icon name="ellipsis" class="size-5" />
-						</button>
+						/>
 					</div>
 					{#if menu === option.id}
 						<div role="group" aria-label={option.label} class="mt-1 flex flex-wrap gap-1 pl-2">
