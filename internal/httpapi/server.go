@@ -199,22 +199,51 @@ func bindErrorHandler(w http.ResponseWriter, r *http.Request, _ error) {
 }
 
 // decodeJSON decodes the request body into v: at most 1 MB, no unknown fields, nothing after the
-// value. On failure it writes the problem (413 payload-too-large or 422 validation) and returns
-// it; the handler then returns. The decode error is never logged: it can quote the body.
+// value, and no NUL character (U+0000) in any string. On failure it writes the problem (413
+// payload-too-large or 422 validation) and returns it; the handler then returns. The decode error
+// is never logged: it can quote the body.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxJSONBody))
+	if err != nil {
+		return rejectBody(w, r, fmt.Errorf("read the body: %w", err))
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
-	err := dec.Decode(v)
+	err = dec.Decode(v)
 	if err == nil {
 		// A second value, even an empty one, means trailing data.
 		if extra := dec.Decode(&json.RawMessage{}); !errors.Is(extra, io.EOF) {
 			err = fmt.Errorf("trailing data after the body: %w", extra)
 		}
 	}
-	if err == nil {
-		return nil
+	if err != nil {
+		return rejectBody(w, r, err)
 	}
-	return rejectBody(w, r, err)
+	if hasNUL(body) {
+		// Postgres text cannot store U+0000: the insert would fail and the route answer 500 (found
+		// by the ZAP scan, make dast).
+		slog.WarnContext(r.Context(), "body rejected",
+			"code", "body_nul", "path", r.URL.Path, "request_id", logging.RequestID(r.Context()))
+		p := problem.Validation{}
+		problem.Write(w, r, p)
+		return p
+	}
+	return nil
+}
+
+// hasNUL reports whether any string in body, keys included, holds U+0000. body has already
+// decoded, so a token error cannot happen; it would stop the walk with false.
+func hasNUL(body []byte) bool {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		if s, ok := tok.(string); ok && strings.ContainsRune(s, 0) {
+			return true
+		}
+	}
 }
 
 // decodePatch is decodeJSON for a PATCH body, plus one rule: a top-level field sent as null is

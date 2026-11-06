@@ -258,6 +258,8 @@ func TestDecodeJSON(t *testing.T) {
 		{"trailing data after the object is 422 validation", `{"name":"x"}{}`, 422, "validation", "body_invalid"},
 		{"a wrong field type is 422 validation", `{"count":"three"}`, 422, "validation", "body_invalid"},
 		{"a body over 1 MB is 413 payload-too-large", tooLarge, 413, "payload-too-large", "payload_too_large"},
+		// Postgres text cannot hold U+0000: without this the insert fails and the route answers 500.
+		{"a NUL character in a string is 422 validation", `{"name":"a\u0000b"}`, 422, "validation", "body_nul"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -304,6 +306,18 @@ func TestDecodeJSONValidBody(t *testing.T) {
 	}
 	if rec.Body.Len() != 0 {
 		t.Fatalf("decodeJSON wrote %q on success, want nothing", rec.Body.String())
+	}
+}
+
+// An escaped backslash followed by "u0000" is plain text, not a NUL character.
+func TestDecodeJSONAcceptsTheTextBackslashU0000(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/decode-test", strings.NewReader(`{"name":"a\\u0000b"}`))
+	var v decodeTarget
+	if err := decodeJSON(httptest.NewRecorder(), req, &v); err != nil {
+		t.Fatalf("decodeJSON = %v, want nil", err)
+	}
+	if v.Name != `a\u0000b` {
+		t.Fatalf("name = %q, want the text a\\u0000b", v.Name)
 	}
 }
 
