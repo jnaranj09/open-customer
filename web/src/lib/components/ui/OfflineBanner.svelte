@@ -18,7 +18,7 @@
 	role="status"
 	class="glass-card flex items-center gap-3 rounded-lg bg-glass-tint px-5 py-3.5 text-ink"
 >
-	<Icon name="cloud-off" class="size-5.5 shrink-0 text-accent-700" />
+	<Icon name="cloud-off" class="size-5.5 shrink-0 text-accent-text" />
 	<div class="flex min-w-0 flex-col gap-0.5">
 		<p class="text-base">{message}</p>
 		<p class="text-sm text-ink-muted">{t('offline_cannot_save')}</p>

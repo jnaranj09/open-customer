@@ -141,7 +141,7 @@
 					>
 						<span class="min-w-0 flex-1">{option.label}</span>
 						{#if chosen}
-							<Icon name="check" class="size-4.5 text-accent-700" />
+							<Icon name="check" class="size-4.5 text-accent-text" />
 						{/if}
 					</button>
 					{#if hasChildren(option.id)}

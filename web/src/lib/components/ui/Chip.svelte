@@ -26,7 +26,7 @@
 	};
 	const INK: Record<ChipVariant, string> = {
 		default: 'text-ink hover:bg-accent-100',
-		selected: 'text-accent-700'
+		selected: 'text-accent-text'
 	};
 </script>
 

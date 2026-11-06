@@ -103,7 +103,7 @@
 							data-head
 							class="sticky top-0 z-10 h-14 w-full bg-bg-100 text-center text-sm hover:bg-accent-100 {lane.day ===
 							today
-								? 'font-extrabold text-accent-700'
+								? 'font-extrabold text-accent-text'
 								: 'font-bold text-ink'}"
 							onclick={() => {
 								onpickday(lane.day);
@@ -142,7 +142,7 @@
 									>
 										{#if box.height <= ONE_LINE_MIN}
 											<p class="truncate text-sm font-bold text-ink">
-												<span class="text-xs text-accent-700">{formatTime(a.starts_at, zone)}</span>
+												<span class="text-xs text-accent-text">{formatTime(a.starts_at, zone)}</span>
 												{#if a.status === 'no_show'}
 													<span class="text-xs text-ink-muted">· {t('status_no_show')}</span>
 												{:else if a.status === 'confirmed'}
@@ -151,7 +151,7 @@
 												<span>{a.client_name}</span>
 											</p>
 										{:else}
-											<p class="truncate text-xs font-bold text-accent-700">
+											<p class="truncate text-xs font-bold text-accent-text">
 												{formatTime(a.starts_at, zone)}
 												{#if a.status === 'no_show'}
 													<span class="text-ink-muted">· {t('status_no_show')}</span>

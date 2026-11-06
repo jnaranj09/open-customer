@@ -2,8 +2,9 @@
 @import '@fontsource-variable/nunito';
 
 /* Tokens from the mockup (design/soft-glass.pen "variables"). `--accent` is the one runtime value:
-   applyAccent (lib/color.ts) sets it from settings; the shades below follow it. `--accent-fill` and
-   `--on-accent` (a filled accent control and its label) are computed there too, so the label keeps
+   applyAccent (lib/color.ts) sets it from settings; the shades below follow it. `--accent-fill`,
+   `--accent-fill-hover` and `--on-accent` (a filled accent control, its hover and its label) and
+   `--accent-text` (the accent as text on a light surface) are computed there too, so text keeps
    WCAG AA contrast for any accent; the values here are the default accent's (a test keeps them in
    sync). */
 :root {
@@ -24,6 +25,8 @@
 
 	--accent: #c76b85;
 	--accent-fill: #9f566a;
+	--accent-fill-hover: #8b4b5d;
+	--accent-text: #955064;
 	--on-accent: var(--on-strong);
 	--accent-100: color-mix(in oklab, var(--accent) 15%, white);
 	--accent-300: color-mix(in oklab, var(--accent) 45%, white);
@@ -58,6 +61,8 @@
 	--color-accent-300: var(--accent-300);
 	--color-accent-700: var(--accent-700);
 	--color-accent-fill: var(--accent-fill);
+	--color-accent-fill-hover: var(--accent-fill-hover);
+	--color-accent-text: var(--accent-text);
 	--color-on-accent: var(--on-accent);
 	--color-sage-200: var(--sage-200);
 	--color-success: var(--success);

@@ -28,9 +28,9 @@
 	} = $props();
 
 	const LOOK: Record<TextButtonVariant, string> = {
-		accent: 'px-4 text-accent-700',
+		accent: 'px-4 text-accent-text',
 		danger: 'px-4 text-error',
-		back: 'inline-flex items-center gap-1 pr-4 text-accent-700'
+		back: 'inline-flex items-center gap-1 pr-4 text-accent-text'
 	};
 	const classes = $derived(
 		`min-h-tap rounded-pill text-sm font-bold hover:bg-accent-100 disabled:opacity-40 ${LOOK[variant]} ${layoutClass}`

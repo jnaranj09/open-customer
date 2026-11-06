@@ -62,7 +62,7 @@
 </script>
 
 {#snippet archivedBadge()}
-	<span class="rounded-pill bg-glass-tint px-3 py-1 text-xs font-bold text-accent-700">
+	<span class="rounded-pill bg-glass-tint px-3 py-1 text-xs font-bold text-accent-text">
 		{t('clients_archived_badge')}
 	</span>
 {/snippet}

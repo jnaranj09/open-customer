@@ -32,7 +32,7 @@
 		{href}
 		aria-current={active ? 'page' : undefined}
 		class="flex min-h-tap flex-1 flex-col items-center justify-center gap-0.5 rounded-pill px-3 py-2 text-xs font-bold {active
-			? 'bg-glass-tint text-accent-700'
+			? 'bg-glass-tint text-accent-text'
 			: 'text-ink-muted'}"
 	>
 		<Icon name={icon} class="size-5.5" />
@@ -43,7 +43,7 @@
 		{href}
 		aria-current={active ? 'page' : undefined}
 		class="flex min-h-tap items-center gap-3 rounded-pill px-4 text-sm font-bold {active
-			? 'bg-glass-tint text-accent-700'
+			? 'bg-glass-tint text-accent-text'
 			: 'text-ink-muted hover:bg-accent-100'}"
 	>
 		<Icon name={icon} />

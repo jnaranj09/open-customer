@@ -29,7 +29,7 @@
 		<h2 class="text-xl font-bold text-ink">{t('due_today_heading')}</h2>
 		<a
 			href={resolve('/enviar')}
-			class="flex min-h-tap items-center gap-2 text-base font-bold text-accent-700 hover:underline"
+			class="flex min-h-tap items-center gap-2 text-base font-bold text-accent-text hover:underline"
 		>
 			{summary}
 			<Icon name="chevron-right" class="size-4.5 text-ink-muted" />
@@ -58,7 +58,7 @@
 		pad="md"
 		class="flex items-center gap-4 text-ink hover:bg-accent-100"
 	>
-		<Icon name="send" class="size-7 shrink-0 text-accent-700" />
+		<Icon name="send" class="size-7 shrink-0 text-accent-text" />
 		<span class="flex min-w-0 flex-1 flex-col gap-1">
 			<span class="text-xl font-extrabold">{summary}</span>
 			{#if items.length > 0}

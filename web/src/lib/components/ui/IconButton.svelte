@@ -44,7 +44,7 @@
 		muted: 'size-11 rounded-pill text-ink-muted hover:bg-accent-100',
 		glass: 'glass-card size-11 rounded-pill text-ink hover:bg-accent-100',
 		square: 'size-11 rounded-md text-ink-muted hover:bg-accent-100',
-		accent: 'size-11 rounded-pill text-accent-700 hover:bg-accent-300'
+		accent: 'size-11 rounded-pill text-accent-text hover:bg-accent-300'
 	};
 	const ICON: Record<IconButtonVariant, string> = {
 		add: 'size-7',
@@ -56,7 +56,7 @@
 	};
 	const classes = $derived(
 		`grid shrink-0 place-items-center ${LOOK[variant]} ${
-			variant === 'add' && !inert ? 'hover:opacity-90' : ''
+			variant === 'add' && !inert ? 'hover:bg-accent-fill-hover' : ''
 		} ${inert ? 'opacity-60' : ''} ${placeClass}`
 	);
 </script>

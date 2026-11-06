@@ -211,7 +211,7 @@
                   "type": "text",
                   "id": "h4ppTq",
                   "name": "Label",
-                  "fill": "$rose-700",
+                  "fill": "$accent-text",
                   "content": "Button",
                   "fontFamily": "$font-sans",
                   "fontSize": 14,
@@ -692,7 +692,7 @@
                   "type": "text",
                   "id": "snMxF",
                   "name": "Label",
-                  "fill": "$rose-700",
+                  "fill": "$accent-text",
                   "content": "Acrílico",
                   "fontFamily": "$font-sans",
                   "fontSize": 14,
@@ -764,7 +764,7 @@
                   "type": "text",
                   "id": "EqJom",
                   "name": "Label",
-                  "fill": "$rose-700",
+                  "fill": "$accent-text",
                   "content": "Agregar opción",
                   "fontFamily": "$font-sans",
                   "fontSize": 14,
@@ -824,13 +824,13 @@
                   "height": 20,
                   "icon": "chevron-left",
                   "library": "lucide",
-                  "fill": "$rose-700"
+                  "fill": "$accent-text"
                 },
                 {
                   "type": "text",
                   "id": "Bk7tL",
                   "name": "Label",
-                  "fill": "$rose-700",
+                  "fill": "$accent-text",
                   "content": "Ajustes",
                   "fontFamily": "$font-sans",
                   "fontSize": 14,
@@ -957,7 +957,7 @@
                   "height": 18,
                   "icon": "minus",
                   "library": "lucide",
-                  "fill": "$rose-700"
+                  "fill": "$accent-text"
                 }
               ]
             }
@@ -1315,7 +1315,7 @@
                   "height": 22,
                   "icon": "cloud-off",
                   "library": "lucide",
-                  "fill": "$rose-700"
+                  "fill": "$accent-text"
                 },
                 {
                   "type": "text",
@@ -1849,7 +1849,7 @@
                   "height": 32,
                   "icon": "sparkles",
                   "library": "lucide",
-                  "fill": "$rose-700"
+                  "fill": "$accent-text"
                 },
                 {
                   "type": "text",
@@ -4847,6 +4847,14 @@
     "accent-fill": {
       "type": "color",
       "value": "#9f566a"
+    },
+    "accent-fill-hover": {
+      "type": "color",
+      "value": "#8b4b5d"
+    },
+    "accent-text": {
+      "type": "color",
+      "value": "#955064"
     },
     "sage-200": {
       "type": "color",

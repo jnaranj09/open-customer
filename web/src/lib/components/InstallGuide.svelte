@@ -17,7 +17,7 @@
 		{#each steps as step, i (step.text)}
 			<li class="flex items-center gap-3">
 				<span
-					class="flex size-11 shrink-0 items-center justify-center rounded-pill bg-accent-100 text-accent-700"
+					class="flex size-11 shrink-0 items-center justify-center rounded-pill bg-accent-100 text-accent-text"
 				>
 					<Icon name={step.icon} class="size-5" />
 				</span>

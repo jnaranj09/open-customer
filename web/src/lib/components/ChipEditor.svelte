@@ -250,7 +250,7 @@
 				<li>
 					<button
 						type="button"
-						class="min-h-tap rounded-pill border border-accent-300 bg-accent-100 px-4 text-sm font-bold text-accent-700 hover:bg-accent-300"
+						class="min-h-tap rounded-pill border border-accent-300 bg-accent-100 px-4 text-sm font-bold text-accent-text hover:bg-accent-300"
 						onpointerdown={(event) => {
 							// Keeps the caret in the field while the chip is inserted.
 							event.preventDefault();

@@ -3,9 +3,12 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
 	AA_TEXT,
+	BG_LUMINANCE,
 	DEFAULT_ACCENT,
 	INK_LUMINANCE,
+	accent100,
 	accentFill,
+	accentText,
 	applyAccent,
 	contrast,
 	isHexColor,
@@ -13,6 +16,10 @@ import {
 	swatches
 } from './color';
 import { t } from './i18n';
+
+const STEPS = ['00', '33', '66', '99', 'cc', 'ff'];
+/** 216 colors spread over the sRGB cube. */
+const CUBE = STEPS.flatMap((r) => STEPS.flatMap((g) => STEPS.map((b) => `#${r}${g}${b}`)));
 
 /** A stand-in for an element: the only thing `applyAccent` touches is the style. */
 function fakeRoot(): { root: HTMLElement; vars: Map<string, string> } {
@@ -23,11 +30,21 @@ function fakeRoot(): { root: HTMLElement; vars: Map<string, string> } {
 	return { root, vars };
 }
 
-/** The contrast of the label on the fill `accentFill` gives for `hex`. */
-function labelContrast(hex: string): number {
-	const { fill, text } = accentFill(hex);
-	return contrast(text === 'light' ? 1 : INK_LUMINANCE, luminance(fill));
+/** The contrast of the label on the fill (or its hover) `accentFill` gives for `hex`. */
+function labelContrast(hex: string, on: 'fill' | 'hover' = 'fill'): number {
+	const r = accentFill(hex);
+	return contrast(r.text === 'light' ? 1 : INK_LUMINANCE, luminance(r[on]));
 }
+
+/** The lower contrast of `accentText(hex)` on the page background and on `--accent-100`. */
+function textContrast(hex: string): number {
+	const l = luminance(accentText(hex));
+	return Math.min(contrast(BG_LUMINANCE, l), contrast(luminance(accent100(hex)), l));
+}
+
+const CSS = (): string => readFileSync(join(import.meta.dirname, '../app.css'), 'utf8');
+const cssColor = (name: string): string | undefined =>
+	new RegExp(`--${name}:\\s*(#[0-9a-f]{6});`, 'i').exec(CSS())?.[1];
 
 describe('accentFill', () => {
 	it('gives the default accent a fill white text reaches AA on (white on it is 3.57:1)', () => {
@@ -42,25 +59,56 @@ describe('accentFill', () => {
 
 	it('darkens a mid-tone accent past its 700 shade until white text reaches AA', () => {
 		// #a0a0a0 at the 700 shade (#808080) gives white 3.95:1 and ink 2.89:1.
-		expect(accentFill('#a0a0a0')).toEqual({ fill: '#707070', text: 'light' });
+		expect(accentFill('#a0a0a0')).toMatchObject({ fill: '#707070', text: 'light' });
 	});
 
 	it('keeps a dark accent with white text', () => {
-		expect(accentFill('#000000')).toEqual({ fill: '#000000', text: 'light' });
+		expect(accentFill('#000000')).toMatchObject({ fill: '#000000', text: 'light' });
 	});
 
-	it('reaches AA for every accent on a grid of the color cube', () => {
-		const steps = ['00', '33', '66', '99', 'cc', 'ff'];
-		const all = steps.flatMap((r) => steps.flatMap((g) => steps.map((b) => `#${r}${g}${b}`)));
-		const low = [...all, ...swatches().map((s) => s.hex)].filter(
-			(hex) => labelContrast(hex) < AA_TEXT
+	it('reaches AA for every accent on a grid of the color cube, on the fill and its hover', () => {
+		const low = [...CUBE, ...swatches().map((s) => s.hex)].filter(
+			(hex) => labelContrast(hex) < AA_TEXT || labelContrast(hex, 'hover') < AA_TEXT
 		);
 		expect(low).toEqual([]);
 	});
 
-	it('matches the --accent-fill default in app.css', () => {
-		const css = readFileSync(join(import.meta.dirname, '../app.css'), 'utf8');
-		expect(/--accent-fill:\s*(#[0-9a-f]{6})/i.exec(css)?.[1]).toBe(accentFill(DEFAULT_ACCENT).fill);
+	it('gives a hover fill that differs from the fill', () => {
+		expect(CUBE.filter((hex) => accentFill(hex).hover === accentFill(hex).fill)).toEqual([]);
+	});
+
+	it('matches the --accent-fill and --accent-fill-hover defaults in app.css', () => {
+		const { fill, hover } = accentFill(DEFAULT_ACCENT);
+		expect([cssColor('accent-fill'), cssColor('accent-fill-hover')]).toEqual([fill, hover]);
+	});
+});
+
+describe('accentText', () => {
+	it.each(['#c76b85', '#f6e7a1', '#ffff00'])(
+		'reaches AA on the page background and the pale accent tint for %s',
+		(hex) => {
+			expect(textContrast(hex)).toBeGreaterThanOrEqual(AA_TEXT);
+		}
+	);
+
+	it('reaches AA for every accent on a grid of the color cube', () => {
+		expect(CUBE.filter((hex) => textContrast(hex) < AA_TEXT)).toEqual([]);
+	});
+
+	it('matches the --accent-text default in app.css', () => {
+		expect(cssColor('accent-text')).toBe(accentText(DEFAULT_ACCENT));
+	});
+});
+
+describe('accent100', () => {
+	it('mixes 15% of the accent into white, as color-mix in oklab does', () => {
+		expect([accent100('#ffffff'), accent100('#000000')]).toEqual(['#ffffff', '#cecece']);
+	});
+});
+
+describe('BG_LUMINANCE', () => {
+	it('matches the --bg-100 token in app.css', () => {
+		expect(BG_LUMINANCE).toBeCloseTo(luminance(cssColor('bg-100') ?? ''), 6);
 	});
 });
 
@@ -107,7 +155,9 @@ describe('applyAccent', () => {
 		expect(Object.fromEntries(vars)).toEqual({
 			'--accent': '#f6e7a1',
 			'--accent-fill': accentFill('#f6e7a1').fill,
-			'--on-accent': 'var(--ink)'
+			'--accent-fill-hover': accentFill('#f6e7a1').hover,
+			'--on-accent': 'var(--ink)',
+			'--accent-text': accentText('#f6e7a1')
 		});
 	});
 

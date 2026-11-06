@@ -203,7 +203,7 @@
 						</p>
 					</div>
 					<!-- aria-label is not allowed on a <p>: the "Estado" prefix is screen-reader text. -->
-					<p class="rounded-pill bg-glass-tint px-3 py-1 text-sm font-bold text-accent-700">
+					<p class="rounded-pill bg-glass-tint px-3 py-1 text-sm font-bold text-accent-text">
 						<span class="sr-only">{t('appointment_status_label')}:</span>
 						<span>{t(STATUS_NAME[appt.status])}</span>
 					</p>

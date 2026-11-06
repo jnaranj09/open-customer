@@ -40,7 +40,7 @@
 				>
 					{service.name}
 					{#if count > 1}
-						<span class="text-accent-700">{t('appointment_service_count', { count })}</span>
+						<span class="text-accent-text">{t('appointment_service_count', { count })}</span>
 					{/if}
 					{#snippet trailing()}
 						{#if count > 0}

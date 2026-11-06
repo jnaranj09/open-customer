@@ -22,7 +22,7 @@
 </script>
 
 <div class="flex flex-col items-center gap-2 p-6 text-center">
-	<Icon name="sparkles" class="size-8 text-accent-700" />
+	<Icon name="sparkles" class="size-8 text-accent-text" />
 	<h2 class="text-xl font-bold text-ink">{title}</h2>
 	<p class="text-sm text-ink-muted">{body}</p>
 	{#if actionLabel !== undefined && href !== undefined}
