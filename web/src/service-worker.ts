@@ -3,7 +3,7 @@
 import { version } from '$app/env';
 import { assets, immutable } from '$app/manifest';
 import { self as sw } from '$app/service-worker';
-import { pushShown, swAction } from './lib/sw-routes';
+import { openFromTap, pushShown, swAction } from './lib/sw-routes';
 
 const CACHE = `oc-${version}`;
 // The SPA fallback page is not in SvelteKit's lists, so it is added by hand.
@@ -80,11 +80,8 @@ sw.addEventListener('push', (event) => {
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	event.waitUntil(
-		sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
-			const open = windows[0];
-			return open
-				? open.focus().then((w) => w.navigate(SEND_PATH))
-				: sw.clients.openWindow(SEND_PATH);
-		})
+		sw.clients
+			.matchAll({ type: 'window', includeUncontrolled: true })
+			.then((windows) => openFromTap(windows, (url) => sw.clients.openWindow(url), SEND_PATH))
 	);
 });

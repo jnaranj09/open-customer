@@ -2201,7 +2201,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   On `message` `{type: "SKIP_WAITING"}`: calls `self.skipWaiting()`.
     *   On `push`: parses the payload once (`pushShown` in `lib/sw-routes.ts`), shows the notification, and calls `self.navigator.setAppBadge(n)` when it exists. Every push shows a notification, because the subscription is `userVisibleOnly` and iOS can revoke one whose push shows none: a push with no payload or a bad one (for example from a newer server than this worker) shows the fixed `push_fallback_title` and `push_fallback_body` texts, sets no badge and logs `code=push_payload_invalid`.
     *   Types come from `self` in `$app/service-worker` (typed `ServiceWorkerGlobalScope`) under `tsconfig.service-worker.json`. The worker imports only `$app/env`, `$app/manifest`, `$app/service-worker` and `lib/` modules (guard `layers`). The routing choice is the pure `swAction(url, mode, precached)` in `lib/sw-routes.ts`.
-    *   On `notificationclick`: closes the notification, then focuses an open window and navigates it to `/enviar`, or opens one.
+    *   On `notificationclick`: closes the notification, then focuses an open window and navigates it to `/enviar`, or opens one (`openFromTap` in `lib/sw-routes.ts`). `navigate()` rejects for a window the worker does not control (`matchAll` with `includeUncontrolled` returns those), so on any rejection it logs `code=notification_navigate_failed` and opens a new window instead.
 
 ##### 66. `web/src/lib/api/schema.d.ts` (Create, generated), `web/src/lib/api/client.ts` (Create)
 

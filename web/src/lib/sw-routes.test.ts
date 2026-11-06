@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { pushCount, pushNotice, pushShown, swAction } from './sw-routes';
+import { describe, expect, it, vi } from 'vitest';
+import {
+	openFromTap,
+	pushCount,
+	pushNotice,
+	pushShown,
+	swAction,
+	type TapWindow
+} from './sw-routes';
 
 const ORIGIN = 'https://app.test';
 const precached: ReadonlySet<string> = new Set(['/index.html', '/_app/immutable/entry/start.js']);
@@ -92,5 +99,45 @@ describe('pushShown', () => {
 
 	it('a payload of another shape still shows the fallback text', () => {
 		expect(pushShown(JSON.stringify({ message: 'x' }))).toEqual(FALLBACK);
+	});
+});
+
+/** A window whose `navigate` answers with `navigate`; it records the paths it was sent to. */
+function tapWindow(navigate: (url: string) => Promise<unknown>): TapWindow & { sent: string[] } {
+	const sent: string[] = [];
+	return {
+		sent,
+		focus: () =>
+			Promise.resolve({
+				navigate: (url: string) => {
+					sent.push(url);
+					return navigate(url);
+				}
+			})
+	};
+}
+
+describe('openFromTap', () => {
+	it('moves the open window to the path', async () => {
+		const open = tapWindow(() => Promise.resolve(null));
+		const openWindow = vi.fn(() => Promise.resolve(null));
+		await openFromTap([open], openWindow, '/enviar');
+		expect([open.sent, openWindow.mock.calls.length]).toEqual([['/enviar'], 0]);
+	});
+
+	it('opens a new window when there is none', async () => {
+		const openWindow = vi.fn(() => Promise.resolve(null));
+		await openFromTap([], openWindow, '/enviar');
+		expect(openWindow).toHaveBeenCalledWith('/enviar');
+	});
+
+	it('opens a new window when the open one cannot navigate (not controlled)', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const open = tapWindow(() => Promise.reject(new TypeError('not controlled')));
+		const openWindow = vi.fn(() => Promise.resolve(null));
+		await openFromTap([open], openWindow, '/enviar');
+		expect(openWindow).toHaveBeenCalledWith('/enviar');
+		expect(warn).toHaveBeenCalledWith('code=notification_navigate_failed');
+		warn.mockRestore();
 	});
 });
