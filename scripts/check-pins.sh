@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 
 : "${PG_IMAGE:?set by make}"
 : "${GOLANGCI_LINT_VERSION:?set by make}"
+: "${GITLEAKS_IMAGE:?set by make}"
 
 fail=0
 bad() {
@@ -43,6 +44,10 @@ if [ -f .github/workflows/ci.yml ]; then
   ci_lint=$(grep -A3 'golangci/golangci-lint-action' .github/workflows/ci.yml | sed -n 's/^ *version: *//p' | head -1)
   [ "$ci_lint" = "$GOLANGCI_LINT_VERSION" ] ||
     bad "ci.yml golangci-lint version '$ci_lint', Makefile GOLANGCI_LINT_VERSION is $GOLANGCI_LINT_VERSION"
+  # The GITLEAKS_VERSION env of the gitleaks action step equals GITLEAKS_IMAGE's tag (without its v).
+  ci_gitleaks=$(grep -A6 'gitleaks/gitleaks-action' .github/workflows/ci.yml | sed -n 's/^ *GITLEAKS_VERSION: *\([^ #]*\).*/\1/p' | head -1)
+  [ "$ci_gitleaks" = "${GITLEAKS_IMAGE##*:v}" ] ||
+    bad "ci.yml gitleaks GITLEAKS_VERSION '$ci_gitleaks', Makefile GITLEAKS_IMAGE is $GITLEAKS_IMAGE"
 fi
 
 [ "$fail" -eq 0 ] && echo "check-pins: ok"

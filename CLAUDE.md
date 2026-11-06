@@ -31,7 +31,7 @@ with fnm, `fnm use` in web/).
 
 - `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript.
 - `make check-generated`: `generate`, then fails on any diff.
-- `make check-pins`: Postgres, Node, Go and golangci-lint pins agree across files.
+- `make check-pins`: Postgres, Node, Go, golangci-lint and gitleaks pins agree across files.
 - `make lint`: `go mod tidy -diff`, golangci-lint, `go build` for darwin and windows, deadcode
   (exact `DEADCODE_BUDGET`), shellcheck, svelte-check, eslint, prettier check, knip, jscpd (fails
   on an empty scan).
@@ -40,7 +40,12 @@ with fnm, `fnm use` in web/).
 - `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`,
   `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
 - `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
-  app Docker image.
+  app and backup Docker images (`open-customer:$(VERSION)`, `open-customer-backup:$(VERSION)`).
+- `make image-scan [MODE=push|release]`: Trivy on the two `make image` images, `PG_IMAGE` and the
+  compose cloudflared image (`scripts/security/image-scan.sh`). `push` (default) blocks on our two
+  images only; `release` blocks on all four. Needs network (the Trivy database).
+- `make secrets`: gitleaks over the whole git history (`.gitleaksignore` honoured). `make test-sec`:
+  the scan wrappers' tests (`scripts/security/tests/run.sh`, fake `docker`).
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
@@ -49,9 +54,10 @@ with fnm, `fnm use` in web/).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db cover test-deploy`. CI
-(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e`
-(after `make build`).
+`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec`,
+plus `make image image-scan` for a change to an image or the scan. CI (`.github/workflows/ci.yml`)
+also runs the gitleaks action, `pnpm audit --audit-level high` and `make e2e` (after `make build`)
+in job `gate`, and `make image image-scan MODE=push` in job `security`.
 
 A check that could not run is reported as NOT RUN, never as passing.
 

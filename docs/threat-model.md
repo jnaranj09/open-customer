@@ -109,9 +109,9 @@ dashboard and settings (Cloudflare or any other).
 | T66 | client data | A restore runs without confirmation or leaves the app on the wrong version | restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T67 | deploy/.env | A killed upgrade or restore leaves a copy of .env (every secret) behind | upgrade.sh, restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T68 | the images | An upgrade pulls an image that was not built by this repo's release workflow | upgrade.sh | gap: Task 7 |
-| T69 | the images | A known high or critical CVE ships in the app or backup image | Dockerfile, deploy/backup/Dockerfile | gap: Task 2 |
-| T70 | the images | A known CVE in the pinned Postgres or cloudflared image | deploy/compose.yaml | gap: Task 2 |
-| T71 | the images | A CVE found after an image shipped goes unnoticed | released images | gap: Task 2 |
+| T69 | the images | A known high or critical CVE ships in the app or backup image | Dockerfile, deploy/backup/Dockerfile | make:image-scan; ci:ci.yml/security; ci:release.yml/images; file:scripts/security/tests/run.sh; make:test-sec |
+| T70 | the images | A known CVE in the pinned Postgres or cloudflared image | deploy/compose.yaml | make:image-scan; ci:release.yml/images; ci:security-weekly.yml/rescan; ci:ci.yml/security |
+| T71 | the images | A CVE found after an image shipped goes unnoticed | released images | ci:security-weekly.yml/rescan; make:image-scan |
 | T72 | the images | The app runs as root or with a shell an attacker could use | Dockerfile | file:Dockerfile; gap: Task 4 |
 | T73 | the home network | The tunnel reaches the home network, so a bug in the app exposes the Compose network | deploy/compose.yaml | accepted: the app runs as non-root in a distroless image and no container publishes a port (release-1 Accepted risks); gap: Task 4 |
 | T74 | the build | A dependency with a known vulnerability (Go) | go.mod | make:vuln; ci:ci.yml/gate; file:.github/dependabot.yml |
@@ -120,7 +120,7 @@ dashboard and settings (Cloudflare or any other).
 | T92 | the build | A Go or npm dependency is swapped for a different version or content | go.sum, web/pnpm-lock.yaml | file:go.sum; file:web/pnpm-lock.yaml; file:Dockerfile; ci:ci.yml/gate |
 | T93 | the build | A package already in the lockfile is malicious with no CVE | go.sum, web/pnpm-lock.yaml | accepted: no tool finds a malicious package that has no CVE, so the controls are the lockfiles and review of each Dependabot bump |
 | T76 | the build | A GitHub Action is swapped under its tag, or a workflow has too-wide permissions or script injection | .github/workflows | file:.github/workflows/ci.yml; gap: Task 4 |
-| T77 | the build | A secret is committed to the repo | git history | ci:ci.yml/gate; gap: Task 2 |
+| T77 | the build | A secret is committed to the repo | git history | make:secrets; ci:ci.yml/gate |
 | T78 | the build | A release ships images nobody can verify, with no list of what is in them | release workflow | gap: Task 7 |
 | T79 | the build | A change reaches main without a green CI run | GitHub settings | gap: Task 10 |
 | T80 | the host | The OS, the disk, the Docker daemon, deploy/.env at rest and docker logs (which hold the setup link) | the host machine | out of scope: the deployer who owns the host |

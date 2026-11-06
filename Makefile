@@ -9,6 +9,10 @@ SHELL := bash
 PG_IMAGE := postgres:18.6-alpine
 GOLANGCI_LINT_VERSION := v2.15.0
 SQLC_IMAGE := sqlc/sqlc:1.31.1
+# Security pipeline scanners (docs/designs/devsecops.md). GITLEAKS_IMAGE's version is also the CI
+# gitleaks action's GITLEAKS_VERSION; check-pins keeps the two equal.
+TRIVY_IMAGE := aquasec/trivy:0.76.1
+GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.24.3
 export PG_IMAGE
 
 VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)
@@ -58,7 +62,8 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
+	image-scan secrets test-sec
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -137,7 +142,7 @@ test-deploy:
 	PG_IMAGE=$(PG_IMAGE) scripts/test-deploy.sh
 
 check-pins:
-	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) scripts/check-pins.sh
+	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) GITLEAKS_IMAGE=$(GITLEAKS_IMAGE) scripts/check-pins.sh
 
 # Postgres in Docker (started or reused), serve on :8080 in the background, and Vite on :5173 in
 # the foreground; the trap stops serve when Vite exits. serve runs as a built binary, not through
@@ -170,5 +175,26 @@ endif
 	$(PNPM) e2e
 e2e: export E2E_DATABASE_URL := $(or $(E2E_GIVEN),postgres://open_customer:$(DEV_PG_PASSWORD)@localhost:$(DEV_PG_PORT)/$(E2E_DB_NAME))
 
+# The app image and the backup image, both tagged $(VERSION) (make image-scan scans them).
 image:
-	docker build --build-arg VERSION=$(VERSION) -t open-customer:$(VERSION) .
+	docker build --pull --build-arg VERSION=$(VERSION) -t open-customer:$(VERSION) .
+	docker build --pull -t open-customer-backup:$(VERSION) deploy/backup
+
+# devsecops.md section 4: Trivy on open-customer:$(VERSION) and open-customer-backup:$(VERSION)
+# (built by make image), $(PG_IMAGE) and the cloudflared image of deploy/compose.yaml. MODE=push
+# blocks on the app and backup images only; MODE=release blocks on all four. PULL=1 pulls the
+# released app and backup images (the ghcr names in deploy/compose.yaml) instead of the local
+# build, for the weekly rescan. SARIF_DIR=<dir> also writes one SARIF file per image (CI).
+MODE ?= push
+PULL ?=
+image-scan:
+	TRIVY_IMAGE=$(TRIVY_IMAGE) VERSION=$(VERSION) PULL=$(PULL) scripts/security/image-scan.sh $(MODE)
+
+# gitleaks over the whole git history, offline; reviewed false positives are in .gitleaksignore.
+secrets:
+	docker run --rm --name oc-secrets-gitleaks --network none -v "$(CURDIR)":/repo -w /repo \
+		$(GITLEAKS_IMAGE) detect --redact --no-banner
+
+# The scan wrappers' tests (scripts/security/tests/run.sh), with a fake docker.
+test-sec:
+	bash scripts/security/tests/run.sh

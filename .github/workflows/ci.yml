@@ -1,5 +1,7 @@
 # Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
-# in P2, e2e in P6, test-deploy in P7).
+# in P2, e2e in P6, test-deploy in P7, secrets and test-sec with the security pipeline). The job
+# security scans the images (docs/designs/devsecops.md section 4). The job names gate and security
+# are required checks on main: never rename them.
 name: ci
 
 on:
@@ -52,6 +54,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3 # the GITLEAKS_IMAGE pin (make secrets); check-pins compares them
       - name: Dependency audit (web)
         working-directory: web
         run: pnpm audit --audit-level high
@@ -63,6 +66,8 @@ jobs:
       - run: make test-db
       - run: make test-deploy
       - run: make cover
+      - run: make secrets
+      - run: make test-sec
       # After every check above, so they ran with only the web stub (Verification Plan, "Clean checkout");
       # e2e below needs the real build.
       - run: make build
@@ -79,3 +84,58 @@ jobs:
           name: e2e-test-results
           path: web/test-results/
           if-no-files-found: ignore
+
+  # Trivy on the app and backup images built here and on the pinned postgres and cloudflared images
+  # (make image-scan MODE=push: only the app and backup images block). The SARIF files go to the
+  # repo's Security tab, also when the scan is red.
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload-sarif
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # The Makefile runs go list when it loads.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # Trivy downloads its database on every run; the cache is keyed by day, so a run reuses the
+      # day's copy and Trivy still refreshes a stale one itself.
+      - name: Trivy cache key
+        id: trivy-day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/trivy
+          key: trivy-${{ steps.trivy-day.outputs.day }}
+          restore-keys: trivy-
+      - run: make image
+      - run: make image-scan MODE=push SARIF_DIR=trivy-sarif
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy
+      - name: Upload SARIF (app image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/app.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4.39.1
+        with:
+          sarif_file: trivy-sarif/app.sarif
+          category: trivy-app
+      - name: Upload SARIF (backup image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/backup.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4.39.1
+        with:
+          sarif_file: trivy-sarif/backup.sarif
+          category: trivy-backup
+      - name: Upload SARIF (postgres image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/postgres.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4.39.1
+        with:
+          sarif_file: trivy-sarif/postgres.sarif
+          category: trivy-postgres
+      - name: Upload SARIF (cloudflared image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/cloudflared.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4.39.1
+        with:
+          sarif_file: trivy-sarif/cloudflared.sarif
+          category: trivy-cloudflared

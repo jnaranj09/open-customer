@@ -193,10 +193,10 @@ own change.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.
 - Owner exception recorded: the design doc keeps the 90% `make cover` floor, which the bootstrap
   skill would not use. Kept by owner decision.
-- `make vuln` lists 3 known vulnerabilities in kin-openapi and golang.org/x/crypto that our code
-  does not call (govulncheck passes).
+- `make vuln` lists 1 known vulnerability in golang.org/x/crypto (`openpgp`, GO-2026-5932) that our
+  code does not call (govulncheck passes). kin-openapi went to v0.149.0 when the image scan found
+  CVE-2026-100353 and CVE-2026-100354 in the app binary.
 - `scripts/check-pins.sh` accepts a non-numeric postgres tag (`postgres:latest` passed); found
   before P7, not fixed in P7.
 - shellcheck is not pinned: CI uses the runner's version and the local gate whatever is installed,
   so the two can disagree (seen on p7: SC2015 only in CI).
-- gitleaks runs only in CI, not in the local gate, so a false positive shows up only after a push.

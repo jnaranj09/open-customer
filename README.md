@@ -33,10 +33,13 @@ run.
 | `make vuln` | govulncheck |
 | `make build` | The web build, then `bin/open-customer` |
 | `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
-| `make image` | The app Docker image |
+| `make image` | The app and backup Docker images, tagged with the version |
+| `make image-scan` | Trivy on the two `make image` images and the pinned postgres and cloudflared images (needs Docker and network). `MODE=push` (the default) fails only on the app and backup images; `MODE=release` fails on any of the four |
+| `make secrets` | gitleaks over the whole git history (needs Docker); reviewed false positives are in `.gitleaksignore` |
+| `make test-sec` | The scan wrappers' tests (`scripts/security/tests/run.sh`, against a fake `docker`) |
 | `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary: the CUJ specs and the UI probe (axe and layout checks on every route at phone and desktop size). Needs the Playwright WebKit browser and its host libraries, port 8080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
 
-The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy`.
+The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec`.
 The gate leaves out `make e2e`. CI runs it after `make build` (design doc item 8); locally it runs
 by hand.
 

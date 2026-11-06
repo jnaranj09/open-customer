@@ -1,0 +1,47 @@
+# Weekly rescan of the latest release (docs/designs/devsecops.md section 4): new CVEs are found in
+# images that already shipped. Scans the images of the newest v* tag, pulled from the registry as a
+# deployer pulls them, with that tag's Makefile and deploy/compose.yaml (make image-scan
+# MODE=release PULL=1): a high or critical finding with a fix in any of the four images, or an
+# image that cannot be pulled, fails the run, and GitHub emails the owner about a failed scheduled
+# run. With no v* tag yet the job writes "NOT RUN: no release tag" to its summary and passes.
+name: security-weekly
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rescan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the tags
+          persist-credentials: false
+      - name: Latest release tag
+        id: tag
+        run: |
+          tag=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          if [ -z "$tag" ]; then
+            echo "NOT RUN: no release tag" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Check out the release
+        if: steps.tag.outputs.tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: git checkout --detach "$TAG"
+      # The Makefile runs go list when it loads.
+      - uses: actions/setup-go@v7
+        if: steps.tag.outputs.tag != ''
+        with:
+          go-version-file: go.mod
+      - name: Image scan
+        if: steps.tag.outputs.tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: make image-scan MODE=release PULL=1 VERSION="${TAG#v}"
