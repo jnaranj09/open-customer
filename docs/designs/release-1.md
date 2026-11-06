@@ -100,7 +100,7 @@ Each goal has a check. Release 1 is done when all checks pass.
     Check: 4 weeks of daily use without going back to the notebook (the PRD's gate to Phase 2). Days with the PC off do not count as misses and do not restart the 4 weeks.
 5.  **Her data is safe and is hers.**
     Checks:
-    *   While the PC is on, backups run at most 25 h apart (the hourly check runs a backup once the last one is 24 h old), and each copy lands on a second disk or machine.
+    *   While the PC is on, backups run at most 25 h apart (the hourly check runs a backup once the last one is 24 h old), and each copy lands on a second disk or machine. The first install keeps `BACKUP_TARGET` on a folder of the same laptop that runs the stack (owner decision), so this check is met only once `BACKUP_TARGET` is on another disk or machine.
     *   One full restore on a clean install succeeds before her real data goes in.
     *   She can download her data as CSV + JSON from the app, without the author.
 6.  **"Hoy" opens in under 1 s, and the app shows when the server is off.**
@@ -942,7 +942,7 @@ Grouped by area. Each alternative was rejected or narrowed during the brainstorm
 
 *   **Pros**: Open source and free. Mature calendars.
 *   **Cons**: Built around a public booking page. Heavy to run (Cal.com and Odoo need much more than one small container). Weak support for custom fields inside messages. Not designed for one-hand iPhone use.
-*   **Reason for Rejection**: The work to adapt them is larger than building the narrow app she needs. The PRD claim that "no free self-hosted option exists" is wrong. The PRD will say instead that these tools exist and do not fit.
+*   **Reason for Rejection**: The work to adapt them is larger than building the narrow app she needs. The original PRD claimed that "no free self-hosted option exists", which was wrong; the PRD now says these tools exist and do not fit.
 
 #### Alternative A3: General CRMs (Twenty, EspoCRM)
 
@@ -1026,7 +1026,7 @@ Grouped by area. Each alternative was rejected or narrowed during the brainstorm
 
 #### Alternative E5: Skip come-back only for a future booking "of that service" (PRD FR-R7)
 
-*   **Pros**: Matches the PRD's wording. An unrelated later visit (a pedicure after an acrylic set) no longer drops the come-back, which the earlier "any later active appointment" rule did wrongly.
+*   **Pros**: Matches the original PRD's wording. An unrelated later visit (a pedicure after an acrylic set) no longer drops the come-back, which the earlier "any later active appointment" rule did wrongly.
 *   **Cons**: Taken literally, the rule is on "Acrílico" but the next booking is "Relleno", so a client who already rebooked would still get the come-back reminder.
 *   **Outcome** (chosen in a modified form): the rule names a return service (empty = its own service), and only a later booking that includes it skips the item. The return service fixes the Acrílico → Relleno problem; the same-service check fixes the pedicure problem. A future booking without the return service turns the item into a booking prompt for her, so she can add the service to that appointment instead of messaging a client who is already coming.
 *   **Rejected with it**: a list of return services per rule. One nullable column covers acrylic → refill; a list can be added later (a join table, filled from the column) without rewriting stored data.
