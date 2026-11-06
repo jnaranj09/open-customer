@@ -105,3 +105,49 @@ const FIELD_STEPS: Record<string, WizardStep> = {
 export function stepForField(field: string): WizardStep | null {
 	return FIELD_STEPS[field] ?? null;
 }
+
+/** The wizard's steps after `POST /setup`: the account exists, so a reload must come back to them
+ *  instead of leaving the wizard (the guard sends a signed-in user away from `/setup`). */
+export type FinishingStep = 'icon' | 'install';
+
+/** The tab's session storage key that holds the finishing step. */
+const FINISHING_KEY = 'open-customer.setup-finishing';
+
+/** The slice of `Storage` the finishing step uses; a test passes a plain object. */
+export type StepStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+/** The tab's session storage, or null where the browser refuses it (private mode, settings). */
+export function sessionStore(): StepStore | null {
+	try {
+		return window.sessionStorage;
+	} catch {
+		console.warn('code=session_storage_unavailable');
+		return null;
+	}
+}
+
+/** The finishing step stored in `store`, or null when the wizard is not between its account and
+ *  its end. */
+export function finishingStep(store: StepStore | null): FinishingStep | null {
+	try {
+		const step = store?.getItem(FINISHING_KEY) ?? null;
+		return step === 'icon' || step === 'install' ? step : null;
+	} catch {
+		console.warn('code=session_storage_read_failed');
+		return null;
+	}
+}
+
+/** Stores the finishing step, or clears it with null (she entered the app). A failed write only
+ *  loses the reload case: the wizard goes on. */
+export function rememberFinishing(store: StepStore | null, step: FinishingStep | null): void {
+	try {
+		if (step === null) {
+			store?.removeItem(FINISHING_KEY);
+		} else {
+			store?.setItem(FINISHING_KEY, step);
+		}
+	} catch {
+		console.warn('code=session_storage_write_failed');
+	}
+}

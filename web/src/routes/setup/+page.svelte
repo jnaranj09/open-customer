@@ -19,6 +19,9 @@
 	import {
 		countryOptions,
 		currencyOptions,
+		finishingStep,
+		rememberFinishing,
+		sessionStore,
 		stepForField,
 		STEPS,
 		timeZoneOptions,
@@ -37,7 +40,9 @@
 	let countries = $state<Option[]>([]);
 	let optionsError = $state<string | null>(null);
 
-	let step = $state<WizardStep>('business');
+	// After `POST /setup` the step is kept in the tab's session storage: a reload comes back to it.
+	const store = sessionStore();
+	let step = $state<WizardStep>(finishingStep(store) ?? 'business');
 	let name = $state('');
 	let timezone = $state(browserZone);
 	let currency = $state('');
@@ -72,6 +77,9 @@
 	function go(to: WizardStep, error: string | null = null): void {
 		step = to;
 		stepError = error;
+		if (to === 'icon' || to === 'install') {
+			rememberFinishing(store, to);
+		}
 	}
 
 	/** The value the current step asks for, for the "is it filled" check. */
@@ -179,6 +187,7 @@
 
 	function finish(): void {
 		// The layout asks the server again on the new path and shows the app.
+		rememberFinishing(store, null);
 		void goto(resolve('/'));
 	}
 </script>
@@ -199,9 +208,7 @@
 	title={t('setup_title')}
 	caption={t('setup_progress', { n: index + 1, total: STEPS.length })}
 >
-	{#if token === null}
-		<p role="alert" class="text-base text-error">{t('setup_no_token')}</p>
-	{:else if step === 'icon'}
+	{#if step === 'icon'}
 		<form
 			class="flex flex-col gap-4"
 			onsubmit={(e) => {
@@ -243,6 +250,8 @@
 			{/if}
 			<Button variant="strong" onclick={finish}>{t('setup_enter')}</Button>
 		</div>
+	{:else if token === null}
+		<p role="alert" class="text-base text-error">{t('setup_no_token')}</p>
 	{:else}
 		<form
 			class="flex flex-col gap-4"

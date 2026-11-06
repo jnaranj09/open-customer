@@ -19,8 +19,9 @@ export const PUBLIC_PATHS: readonly string[] = ['/login', '/setup'];
 const CHANGE_PASSWORD = '/cambiar-clave';
 
 /** Where `path` should go given the session. Offline never redirects: with a cached `Me` the cached
- *  app shows, without one the layout shows the offline text. */
-export function guard(path: string, s: Session): GuardResult {
+ *  app shows, without one the layout shows the offline text. `finishingSetup`: the wizard made her
+ *  account and still has its last steps (icon, install) to show, so `/setup` stays. */
+export function guard(path: string, s: Session, finishingSetup = false): GuardResult {
 	if (s.kind === 'offline') {
 		return s.cachedMe === null ? { kind: 'offline_blank' } : { kind: 'stay' };
 	}
@@ -32,6 +33,9 @@ export function guard(path: string, s: Session): GuardResult {
 	}
 	if (s.me.must_change_password) {
 		return path === CHANGE_PASSWORD ? { kind: 'stay' } : { kind: 'redirect', to: CHANGE_PASSWORD };
+	}
+	if (path === '/setup' && finishingSetup) {
+		return { kind: 'stay' };
 	}
 	return PUBLIC_PATHS.includes(path) ? { kind: 'redirect', to: '/' } : { kind: 'stay' };
 }
@@ -63,19 +67,20 @@ export function canSync(s: Session | null): boolean {
 	return !s.setupNeeded && s.me !== null && !s.me.must_change_password;
 }
 
-/** What the layout shows for `path`: the guard's answer, or null while the session is unknown or
+/** What the layout shows for `path`: the guard's answer (`finishingSetup` as for `guard`), or null while the session is unknown or
  *  has to be asked again for this path (`checkedFor` is the path the last answer was checked for).
  *  A settled session answers every app page at once, so moving between app pages never blanks the
  *  shell. */
 export function verdictFor(
 	s: Session | null,
 	checkedFor: string | null,
-	path: string
+	path: string,
+	finishingSetup = false
 ): GuardResult | null {
 	if (s === null || (needsRecheck(s, path) && checkedFor !== path)) {
 		return null;
 	}
-	return guard(path, s);
+	return guard(path, s, finishingSetup);
 }
 
 /** True when a refresh just worked while the session is still `offline`: the server is back, so the

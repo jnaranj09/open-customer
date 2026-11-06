@@ -35,6 +35,7 @@
 	import { createReporter } from '../lib/report';
 	import { pushControl } from '../lib/pushControl.svelte';
 	import { resolveSession } from '../lib/session';
+	import { finishingStep, sessionStore } from '../lib/setup';
 	import { shownDay } from '../lib/shownDay.svelte';
 	import { systemNow } from '../lib/time';
 
@@ -50,7 +51,10 @@
 	let settleRun = 0;
 	let recoverRun = 0;
 
-	const verdict = $derived(verdictFor(session, checkedFor, path));
+	// The setup wizard's last steps survive a reload (lib/setup.ts `finishingStep`).
+	const verdict = $derived(
+		verdictFor(session, checkedFor, path, finishingStep(sessionStore()) !== null)
+	);
 
 	async function rememberMe(me: Me): Promise<void> {
 		try {

@@ -67,6 +67,9 @@ test('the setup link opens the wizard and setup creates her account', async ({ p
 	await page.getByRole('button', { name: es.setup_create }).click();
 
 	await expect(page.getByRole('heading', { name: es.setup_icon_title })).toBeVisible();
+	// A reload after the account exists keeps her on the wizard's last steps.
+	await page.reload();
+	await expect(page.getByRole('heading', { name: es.setup_icon_title })).toBeVisible();
 	await page.getByRole('button', { name: es.setup_icon_skip }).click();
 	await expect(page.getByRole('heading', { name: es.install_title })).toBeVisible();
 	await page.getByRole('button', { name: es.setup_enter }).click();
@@ -185,9 +188,9 @@ test.describe('logged in', () => {
 		});
 		await sheet.getByLabel(es.rule_days_before, { exact: true }).fill('1');
 		await sheet.getByRole('button', { name: es.rule_save }).click();
-		await expect(sheet.getByRole('heading', { name: es.overdue_title })).toBeVisible();
-		await sheet.getByRole('button', { name: es.overdue_from_today }).click();
+		// A "before" rule never brings late messages: it saves without the overdue question.
 		await expect(sheet).toBeHidden();
+		await expect(page.getByRole('heading', { name: es.overdue_title })).toHaveCount(0);
 		await expect(
 			page.getByText(
 				fill(es.rule_sentence_before, {

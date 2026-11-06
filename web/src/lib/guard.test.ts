@@ -75,6 +75,18 @@ describe('guard, online', () => {
 		expect(guard('/setup', online())).toEqual({ kind: 'redirect', to: '/' });
 	});
 
+	it('keeps /setup while logged in when the wizard still has its last steps', () => {
+		expect(guard('/setup', online(), true)).toEqual({ kind: 'stay' });
+	});
+
+	it('still sends /login to / while the wizard has its last steps', () => {
+		expect(guard('/login', online(), true)).toEqual({ kind: 'redirect', to: '/' });
+	});
+
+	it('passes the wizard state through verdictFor', () => {
+		expect(verdictFor(online(), '/setup', '/setup', true)).toEqual({ kind: 'stay' });
+	});
+
 	it('stays on an app page while logged in', () => {
 		expect(guard('/clientas/abc', online())).toEqual({ kind: 'stay' });
 	});
