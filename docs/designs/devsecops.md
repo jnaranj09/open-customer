@@ -385,8 +385,9 @@ rule names its sensor") applied to security.
   and push to `main`. This is a GitHub setting, not a repo file: `docs/threat-model.md` "GitHub
   settings" holds the exact `gh api` command, with the tag ruleset for `v*` and the public ghcr
   packages. The ruleset only limits who can tag (the owner is on its bypass list); the check that
-  the tagged commit is on `main` is `release-on-main.sh` (section 4). The owner applies the
-  settings after the merge (a required check must have run first). The threat model lists them as
+  the tagged commit is on `main` is `release-on-main.sh` (section 4). Branch protection and the
+  tag ruleset were applied after the merge, on 2026-11-07 (a required check must have run first);
+  the ghcr visibility waits for the first release. The threat model lists them as
   `manual:` rows, "re-checked by hand after any repo settings change". The job names in CI stay
   stable, because a renamed required check silently blocks every PR.
 
