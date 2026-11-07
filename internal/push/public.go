@@ -18,7 +18,7 @@ import (
 // never followed: a public push service could otherwise send the POST on to a private host.
 
 const (
-	// lookupTimeout bounds the DNS lookup Subscribe makes.
+	// lookupTimeout bounds the DNS lookup Check makes.
 	lookupTimeout = 5 * time.Second
 	// dialTimeout and tlsTimeout bound the connection part of one send.
 	dialTimeout = 10 * time.Second
