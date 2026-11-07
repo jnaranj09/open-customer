@@ -222,12 +222,18 @@ own change.
 - shellcheck is not pinned: CI uses the runner's version and the local gate whatever is installed,
   so the two can disagree (seen on p7: SC2015 only in CI).
 - `postgres:18.6-alpine` ships `gosu` built with Go 1.24.6, with Go stdlib CVEs (CVE-2025-68121
-  critical, and more); found by `make image-scan` (devsecops). Third-party: it only reports on a
-  push, and blocks a release and the weekly rescan until upstream rebuilds it or the owner
-  allow-lists the CVEs. Our backup image removes its copy of `gosu`.
+  critical, and more); found by `make image-scan` (devsecops). Allow-listed until 2027-05-06 (owner
+  decision 2026-11-07): `deploy/compose.yaml` runs Postgres as `user: postgres`, so the image
+  entrypoint never runs `gosu`. Each of the 26 entries in `security/allow.json` is scoped to
+  `usr/local/bin/gosu`, so the same CVE in our own binaries still blocks. Our backup image removes
+  its copy of `gosu`. On or before 2027-05-06: bump the pinned Postgres image if it ships a rebuilt
+  `gosu` and delete the entries; otherwise ask the owner for a new date. An expired entry turns the
+  release and the weekly rescan red again.
 - `cloudflare/cloudflared:2026.10.7` has CVE-2026-78661 (golang.org/x/net, fixed in 0.62.0); found
-  by `make image-scan`. It only reports on a push, and blocks a release and the weekly rescan until
-  a cloudflared tag with the fix is pinned.
+  by `make image-scan`. Allow-listed until 2027-02-05 (owner decision 2026-11-07), scoped to
+  `usr/local/bin/cloudflared`: 2026.10.7 is the newest tag and no fixed tag exists. Delete the entry
+  when Dependabot brings a fixed tag; if none exists by 2027-02-05, ask the owner for a new date. An
+  expired entry turns the release and the weekly rescan red again.
 - `make dast` loads 6519 Nuclei templates (v10.5.1) and 262 of them do not run: Nuclei reports
   them as templates with a runtime error, and dast.sh prints "262 templates did not run" but stays
   green (seen 2026-11-07). Not investigated: which templates, and whether any of them would apply

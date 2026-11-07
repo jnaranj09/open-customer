@@ -352,14 +352,26 @@ rule names its sensor") applied to security.
   `DS-0002`: the check is ignored in every scanned Dockerfile) or `<check id>@<repo path>` (for
   example `DS-0002@deploy/backup/Dockerfile`: ignored in that Dockerfile only, through Trivy's own
   `paths:` in the ignore entry, so the same check still blocks on every other file); prefer the
-  scoped form. `config-scan.sh` refuses a scope that is not one of the Dockerfiles it scans. The
+  scoped form. `config-scan.sh` refuses a scope that is not one of the Dockerfiles it scans. A `trivy` id is a CVE id
+  (ignored in every result of every image and of `deps-scan`) or `<CVE id>@<path>` (for example
+  `CVE-2026-78661@usr/local/bin/cloudflared`: ignored only in the result whose Target is that path,
+  through Trivy's own `paths:`; the same CVE in any other binary still blocks). For a Go binary in
+  an image Trivy 0.76.1 sets the Target to the binary's path in the image, without a leading slash
+  (checked by a run on the pinned Postgres and cloudflared images; `PkgPath` is empty there), so the
+  scope is a path inside the image. Prefer the scoped form for a CVE in a third-party binary: a plain
+  id would also hide the same Go standard library CVE in our own app binary. `image-scan.sh` and
+  `deps-scan.sh` both write the ignore file through `scripts/security/trivy-ignore.sh` and refuse
+  an id of another shape; `deps-scan.sh` passes a scoped id through, where it ignores nothing
+  because an image path is never a manifest. The
   guard `TestSecurityAllowList` (`internal/guards`) fails on a missing field, an unknown tool, a bad
   date, an expired date, a date more than 180 days ahead, a duplicate `(tool, id)`, an id of any
   tool with whitespace, a newline or a comma (it would read as two ids: `allow.sh` prints one per
   line, and the nuclei ids are joined with commas), a `zap` id of
   another shape (its regex must compile, end in `$` and match none of a few probe URLs: the shell,
   a built file, an API route; that catches a typo or a catch-all), or a `trivy-config` id of another
-  shape (the scope must be a clean repo-relative path, with no glob, to a file that exists). `scripts/security/allow.sh <tool>` prints
+  shape (the scope must be a clean repo-relative path, with no glob, to a file that exists), or a
+  `trivy` id of another shape (the scope must be a clean relative path, with no glob and no `..`; it
+  names a file inside an image, so it is not looked up in the repo). `scripts/security/allow.sh <tool>` prints
   that tool's live ids (expiry today or later, UTC), one per line, and refuses an id with a line
   break; each scan wrapper refuses its own ids of another shape (a space or a comma included) and
   turns them into the tool's own ignore form. gitleaks keeps its `.gitleaksignore` of fingerprints, which this
