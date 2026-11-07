@@ -228,6 +228,10 @@ own change.
 - `cloudflare/cloudflared:2026.10.7` has CVE-2026-78661 (golang.org/x/net, fixed in 0.62.0); found
   by `make image-scan`. It only reports on a push, and blocks a release and the weekly rescan until
   a cloudflared tag with the fix is pinned.
+- `make dast` loads 6519 Nuclei templates (v10.5.1) and 262 of them do not run: Nuclei reports
+  them as templates with a runtime error, and dast.sh prints "262 templates did not run" but stays
+  green (seen 2026-11-07). Not investigated: which templates, and whether any of them would apply
+  to this app (`nuclei -validate` lists them). A silent loss of coverage until someone looks.
 - `api/openapi.yaml` has no `maxLength` on any text field (security audit A8). The modules already
   refuse long text (client name 120 runes, other names and labels 80, notes and template body
   2000, a text attribute value 500), but the contract does not say so and no web input has a
