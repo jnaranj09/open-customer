@@ -795,7 +795,7 @@ Cloudflare settings the author sets once (documented in `deploy/README.md`):
 
 ### Backups
 
-`backup.sh` has two main modes. With no argument (the container's normal command) it runs the check below once when the container starts, then every hour. With `once [--tag pre-upgrade]` it runs steps 1 and 3–6 a single time, skipping the 24 h check, and exits with a non-zero code on any failure. Every run, and every restore, holds the lock file `/backup-status/backup.lock` (`flock`), so two of them never touch the database dump or the restic repository at the same time.
+`backup.sh` has two main modes. With no argument (the container's normal command) it runs the check below once when the container starts, then every hour. With `once [--tag pre-upgrade]` it runs steps 1 and 3–6 a single time, skipping the 24 h check, and exits with a non-zero code on any failure. Both modes exit 2 before anything runs when `RESTIC_PASSWORD` or the database password is still the `.env.example` placeholder (threat model T63). Every run, and every restore, holds the lock file `/backup-status/backup.lock` (`flock`), so two of them never touch the database dump or the restic repository at the same time.
 
 A failed step never ends the script early: its error goes to `status.json` (step 6) first. In loop mode the script then waits for the next hour instead of exiting, because `restart: unless-stopped` would otherwise restart it against a broken disk again and again. `once` exits non-zero after writing the status.
 
@@ -867,12 +867,12 @@ The "Read by" column says who reads each variable. The app reads and checks only
 | --- | --- | --- | --- |
 | `APP_VERSION` | Compose | yes | Pinned image tag for `app` and `backup`. Passed to `backup` for snapshot tags. |
 | `PUBLIC_URL` | app | yes | `https://<subdomain>` in production. `http://localhost:<port>` or `http://127.0.0.1:<port>` is also accepted, for development and e2e. Used for links, the Origin check and the manifest. |
-| `DB_PASSWORD` | app, Compose | yes | Used by `db`, and to build the app's and the backup's connection settings. |
+| `DB_PASSWORD` | app, Compose | yes | Used by `db`, and to build the app's and the backup's connection settings. The `.env.example` placeholder (`change-me`) is refused by the app at start and by `backup.sh`. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME`, `DB_SSLMODE` | app, Compose | no | Defaults `db`, `5432`, `open_customer`, `open_customer`, `disable` (traffic stays on the Compose network). Compose passes them to `app` as is, to `db` as `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and to `backup` and `restore` as `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`. |
 | `TUNNEL_TOKEN` | Compose (`cloudflared`) | yes | cloudflared token. |
 | `VAPID_SUBJECT` | app | yes | `mailto:` contact for Web Push. |
 | `BACKUP_TARGET` | Compose (`backup` bind) | yes | Host path of any folder the owner chooses (a USB or second disk is optional). The marker file `.open-customer-backup-target` must exist in it. |
-| `RESTIC_PASSWORD` | `backup` | yes | Backup encryption key. |
+| `RESTIC_PASSWORD` | `backup` | yes | Backup encryption key. `backup.sh` refuses the `.env.example` placeholder (`change-me`) before a backup (not before a restore, which may need to read an old repository). |
 | `TRUSTED_PROXY_CIDRS` | app | no | Default: the private ranges `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`, which include any Docker network. Only these peers' `CF-Connecting-IP` is trusted. This is safe because `app` publishes no port: only containers on the Compose network can reach it. A self-hoster who publishes a port sets this to their proxy's address. |
 | `MEDIA_DIR` | app | no | Default `/data/media` (the `media` volume mount). |
 | `BACKUP_STATUS_FILE` | app | no | Default `/backup-status/status.json`. The file read by the migration guard and the status screen. |
@@ -1745,7 +1745,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 20. `internal/platform/config/config.go` (Create)
 
 *   **Type / Scope**: Config.
-*   **Proposed Changes**: Reads the `.env` variables listed in the Technical Plan into a struct. It reads only the variables marked "app" in the Configuration table. It validates them: `PUBLIC_URL` must be `https`, unless its host is `localhost` or `127.0.0.1`; and `PUBLIC_URL`, `DB_PASSWORD` and `VAPID_SUBJECT` must be present. There is no separate "insecure" flag, so nothing can turn off `https` on a real subdomain. It fails at start with one message that lists every missing variable. `DATABASE_URL` is built from `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` and `DB_SSLMODE`.
+*   **Proposed Changes**: Reads the `.env` variables listed in the Technical Plan into a struct. It reads only the variables marked "app" in the Configuration table. It validates them: `PUBLIC_URL` must be `https`, unless its host is `localhost` or `127.0.0.1`; and `PUBLIC_URL`, `DB_PASSWORD` and `VAPID_SUBJECT` must be present; `DB_PASSWORD` must not be one of `PlaceholderSecrets`, the secret values `deploy/.env.example` publishes (`backup.sh` keeps the same list as `PLACEHOLDER_SECRETS`; `TestPlaceholderSecretsMatchEnvExample` reads all three and keeps them equal). There is no separate "insecure" flag, so nothing can turn off `https` on a real subdomain. It fails at start with one message that lists every missing variable. `DATABASE_URL` is built from `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` and `DB_SSLMODE`.
 
 ##### 21. `internal/platform/logging/logging.go` (Create)
 
@@ -2492,6 +2492,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   `snapshot-info` prints `{"id", "time", "app"}` from `restic --no-lock snapshots --json`.
     *   `restore` unpacks the snapshot into `/backup-status/work/restore` (on the `backup-status` volume, not the container layer) and uses `pg_restore` without `--clean`, because the database was just recreated empty. Without `--no-owner` either, so it relies on `PGUSER` owning the objects in the dump: changing `DB_USER` between a backup and its restore needs care.
     *   The new-volumes guard of step 1 in "Backups": the state is the file `/backup-status/restore-first`; the snapshot count comes from `restic --no-lock list snapshots` (snapshot files, so a corrupt one still counts). Tests: `fresh volumes with an existing repository take no snapshot` (also: it holds on later runs, across a marker-missing run, and in the loop), `restore lets backups resume`, `a failed restore blocks the next backup` (a failing `pg_restore`), `an empty status file allows a fresh start`, `the guard fails closed when the snapshots cannot be counted` (a corrupt snapshot file; a failing listing).
+    *   The placeholder check (audit A3): `loop` and `once` exit 2 with one line naming `RESTIC_PASSWORD` or `PGPASSWORD` when it is still a `PLACEHOLDER_SECRETS` value. Test: `a placeholder secret stops the backup` (both variables, both modes, nothing written under `/target`).
     *   Runs `restic init` on the first run if the repository is missing. "Missing" means `restic cat config` fails and `/target/restic` does not exist; if the folder exists but `cat config` fails, it reports an error instead of creating a new repository.
     *   `#!/usr/bin/env bash` (the image adds `bash`). A `trap` on `TERM` and `INT` lets the running step finish or writes "interrupted" to `status.json`, then exits; bash as PID 1 ignores signals it does not trap.
     *   The hourly loop takes the lock with `flock -n`: if a `once` run or a restore holds it, that hour is skipped. Busybox `flock` exits 1 both on contention and on a real error; only a real error prints to stderr, so the loop records that one in `status.json` ("lock: …") instead of skipping silently. A lock file that cannot be opened, or a failed blocking `flock` in `once` or `restore`, exits 1 with one line naming the lock file; nothing runs without the lock.

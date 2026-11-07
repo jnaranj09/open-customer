@@ -478,6 +478,29 @@ test_bad_args() {
   exits_2 restore a b
 }
 
+# A published placeholder (deploy/.env.example) as RESTIC_PASSWORD or the database password stops
+# the backup before anything is written, with one line naming the variable.
+test_placeholder_secrets() {
+  local name mode rc out
+  for name in RESTIC_PASSWORD PGPASSWORD; do
+    for mode in once loop; do
+      fresh
+      touch "$MARKER"
+      rc=0
+      # loop takes no argument; timeout keeps a loop that does not stop from hanging the suite.
+      if [ "$mode" = loop ]; then
+        out=$(env "$name=change-me" timeout 20 "$BACKUP" 2>&1) || rc=$?
+      else
+        out=$(env "$name=change-me" timeout 20 "$BACKUP" once 2>&1) || rc=$?
+      fi
+      assert_eq "exit code of $mode with $name=change-me" 2 "$rc"
+      assert_eq "output lines of $mode with $name=change-me" 1 "$(printf '%s\n' "$out" | wc -l)"
+      case $out in *"$name"*) ;; *) fail "output '$out' does not name $name" ;; esac
+      assert_eq "files under /target after $mode with $name=change-me" ".open-customer-backup-target" "$(ls -A /target)"
+    done
+  done
+}
+
 t "marker missing writes nothing to the target" test_marker_missing
 t "first run initialises the repository and backs up" test_first_run
 t "pre-upgrade tag is kept by forget" test_pre_upgrade_kept
@@ -496,4 +519,5 @@ t "a failed restore blocks the next backup" test_failed_restore_blocks_backup
 t "an empty status file allows a fresh start" test_empty_status_fresh_start
 t "the guard fails closed when the snapshots cannot be counted" test_guard_fails_closed
 t "bad args exit 2" test_bad_args
+t "a placeholder secret stops the backup" test_placeholder_secrets
 finish

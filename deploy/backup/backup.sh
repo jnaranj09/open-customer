@@ -49,6 +49,24 @@ require() {
   done
 }
 
+# The secret values deploy/.env.example publishes; the same list as PlaceholderSecrets in
+# internal/platform/config (TestPlaceholderSecretsMatchEnvExample keeps them equal).
+PLACEHOLDER_SECRETS=(change-me)
+
+# refuse_placeholder <name...>: exits 2 naming the first variable that still holds a published
+# placeholder (never its value). A backup with a public password is readable by anyone.
+refuse_placeholder() {
+  local name placeholder
+  for name in "$@"; do
+    for placeholder in "${PLACEHOLDER_SECRETS[@]}"; do
+      if [ "${!name}" = "$placeholder" ]; then
+        echo "backup.sh: $name is still the placeholder from .env.example; set a real secret" >&2
+        exit 2
+      fi
+    done
+  done
+}
+
 now() {
   date -u +%Y-%m-%dT%H:%M:%SZ
 }
@@ -455,7 +473,12 @@ case "$mode" in
 esac
 
 case "$mode" in
-  loop | once) require RESTIC_PASSWORD APP_VERSION PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE ;;
+  loop | once)
+    require RESTIC_PASSWORD APP_VERSION PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
+    # Only the modes that write a backup refuse it: restore and snapshot-info must still read a
+    # repository made with the placeholder, or its data is lost.
+    refuse_placeholder RESTIC_PASSWORD PGPASSWORD
+    ;;
   snapshot-info) require RESTIC_PASSWORD ;;
   restore) require RESTIC_PASSWORD PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE ;;
 esac

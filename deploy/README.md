@@ -93,11 +93,11 @@ without a restart.
    | --- | --- |
    | `APP_VERSION` | The release to run, for example `1.0.0` (the tag without its `v`). |
    | `PUBLIC_URL` | `https://citas.example.com` |
-   | `DB_PASSWORD` | A long random password. |
+   | `DB_PASSWORD` | A long random password. The app and the backup refuse the example's `change-me`. |
    | `TUNNEL_TOKEN` | The token from section 2. |
    | `VAPID_SUBJECT` | `mailto:` and a contact address. |
    | `BACKUP_TARGET` | The folder from section 4. |
-   | `RESTIC_PASSWORD` | A long random password. Keep a copy outside this PC: without it every backup is unreadable. |
+   | `RESTIC_PASSWORD` | A long random password. Keep a copy outside this PC: without it every backup is unreadable. The backup refuses the example's `change-me`. |
 
 3. Check that Compose accepts it. A missing value stops with a message naming it:
 
