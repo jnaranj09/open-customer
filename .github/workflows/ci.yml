@@ -1,5 +1,9 @@
 # Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
-# in P2, e2e in P6, test-deploy in P7).
+# in P2, e2e in P6, test-deploy in P7, secrets, test-sec, config-scan, sast and deps-scan with the
+# security pipeline; deps-scan replaced pnpm audit). The job security scans the images and the running app (docs/designs/devsecops.md
+# sections 4 and 6) and uploads the zizmor and Semgrep SARIF (sections 3 and 2). The job names gate
+# and security are required checks on main: never rename them. Every action is pinned by commit
+# SHA, with its version in the comment (guard TestSupplyChainPins; Dependabot bumps both).
 name: ci
 
 on:
@@ -13,8 +17,8 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     services:
-      postgres: # the e2e database server; the tag is the PG_IMAGE pin
-        image: postgres:18.6-alpine
+      postgres: # the e2e database server; the image is the PG_IMAGE pin, digest included
+        image: postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
         env:
           POSTGRES_USER: open_customer
           POSTGRES_PASSWORD: e2e
@@ -27,16 +31,17 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # gitleaks scans the whole history
-      - uses: actions/setup-go@v7
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: web/package.json
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: web/package.json
           cache: pnpm
@@ -44,17 +49,15 @@ jobs:
       - name: Install web dependencies
         working-directory: web
         run: pnpm install --frozen-lockfile
-      - uses: golangci/golangci-lint-action@v9
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15.0
           install-only: true
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Dependency audit (web)
-        working-directory: web
-        run: pnpm audit --audit-level high
+          GITLEAKS_VERSION: 8.24.3 # the GITLEAKS_IMAGE pin (make secrets); check-pins compares them
       - run: make check-pins
       - run: make lint GOLANGCI_LINT=golangci-lint
       - run: make test
@@ -63,6 +66,24 @@ jobs:
       - run: make test-db
       - run: make test-deploy
       - run: make cover
+      - run: make secrets
+      - run: make test-sec
+      - run: make config-scan
+      - run: make sast
+      # Trivy fs on web/pnpm-lock.yaml and go.mod (docs/designs/devsecops.md section 4): a high or
+      # critical finding with a fix blocks. Its own day-keyed cache of the Trivy database, as in job
+      # security below.
+      - name: Trivy cache key
+        id: trivy-day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy
+          key: trivy-deps-${{ steps.trivy-day.outputs.day }}
+          restore-keys: trivy-deps-
+      - run: make deps-scan
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy
       # After every check above, so they ran with only the web stub (Verification Plan, "Clean checkout");
       # e2e below needs the real build.
       - run: make build
@@ -74,8 +95,111 @@ jobs:
           E2E_DATABASE_URL: postgres://open_customer:e2e@localhost:5432/open_customer_e2e
       - name: Upload e2e results
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-test-results
           path: web/test-results/
           if-no-files-found: ignore
+
+  # Trivy on the app and backup images built here and on the pinned postgres and cloudflared images
+  # (make image-scan MODE=push: only the app and backup images block). The SARIF files go to the
+  # repo's Security tab, also when the scan is red. Then ZAP and Nuclei on the app image (make dast);
+  # its reports are an artifact when it is red. Last, the zizmor SARIF of the workflows.
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload-sarif
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The Makefile runs go list when it loads.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Trivy downloads its database on every run; the cache is keyed by day, so a run reuses the
+      # day's copy and Trivy still refreshes a stale one itself.
+      - name: Trivy cache key
+        id: trivy-day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy
+          key: trivy-${{ steps.trivy-day.outputs.day }}
+          restore-keys: trivy-
+      - run: make image
+      - run: make image-scan MODE=push SARIF_DIR=trivy-sarif
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy
+      - name: Upload SARIF (app image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/app.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-sarif/app.sarif
+          category: trivy-app
+      - name: Upload SARIF (backup image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/backup.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-sarif/backup.sarif
+          category: trivy-backup
+      - name: Upload SARIF (postgres image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/postgres.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-sarif/postgres.sarif
+          category: trivy-postgres
+      - name: Upload SARIF (cloudflared image)
+        if: ${{ !cancelled() && hashFiles('trivy-sarif/cloudflared.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-sarif/cloudflared.sarif
+          category: trivy-cloudflared
+      # The Nuclei templates release and its tarball's sha256 are pinned (NUCLEI_TEMPLATES,
+      # NUCLEI_TEMPLATES_SHA256), so the cache key is both Makefile values: a new sha256 never
+      # restores a cache unpacked from another tarball (dast.sh names the folder the same way).
+      - name: Nuclei templates cache key
+        id: nuclei-templates
+        if: ${{ !cancelled() }}
+        run: |
+          version=$(sed -n 's/^NUCLEI_TEMPLATES := //p' Makefile)
+          sha=$(sed -n 's/^NUCLEI_TEMPLATES_SHA256 := //p' Makefile)
+          [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && $sha =~ ^[0-9a-f]{64}$ ]] || { echo "no NUCLEI_TEMPLATES pin in the Makefile" >&2; exit 1; }
+          echo "key=$version-$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() }}
+        with:
+          path: ${{ runner.temp }}/nuclei
+          key: nuclei-templates-${{ steps.nuclei-templates.outputs.key }}
+      - run: make dast
+        if: ${{ !cancelled() }}
+        env:
+          NUCLEI_CACHE_DIR: ${{ runner.temp }}/nuclei
+      - name: Upload dast reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dast-report
+          path: dast-report/
+          if-no-files-found: ignore
+      # zizmor's findings on the workflows for the Security tab, also when a scan above is red (the
+      # same make config-scan in gate decides; this run only adds the SARIF file).
+      - run: make config-scan SARIF_DIR=zizmor-sarif
+        if: ${{ !cancelled() }}
+      - name: Upload SARIF (zizmor)
+        if: ${{ !cancelled() && hashFiles('zizmor-sarif/zizmor.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: zizmor-sarif/zizmor.sarif
+          category: zizmor
+      # Semgrep's findings for the Security tab, also when a scan above is red (the same make sast
+      # in gate decides; this run only adds the SARIF file).
+      - run: make sast SARIF_DIR=semgrep-sarif
+        if: ${{ !cancelled() }}
+      - name: Upload SARIF (semgrep)
+        if: ${{ !cancelled() && hashFiles('semgrep-sarif/semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: semgrep-sarif/semgrep.sarif
+          category: semgrep

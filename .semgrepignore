@@ -1,0 +1,15 @@
+# Files make sast (scripts/security/sast.sh) does not scan. The rules guard the code that ships,
+# so tests and the rules' own fixtures (which hold every forbidden call on purpose) are skipped.
+# Only these are listed: a new directory of app code is scanned without being named.
+/security/semgrep/testdata/
+*_test.go
+*.test.ts
+*.spec.ts
+/web/tests/
+node_modules/
+/web/build/
+/web/.svelte-kit/
+/bin/
+/dast-report/
+/design/
+/.superpowers/

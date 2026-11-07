@@ -6,9 +6,34 @@ SHELL := bash
 .DEFAULT_GOAL := build
 
 # Pins (design doc "Pins"). A bump changes every copy in one commit; check-pins keeps them equal.
-PG_IMAGE := postgres:18.6-alpine
+# The images live in security/tools.Dockerfile, one `FROM <image> AS <name>` line each, where
+# Dependabot's docker ecosystem bumps them; tool_image reads one by its stage name, and a missing
+# one stops make here. Every image is <tag>@<digest of its multi-arch index> (guard
+# TestSupplyChainPins).
+TOOLS_DOCKERFILE := security/tools.Dockerfile
+tool_image = $(shell awk '$$1 == "FROM" && $$3 == "AS" && $$4 == "$(1)" { print $$2 }' $(TOOLS_DOCKERFILE))
+PG_IMAGE := $(call tool_image,postgres)
 GOLANGCI_LINT_VERSION := v2.15.0
-SQLC_IMAGE := sqlc/sqlc:1.31.1
+SQLC_IMAGE := $(call tool_image,sqlc)
+# Security pipeline scanners (docs/designs/devsecops.md). GITLEAKS_IMAGE's version is also the CI
+# gitleaks action's GITLEAKS_VERSION; check-pins keeps the two equal.
+TRIVY_IMAGE := $(call tool_image,trivy)
+GITLEAKS_IMAGE := $(call tool_image,gitleaks)
+# make config-scan: zizmor on .github/workflows (Trivy config, above, reads the Dockerfiles).
+ZIZMOR_IMAGE := $(call tool_image,zizmor)
+# make dast: ZAP, Nuclei and its templates release, and the curl image that drives the app.
+ZAP_IMAGE := $(call tool_image,zap)
+NUCLEI_IMAGE := $(call tool_image,nuclei)
+NUCLEI_TEMPLATES := v10.5.1
+# sha256 of that release's GitHub archive (refs/tags/$(NUCLEI_TEMPLATES).tar.gz); dast.sh refuses
+# any other bytes. A templates bump changes both lines.
+NUCLEI_TEMPLATES_SHA256 := 30fe1cfaced4635f886e4a2673641bba86998dceec28e468274524e789aa56eb
+CURL_IMAGE := $(call tool_image,curl)
+# make sast: Semgrep, with only the rules in security/semgrep.
+SEMGREP_IMAGE := $(call tool_image,semgrep)
+$(foreach v,PG_IMAGE SQLC_IMAGE TRIVY_IMAGE GITLEAKS_IMAGE ZIZMOR_IMAGE ZAP_IMAGE NUCLEI_IMAGE CURL_IMAGE SEMGREP_IMAGE,\
+	$(if $(word 2,$($(v))x),$(error $(v): want exactly one FROM <image> AS <name> line in $(TOOLS_DOCKERFILE), got '$($(v))'),\
+	$(if $($(v)),,$(error $(v): no FROM <image> AS <name> line in $(TOOLS_DOCKERFILE)))))
 export PG_IMAGE
 
 VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)
@@ -58,7 +83,8 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
+	image-scan deps-scan secrets test-sec dast scan-live config-scan sast fuzz release-sign
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -68,8 +94,11 @@ node-check:
 	@want=$$(sed -n 's/.*"node": "\(.*\)".*/\1/p' web/package.json); have=$$(node --version | sed 's/^v//'); \
 	if [ "$$want" != "$$have" ]; then echo "node $$have, but web/package.json pins $$want (fnm use $$want)" >&2; exit 1; fi
 
+# Right after the build, the script CSP's check reads the real index.html (never the web-stub,
+# which it refuses: it has no CSP meta).
 web: node-check
 	$(PNPM) build
+	scripts/security/csp-check.sh web/build/index.html
 # vite.config.ts reads VERSION from the environment.
 web: export VERSION := $(VERSION)
 
@@ -137,7 +166,7 @@ test-deploy:
 	PG_IMAGE=$(PG_IMAGE) scripts/test-deploy.sh
 
 check-pins:
-	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) scripts/check-pins.sh
+	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) GITLEAKS_IMAGE=$(GITLEAKS_IMAGE) scripts/check-pins.sh
 
 # Postgres in Docker (started or reused), serve on :8080 in the background, and Vite on :5173 in
 # the foreground; the trap stops serve when Vite exits. serve runs as a built binary, not through
@@ -170,5 +199,91 @@ endif
 	$(PNPM) e2e
 e2e: export E2E_DATABASE_URL := $(or $(E2E_GIVEN),postgres://open_customer:$(DEV_PG_PASSWORD)@localhost:$(DEV_PG_PORT)/$(E2E_DB_NAME))
 
+# The app image and the backup image, both tagged $(VERSION) (make image-scan scans them).
 image:
-	docker build --build-arg VERSION=$(VERSION) -t open-customer:$(VERSION) .
+	docker build --pull --build-arg VERSION=$(VERSION) -t open-customer:$(VERSION) .
+	docker build --pull -t open-customer-backup:$(VERSION) deploy/backup
+
+# devsecops.md section 4: Trivy on open-customer:$(VERSION) and open-customer-backup:$(VERSION)
+# (built by make image), $(PG_IMAGE) and the cloudflared image of deploy/compose.yaml. MODE=push
+# blocks on the app and backup images only; MODE=release blocks on all four. PULL=1 pulls the
+# released app and backup images (the ghcr names in deploy/compose.yaml) instead of the local
+# build, for the weekly rescan. SARIF_DIR=<dir> also writes one SARIF file per image (CI).
+MODE ?= push
+PULL ?=
+image-scan:
+	TRIVY_IMAGE=$(TRIVY_IMAGE) VERSION=$(VERSION) PULL=$(PULL) scripts/security/image-scan.sh $(MODE)
+
+# devsecops.md section 4: Trivy fs on web/pnpm-lock.yaml (dev dependencies included) and go.mod.
+# A high or critical finding with a fix blocks; trivy ids of security/allow.json are honoured.
+# Needs network (the Trivy database). Replaces pnpm audit, which blocks on advisories with no fix.
+deps-scan:
+	TRIVY_IMAGE=$(TRIVY_IMAGE) scripts/security/deps-scan.sh
+
+# devsecops.md section 4: the release workflow's push, SBOM and keyless signature of one image,
+# IMAGE=<repository>:<tag> (scripts/security/release-sign.sh). Release workflow only: it needs the
+# registry login, cosign and the job's OIDC token; not in the gate.
+release-sign:
+	TRIVY_IMAGE=$(TRIVY_IMAGE) scripts/security/release-sign.sh $(IMAGE)
+
+# devsecops.md section 6: ZAP (API scan signed out and signed in, baseline) and Nuclei against
+# open-customer:$(VERSION) (built by make image) on a private network, with no published port.
+# Reports go to REPORT_DIR (git-ignored); NUCLEI_CACHE_DIR keeps the downloaded templates.
+REPORT_DIR ?= dast-report
+dast:
+	IMAGE=open-customer:$(VERSION) PG_IMAGE=$(PG_IMAGE) ZAP_IMAGE=$(ZAP_IMAGE) NUCLEI_IMAGE=$(NUCLEI_IMAGE) \
+		NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) NUCLEI_TEMPLATES_SHA256=$(NUCLEI_TEMPLATES_SHA256) \
+		CURL_IMAGE=$(CURL_IMAGE) REPORT_DIR=$(REPORT_DIR) \
+		scripts/security/dast.sh
+
+# devsecops.md section 9: a manual scan of your own deployment (URL=https://...): the security
+# headers, the ZAP baseline (passive) and Nuclei (non-intrusive active probes), all signed out.
+# Needs Docker, bash 4, jq and coreutils on the host, and network; uses no key; never runs in CI (exit 2 when GITHUB_ACTIONS=true). The allow-list is the git-ignored
+# deploy/.scan-live.allow. The report goes to security/reports/scan-live-<UTC timestamp>/ unless
+# REPORT_DIR is set. NETWORK (a Docker network or container:<name>) is a test hook that puts the
+# tool containers on that network and allows http://localhost; see scripts/security/scan-live.sh.
+# (REPORT_DIR above is make dast's default, so only a REPORT_DIR the caller gave reaches this one.)
+# URL, NETWORK and REPORT_DIR reach the script through the environment, never pasted into the
+# recipe text, so a quote, backtick or $( in them cannot run in the shell; the script validates them.
+scan-live: export SCAN_URL := $(URL)
+scan-live: export NETWORK := $(NETWORK)
+scan-live: export REPORT_DIR := $(if $(filter command line environment,$(origin REPORT_DIR)),$(REPORT_DIR))
+scan-live:
+	ZAP_IMAGE=$(ZAP_IMAGE) NUCLEI_IMAGE=$(NUCLEI_IMAGE) NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) \
+		NUCLEI_TEMPLATES_SHA256=$(NUCLEI_TEMPLATES_SHA256) CURL_IMAGE=$(CURL_IMAGE) \
+		scripts/security/scan-live.sh
+
+# devsecops.md section 7: each fuzz target for FUZZTIME, one after another (go test -fuzz takes one
+# target per package). Not in the gate; CI runs it weekly with FUZZTIME=30s (security-weekly.yml job
+# fuzz); the seeds run in `make test`. A crash writes
+# its input to testdata/fuzz/<Name>/ in the package: keep it as a seed and fix the code.
+FUZZTIME ?= 60s
+FUZZ_TARGETS := ./internal/httpapi:FuzzDecodeJSON ./internal/httpapi:FuzzMultipartUpload \
+	./internal/templates:FuzzParseTemplate ./internal/platform/backupstatus:FuzzBackupStatusRead
+fuzz: web-stub
+	@for t in $(FUZZ_TARGETS); do \
+		pkg=$${t%%:*}; name=$${t##*:}; \
+		echo "fuzz: $$name ($$pkg) for $(FUZZTIME)"; \
+		go test "$$pkg" -run '^$$' -fuzz "^$$name$$" -fuzztime "$(FUZZTIME)" || exit 1; \
+	done
+
+# devsecops.md section 3: Trivy config on Dockerfile and deploy/backup/Dockerfile (high or critical
+# blocks), and zizmor --offline on .github/workflows (medium or high blocks), both with no network.
+# SARIF_DIR=<dir> also writes <dir>/zizmor.sarif (CI).
+config-scan:
+	TRIVY_IMAGE=$(TRIVY_IMAGE) ZIZMOR_IMAGE=$(ZIZMOR_IMAGE) scripts/security/config-scan.sh
+
+# devsecops.md section 2: Semgrep with only the rules written in security/semgrep (never a registry
+# rule), with no network. First semgrep --test on the rules' fixtures, then the scan of the repo.
+# SARIF_DIR=<dir> also writes <dir>/semgrep.sarif (CI).
+sast:
+	SEMGREP_IMAGE=$(SEMGREP_IMAGE) scripts/security/sast.sh
+
+# gitleaks over the whole git history, offline; reviewed false positives are in .gitleaksignore.
+secrets:
+	docker run --rm --name oc-secrets-gitleaks --network none -v "$(CURDIR)":/repo -w /repo \
+		$(GITLEAKS_IMAGE) detect --redact --no-banner
+
+# The scan wrappers' tests (scripts/security/tests/run.sh), with a fake docker.
+test-sec:
+	bash scripts/security/tests/run.sh

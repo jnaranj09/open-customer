@@ -27,7 +27,12 @@ func (s *Server) SubscribePush(w http.ResponseWriter, r *http.Request) {
 	if decodeJSON(w, r, &body) != nil {
 		return
 	}
-	sub := push.Subscription{Endpoint: body.Endpoint, P256dh: body.Keys.P256dh, Auth: body.Keys.Auth}
+	// Check looks the endpoint's host up in DNS, so it runs before the transaction opens.
+	sub, err := s.push.Check(r.Context(), push.Subscription{Endpoint: body.Endpoint, P256dh: body.Keys.P256dh, Auth: body.Keys.Auth})
+	if err != nil {
+		writeError(w, r, fmt.Errorf("check push subscription: %w", err))
+		return
+	}
 	userID := mustSignedIn(r.Context()).me.ID
 	var out gen.PushSubscriptionId
 	var created bool

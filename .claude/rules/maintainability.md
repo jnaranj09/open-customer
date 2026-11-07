@@ -24,11 +24,15 @@ Every change keeps these rules. Each one names its sensor, or says "prose only".
 - **Every cross-file contract has a drift test that reads both sides.** A contract is anything one
   file must match in another that the type checker cannot see: a route, an error code (problem
   type), a cache table name, a wire string. Sensor: `make check-generated` for spec ↔ Go ↔ web
-  types; prose only for the rest until each test lands.
+  types; guard `TestSemgrepWriteVerbsMatchTheSpec` for the spec ↔ Semgrep rule verb list; prose only
+  for the rest until each test lands.
 - **Three or more call sites with the same obligation share one helper**, and a guard keeps callers
   on it. An obligation is a step every caller must take to be correct (decode with `decodeJSON`, open
-  the write transaction, write errors with the problem helper). Never for look-alikes. Prose only
-  until the guard lands.
+  the write transaction, write errors with the problem helper). Never for look-alikes. Sensor, for
+  the write transaction only: Semgrep `non-get-handler-in-withtx` (`make sast`: a non-GET handler
+  never uses `s.pool`), whose verb list guard `TestSemgrepWriteVerbsMatchTheSpec` keeps equal to the
+  operations in `api/openapi.yaml`. Prose only until a guard lands for `decodeJSON` and the problem
+  helper.
 - **Nothing stale survives the change that made it stale.** Delete dead code. Search every name the
   change renames, moves or removes, and the old wording (the old value, default or message), and fix
   every comment and living doc (`CLAUDE.md`, `.claude/rules/`, `technical-taste.md`, README, the
@@ -46,7 +50,9 @@ Every change keeps these rules. Each one names its sensor, or says "prose only".
   and handover'): one plain stdout line, never a slog record. A second named exception: the
   `message` and `stack` of `POST /client-errors` are logged (`code=client_error`, with the route and
   app version; a message over 2000 characters is rejected, a stack over 8000 is cut to 8000), because they come from our own PWA and are the
-  only way to debug it (design doc 'Observability'). Prose only.
+  only way to debug it (design doc 'Observability'). Sensor, in part: Semgrep `no-slog-of-request-body`
+  (`make sast`: a log call with the request body, a value decoded from it or the decode error);
+  prose only for the other values.
 - **A guard that stays green when the code it protects is broken is not a guard.** Break the code,
   see it red, restore. Prose only (reviewer step 2).
 - **"Why" comments stay.** A comment that states a constraint or an incident is kept; a commit that

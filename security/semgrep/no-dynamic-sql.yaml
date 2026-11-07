@@ -1,0 +1,25 @@
+rules:
+  - id: no-dynamic-sql
+    languages: [go]
+    severity: ERROR
+    message: >-
+      A query is built from a string expression. Every query is a sqlc query or a literal, and
+      values go in as $1, $2 arguments (threat T27). Build nothing with fmt.Sprintf, + or
+      strings.Builder.
+    metadata:
+      threat: T27
+    mode: taint
+    pattern-sources:
+      - pattern: fmt.Sprintf(...)
+      - pattern: fmt.Sprint(...)
+      - pattern: $A + $B
+      - pattern: $B.String()
+      - pattern: strings.Join(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.Exec($CTX, $Q, ...)
+              - pattern: $DB.Query($CTX, $Q, ...)
+              - pattern: $DB.QueryRow($CTX, $Q, ...)
+              - pattern: $DB.Prepare($CTX, $NAME, $Q)
+          - focus-metavariable: $Q

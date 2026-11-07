@@ -6,7 +6,12 @@ you do afterwards: upgrade, restore and password reset. The architecture is in
 folder (`deploy/`) unless it says otherwise; the scripts in `scripts/` also work from any folder.
 
 The stack is five services in `compose.yaml`: `db` (PostgreSQL), `app`, `cloudflared`, `backup`,
-and `restore`, which only `scripts/restore.sh` starts. No service publishes a port.
+and `restore`, which only `scripts/restore.sh` starts. No service publishes a port. Every service
+drops all Linux capabilities and adds back only what it needs (`backup`: `DAC_OVERRIDE`;
+`restore`: `CHOWN`, `DAC_OVERRIDE`, `FOWNER`), and runs with a read-only root file system and a
+memory limit (`db`, `backup` and `restore` 1 GB, `app` 512 MB, `cloudflared` 256 MB; these are
+ceilings, not what each one uses). A service that goes over its limit is killed, and Compose
+restarts it (`restore` then fails, and `scripts/restore.sh` says so).
 
 ## 1. Requirements
 
@@ -15,6 +20,8 @@ and `restore`, which only `scripts/restore.sh` starts. No service publishes a po
 - A Cloudflare account with a domain you control, and Cloudflare Zero Trust enabled.
 - A folder for the backups (section 4).
 - A way to keep a copy of `RESTIC_PASSWORD` outside this PC, for example a password manager.
+- Only to run `make scan-live` (section 14): the repository checkout, `make`, bash 4 or newer,
+  `jq` and the usual coreutils (`tar`, `sha256sum`, `awk`) on the machine you run it from.
 
 ## 2. Create the tunnel and the public hostname
 
@@ -86,11 +93,11 @@ without a restart.
    | --- | --- |
    | `APP_VERSION` | The release to run, for example `1.0.0` (the tag without its `v`). |
    | `PUBLIC_URL` | `https://citas.example.com` |
-   | `DB_PASSWORD` | A long random password. |
+   | `DB_PASSWORD` | A long random password. The app and the backup refuse the example's `change-me`. |
    | `TUNNEL_TOKEN` | The token from section 2. |
    | `VAPID_SUBJECT` | `mailto:` and a contact address. |
    | `BACKUP_TARGET` | The folder from section 4. |
-   | `RESTIC_PASSWORD` | A long random password. Keep a copy outside this PC: without it every backup is unreadable. |
+   | `RESTIC_PASSWORD` | A long random password. Keep a copy outside this PC: without it every backup is unreadable. The backup refuses the example's `change-me`. |
 
 3. Check that Compose accepts it. A missing value stops with a message naming it:
 
@@ -106,12 +113,18 @@ Never commit `.env`. After first setup, `scripts/upgrade.sh` and `scripts/restor
 Restoring onto a new PC, or after the volumes were lost? Do sections 1 to 5, then section 10. Do
 not run this section.
 
-1. Start the stack. On a first start the `backup` service sees no earlier backup and runs one:
+1. Pull the app and backup images of `APP_VERSION` through the signature check, then start the
+   stack. On a first start the `backup` service sees no earlier backup and runs one:
 
    ```sh
+   scripts/pull.sh
    docker compose up -d
    docker compose ps
    ```
+
+   `scripts/pull.sh` stops, and nothing is pulled, if an image is not signed by this repository's
+   release workflow (see "Signatures" in section 9). Do not run `docker compose up -d` before it
+   succeeds: compose would pull the missing images without the check.
 
    Wait until `db` and `app` show `healthy`.
 
@@ -244,15 +257,68 @@ Do it outside her working hours. A rollback drops everything she entered after t
    scripts/upgrade.sh 1.2.3
    ```
 
-   It pulls the new images, takes a backup tagged `pre-upgrade`, sets `APP_VERSION` in `.env`, and
-   runs `docker compose up -d`. The new `app` runs the migrations. If the backup fails (for
-   example the target folder or disk is missing), the script stops and `.env` stays on the old
-   version.
+   It first checks the signature of both new images (the app and the backup image), then pulls
+   them and checks that each pulled image is the exact digest whose signature it checked, takes a
+   backup tagged `pre-upgrade`, sets `APP_VERSION` in `.env`, and runs
+   `docker compose up -d`. The new `app` runs the migrations. If the backup fails (for example the
+   target folder or disk is missing), the script stops and `.env` stays on the old version.
 3. Check `docker compose ps` and open the app.
 
-If you upgrade by editing `.env` and running `docker compose up -d` yourself, `app` refuses to
-migrate without a backup from the last 60 minutes and exits with "Pending migrations and no recent
-backup. Run scripts/upgrade.sh."
+If you upgrade by editing `.env` and running `docker compose up -d` yourself, compose pulls the new
+images without the signature check, and `app` refuses to migrate without a backup from the last
+60 minutes and exits with "Pending migrations and no recent backup. Run scripts/upgrade.sh."
+
+### Signatures
+
+Each release's images are signed by this repository's release workflow (keyless, with cosign
+through GitHub's OIDC; no key is stored anywhere), and each carries a CycloneDX SBOM attestation.
+`scripts/upgrade.sh` runs cosign from its pinned image (`COSIGN_IMAGE` in `scripts/lib.sh`; you
+install nothing) and accepts only a signature whose identity matches `SIGNER_IDENTITY_REGEXP`
+(this repository's `release.yml` on a `v*` tag) from `SIGNER_ISSUER` (GitHub Actions), made in
+`SIGNER_REPOSITORY` on a `SIGNER_TRIGGER` (tag push) event. If the check fails, the script stops
+before it pulls anything or takes a backup, `.env` stays as it was, and the message names the
+image. Check, in this order: the PC can reach `ghcr.io` and Sigstore's public services
+(`sigstore.dev`); the version exists; for a fork, the lines below. There is no option to skip
+the check.
+
+cosign reports the digest it verified; after the pull, each pulled image must carry exactly that
+digest, or the script stops before the backup with `.env` unchanged (the tag changed in the
+registry between the check and the pull: run the upgrade again, and look into the registry if it
+repeats). When the pull or this digest check fails, the script removes both images of that
+version from this PC, so nothing that failed stays under a release name. If it cannot remove one
+(a container still uses it), it says so with a `WARNING:` line and the `docker image rm` command
+to run by hand; do that before anything else. `compose.yaml` sets no `pull_policy`, so
+`docker compose up -d` runs the checked local images.
+
+**Local images are trusted.** The scripts use an app or backup image that is already on this PC
+under its release name (`ghcr.io/jnaranj09/open-customer:<version>`, and the `-backup` one)
+without the network, so an offline restore of local images still works. The scripts put an image
+under those names only through the verified pull (`scripts/pull.sh`, `scripts/upgrade.sh`,
+`scripts/restore.sh`, `scripts/backup-now.sh`), which removes what fails its check. `make image`
+tags `open-customer:<version>`, not the release names. Never pull or tag an image under a release
+name by hand: the scripts would trust it. Each script runs the check before a `docker compose`
+command that would pull a missing app or backup image (`restore.sh` for `.env`'s version and for
+the snapshot's version, before it stops anything; `backup-now.sh` for `.env`'s version). A
+`docker compose` command you type yourself has no check: on a PC that does not have the images of
+`APP_VERSION` yet, run `scripts/pull.sh` first.
+
+To check one image by hand, from this folder, with the same pin and identity the script uses (it
+prints the verified `<image>@<digest>` when the signature is good):
+
+```sh
+bash -c '. scripts/lib.sh && verify_image ghcr.io/jnaranj09/open-customer:1.2.3'
+```
+
+**A fork** that builds and publishes its own images changes, in `scripts/lib.sh`,
+`SIGNER_IDENTITY_REGEXP` to its own repository
+(`^https://github\.com/<owner>/<repo>/\.github/workflows/release\.yml@refs/tags/v`) and
+`SIGNER_REPOSITORY` to `<owner>/<repo>`, next to the image names in `compose.yaml`.
+`SIGNER_ISSUER` and `SIGNER_TRIGGER` stay as they are while the fork releases from GitHub Actions
+on a tag push.
+
+**The cosign pin** (`COSIGN_IMAGE` in `scripts/lib.sh`) is bumped by hand: Dependabot cannot read
+`lib.sh`. Its version must equal `cosign-release` in `.github/workflows/release.yml`; change both
+(and the image digest) in one commit, and `make check-pins` checks that they agree.
 
 ## 10. Restore
 
@@ -290,7 +356,8 @@ docker compose run --rm --entrypoint sh backup -c 'echo {} > /backup-status/stat
 scripts/backup-now.sh
 ```
 
-1. Find the snapshot id. From this folder:
+1. Find the snapshot id. On a new PC, run `scripts/pull.sh` first (the command below runs the
+   backup image, and compose would pull it without the check). From this folder:
 
    ```sh
    docker compose --profile restore run --rm restore snapshot-info latest
@@ -310,9 +377,12 @@ scripts/backup-now.sh
 
    It shows the snapshot's time and app version and asks `[y/N]`. Answer it yourself at the
    prompt; piped input is not supported. Anything but `y` cancels with nothing stopped.
-3. It stops `app` and `backup`, recreates the database from the snapshot, replaces the media
-   folder (owned by `65532:65532`, so `app` can write photos), sets `APP_VERSION` in `.env` to the
-   snapshot's version, and runs `docker compose up -d`.
+3. Before it stops anything, it makes sure the app and backup images of the snapshot's version
+   are on this PC, pulling them through the signature check when they are not (it does the same
+   for `.env`'s version before it reads the snapshot); a failed check stops it with nothing
+   changed. Then it stops `app` and `backup`, recreates the database from the snapshot, replaces
+   the media folder (owned by `65532:65532`, so `app` can write photos), sets `APP_VERSION` in
+   `.env` to the snapshot's version, and runs `docker compose up -d`.
 
 After a rollback on a working install, the hourly check still sees the recent pre-upgrade backup
 and skips for up to 24 h. Run `scripts/backup-now.sh` after the restore to back up the restored
@@ -343,3 +413,73 @@ second factor, on the public internet. Pick a long password for her.
 
 If you do not use Cloudflare, put any reverse proxy in front of `app:8080` and set
 `TRUSTED_PROXY_CIDRS` in `.env` to that proxy's address.
+
+## 14. Scan your deployment
+
+`make scan-live` checks your own live URL from your own machine, from the repository root (not
+`deploy/`). Besides Docker and network access to the URL it needs the repository checkout, `make`,
+bash 4 or newer, `jq` and the usual coreutils; it stops with exit 2 and names the one that is
+missing. It needs no account, key or token, and it never logs in. It is built to be safe against
+production, but it is not purely passive: the ZAP crawl only reads, while Nuclei sends
+non-intrusive but active probes, including default-credential checks on other products' paths.
+The intrusive, denial-of-service and fuzzing templates are off. It never runs in GitHub.
+
+```sh
+make scan-live URL=https://clients.example.com
+```
+
+It runs three checks, one after another, and reports all of them:
+
+- **Headers.** The app sets `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, a
+  `Content-Security-Policy` of `frame-ancestors 'none'; base-uri 'self'; object-src 'none';
+  form-action 'self'` and, over https, `Strict-Transport-Security: max-age=31536000`. A missing
+  header, or one with another value (a proxy that rewrites it), is a finding.
+- **ZAP baseline.** A passive crawl of the URL (it reads pages and attacks nothing). Rules and levels are in `security/zap-rules.tsv`.
+- **Nuclei.** Known weaknesses, exposed files and TLS (its `ssl` templates), as non-intrusive
+  active probes, from a pinned templates release. The first run downloads it into `~/.cache/open-customer/nuclei` and checks
+  its sha256.
+
+The URL must be `https://`. Plain http is refused. The first run pulls the tool images and takes a
+few minutes.
+
+**Result.** Through `make`, a non-zero exit means "not clean": `make` always exits 2 when the
+script fails, and the script's own code (1 for a finding or a tool that could not run, since a scan
+that did not run is never clean, and 2 for a bad URL, a bad allow file or a missing host tool) is in
+make's `Error N` line. Read that line and the scan's output for the cause. A `REPORT_DIR` that
+already holds files is refused (exit 2) so old results are never mistaken for this run's. The
+report is in `security/reports/scan-live-<UTC timestamp>/` (git-ignored): `headers.txt` (only the
+checked headers), `zap/` and `nuclei/`. The scan is signed out, so it sets and sends no session
+cookie.
+
+**Allow a finding that is yours to accept.** What a proxy adds or strips differs per deployment,
+so the allow-list is your own file `deploy/.scan-live.allow`. It is git-ignored and is not
+`security/allow.json`. One entry per line, `<tool> <id> # <reason>`; blank lines and lines
+starting with `#` are ignored. The reason is required. A malformed line stops the scan with its
+line number.
+
+```text
+# The proxy sets its own HSTS.
+header strict-transport-security # set by the proxy with a longer max-age
+zap 10049 # caching header added by the proxy
+zap 10096@https://clients\.example\.com/service-worker\.js$ # a build timestamp, on that file only
+nuclei google-api-key # the public maps key on our own page
+```
+
+`zap` takes a rule number, or `<rule number>@<url regex>` to allow the rule on matching URLs only
+(a regex that matches from the start of the URL and ends in `$`; one that matches `/`,
+`/_app/x.js` or `/api/v1/zz-scope-probe` on your URL, or does not compile, is refused). `nuclei` takes a template id
+from the report. `header` takes `x-content-type-options`, `referrer-policy`,
+`content-security-policy` or `strict-transport-security`.
+
+**Schedule it.** A crontab line for a weekly run that logs the result (use `mail` or any alert you
+already have in place of the log):
+
+```cron
+0 6 * * 1  cd /path/to/open-customer && make scan-live URL=https://clients.example.com >>"$HOME/scan-live.log" 2>&1 || echo "scan-live failed, exit $?, see $HOME/scan-live.log" | mail -s "scan-live" you@example.com
+```
+
+Run it by hand after each upgrade as well.
+
+The scan has a test hook for the repository's own checks: `NETWORK=container:<name>` (or a Docker
+network) puts the tool containers on that network and accepts `http://localhost` as the URL, because
+the app answers plain http only on localhost. It is not a way to scan a deployment over http.

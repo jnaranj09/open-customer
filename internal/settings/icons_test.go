@@ -20,10 +20,16 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
-// pngOf builds a solid-colour PNG of the given size.
+// pngOf builds a solid-colour square PNG of the given size.
 func pngOf(t *testing.T, size int, c color.RGBA) []byte {
 	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	return pngSized(t, size, size, c)
+}
+
+// pngSized builds a solid-colour w by h PNG.
+func pngSized(t *testing.T, w, h int, c color.RGBA) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for i := range img.Pix {
 		img.Pix[i] = 0
 	}
@@ -58,11 +64,19 @@ func TestSetIconsRejectsNonPNG(t *testing.T) {
 	if _, err := m.Create(t.Context(), pool, validInput()); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	good := pngOf(t, 4, color.RGBA{1, 2, 3, 255})
+	good512, good180 := pngOf(t, 512, color.RGBA{1, 2, 3, 255}), pngOf(t, 180, color.RGBA{1, 2, 3, 255})
 	for name, args := range map[string][2][]byte{
-		"512 is not a PNG": {[]byte("GIF89a not a png"), good},
-		"180 is not a PNG": {good, []byte("\xff\xd8\xff jpeg")},
-		"512 is empty":     {nil, good},
+		"512 is not a PNG": {[]byte("GIF89a not a png"), good180},
+		"180 is not a PNG": {good512, []byte("\xff\xd8\xff jpeg")},
+		"512 is empty":     {nil, good180},
+		// A PNG signature in front of other bytes (threat model T31): DecodeConfig refuses it.
+		"512 is a PNG signature then HTML": {[]byte(pngSignature + "<html><script>alert(1)</script></html>"), good180},
+		"180 is a PNG signature then HTML": {good512, []byte(pngSignature + "<html><script>alert(1)</script></html>")},
+		"512 is 180 px":                    {good180, good180},
+		"180 is 512 px":                    {good512, good512},
+		"512 is 4 px":                      {pngOf(t, 4, color.RGBA{1, 2, 3, 255}), good180},
+		"180 is 181 px":                    {good512, pngOf(t, 181, color.RGBA{1, 2, 3, 255})},
+		"512 is 512 by 511 px":             {pngSized(t, 512, 511, color.RGBA{1, 2, 3, 255}), good180},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := m.SetIcons(t.Context(), pool, args[0], args[1])
@@ -86,12 +100,13 @@ func TestSetIconsRejectsOversize(t *testing.T) {
 	if _, err := m.Create(t.Context(), pool, validInput()); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	good := pngOf(t, 4, color.RGBA{1, 2, 3, 255})
+	good512, good180 := pngOf(t, 512, color.RGBA{1, 2, 3, 255}), pngOf(t, 180, color.RGBA{1, 2, 3, 255})
 	big := append([]byte(pngSignature), bytes.Repeat([]byte{0}, maxIconBytes)...)
-	atLimit := append([]byte(pngSignature), bytes.Repeat([]byte{0}, maxIconBytes-len(pngSignature))...)
+	// A real 512 px PNG padded after its end to exactly 1 MB: decoders ignore trailing bytes.
+	atLimit := append(bytes.Clone(good512), bytes.Repeat([]byte{0}, maxIconBytes-len(good512))...)
 	for name, args := range map[string][2][]byte{
-		"512 is over 1 MB": {big, good},
-		"180 is over 1 MB": {good, big},
+		"512 is over 1 MB": {big, good180},
+		"180 is over 1 MB": {good512, big},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := m.SetIcons(t.Context(), pool, args[0], args[1])
@@ -104,7 +119,7 @@ func TestSetIconsRejectsOversize(t *testing.T) {
 		})
 	}
 	t.Run("exactly 1 MB is accepted", func(t *testing.T) {
-		if err := m.SetIcons(t.Context(), pool, atLimit, good); err != nil {
+		if err := m.SetIcons(t.Context(), pool, atLimit, good180); err != nil {
 			t.Fatalf("SetIcons: %v", err)
 		}
 	})
@@ -114,8 +129,8 @@ func TestSetIconsBeforeSetupIsNotFound(t *testing.T) {
 	dir := t.TempDir()
 	pool := dbtest.Pool(t)
 	m := New(Options{Clock: clock.NewFake(start), MediaDir: dir})
-	good := pngOf(t, 4, color.RGBA{1, 2, 3, 255})
-	if err := m.SetIcons(t.Context(), pool, good, good); !errors.As(err, &problem.NotFound{}) {
+	good512, good180 := pngOf(t, 512, color.RGBA{1, 2, 3, 255}), pngOf(t, 180, color.RGBA{1, 2, 3, 255})
+	if err := m.SetIcons(t.Context(), pool, good512, good180); !errors.As(err, &problem.NotFound{}) {
 		t.Fatalf("err = %v, want NotFound", err)
 	}
 	if got := brandingEntries(t, dir); len(got) != 0 {
@@ -162,10 +177,11 @@ func TestSetIconsReplacesEarlierUpload(t *testing.T) {
 	if _, err := m.Create(t.Context(), pool, validInput()); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	first := pngOf(t, 4, color.RGBA{1, 1, 1, 255})
-	second := pngOf(t, 4, color.RGBA{2, 2, 2, 255})
+	first := pngOf(t, 512, color.RGBA{1, 1, 1, 255})
+	second := pngOf(t, 512, color.RGBA{2, 2, 2, 255})
+	small := pngOf(t, 180, color.RGBA{2, 2, 2, 255})
 	for _, b := range [][]byte{first, second} {
-		if err := m.SetIcons(t.Context(), pool, b, b); err != nil {
+		if err := m.SetIcons(t.Context(), pool, b, small); err != nil {
 			t.Fatalf("SetIcons: %v", err)
 		}
 	}
@@ -240,8 +256,8 @@ func TestIconMissingFileFallsBack(t *testing.T) {
 	if _, err := m.Create(t.Context(), pool, validInput()); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	good := pngOf(t, 4, color.RGBA{1, 2, 3, 255})
-	if err := m.SetIcons(t.Context(), pool, good, good); err != nil {
+	good512, good180 := pngOf(t, 512, color.RGBA{1, 2, 3, 255}), pngOf(t, 180, color.RGBA{1, 2, 3, 255})
+	if err := m.SetIcons(t.Context(), pool, good512, good180); err != nil {
 		t.Fatalf("SetIcons: %v", err)
 	}
 	if err := os.Remove(filepath.Join(dir, "branding", "icon-512.png")); err != nil {

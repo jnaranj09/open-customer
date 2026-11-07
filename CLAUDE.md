@@ -11,8 +11,9 @@ clients, appointments and hand-sent WhatsApp reminders.
 **Designing or choosing without the owner?** Read `technical-taste.md` first. **Setting up?** Work
 through `TASKS.md` in order.
 
-**Architecture source:** `docs/designs/release-1.md` is the only one. Build it phase by phase (its
-"Build order"). A change that makes the doc false fixes the doc in the same change.
+**Architecture source:** `docs/designs/release-1.md` for the app; build it phase by phase (its
+"Build order"). `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
+every threat and its check. A change that makes a doc false fixes the doc in the same change.
 
 ## Never commit
 
@@ -30,7 +31,8 @@ with fnm, `fnm use` in web/).
 
 - `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript.
 - `make check-generated`: `generate`, then fails on any diff.
-- `make check-pins`: Postgres, Node, Go and golangci-lint pins agree across files.
+- `make check-pins`: Postgres (digest included), Node, Go, golangci-lint, gitleaks and cosign pins
+  agree across files.
 - `make lint`: `go mod tidy -diff`, golangci-lint, `go build` for darwin and windows, deadcode
   (exact `DEADCODE_BUDGET`), shellcheck, svelte-check, eslint, prettier check, knip, jscpd (fails
   on an empty scan).
@@ -38,19 +40,59 @@ with fnm, `fnm use` in web/).
   (testcontainers).
 - `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`,
   `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
-- `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
-  app Docker image.
+- `make vuln`: govulncheck. `make build`: web build, the script CSP check on the built
+  `web/build/index.html` (`scripts/security/csp-check.sh`: one CSP `<meta>`, `script-src` only
+  `'self'` and sha256 hashes, every inline script hashed), then `bin/open-customer`. `make image`: the
+  app and backup Docker images (`open-customer:$(VERSION)`, `open-customer-backup:$(VERSION)`).
+- `make image-scan [MODE=push|release]`: Trivy on the two `make image` images, `PG_IMAGE` and the
+  compose cloudflared image (`scripts/security/image-scan.sh`). `push` (default) blocks on our two
+  images only; `release` blocks on all four. Needs network (the Trivy database).
+- `make deps-scan`: Trivy fs on `web/pnpm-lock.yaml` (dev dependencies included) and `go.mod`
+  (`scripts/security/deps-scan.sh`): a high or critical finding with a fix blocks; `trivy` ids of
+  `security/allow.json` are honoured. Needs network (the Trivy database). `make vuln` stays the Go
+  reachability check.
+- `make secrets`: gitleaks over the whole git history (`.gitleaksignore` honoured). `make test-sec`:
+  the tests of the scan wrappers, csp-check, deps-scan, release-sign, release-on-main,
+  latest-release and check-pins (`scripts/security/tests/run.sh`, fake `docker` and `cosign`).
+- `make release-sign IMAGE=<repository>:<tag>`: release workflow only (registry login, cosign,
+  OIDC token; not in the gate): push, digest from the push, CycloneDX SBOM (Trivy), then `cosign
+  sign` and `cosign attest` on `<repository>@<digest>` (`scripts/security/release-sign.sh`).
+- `make config-scan`: Trivy config on the two Dockerfiles (high or critical blocks) and zizmor
+  `--offline` on `.github/workflows` (medium or high blocks), both with no network
+  (`scripts/security/config-scan.sh`). `deploy/compose.yaml` is checked by the guard
+  `TestComposeHardening` instead.
+- `make sast`: Semgrep with only the rules written in `security/semgrep` (one file per rule, a
+  fixture each in `security/semgrep/testdata`; never a registry rule), no network
+  (`scripts/security/sast.sh`): `semgrep --test` on the fixtures, then the scan; any finding blocks.
+  `.semgrepignore` lists what is skipped (tests, fixtures).
+- `make fuzz [FUZZTIME=60s]`: the four Go fuzz targets (`FuzzDecodeJSON`, `FuzzMultipartUpload`,
+  `FuzzParseTemplate`, `FuzzBackupStatusRead`), one after another, each for `FUZZTIME`; any crash
+  fails. Not in the gate; CI runs it weekly (`security-weekly.yml` job `fuzz`, `FUZZTIME=30s`), and
+  `make test` runs their seeds. A crash input lands in the package's `testdata/fuzz/<Name>/`: keep
+  it as a seed and fix the code with its own test.
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
   a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit), then
   `deploy/tests/scripts_test.sh` (the operator scripts, with a fake `docker`) on the host.
+- `make dast`: the running-app scan (`scripts/security/dast.sh`): the app image from `make image`
+  and a throwaway Postgres on a private network (`oc-dast-*`, no host port), a made-up owner signed
+  in, then ZAP (API scan signed out and signed in, baseline) and Nuclei. Reports in `dast-report/`.
+- `make scan-live URL=https://…`: a manual scan of your own deployment
+  (`scripts/security/scan-live.sh`; Docker, network, bash 4, jq and coreutils, no key, never in CI:
+  exit 2 when `GITHUB_ACTIONS=true`): the security headers, the ZAP baseline (passive) and Nuclei
+  (non-intrusive active probes), signed out. Non-zero means not clean; the script's own code
+  (1 findings, 2 bad arguments) is in make's `Error N` line. Its
+  allow-list is the git-ignored `deploy/.scan-live.allow`, never `security/allow.json`. Reports in
+  `security/reports/scan-live-<UTC timestamp>/`. `dast.sh` and it share `scripts/security/lib.sh`.
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db cover test-deploy`. CI
-(`.github/workflows/ci.yml`) also runs gitleaks, `pnpm audit --audit-level high` and `make e2e`
-(after `make build`).
+`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast deps-scan`,
+plus `make image image-scan dast` for a change to an image, a scan or what the app serves. CI
+(`.github/workflows/ci.yml`) also runs the gitleaks action, `make deps-scan` and
+`make e2e` (after `make build`) in job `gate`, and `make image image-scan MODE=push dast` (and the
+zizmor and Semgrep SARIF uploads) in job `security`.
 
 A check that could not run is reported as NOT RUN, never as passing.
 
@@ -95,9 +137,12 @@ A check that could not run is reported as NOT RUN, never as passing.
   `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noImplicitReturns`; typescript-eslint
   `strictTypeChecked`. Never loosen a flag; fix the consumer.
 - Guard tests in `internal/guards` (Go: agent-context, nolint budget, catch-blocks, test-hygiene,
-  forbid-only) and `web/tests/guards` (Vitest: layers, catch-blocks, test-hygiene, forbid-only,
-  raw-colors, design-tokens, design-parity, ui-lint, eslint suppression budget, bulk file and inline
-  comments). Allow-lists only shrink.
+  forbid-only, threat-model, security-allow-list for `security/allow.json`) and `web/tests/guards`
+  (Vitest: layers, catch-blocks, test-hygiene, forbid-only, raw-colors, design-tokens,
+  design-parity, ui-lint, eslint suppression budget, bulk file and inline comments). Allow-lists
+  only shrink. `docs/threat-model.md` has no `gap:` row (the guard refuses one); its "GitHub
+  settings" hold the branch protection, tag ruleset and ghcr steps, re-checked by hand after a
+  settings change.
 - Lint suppressions: a pinned total that only falls (guard `suppression-budget`, `svelte-ignore`
   included).
 - UI pipeline (`rules/ui.md`): tokens and components follow `design/soft-glass.pen` (guards
@@ -112,13 +157,21 @@ A check that could not run is reported as NOT RUN, never as passing.
 ## Versions (don't bump in passing)
 
 Pinned at P0, each in the one place the design doc's "Pins" table names. A bump changes every
-copy in one commit, and `make check-pins` must stay green.
+copy in one commit, and `make check-pins` must stay green. Every image is pinned
+`<tag>@sha256:<index digest>` and every Action by its full commit SHA with `# vX.Y.Z` (guard
+`TestSupplyChainPins`): a bump changes the tag and the digest (or SHA and comment) together.
 
 - Go 1.27.3: `go.mod` (`go 1.27.0` + `toolchain go1.27.3`); `golang:` in the `Dockerfile`.
 - Node 26.13.0 and pnpm 12.16.1: `web/package.json` (`engines.node`, `packageManager`); `node:` and
   `pnpm@` in the `Dockerfile`.
-- Postgres 18.6: `PG_IMAGE` in the `Makefile`.
+- Postgres 18.6: the `postgres` stage of `security/tools.Dockerfile` (with its digest), read into
+  `PG_IMAGE` by the `Makefile`; `deploy/compose.yaml`,
+  `deploy/backup/Dockerfile` and the CI service repeat it, digest included.
 - golangci-lint v2.15.0: `GOLANGCI_LINT_VERSION` in the `Makefile`; `version:` in CI.
-- sqlc 1.31.1: `SQLC_IMAGE` in the `Makefile`.
+- sqlc 1.31.1: the `sqlc` stage of `security/tools.Dockerfile`, read into `SQLC_IMAGE`.
+- The scanner images (Trivy, gitleaks, zizmor, ZAP, Nuclei, curl, Semgrep): one stage each in
+  `security/tools.Dockerfile`, read into `<NAME>_IMAGE` by the `Makefile`; Dependabot bumps them.
+- cosign v3.1.4: `COSIGN_IMAGE` in `deploy/scripts/lib.sh` (deployers lack the `Makefile`) and
+  `cosign-release` in `release.yml`; Dependabot reads neither, so bump both by hand.
 - Go tools (oapi-codegen, govulncheck, deadcode): `tool` lines in `go.mod`.
 - TypeScript stays on 6.0.x: typescript-eslint and SvelteKit do not accept 7 yet.

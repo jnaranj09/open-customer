@@ -1,41 +1,74 @@
-# Design doc item 10. postgres, node and golang are bumped by hand, every copy in one commit
-# (design doc "Pins"); make check-pins keeps them equal. The docker-compose entry bumps the other
-# image tags in deploy/compose.yaml (cloudflared); the app and backup images use ${APP_VERSION}.
+# Design doc item 10. Every image is pinned <tag>@sha256:<digest> and every action by commit SHA with
+# a `# vX.Y.Z` comment (guard TestSupplyChainPins); Dependabot bumps both parts together.
+#
+# docker: / reads Dockerfile (node, golang, distroless), /deploy/backup the backup image's postgres
+# base, and /security the tool and Postgres pins of security/tools.Dockerfile, which the Makefile
+# reads (Dependabot does not read a Makefile). docker-compose: /deploy reads deploy/compose.yaml
+# (postgres, cloudflared; the app and backup images use ${APP_VERSION}).
+#
+# postgres, node and golang versions are bumped by hand, every copy in one commit (design doc
+# "Pins"): their version updates (major, minor and patch) are ignored, but a new digest for the same
+# tag (an upstream rebuild) still comes as a PR (dependabot-core's docker update checker keeps the
+# current tag as a candidate and compares its digest). Each entry opens its own PRs, and none reads
+# ci.yml's service image or the gitleaks action's GITLEAKS_VERSION, so a PR that bumps one copy of a
+# pin make check-pins compares (postgres in four files, gitleaks in two) is red until the other
+# copies change in the same PR. Every entry waits 14 days before proposing a new version or digest
+# (the "at least two weeks old" rule; guard TestSupplyChainPins).
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     ignore:
-      - dependency-name: postgres
       - dependency-name: node
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: golang
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
   - package-ecosystem: docker
     directory: /deploy/backup
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     ignore:
       - dependency-name: postgres
-      - dependency-name: node
-      - dependency-name: golang
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
+  - package-ecosystem: docker
+    directory: /security
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     ignore:
       - dependency-name: postgres
-      - dependency-name: node
-      - dependency-name: golang
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14

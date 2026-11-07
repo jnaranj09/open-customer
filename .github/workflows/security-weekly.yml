@@ -1,0 +1,74 @@
+# Weekly rescan of the latest release (docs/designs/devsecops.md section 4): new CVEs are found in
+# images that already shipped. Scans the images of the newest release tag, vX.Y.Z with no
+# pre-release suffix (scripts/security/latest-release.sh), pulled from the registry as a
+# deployer pulls them, with that tag's Makefile and deploy/compose.yaml (make image-scan
+# MODE=release PULL=1): a high or critical finding with a fix in any of the four images, or an
+# image that cannot be pulled, fails the run, and GitHub emails the owner about a failed scheduled
+# run. With no release tag yet the job writes "NOT RUN: no release tag" to its summary and passes.
+#
+# Job fuzz (devsecops.md section 7) runs the four Go fuzz targets on the default branch for 30 s
+# each (make fuzz FUZZTIME=30s). A crash fails the run, its input is uploaded as an artifact (keep
+# it as a seed in testdata/fuzz/<Name>/ and fix the code), and the step timeout keeps a hung fuzzer
+# from holding the runner.
+name: security-weekly
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rescan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the tags
+          persist-credentials: false
+      - name: Latest release tag
+        id: tag
+        run: |
+          tag=$(scripts/security/latest-release.sh)
+          if [ -z "$tag" ]; then
+            echo "NOT RUN: no release tag" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Check out the release
+        if: steps.tag.outputs.tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: git checkout --detach "$TAG"
+      # The Makefile runs go list when it loads.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: steps.tag.outputs.tag != ''
+        with:
+          go-version-file: go.mod
+      - name: Image scan
+        if: steps.tag.outputs.tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: make image-scan MODE=release PULL=1 VERSION="${TAG#v}"
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Fuzz
+        # Four targets at 30 s each plus the builds take a few minutes; 20 is the hang limit.
+        timeout-minutes: 20
+        run: make fuzz FUZZTIME=30s
+      - name: Upload crash inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crashers
+          path: internal/**/testdata/fuzz/
+          if-no-files-found: ignore

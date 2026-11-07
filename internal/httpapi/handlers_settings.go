@@ -62,8 +62,9 @@ func toGenSettings(v settings.Settings) gen.Settings {
 }
 
 // UploadIcon stores the two icon PNGs. The body is at most 3 MB and each part is read up to one
-// byte past 1 MB; settings.SetIcons checks the PNG signature and the 1 MB limit. A body that is
-// not multipart/form-data is 415; a missing, repeated or unknown part, or broken multipart, is 422.
+// byte past 1 MB; settings.SetIcons checks the 1 MB limit (413) and that each part is a PNG of
+// exactly 512 or 180 px square (415). A body that is not multipart/form-data is 415; a missing,
+// repeated or unknown part, or broken multipart, is 422.
 func (s *Server) UploadIcon(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxIconRequest)
 	icons, err := readIconParts(r)

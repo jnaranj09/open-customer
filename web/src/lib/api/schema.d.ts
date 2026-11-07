@@ -175,7 +175,7 @@ export interface paths {
         put?: never;
         /**
          * Replace the app icon
-         * @description Both parts are PNG files of at most 1 MB each, and the request is at most 3 MB. A part without the PNG signature, or a body that is not multipart/form-data, is 415. A missing, repeated or unknown part is 422.
+         * @description Both parts are PNG files of at most 1 MB each, and the request is at most 3 MB. A part that is not a PNG of exactly its size (512 or 180 px square), or a body that is not multipart/form-data, is 415. A missing, repeated or unknown part is 422.
          */
         post: operations["uploadIcon"];
         delete?: never;
@@ -809,12 +809,12 @@ export interface components {
         IconUpload: {
             /**
              * Format: binary
-             * @description The 512 px PNG.
+             * @description The 512 by 512 px PNG.
              */
             icon512: string;
             /**
              * Format: binary
-             * @description The 180 px PNG (apple-touch-icon).
+             * @description The 180 by 180 px PNG (apple-touch-icon).
              */
             icon180: string;
         };

@@ -115,7 +115,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Media:          media.New(media.Options{Clock: fake, MediaDir: cfg.mediaDir}),
 		Templates:      templates.New(templates.Options{Clock: fake, Attributes: attrsModule}),
 		Reminders:      reminders.New(reminders.Options{Clock: fake, Attributes: attrsModule}),
-		Push:           push.New(push.Options{Clock: fake, Subject: "mailto:dev@example.com"}),
+		Push:           push.New(push.Options{Clock: fake, Subject: "mailto:dev@example.com", Resolver: testDNS}),
 		Status:         testStatus(t, fake, cfg.mediaDir),
 		Exporter:       exporter.New(exporter.Options{Clock: fake, Settings: settingsModule, Attributes: attrsModule}),
 		Clock:          fake,
@@ -126,6 +126,24 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		t.Fatalf("New: %v", err)
 	}
 	return testApp{handler: handler, auth: a, clock: fake}
+}
+
+// fakeDNS answers each host from the map; a host it does not hold is a lookup error.
+type fakeDNS map[string][]netip.Addr
+
+func (d fakeDNS) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {
+	found, ok := d[host]
+	if !ok {
+		return nil, errors.New("no such host")
+	}
+	return found, nil
+}
+
+// testDNS is the DNS the test server's push module sees, so no test makes a real lookup.
+// 203.0.113.10 is a documentation address; the push module treats it as public.
+var testDNS = fakeDNS{
+	"push.example.com":   {netip.MustParseAddr("203.0.113.10")},
+	"router.example.com": {netip.MustParseAddr("192.168.1.1")},
 }
 
 // testStatus is the status module on clk. Its backup status file does not exist, so the backup line
@@ -258,6 +276,8 @@ func TestDecodeJSON(t *testing.T) {
 		{"trailing data after the object is 422 validation", `{"name":"x"}{}`, 422, "validation", "body_invalid"},
 		{"a wrong field type is 422 validation", `{"count":"three"}`, 422, "validation", "body_invalid"},
 		{"a body over 1 MB is 413 payload-too-large", tooLarge, 413, "payload-too-large", "payload_too_large"},
+		// Postgres text cannot hold U+0000: without this the insert fails and the route answers 500.
+		{"a NUL character in a string is 422 validation", `{"name":"a\u0000b"}`, 422, "validation", "body_nul"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -304,6 +324,18 @@ func TestDecodeJSONValidBody(t *testing.T) {
 	}
 	if rec.Body.Len() != 0 {
 		t.Fatalf("decodeJSON wrote %q on success, want nothing", rec.Body.String())
+	}
+}
+
+// An escaped backslash followed by "u0000" is plain text, not a NUL character.
+func TestDecodeJSONAcceptsTheTextBackslashU0000(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/decode-test", strings.NewReader(`{"name":"a\\u0000b"}`))
+	var v decodeTarget
+	if err := decodeJSON(httptest.NewRecorder(), req, &v); err != nil {
+		t.Fatalf("decodeJSON = %v, want nil", err)
+	}
+	if v.Name != `a\u0000b` {
+		t.Fatalf("name = %q, want the text a\\u0000b", v.Name)
 	}
 }
 
@@ -481,7 +513,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		Media:     media.New(media.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
 		Templates: templates.New(templates.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Reminders: reminders.New(reminders.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
-		Push:      push.New(push.Options{Clock: clock.NewFake(testStart), Subject: "mailto:dev@example.com"}),
+		Push:      push.New(push.Options{Clock: clock.NewFake(testStart), Subject: "mailto:dev@example.com", Resolver: testDNS}),
 		Status:    testStatus(t, clock.NewFake(testStart), t.TempDir()),
 		Exporter: exporter.New(exporter.Options{
 			Clock: clock.NewFake(testStart), Settings: settings.New(settings.Options{Clock: clock.NewFake(testStart)}), Attributes: attrs,

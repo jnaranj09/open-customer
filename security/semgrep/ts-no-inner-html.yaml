@@ -1,0 +1,26 @@
+rules:
+  - id: ts-no-inner-html
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Do not write HTML into the page from code: a client name or note would run as script. Use
+      textContent or a Svelte binding, which escapes (threat T28).
+    metadata:
+      threat: T28
+    pattern-either:
+      - pattern: $EL.innerHTML = $X
+      - pattern: $EL.innerHTML += $X
+      - pattern: $EL.outerHTML = $X
+      - pattern: $EL.outerHTML += $X
+      - pattern: $EL.insertAdjacentHTML(...)
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
+      - pattern: '$EL["innerHTML"] = $X'
+      - pattern: '$EL["innerHTML"] += $X'
+      - pattern: '$EL["outerHTML"] = $X'
+      - pattern: '$EL["outerHTML"] += $X'
+      - pattern: 'Object.assign($EL, {..., innerHTML: $X, ...})'
+      - pattern: 'Object.assign($EL, {..., outerHTML: $X, ...})'
+      - pattern: $R.createContextualFragment(...)
+      - pattern: $EL.setHTMLUnsafe(...)
+      - pattern: $D.parseHTMLUnsafe(...)

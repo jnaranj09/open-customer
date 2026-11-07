@@ -1,0 +1,165 @@
+rules:
+  - id: no-slog-of-request-body
+    languages: [go]
+    severity: ERROR
+    message: >-
+      A log call must not carry the request body, a value decoded from it, or the error decodeJSON
+      returns (it can quote the input). Log the path and a code only (.claude/rules/boundaries.md,
+      "Log the error path and a code, never the value"; threat T22).
+    metadata:
+      threat: T22
+    patterns:
+      - pattern-either:
+          # After a call that decodes a body: the decoded variable or a field of it, or the error
+          # the call returned, as an argument or inside one (slog.Any("err", err)).
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      decodeJSON($W, $R, &$V)
+                      ...
+                  - pattern-inside: |
+                      $E := decodeJSON($W, $R, &$V)
+                      ...
+                  - pattern-inside: |
+                      $E = decodeJSON($W, $R, &$V)
+                      ...
+                  - pattern-inside: |
+                      if decodeJSON($W, $R, &$V) != nil {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      if $E := decodeJSON($W, $R, &$V); $C {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      decodePatch($W, $R, &$V, ...)
+                      ...
+                  - pattern-inside: |
+                      $E := decodePatch($W, $R, &$V, ...)
+                      ...
+                  - pattern-inside: |
+                      $E = decodePatch($W, $R, &$V, ...)
+                      ...
+                  - pattern-inside: |
+                      if decodePatch($W, $R, &$V, ...) != nil {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      if $E := decodePatch($W, $R, &$V, ...); $C {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      json.NewDecoder($R.Body).Decode(&$V)
+                      ...
+                  - pattern-inside: |
+                      $E := json.NewDecoder($R.Body).Decode(&$V)
+                      ...
+                  - pattern-inside: |
+                      $E = json.NewDecoder($R.Body).Decode(&$V)
+                      ...
+                  - pattern-inside: |
+                      if json.NewDecoder($R.Body).Decode(&$V) != nil {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      if $E := json.NewDecoder($R.Body).Decode(&$V); $C {
+                        ...
+                      }
+                      ...
+              - pattern: $LOG.$M(..., <... $V ...>, ...)
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      $ERR := decodeJSON(...)
+                      ...
+                  - pattern-inside: |
+                      $ERR = decodeJSON(...)
+                      ...
+                  - pattern-inside: |
+                      if $ERR := decodeJSON(...); $C {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      $ERR := decodePatch(...)
+                      ...
+                  - pattern-inside: |
+                      $ERR = decodePatch(...)
+                      ...
+                  - pattern-inside: |
+                      if $ERR := decodePatch(...); $C {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      $ERR := json.NewDecoder($R.Body).Decode(...)
+                      ...
+                  - pattern-inside: |
+                      $ERR = json.NewDecoder($R.Body).Decode(...)
+                      ...
+                  - pattern-inside: |
+                      if $ERR := json.NewDecoder($R.Body).Decode(...); $C {
+                        ...
+                      }
+                      ...
+              - pattern: $LOG.$M(..., <... $ERR ...>, ...)
+              # Not after the error variable is given another call's error (until then it is the
+              # decode error): a reassignment, a redeclaration or an `if err := ...` shadow.
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $ERR = $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $ERR := $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $X, $ERR := $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $X, $ERR = $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        if $ERR := $F(...); $C {
+                          ...
+                        }
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+          # The request itself, anywhere.
+          - pattern: $LOG.$M(..., $R.Body, ...)
+          - pattern: $LOG.$M(..., $R.Form, ...)
+          - pattern: $LOG.$M(..., $R.PostForm, ...)
+          - pattern: $LOG.$M(..., $R.MultipartForm, ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^((Debug|Info|Warn|Error|Log)(Context|Attrs)?|(Print|Fatal|Panic)(f|ln)?)$

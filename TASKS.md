@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit, P6 exit, P7 exit)
+## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit, P6 exit, P7 exit, Security pipeline exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -162,10 +162,28 @@ once by breaking what they protect, then restored.
   through the API, backup, `down -v`, `restore.sh latest`, old login works, photo bytes identical,
   new photo upload works), check 6 simulated (marker removed: `backup-now.sh` exits non-zero,
   "Disco de respaldo no visible", status line red, nothing written) and the Goal 7 grep (check 10).
-  NOT RUN: the release workflow and `upgrade.sh` end to end (both need a `v*` tag; D6); Verification
+  NOT RUN: the release workflow and `upgrade.sh` end to end (both need a `v*` tag; D6); the
+  release workflow's keyless cosign signature and SBOM attestation (`make release-sign`, added by
+  the security pipeline): there is no OIDC token outside Actions, so the first `v*` tag is its
+  test, and `upgrade.sh` to that release is the first verify of a real signature; Verification
   Plan checks 1-4 and 7-9 on her iPhone through the tunnel; a real removable-disk unplug and a
   `nofail` boot (not used yet: D8); the Ley 8968 check. The owner repeats check 5 on the home PC
   before real data (deploy/README.md section 8).
+- **Security pipeline exit** (2026-11-07), branch devsecops (`docs/designs/devsecops.md`, built).
+  CI: PR #4 run 42389556805 and push run 42389512897, `gate` (with `make e2e`) and `security` green. Ran locally: `make check-pins
+  lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`
+  and `make image image-scan dast`: all 16 targets (the 13 of the gate list plus those 3) exit 0.
+  Every new guard and wrapper was seen red once by breaking what it protects (per task).
+  `docs/threat-model.md` has no `gap:` row and its guard refuses the word (seen red on a probe).
+  NOT RUN: `release-on-main.sh` inside a real Actions checkout (tested only against throwaway
+  repos); keyless signing, and
+  `upgrade.sh`, `restore.sh` and `pull.sh` verification against a real release (all need a `v*`
+  tag); `make scan-live` against a real deployment (the deployer's own); the weekly workflow's
+  first scheduled run, its fuzz job included; `make e2e` (CI runs it); Dependabot digest-only
+  updates for base images (seen only after a push); a real Cloudflare tunnel under the hardened
+  compose. Owner actions after the merge: branch protection on `main`, the `v*` tag ruleset, and
+  both ghcr packages set to public after the first release (commands and steps in
+  `docs/threat-model.md` "GitHub settings").
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
@@ -187,16 +205,41 @@ App bugs and rule breaks seen during setup. Setup tasks never fix app code; each
 own change.
 
 - No app code existed before P0, so nothing was found in old code.
-- `pnpm audit` reports 1 low and 1 moderate advisory in dev dependencies (below the `high` gate).
+- `pnpm audit` reported 1 low and 1 moderate advisory in dev dependencies (below the `high` gate);
+  on 2026-11-07 they were still there (deepmerge GHSA-gcqx-w48m-w2h4, low, no fix; minimatch
+  GHSA-g3hv-75wg-m249, moderate, fixed in 11.0.1). `make deps-scan` replaced `pnpm audit` in CI and
+  reports neither (Trivy sees the minimatch one as MEDIUM, below its gate).
 - This PC's default Node (fnm) is 24; the pin is 26.13.0. `make` fails fast (`node-check`) and the
   hooks switch with fnm. Run `fnm default 26.13.0` if you want it everywhere.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.
 - Owner exception recorded: the design doc keeps the 90% `make cover` floor, which the bootstrap
   skill would not use. Kept by owner decision.
-- `make vuln` lists 3 known vulnerabilities in kin-openapi and golang.org/x/crypto that our code
-  does not call (govulncheck passes).
+- `make vuln` lists 1 known vulnerability in golang.org/x/crypto (`openpgp`, GO-2026-5932) that our
+  code does not call (govulncheck passes). kin-openapi went to v0.149.0 when the image scan found
+  CVE-2026-100353 and CVE-2026-100354 in the app binary.
 - `scripts/check-pins.sh` accepts a non-numeric postgres tag (`postgres:latest` passed); found
   before P7, not fixed in P7.
 - shellcheck is not pinned: CI uses the runner's version and the local gate whatever is installed,
   so the two can disagree (seen on p7: SC2015 only in CI).
-- gitleaks runs only in CI, not in the local gate, so a false positive shows up only after a push.
+- `postgres:18.6-alpine` ships `gosu` built with Go 1.24.6, with Go stdlib CVEs (CVE-2025-68121
+  critical, and more); found by `make image-scan` (devsecops). Allow-listed until 2027-05-06 (owner
+  decision 2026-11-07): `deploy/compose.yaml` runs Postgres as `user: postgres`, so the image
+  entrypoint never runs `gosu`. Each of the 26 entries in `security/allow.json` is scoped to
+  `usr/local/bin/gosu`, so the same CVE in our own binaries still blocks. Our backup image removes
+  its copy of `gosu`. On or before 2027-05-06: bump the pinned Postgres image if it ships a rebuilt
+  `gosu` and delete the entries; otherwise ask the owner for a new date. An expired entry turns the
+  release and the weekly rescan red again.
+- `cloudflare/cloudflared:2026.10.7` has CVE-2026-78661 (golang.org/x/net, fixed in 0.62.0); found
+  by `make image-scan`. Allow-listed until 2027-02-05 (owner decision 2026-11-07), scoped to
+  `usr/local/bin/cloudflared`: 2026.10.7 is the newest tag and no fixed tag exists. Delete the entry
+  when Dependabot brings a fixed tag; if none exists by 2027-02-05, ask the owner for a new date. An
+  expired entry turns the release and the weekly rescan red again.
+- `make dast` loads 6519 Nuclei templates (v10.5.1) and 262 of them do not run: Nuclei reports
+  them as templates with a runtime error, and dast.sh prints "262 templates did not run" but stays
+  green (seen 2026-11-07). Not investigated: which templates, and whether any of them would apply
+  to this app (`nuclei -validate` lists them). A silent loss of coverage until someone looks.
+- `api/openapi.yaml` has no `maxLength` on any text field (security audit A8). The modules already
+  refuse long text (client name 120 runes, other names and labels 80, notes and template body
+  2000, a text attribute value 500), but the contract does not say so and no web input has a
+  `maxlength`, so she learns the limit only from the 422. The owner picks the limits for the spec
+  and the Spanish message the form shows.

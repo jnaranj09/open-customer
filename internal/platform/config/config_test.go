@@ -79,6 +79,7 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"a bad CIDR", "TRUSTED_PROXY_CIDRS", "10.0.0.0/8,nope"},
 		{"a bad bool", "ALLOW_MIGRATE_WITHOUT_BACKUP", "maybe"},
 		{"a bad log level", "LOG_LEVEL", "loud"},
+		{"the .env.example placeholder password", "DB_PASSWORD", "change-me"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

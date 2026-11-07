@@ -49,6 +49,24 @@ require() {
   done
 }
 
+# The secret values deploy/.env.example publishes; the same list as PlaceholderSecrets in
+# internal/platform/config (TestPlaceholderSecretsMatchEnvExample keeps them equal).
+PLACEHOLDER_SECRETS=(change-me)
+
+# refuse_placeholder <name...>: exits 2 naming the first variable that still holds a published
+# placeholder (never its value). A backup with a public password is readable by anyone.
+refuse_placeholder() {
+  local name placeholder
+  for name in "$@"; do
+    for placeholder in "${PLACEHOLDER_SECRETS[@]}"; do
+      if [ "${!name}" = "$placeholder" ]; then
+        echo "backup.sh: $name is still the placeholder from .env.example; set a real secret" >&2
+        exit 2
+      fi
+    done
+  done
+}
+
 now() {
   date -u +%Y-%m-%dT%H:%M:%SZ
 }
@@ -111,7 +129,7 @@ on_signal() {
     kill "$sleep_pid" 2>/dev/null
   fi
   if [ "$in_run" -eq 1 ]; then
-    rm -f "$STATUS_DIR"/.status.json.*
+    rm -f "$STATUS_DIR"/.status.json.* "$DUMP"
     fail_status interrupted
     log "interrupted"
     exit 143
@@ -217,10 +235,13 @@ run_backup() {
     return 0
   fi
 
-  # Step 3.
+  # Step 3. The dump is plaintext (every client, the password hash, the VAPID private key), so it
+  # is written readable by root only and removed once the run ends, whatever the outcome: the next
+  # run always dumps again, and a restore reads the dump from the snapshot (threat model T63).
   mkdir -p "$WORK"
   rm -f "$DUMP"
-  if ! pg_dump -Fc -f "$DUMP" 2>"$WORK/dump.err"; then
+  if ! (umask 077 && exec pg_dump -Fc -f "$DUMP") 2>"$WORK/dump.err"; then
+    rm -f "$DUMP"
     log "dump: failed"
     fail_status "dump: $(first_line "$WORK/dump.err")"
     in_run=0
@@ -233,12 +254,14 @@ run_backup() {
   # initialised again: that would hide the real backups behind a new, empty repository.
   if ! restic -r "$REPO" cat config >/dev/null 2>"$WORK/copy.err"; then
     if [ -e "$REPO" ]; then
+      rm -f "$DUMP"
       log "copy: the repository cannot be read"
       fail_status "copy: $(first_line "$WORK/copy.err")" "last_dump_at=$dump_at"
       in_run=0
       return 1
     fi
     if ! restic -r "$REPO" init >/dev/null 2>"$WORK/copy.err"; then
+      rm -f "$DUMP"
       log "copy: init failed"
       fail_status "copy: $(first_line "$WORK/copy.err")" "last_dump_at=$dump_at"
       in_run=0
@@ -251,8 +274,11 @@ run_backup() {
   if [ -n "$tag" ]; then
     tags+=(--tag "$tag")
   fi
-  if ! restic -r "$REPO" backup --host "$HOST" "${tags[@]}" --json "$DUMP" "$MEDIA" \
-    >"$WORK/copy.out" 2>"$WORK/copy.err"; then
+  local copy_rc=0
+  restic -r "$REPO" backup --host "$HOST" "${tags[@]}" --json "$DUMP" "$MEDIA" \
+    >"$WORK/copy.out" 2>"$WORK/copy.err" || copy_rc=$?
+  rm -f "$DUMP"
+  if [ "$copy_rc" -ne 0 ]; then
     log "copy: backup failed"
     fail_status "copy: $(first_line "$WORK/copy.err")" "last_dump_at=$dump_at"
     in_run=0
@@ -455,7 +481,12 @@ case "$mode" in
 esac
 
 case "$mode" in
-  loop | once) require RESTIC_PASSWORD APP_VERSION PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE ;;
+  loop | once)
+    require RESTIC_PASSWORD APP_VERSION PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
+    # Only the modes that write a backup refuse it: restore and snapshot-info must still read a
+    # repository made with the placeholder, or its data is lost.
+    refuse_placeholder RESTIC_PASSWORD PGPASSWORD
+    ;;
   snapshot-info) require RESTIC_PASSWORD ;;
   restore) require RESTIC_PASSWORD PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE ;;
 esac

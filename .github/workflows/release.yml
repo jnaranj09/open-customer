@@ -1,5 +1,12 @@
-# Design doc item 9. Builds and pushes the app image (root Dockerfile) and the backup image
-# (deploy/backup/Dockerfile), both tagged with the version.
+# Design doc item 9. Refuses a tag whose commit is not on main (scripts/security/release-on-main.sh),
+# then builds the app image (root Dockerfile) and the backup image
+# (deploy/backup/Dockerfile), both tagged with the version, scans them and the pinned postgres and
+# cloudflared images (make image-scan MODE=release: a high or critical finding with a fix in any
+# of the four stops the release, docs/designs/devsecops.md section 4), then pushes the two images
+# it scanned and, on the digest each push answered, writes a CycloneDX SBOM, signs the image
+# keylessly with cosign through GitHub OIDC and attests the SBOM (make release-sign).
+# deploy/scripts/upgrade.sh verifies that signature before it pulls. The first v* tag is the first
+# real test of the signing (there is no OIDC token outside Actions).
 name: release
 
 on:
@@ -8,33 +15,72 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   images:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push the two images to ghcr.io, and their signatures and attestations
+      id-token: write # the OIDC token cosign signs keylessly with (no key is stored anywhere)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the whole history, so release-on-main.sh can decide the ancestry
+      # First, before any build, scan or push: a tag on a commit that is not on main stops here.
+      - name: Tagged commit is on main
+        run: scripts/security/release-on-main.sh
       - name: Version from the tag
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      # The Makefile runs go list when it loads. No Go cache: a release never restores a cache an
+      # earlier run could have poisoned.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      # The docker driver builds in the runner's own Docker engine. With no driver the action starts
+      # the docker-container driver, which pulls moby/buildkit:buildx-stable-1, a moving tag, into
+      # the job that signs (TestSupplyChainPins refuses that). The two builds need no
+      # docker-container feature: one platform, load: true, no cache export, and the push is make
+      # release-sign's docker push.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Built into the local Docker (load: true) under the names make image-scan reads and the ghcr
+      # names, so the push below sends exactly the images that were scanned.
       - name: App image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
-          push: true
+          load: true
           build-args: VERSION=${{ env.VERSION }}
-          tags: ghcr.io/jnaranj09/open-customer:${{ env.VERSION }}
+          tags: |
+            open-customer:${{ env.VERSION }}
+            ghcr.io/jnaranj09/open-customer:${{ env.VERSION }}
       - name: Backup image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: deploy/backup
           platforms: linux/amd64
-          push: true
-          tags: ghcr.io/jnaranj09/open-customer-backup:${{ env.VERSION }}
+          load: true
+          tags: |
+            open-customer-backup:${{ env.VERSION }}
+            ghcr.io/jnaranj09/open-customer-backup:${{ env.VERSION }}
+      - name: Image scan
+        run: make image-scan MODE=release VERSION="$VERSION"
+      # cosign-release is also the version of COSIGN_IMAGE in deploy/scripts/lib.sh (make
+      # check-pins); Dependabot cannot read lib.sh, so both are bumped by hand in one commit.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
+      - name: Push, SBOM and signature
+        run: |
+          make release-sign IMAGE="ghcr.io/jnaranj09/open-customer:$VERSION"
+          make release-sign IMAGE="ghcr.io/jnaranj09/open-customer-backup:$VERSION"

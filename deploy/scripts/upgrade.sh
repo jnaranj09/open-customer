@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# upgrade.sh <version> (design doc item 86, the five steps in "Upgrades and the migration guard"):
-# checks .env against the running app, pulls the new images, takes a pre-upgrade backup, then
-# sets APP_VERSION in .env and restarts the stack. Any failure stops it; until step 4, .env and
-# the running containers stay on the old version. Runs from any folder: the stack is the one next
+# upgrade.sh <version> (design doc item 86, the five steps in "Upgrades and the migration
+# guard"): checks .env against the running app, verifies the new images' signatures, pulls them
+# and checks each pulled digest is the verified one, takes a pre-upgrade backup, then sets
+# APP_VERSION in .env and restarts the stack. Any failure stops it; until step 4, .env and the
+# running containers stay on the old version. Runs from any folder: the stack is the one next
 # to this script.
 set -euo pipefail
 
@@ -37,8 +38,9 @@ running=$(printf '%s' "$running" | tr -d '[:space:]')
 [ "$running" = "$current" ] ||
   die "APP_VERSION in .env is '$current' but the running app is '$running'; fix .env first"
 
-# 2. The new images; .env is not changed yet.
-APP_VERSION=$new docker compose pull || die "pull failed; nothing changed"
+# 2. The new images, verified, pulled and checked against the verified digests (pull_verified in
+# lib.sh: a failed signature check pulls nothing). .env is not changed yet.
+pull_verified "$new" || die "nothing changed; .env and the running containers stay on $current"
 
 # 3. The backup the migration guard asks for.
 scripts/backup-now.sh --tag pre-upgrade ||

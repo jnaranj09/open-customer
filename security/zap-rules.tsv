@@ -1,0 +1,123 @@
+# ZAP rules for make dast (scripts/security/dast.sh; docs/designs/devsecops.md "Blocking policy").
+# <rule id> TAB <FAIL|WARN|IGNORE> TAB <name; risk or reason>. Every rule ZAP 2.17.0 runs in the
+# API and baseline scans is listed: High and Medium are FAIL, Low and Informational WARN (a
+# controller ruling), except where the reason says otherwise. ZAP would only WARN a rule not
+# listed, so dast.sh is red on an alert from one: a new rule from a ZAP bump is added here. Never IGNORE a rule here: an accepted finding goes in security/allow.json, with
+# its reason and expiry, and dast.sh turns its live ids into IGNORE, or a scoped id
+# (<rule>@<url regex>) into an OUTOFSCOPE line for that URL only.
+0	FAIL	Directory Browsing (Active); Medium
+2	WARN	Private IP Disclosure (Passive); Low
+3	FAIL	Session ID in URL Rewrite (Passive); Medium
+6	FAIL	Path Traversal (Active); High
+7	FAIL	Remote File Inclusion (Active); High
+10003	FAIL	Vulnerable JS Library (Powered by Retire.js) (Passive); Medium
+10009	WARN	In Page Banner Information Leak (Passive); Low
+10010	WARN	Cookie No HttpOnly Flag (Passive); Low
+10011	WARN	Cookie Without Secure Flag (Passive); the scan runs over plain http on localhost, where the app drops Secure by design
+10015	WARN	Re-examine Cache-control Directives (Passive); Informational
+10017	WARN	Cross-Domain JavaScript Source File Inclusion (Passive); Low
+10019	WARN	Content-Type Header Missing (Passive); Informational
+10020	FAIL	Anti-clickjacking Header (Passive); Medium
+10021	FAIL	X-Content-Type-Options Header Missing (Passive); a header the app sets on every response (D8): a missing nosniff blocks
+10023	WARN	Information Disclosure - Debug Error Messages (Passive); Low
+10024	WARN	Information Disclosure - Sensitive Information in URL (Passive); Informational
+10025	WARN	Information Disclosure - Sensitive Information in HTTP Referrer Header (Passive); Informational
+10027	WARN	Information Disclosure - Suspicious Comments (Passive); Informational
+10028	FAIL	Off-site Redirect (Passive); High
+10029	WARN	Cookie Poisoning (Passive); Informational
+10030	WARN	User Controllable Charset (Passive); Informational
+10031	WARN	User Controllable HTML Element Attribute (Potential XSS) (Passive); Informational
+10032	FAIL	Viewstate (Passive); High
+10033	FAIL	Directory Browsing (Passive); Medium
+10034	FAIL	Heartbleed OpenSSL Vulnerability (Indicative) (Passive); High
+10035	FAIL	Strict-Transport-Security Header (Passive); a header the app sets for an https PUBLIC_URL (D8); ZAP checks it only over https
+10036	WARN	HTTP Server Response Header (Passive); Low
+10037	WARN	Server Leaks Information via "X-Powered-By" HTTP Response Header Field(s) (Passive); Low
+10038	FAIL	Content Security Policy (CSP) Header Not Set (Passive); Medium
+10039	WARN	X-Backend-Server Header Information Leak (Passive); Low
+10040	WARN	Secure Pages Include Mixed Content (Passive); Low
+10041	FAIL	HTTP to HTTPS Insecure Transition in Form Post (Passive); Medium
+10042	FAIL	HTTPS to HTTP Insecure Transition in Form Post (Passive); Medium
+10043	WARN	User Controllable JavaScript Event (XSS) (Passive); Informational
+10044	WARN	Big Redirect Detected (Potential Sensitive Information Leak) (Passive); Low
+10045	FAIL	Source Code Disclosure - /WEB-INF Folder (Active); High
+10047	WARN	HTTPS Content Available via HTTP (Active); Low
+10048	FAIL	Remote Code Execution - Shell Shock (Active); High
+10050	WARN	Retrieved from Cache (Passive); Informational
+10052	FAIL	X-ChromeLogger-Data (XCOLD) Header Information Leak (Passive); Medium
+10054	WARN	Cookie without SameSite Attribute (Passive); Low
+10055	FAIL	CSP (Passive); Medium
+10056	WARN	X-Debug-Token Information Leak (Passive); Low
+10057	WARN	Username Hash Found (Passive); Informational
+10058	WARN	GET for POST (Active); Informational
+10061	WARN	X-AspNet-Version Response Header (Passive); Low
+10062	FAIL	PII Disclosure (Passive); High
+10096	WARN	Timestamp Disclosure (Passive); Low
+10097	FAIL	Hash Disclosure (Passive); High
+10098	FAIL	Cross-Domain Misconfiguration (Passive); Medium
+10104	WARN	User Agent Fuzzer (Active); Informational
+10105	FAIL	Weak Authentication Method (Passive); Medium
+10106	FAIL	HTTP Only Site (Active); Medium
+10108	FAIL	Reverse Tabnabbing (Passive); Medium
+10109	WARN	Modern Web Application (Passive); Informational
+10111	WARN	Authentication Request Identified (Passive); Informational
+10112	WARN	Session Management Response Identified (Passive); Informational
+10113	WARN	Verification Request Identified (Passive); Informational
+10115	FAIL	Script Served From Malicious Domain (polyfill) (Passive); High
+10116	WARN	ZAP is Out of Date (Passive); about the scanner, not the app: the ZAP_IMAGE pin is bumped by hand
+10202	FAIL	Absence of Anti-CSRF Tokens (Passive); Medium
+20015	FAIL	Heartbleed OpenSSL Vulnerability (Active); High
+20017	FAIL	Source Code Disclosure - CVE-2012-1823 (Active); High
+20018	FAIL	Remote Code Execution - CVE-2012-1823 (Active); High
+20019	FAIL	External Redirect (Active); High
+20020	FAIL	Server Side Technology Version with Known Vulnerabilities (Passive); High
+30001	FAIL	Buffer Overflow (Active); Medium
+30002	FAIL	Format String Error (Active); Medium
+40003	FAIL	CRLF Injection (Active); Medium
+40008	FAIL	Parameter Tampering (Active); Medium
+40009	FAIL	Server Side Include (Active); High
+40012	FAIL	Cross Site Scripting (Reflected) (Active); High
+40014	FAIL	Cross Site Scripting (Persistent) (Active); High
+40016	WARN	Cross Site Scripting (Persistent) - Prime (Active); Informational
+40017	WARN	Cross Site Scripting (Persistent) - Spider (Active); Informational
+40018	FAIL	SQL Injection (Active); High
+40019	FAIL	SQL Injection - MySQL (Time Based) (Active); High
+40020	FAIL	SQL Injection - Hypersonic SQL (Time Based) (Active); High
+40021	FAIL	SQL Injection - Oracle (Time Based) (Active); High
+40022	FAIL	SQL Injection - PostgreSQL (Time Based) (Active); High
+40026	FAIL	Cross Site Scripting (DOM Based) (Active); High
+40027	FAIL	SQL Injection - MsSQL (Time Based) (Active); High
+40028	FAIL	ELMAH Information Leak (Active); Medium
+40029	FAIL	Trace.axd Information Leak (Active); Medium
+40032	FAIL	.htaccess Information Leak (Active); Medium
+40034	FAIL	.env Information Leak (Active); Medium
+40035	FAIL	Hidden File Finder (Active); Medium
+40042	FAIL	Spring Actuator Information Leak (Active); Medium
+40043	FAIL	Log4Shell (Active); High
+40044	FAIL	Exponential Entity Expansion (Billion Laughs Attack) (Active); Medium
+40045	FAIL	Spring4Shell (Active); High
+40048	FAIL	Remote Code Execution (React2Shell) (Active); High
+50000	FAIL	Script Active Scan Rules (Active); risk set by the script
+50001	FAIL	Script Passive Scan Rules (Passive); risk set by the script
+90001	FAIL	Insecure JSF ViewState (Passive); Medium
+90002	FAIL	Java Serialization Object (Passive); Medium
+90003	FAIL	Sub Resource Integrity Attribute Missing (Passive); Medium
+90011	WARN	Charset Mismatch (Passive); Informational
+90017	FAIL	XSLT Injection (Active); Medium
+90019	FAIL	Server Side Code Injection (Active); High
+90020	FAIL	Remote OS Command Injection (Active); High
+90021	FAIL	XPath Injection (Active); High
+90022	FAIL	Application Error Disclosure (Passive); Medium
+90023	FAIL	XML External Entity Attack (Active); High
+90024	FAIL	Generic Padding Oracle (Active); High
+90026	FAIL	SOAP Action Spoofing (Active); High
+90029	FAIL	SOAP XML Injection (Active); High
+90030	FAIL	WSDL File Detection (Passive); risk set by the script
+90033	WARN	Loosely Scoped Cookie (Passive); Informational
+90034	FAIL	Cloud Metadata Potentially Exposed (Active); High
+90035	FAIL	Server Side Template Injection (Active); High
+90036	FAIL	Server Side Template Injection (Blind) (Active); High
+90037	FAIL	Remote OS Command Injection (Time Based) (Active); High
+100000	WARN	A Client Error or Server Error response code was returned (API scan); Informational for 4xx, Low for 5xx. dast.sh makes a 5xx red itself, from the report
+100001	WARN	Unexpected Content-Type was returned (API scan); Low: the SPA files the scan also reaches are HTML, JS, CSS and fonts
+100043	FAIL	Swagger UI Secret & Vulnerability Detector (Active); High

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -23,6 +24,13 @@ type Config struct {
 	AllowMigrateWithoutBackup bool
 	LogLevel                  slog.Level
 }
+
+// PlaceholderSecrets are the secret values deploy/.env.example publishes. A secret that still holds
+// one is refused: the value is public in this repo (threat model T63). deploy/backup/backup.sh keeps
+// the same list for RESTIC_PASSWORD and the database password. TestPlaceholderSecretsMatchEnvExample
+// keeps the two lists and .env.example equal, and checks that each placeholder variable's consumer
+// in deploy/compose.yaml refuses it.
+var PlaceholderSecrets = []string{"change-me"}
 
 const (
 	defaultTrustedProxyCIDRs = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -59,6 +67,12 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	password := required("DB_PASSWORD")
+	// Only DB_PASSWORD is checked here: it is the one placeholder secret the app receives. Compose
+	// gives RESTIC_PASSWORD only to the backup and restore services (backup.sh refuses it) and
+	// TUNNEL_TOKEN only to cloudflared.
+	if slices.Contains(PlaceholderSecrets, password) {
+		bad = append(bad, "DB_PASSWORD (still the placeholder from .env.example: set a real password)")
+	}
 	c.VAPIDSubject = required("VAPID_SUBJECT")
 	if c.VAPIDSubject != "" && !strings.HasPrefix(c.VAPIDSubject, "mailto:") {
 		bad = append(bad, "VAPID_SUBJECT (must start with mailto:)")

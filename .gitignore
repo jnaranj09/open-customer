@@ -17,3 +17,10 @@ web/tests/e2e/.auth/
 
 # Agent plan workspaces (local only)
 .superpowers/
+
+# make dast reports (never committed)
+dast-report/
+
+# make scan-live: its reports, and the deployer's own allow-list (never committed)
+security/reports/
+deploy/.scan-live.allow

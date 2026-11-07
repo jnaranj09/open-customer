@@ -1,0 +1,14 @@
+rules:
+  - id: svelte-no-html-tag
+    # Semgrep has no Svelte parser, so this reads the text of .svelte files.
+    languages: [generic]
+    severity: ERROR
+    message: >-
+      {@html ...} writes a string into the page unescaped: a client name or note would run as
+      script. Render the text with {value}, which escapes (threat T28).
+    metadata:
+      threat: T28
+    paths:
+      include:
+        - '*.svelte'
+    pattern-regex: '\{\s*@html\s'

@@ -227,7 +227,7 @@ func csvFile(w io.Writer, header []string, rows func(cw *csv.Writer) error) erro
 		return fmt.Errorf("write bom: %w", err)
 	}
 	cw := csv.NewWriter(w)
-	if err := cw.Write(header); err != nil {
+	if err := cw.Write(neutralize(header)); err != nil {
 		return fmt.Errorf("write header: %w", err)
 	}
 	if err := rows(cw); err != nil {
@@ -242,10 +242,28 @@ func csvFile(w io.Writer, header []string, rows func(cw *csv.Writer) error) erro
 
 // writePage writes one page of CSV records and flushes them.
 func writePage(cw *csv.Writer, records [][]string) error {
+	for _, r := range records {
+		neutralize(r)
+	}
 	if err := cw.WriteAll(records); err != nil {
 		return fmt.Errorf("write rows: %w", err)
 	}
 	return nil
+}
+
+// formulaStart are the first characters that make a spreadsheet read a cell as a formula.
+const formulaStart = "=+-@\t\r"
+
+// neutralize puts ' before every cell of record that starts with a formulaStart character, so a
+// spreadsheet shows the text instead of running it (threat model T42). It changes record in place
+// and returns it. The E.164 telefono starts with + and gets the ' too.
+func neutralize(record []string) []string {
+	for i, cell := range record {
+		if cell != "" && strings.ContainsRune(formulaStart, rune(cell[0])) {
+			record[i] = "'" + cell
+		}
+	}
+	return record
 }
 
 // columns returns the active attributes of scope in position order, and their column names: the

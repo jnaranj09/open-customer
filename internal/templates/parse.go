@@ -28,9 +28,14 @@ type segment struct {
 	bad int
 }
 
+// maxParseErrors caps the errors Parse reports, so a body of many "{{" cannot make a response of
+// thousands of entries; the first ones are enough to fix the body.
+const maxParseErrors = 20
+
 // Parse checks a template body. The error is a problem.Validation with one MsgTemplateUnclosed on
-// field "body" per "{{" that starts no valid variable, in body order. Parsed is returned with the
-// error and holds every well-formed variable, so the caller can still check them.
+// field "body" per "{{" that starts no valid variable, in body order, for the first maxParseErrors
+// of them. Parsed is returned with the error and holds every well-formed variable, so the caller
+// can still check them.
 func Parse(body string) (Parsed, error) {
 	var parsed Parsed
 	var errs []problem.FieldError
@@ -38,7 +43,7 @@ func Parse(body string) (Parsed, error) {
 		switch {
 		case s.ref != nil:
 			parsed.Vars = append(parsed.Vars, *s.ref)
-		case s.bad > 0:
+		case s.bad > 0 && len(errs) < maxParseErrors:
 			errs = append(errs, problem.FieldError{Field: "body", Message: fmt.Sprintf(problem.MsgTemplateUnclosed, s.bad)})
 		}
 	}

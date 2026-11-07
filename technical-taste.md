@@ -71,7 +71,7 @@ red when the rule is broken; "prose only" = nothing yet. Prefer turning prose-on
 21. **A failure is never silent**: it reaches her screen, an exit code or an HTTP status. Consensus.
     Sensor: prose only + per-surface tests.
 22. **Security basics for the shape**: OWASP for the web app, secrets never logged or committed,
-    dependency audit. Consensus. Sensor: govulncheck, gosec, `pnpm audit`, gitleaks in CI.
+    dependency audit. Consensus. Sensor: govulncheck, gosec, `make deps-scan` (Trivy), gitleaks in CI.
 23. **Plain over clever.** Concrete module types, an interface only where a test needs a fake.
     Taste. Sensor: prose only.
 
@@ -102,7 +102,7 @@ Which tool is the sensor for each row in this repo (filled at setup; update when
 | `duplication` | `dupl` (threshold 80) | jscpd (`**/*.test.ts` and `**/schema.d.ts` ignored; fails on a fully empty scan; `.svelte` coverage not yet shown) |
 | `boundary-schema` | typed structs + `DisallowUnknownFields` + module-side field validation | zod |
 | `mutation` | gremlins (`README.md` release checklist, never in the gate) | StrykerJS (same) |
-| `security` | govulncheck, gosec, gitleaks in CI | `pnpm audit --audit-level high` and gitleaks in CI |
+| `security` | govulncheck, gosec, gitleaks in CI | `make deps-scan` (Trivy fs on the lockfile) and gitleaks in CI |
 | `suppression-budget` | `//nolint` count, guard `suppression-budget` | `eslint-suppressions.json` total and inline `eslint-disable` / `@ts-*` count, guard `suppression-budget` |
 | shell (`scripts/`, `deploy/`, hooks) | shellcheck in `make lint` | — |
 
