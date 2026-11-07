@@ -177,7 +177,10 @@ rule names its sensor") applied to security.
 - Weekly scheduled CI run: scan the images of the latest release tag only (deployers upgrade to the
   latest). A finding that meets the blocking policy fails the run, and GitHub emails the owner about
   a failed scheduled run with no setup. Until the first `v*` tag exists, the job writes "NOT RUN: no
-  release tag" in its summary and passes. My call.
+  release tag" in its summary and passes. My call. Limit: in a public repo GitHub turns off a
+  schedule after 60 days with no repository activity, with no red run and no email, so the owner
+  checks the Actions tab monthly and re-enables `security-weekly` if it was turned off
+  (`docs/threat-model.md` T71 and "GitHub settings"). No keepalive commits.
 - My call: the release also writes an SBOM and signs the images keylessly with cosign through
   GitHub OIDC. Keyless signing stores no key, so it keeps anti-goal 1. Built as
   `make release-sign IMAGE=<repository>:<tag>` (`scripts/security/release-sign.sh`), run by the release
