@@ -169,6 +169,11 @@ rule names its sensor") applied to security.
 
 - On every push: build the app and backup images and scan them, plus the pinned `postgres` and
   `cloudflared` images from `deploy/compose.yaml`.
+- On every push, in job `gate`: `make deps-scan` (`scripts/security/deps-scan.sh`), Trivy fs on
+  `web/pnpm-lock.yaml` (development dependencies included) and `go.mod`, each mounted alone, with
+  the same database cache handling as the image scan (no database is exit 1, red). Its JSON report
+  must list both manifests, and an exit that disagrees with the report is red. Tests: `make
+  test-sec` (`deps-scan:` cases).
 - In the release workflow: the first step, `scripts/security/release-on-main.sh`, refuses a tag
   whose commit is not an ancestor of `main` (fail closed: a missing SHA, a shallow clone and a
   failed fetch are red; `make test-sec` covers it). A commit that reached `main` before branch
@@ -316,7 +321,12 @@ rule names its sensor") applied to security.
 ## Blocking policy
 
 - **CVE scanners** (Trivy on images and dependencies): high or critical with a fixed version
-  available blocks. Medium and low are reported, not blocking.
+  available blocks. Medium and low are reported, not blocking. The dependency scan is
+  `make deps-scan` (Trivy fs on `web/pnpm-lock.yaml`, development dependencies included, and on
+  `go.mod`; `--ignore-unfixed`, so an advisory with no fix never blocks; `trivy` allow ids
+  honoured), in CI job `gate`. It replaced `pnpm audit --audit-level high`, which has no "fix
+  available" filter and no allow path. `make vuln` (govulncheck) stays the Go check of what the
+  code calls.
 - **Every other tool** (Semgrep, Nuclei, the compose and threat-model guards): every finding
   blocks unless it is allow-listed. Their severity scales differ and have no "fix available", and a
   missing header or `cap_drop` must go red to be fixed. My call. The config scan blocks from a set

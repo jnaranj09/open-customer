@@ -84,7 +84,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 PNPM := cd web && pnpm
 
 .PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
-	image-scan secrets test-sec dast scan-live config-scan sast fuzz release-sign
+	image-scan deps-scan secrets test-sec dast scan-live config-scan sast fuzz release-sign
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -213,6 +213,12 @@ MODE ?= push
 PULL ?=
 image-scan:
 	TRIVY_IMAGE=$(TRIVY_IMAGE) VERSION=$(VERSION) PULL=$(PULL) scripts/security/image-scan.sh $(MODE)
+
+# devsecops.md section 4: Trivy fs on web/pnpm-lock.yaml (dev dependencies included) and go.mod.
+# A high or critical finding with a fix blocks; trivy ids of security/allow.json are honoured.
+# Needs network (the Trivy database). Replaces pnpm audit, which blocks on advisories with no fix.
+deps-scan:
+	TRIVY_IMAGE=$(TRIVY_IMAGE) scripts/security/deps-scan.sh
 
 # devsecops.md section 4: the release workflow's push, SBOM and keyless signature of one image,
 # IMAGE=<repository>:<tag> (scripts/security/release-sign.sh). Release workflow only: it needs the

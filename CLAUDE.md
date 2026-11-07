@@ -47,6 +47,10 @@ with fnm, `fnm use` in web/).
 - `make image-scan [MODE=push|release]`: Trivy on the two `make image` images, `PG_IMAGE` and the
   compose cloudflared image (`scripts/security/image-scan.sh`). `push` (default) blocks on our two
   images only; `release` blocks on all four. Needs network (the Trivy database).
+- `make deps-scan`: Trivy fs on `web/pnpm-lock.yaml` (dev dependencies included) and `go.mod`
+  (`scripts/security/deps-scan.sh`): a high or critical finding with a fix blocks; `trivy` ids of
+  `security/allow.json` are honoured. Needs network (the Trivy database). `make vuln` stays the Go
+  reachability check.
 - `make secrets`: gitleaks over the whole git history (`.gitleaksignore` honoured). `make test-sec`:
   the scan wrappers', csp-check's, release-sign's and check-pins' tests
   (`scripts/security/tests/run.sh`, fake `docker` and `cosign`).
@@ -84,9 +88,9 @@ with fnm, `fnm use` in web/).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`,
+`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast deps-scan`,
 plus `make image image-scan dast` for a change to an image, a scan or what the app serves. CI
-(`.github/workflows/ci.yml`) also runs the gitleaks action, `pnpm audit --audit-level high` and
+(`.github/workflows/ci.yml`) also runs the gitleaks action, `make deps-scan` and
 `make e2e` (after `make build`) in job `gate`, and `make image image-scan MODE=push dast` (and the
 zizmor and Semgrep SARIF uploads) in job `security`.
 

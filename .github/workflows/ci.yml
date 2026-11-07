@@ -1,6 +1,6 @@
 # Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
-# in P2, e2e in P6, test-deploy in P7, secrets, test-sec, config-scan and sast with the security
-# pipeline). The job security scans the images and the running app (docs/designs/devsecops.md
+# in P2, e2e in P6, test-deploy in P7, secrets, test-sec, config-scan, sast and deps-scan with the
+# security pipeline; deps-scan replaced pnpm audit). The job security scans the images and the running app (docs/designs/devsecops.md
 # sections 4 and 6) and uploads the zizmor and Semgrep SARIF (sections 3 and 2). The job names gate
 # and security are required checks on main: never rename them. Every action is pinned by commit
 # SHA, with its version in the comment (guard TestSupplyChainPins; Dependabot bumps both).
@@ -58,9 +58,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_VERSION: 8.24.3 # the GITLEAKS_IMAGE pin (make secrets); check-pins compares them
-      - name: Dependency audit (web)
-        working-directory: web
-        run: pnpm audit --audit-level high
       - run: make check-pins
       - run: make lint GOLANGCI_LINT=golangci-lint
       - run: make test
@@ -73,6 +70,20 @@ jobs:
       - run: make test-sec
       - run: make config-scan
       - run: make sast
+      # Trivy fs on web/pnpm-lock.yaml and go.mod (docs/designs/devsecops.md section 4): a high or
+      # critical finding with a fix blocks. Its own day-keyed cache of the Trivy database, as in job
+      # security below.
+      - name: Trivy cache key
+        id: trivy-day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy
+          key: trivy-deps-${{ steps.trivy-day.outputs.day }}
+          restore-keys: trivy-deps-
+      - run: make deps-scan
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy
       # After every check above, so they ran with only the web stub (Verification Plan, "Clean checkout");
       # e2e below needs the real build.
       - run: make build

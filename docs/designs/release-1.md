@@ -1457,7 +1457,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     | --- | --- |
     | Setup: `actions/checkout` with `fetch-depth: 0`, `actions/setup-go`, `pnpm/action-setup`, `actions/setup-node`, `pnpm install --frozen-lockfile` in `web/`, `golangci/golangci-lint-action` with `install-only: true` and the pinned `version:` | P0 |
     | Secret scan: `gitleaks/gitleaks-action` (no license key is needed for a personal account), with `GITLEAKS_VERSION` set to the `GITLEAKS_IMAGE` version (`make check-pins` compares them; the action's own default would otherwise decide). On a push it scans the pushed commits; `make secrets` below scans the whole history. Reviewed false positives are listed by fingerprint, each with its reason, in `.gitleaksignore` (today the item 19 temp-password alphabet, one made-up hash fixture in a test, the variable name `argonIDKey`, and Pencil's `fileToken` in `design/soft-glass.pen`, accepted by the owner: threat model T94) | P0 |
-    | `pnpm audit --audit-level high` in `web/` | P0 |
+    | `pnpm audit --audit-level high` in `web/` (replaced by `make deps-scan`, after `make sast`, in the security pipeline: Trivy fs on `web/pnpm-lock.yaml` and `go.mod`, high or critical with a fix blocks, its Trivy database in a day-keyed `actions/cache`) | P0 |
     | `make check-pins` | P0 |
     | `make lint GOLANGCI_LINT=golangci-lint` | P0 |
     | `make test` | P0 |
@@ -2545,7 +2545,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 *   **Unit Tests**: `make test` (`go test $(GO_PKGS)` + `pnpm test`).
 *   **Database Tests**: `make test-db` (`go test -tags db $(GO_PKGS)` with testcontainers Postgres 18).
 *   **Deploy Tests**: `make test-deploy` (`deploy/tests/backup_test.sh` in the backup image against a throwaway Postgres, then `deploy/tests/scripts_test.sh` on the host; item 2).
-*   **Static Analysis & Linting**: `make lint` (golangci-lint with the `depguard` module rules, the darwin and windows `go build`, `deadcode`, shellcheck, `pnpm check` (svelte-check), `pnpm lint` (eslint, prettier, knip, jscpd)) and `make vuln` (govulncheck). CI adds gitleaks and `pnpm audit --audit-level high`.
+*   **Static Analysis & Linting**: `make lint` (golangci-lint with the `depguard` module rules, the darwin and windows `go build`, `deadcode`, shellcheck, `pnpm check` (svelte-check), `pnpm lint` (eslint, prettier, knip, jscpd)) and `make vuln` (govulncheck). CI adds gitleaks and `make deps-scan` (Trivy fs on the lockfile and `go.mod`).
 *   **Clean checkout:** CI runs on a fresh clone, and `make build` is its last step before e2e (item 8), so `make lint`, `make test`, `make vuln` and `make test-db` passing first shows the targets compile with only the stub present.
 *   **Generated Code**: `make check-generated` must show no diff.
 *   **Test Coverage Requirement**: 90%+ statement coverage (the `go tool cover -func` total) on `internal/reminders`, `internal/templates`, `internal/attributes`, `internal/appointments` and `internal/auth`, enforced in CI by `make cover`. No target for handlers or UI. Their behavior is covered by e2e.

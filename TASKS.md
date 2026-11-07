@@ -205,7 +205,10 @@ App bugs and rule breaks seen during setup. Setup tasks never fix app code; each
 own change.
 
 - No app code existed before P0, so nothing was found in old code.
-- `pnpm audit` reports 1 low and 1 moderate advisory in dev dependencies (below the `high` gate).
+- `pnpm audit` reported 1 low and 1 moderate advisory in dev dependencies (below the `high` gate);
+  on 2026-11-07 they were still there (deepmerge GHSA-gcqx-w48m-w2h4, low, no fix; minimatch
+  GHSA-g3hv-75wg-m249, moderate, fixed in 11.0.1). `make deps-scan` replaced `pnpm audit` in CI and
+  reports neither (Trivy sees the minimatch one as MEDIUM, below its gate).
 - This PC's default Node (fnm) is 24; the pin is 26.13.0. `make` fails fast (`node-check`) and the
   hooks switch with fnm. Run `fnm default 26.13.0` if you want it everywhere.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.

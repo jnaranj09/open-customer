@@ -32,10 +32,11 @@ run.
 | `make cover` | The `db` tests with coverage for each package in `COVER_PKGS`; fails when one is under 90% |
 | `make test-deploy` | Builds the backup image and runs `deploy/tests/backup_test.sh` in it against a throwaway Postgres on a private Docker network (needs Docker; publishes no host port; removes its `oc-deploy-*` containers and network), then `deploy/tests/scripts_test.sh` on the host (the operator scripts against a fake `docker`) |
 | `make vuln` | govulncheck |
-| `make build` | The web build, then `bin/open-customer` |
+| `make build` | The web build, the script CSP check on the built `index.html` (`scripts/security/csp-check.sh`), then `bin/open-customer` |
 | `make dev` | Postgres in Docker (container `open-customer-dev`, host port `DEV_PG_PORT`, default 5433), `serve` on :8080 and Vite on :5173 |
 | `make image` | The app and backup Docker images, tagged with the version |
 | `make image-scan` | Trivy on the two `make image` images and the pinned postgres and cloudflared images (needs Docker and network). `MODE=push` (the default) fails only on the app and backup images; `MODE=release` fails on any of the four |
+| `make deps-scan` | Trivy fs on `web/pnpm-lock.yaml` (dev dependencies included) and `go.mod` (needs Docker and network for the Trivy database). A high or critical finding with a fix fails; `trivy` ids in `security/allow.json` are honoured |
 | `make dast` | ZAP (API scan signed out and signed in, baseline) and Nuclei against the `make image` app image and a throwaway Postgres on a private Docker network (needs Docker and network; publishes no host port; removes its `oc-dast-*` containers and network). A made-up owner is set up and signed in first; reports go to `dast-report/` |
 | `make scan-live URL=https://…` | A manual scan of your own deployment (needs Docker, network, bash 4, `jq` and coreutils; no key; never runs in CI): the security headers, the ZAP baseline (passive) and Nuclei (non-intrusive active probes), signed out. Non-zero means not clean; the script's own code (1 findings, 2 bad arguments) is in make's `Error N` line. The allow-list is your git-ignored `deploy/.scan-live.allow`; reports go to `security/reports/scan-live-<UTC timestamp>/`. See [deploy/README.md](deploy/README.md) section 14 |
 | `make secrets` | gitleaks over the whole git history (needs Docker); reviewed false positives are in `.gitleaksignore` |
@@ -46,7 +47,7 @@ run.
 | `make fuzz` | The four Go fuzz targets (JSON body decoding, multipart uploads, template parsing, the backup status file), one after another, each for `FUZZTIME` (default `60s`). Any crash fails. Not in the gate; CI runs it weekly with `FUZZTIME=30s`; `make test` runs their seeds |
 | `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary: the CUJ specs and the UI probe (axe and layout checks on every route at phone and desktop size). Needs the Playwright WebKit browser and its host libraries, port 8080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
 
-The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`.
+The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast deps-scan`.
 For a change to an image, a scan or what the app serves, also `make image image-scan dast`.
 The gate leaves out `make e2e`. CI runs it after `make build` (design doc item 8); locally it runs
 by hand.

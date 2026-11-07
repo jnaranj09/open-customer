@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), for
-# csp-check.sh (made-up built pages; no docker), and
+# csp-check.sh (made-up built pages; no docker), for deps-scan.sh, and
 # for scripts/check-pins.sh's image digest and cosign version checks. Run by make test-sec on the
 # host. Each test runs a wrapper from a temp copy of the repo parts it reads (scripts/security,
 # security/allow.json, deploy/compose.yaml; made-up Dockerfiles and a workflow for config-scan.sh),
@@ -25,6 +25,13 @@
 #                   the value after an `=`: Name=value), and with the line FAKE_HEADERS_EXTRA
 #                   (a second instance of a header, say) added; a Set-Cookie header with a made-up cookie is always in the answer
 #   curl-test:1 with `-o /cache/<file>` (the templates download) writes a made-up tarball there
+# and, for deps-scan.sh:
+#   deps-test:1     reports each file mounted at /src/<path> (go.mod as gomod, anything else as pnpm;
+#                   all but FAKE_DEPS_UNREAD) in a JSON report at its --output, copies its ignore file
+#                   to $FAKE_LOG.depsignore and its arguments to $FAKE_LOG.depsargs, and gives each
+#                   path in FAKE_DEPS_FINDINGS (space-separated) a HIGH CVE-2099-0001 with a fix
+#                   unless the ignore file lists that id. It exits FAKE_DEPS_CODE when set, else the
+#                   run's --exit-code value when a finding is left, else 0
 # and, for config-scan.sh:
 #   trivy-cfg-test:1  reports each file mounted at /src/<path> as a scanned Dockerfile (all
 #                   but deploy/backup/Dockerfile when FAKE_TRIVY_CONFIG_EMPTY is set) in a JSON
@@ -70,7 +77,7 @@ ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
   FAKE_NUCLEI_FINDINGS FAKE_HEADERS_DROP FAKE_HEADERS_WRONG FAKE_HEADERS_EXTRA SCAN_PATH SCAN_URL GITHUB_ACTIONS NETWORK FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
-  FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
+  FAKE_DEPS_UNREAD FAKE_DEPS_FINDINGS FAKE_DEPS_CODE FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
   FAKE_REPO_DIGEST FAKE_SBOM_EMPTY FAKE_PUSH_SECOND_DIGEST MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
 
@@ -189,6 +196,39 @@ case "$1" in
           prev=$a
         done
         exit "${FAKE_ZAP_CODE:-0}"
+        ;;
+      *" deps-test:1 "*)
+        out_file='' code=0 prev='' targets=()
+        for a in "$@"; do
+          [ "$prev" != --output ] || out_file=$a
+          [ "$prev" != --exit-code ] || code=$a
+          if [ "$prev" = -v ]; then
+            case "$a" in *:/src/*:ro) t=${a#*:/src/} && targets+=("${t%:ro}") ;; esac
+          fi
+          prev=$a
+        done
+        cp "$(mount_of /scan "$@")/.trivyignore.yaml" "$FAKE_LOG.depsignore"
+        echo "$*" >"$FAKE_LOG.depsargs"
+        results='[]' left=0
+        for t in "${targets[@]}"; do
+          [ "$t" != "${FAKE_DEPS_UNREAD:-}" ] || continue
+          type=pnpm
+          [ "$t" != go.mod ] || type=gomod
+          v='[]'
+          case " ${FAKE_DEPS_FINDINGS:-} " in
+            *" $t "*)
+              if ! grep -qxF '  - id: CVE-2099-0001' "$FAKE_LOG.depsignore"; then
+                v='[{"VulnerabilityID":"CVE-2099-0001","Severity":"HIGH","PkgName":"made-up","InstalledVersion":"1.0.0","FixedVersion":"1.0.1"}]'
+                left=1
+              fi
+              ;;
+          esac
+          results=$(jq -c --arg t "$t" --arg y "$type" --argjson v "$v" '. + [{Target: $t, Type: $y, Vulnerabilities: $v}]' <<<"$results")
+        done
+        jq -n --argjson r "$results" '{Results: $r}' >"$(mount_of /out "$@")/${out_file#/out/}"
+        if [ -n "${FAKE_DEPS_CODE:-}" ]; then exit "$FAKE_DEPS_CODE"; fi
+        [ "$left" -eq 0 ] || exit "$code"
+        exit 0
         ;;
       *" trivy-cfg-test:1 "*)
         out_file='' code=0 prev='' targets=()
@@ -349,6 +389,9 @@ setup() {
   printf 'FROM scratch\n' >"$W/Dockerfile"
   printf 'FROM scratch\n' >"$W/deploy/backup/Dockerfile"
   printf 'name: made-up\n' >"$W/.github/workflows/ci.yml"
+  mkdir -p "$W/web"
+  printf 'module made-up\n' >"$W/go.mod"
+  printf "lockfileVersion: '9.0'\n" >"$W/web/pnpm-lock.yaml"
   echo '[]' >"$W/security/allow.json"
   LOG=$W/docker.log
   : >"$LOG"
@@ -1658,6 +1701,78 @@ test_release_on_main_shallow_clone_red() {
 }
 
 
+
+# deps_scan: runs deps-scan.sh from another folder with the fake docker; stdout and stderr go to
+# $W/out.
+deps_scan() {
+  (cd / && PATH="$ROOT/bin:$PATH" TRIVY_IMAGE=deps-test:1 TRIVY_CACHE_DIR="$W/cache" \
+    "$W/scripts/security/deps-scan.sh" "$@") >"$W/out" 2>&1
+}
+
+test_deps_clean_scans_both_manifests() {
+  setup
+  deps_scan || fail "a clean scan was red: $(cat "$W/out")"
+  out_has "deps-scan: go.mod: no blocking findings"
+  out_has "deps-scan: web/pnpm-lock.yaml: no blocking findings"
+  for want in "fs " "-v $W/go.mod:/src/go.mod:ro" "-v $W/web/pnpm-lock.yaml:/src/web/pnpm-lock.yaml:ro" \
+    "--severity HIGH,CRITICAL" "--ignore-unfixed" "--include-dev-deps" "--exit-code 5" "--scanners vuln"; do
+    grep -qF -- "$want" "$LOG.depsargs" || fail "the trivy run lacks '$want': $(cat "$LOG.depsargs")"
+  done
+}
+
+test_deps_finding_red() {
+  setup
+  FAKE_DEPS_FINDINGS=web/pnpm-lock.yaml deps_scan && fail "a lockfile finding passed"
+  out_has "CVE-2099-0001 (HIGH): made-up 1.0.0, fixed in 1.0.1"
+  out_has "web/pnpm-lock.yaml: high or critical findings with a fix"
+  FAKE_DEPS_FINDINGS=go.mod deps_scan && fail "a go.mod finding passed"
+  out_has "go.mod: high or critical findings with a fix"
+}
+
+test_deps_trivy_error_red() {
+  setup
+  FAKE_DEPS_CODE=1 deps_scan && fail "trivy exit 1 (no database) passed"
+  out_has "trivy could not scan the dependency manifests (exit 1)"
+  FAKE_FAIL_ON=deps-test:1 FAKE_FAIL_CODE=125 deps_scan && fail "a trivy that cannot start passed"
+  out_has "(exit 125)"
+}
+
+test_deps_unread_manifest_red() {
+  setup
+  FAKE_DEPS_UNREAD=web/pnpm-lock.yaml deps_scan && fail "a lockfile trivy did not read passed"
+  out_has "trivy read no pnpm manifest at web/pnpm-lock.yaml"
+  FAKE_DEPS_UNREAD=go.mod deps_scan && fail "a go.mod trivy did not read passed"
+  out_has "trivy read no gomod manifest at go.mod"
+}
+
+test_deps_exit_disagrees_red() {
+  setup
+  FAKE_DEPS_CODE=5 deps_scan && fail "exit 5 with an empty report passed"
+  out_has "trivy exited 5 (findings) but its report lists none"
+  FAKE_DEPS_CODE=0 FAKE_DEPS_FINDINGS=go.mod deps_scan && fail "exit 0 with findings passed"
+  out_has "trivy exited 0 but its report lists findings"
+}
+
+test_deps_allow_listed_passes() {
+  setup
+  echo '[{"tool": "trivy", "id": "CVE-2099-0001", "reason": "made up", "expires": "2099-01-01"}]' >"$W/security/allow.json"
+  FAKE_DEPS_FINDINGS=web/pnpm-lock.yaml deps_scan || fail "an allow-listed finding was red: $(cat "$W/out")"
+  grep -qxF '  - id: CVE-2099-0001' "$LOG.depsignore" || fail "the allow id did not reach the ignore file"
+}
+
+test_deps_bad_input() {
+  setup
+  local rc=0
+  deps_scan extra || rc=$?
+  assert_eq "exit code with an argument" 2 "$rc"
+  rc=0
+  (cd / && PATH="$ROOT/bin:$PATH" "$W/scripts/security/deps-scan.sh") >"$W/out" 2>&1 || rc=$?
+  assert_eq "exit code with no TRIVY_IMAGE" 2 "$rc"
+  rm "$W/go.mod"
+  deps_scan && fail "a missing go.mod passed"
+  out_has "go.mod is missing"
+}
+
 # csp-check.sh: a made-up built page. csp_page <policy> writes $W/index.html with that policy in
 # its CSP <meta> and one inline script; $csp_hash is that script's sha256 source. A policy of "-"
 # writes no <meta>.
@@ -1865,6 +1980,13 @@ t "release-on-main: a commit only on a side branch is red" test_release_on_main_
 t "release-on-main: a failed fetch of main is red" test_release_on_main_fetch_fails_red
 t "release-on-main: a missing or unknown GITHUB_SHA is red" test_release_on_main_missing_sha_red
 t "release-on-main: a shallow clone is red" test_release_on_main_shallow_clone_red
+t "deps-scan: a clean scan reads both manifests with the blocking flags" test_deps_clean_scans_both_manifests
+t "deps-scan: a fixable high finding in either manifest is red" test_deps_finding_red
+t "deps-scan: a trivy error or a trivy that cannot start is red" test_deps_trivy_error_red
+t "deps-scan: a manifest missing from the report is red" test_deps_unread_manifest_red
+t "deps-scan: an exit that disagrees with the report is red" test_deps_exit_disagrees_red
+t "deps-scan: an allow-listed trivy id is not red" test_deps_allow_listed_passes
+t "deps-scan: bad arguments, no TRIVY_IMAGE or a missing manifest" test_deps_bad_input
 t "csp-check: a built page with a good policy passes" test_csp_good_page_passes
 t "csp-check: a page with no CSP meta (the web-stub) or no page is red" test_csp_missing_meta_red
 t "csp-check: unsafe-inline, unsafe-eval or a host in script-src is red" test_csp_unsafe_inline_red
