@@ -30,7 +30,7 @@ var (
 	errNoRedirect = errors.New("push endpoint redirected")
 )
 
-// nonPublicPrefixes are the IPv4 ranges netip's own predicates do not cover.
+// nonPublicPrefixes are the ranges netip's own predicates do not cover.
 var nonPublicPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("0.0.0.0/8"),          // "this network"
 	netip.MustParsePrefix("100.64.0.0/10"),      // carrier-grade NAT (RFC 6598)
@@ -38,6 +38,9 @@ var nonPublicPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("198.18.0.0/15"),      // benchmarking (RFC 2544)
 	netip.MustParsePrefix("240.0.0.0/4"),        // reserved
 	netip.MustParsePrefix("255.255.255.255/32"), // limited broadcast
+	// Local-use NAT64 (RFC 8215): where the IPv4 sits depends on the network's own prefix length
+	// (RFC 6052), so it cannot be checked again; no push service lives there.
+	netip.MustParsePrefix("64:ff9b:1::/48"),
 }
 
 // embeddingPrefixes are the IPv6 ranges whose address carries an IPv4 address, and where it sits:
@@ -46,15 +49,14 @@ var embeddingPrefixes = []struct {
 	prefix netip.Prefix
 	from   int // the first of the four bytes that hold the IPv4 address
 }{
-	{netip.MustParsePrefix("64:ff9b::/96"), 12},   // NAT64 (RFC 6052)
-	{netip.MustParsePrefix("64:ff9b:1::/48"), 12}, // local-use NAT64 (RFC 8215), as a /96 inside it
-	{netip.MustParsePrefix("2002::/16"), 2},       // 6to4 (RFC 3056)
-	{netip.MustParsePrefix("::/96"), 12},          // IPv4-compatible (deprecated, RFC 4291)
+	{netip.MustParsePrefix("64:ff9b::/96"), 12}, // NAT64 (RFC 6052)
+	{netip.MustParsePrefix("2002::/16"), 2},     // 6to4 (RFC 3056)
+	{netip.MustParsePrefix("::/96"), 12},        // IPv4-compatible (deprecated, RFC 4291)
 }
 
 // isPublic reports whether a is an address the server may connect to: not loopback, private
 // (RFC 1918, IPv6 ULA), link-local, carrier-grade NAT, reserved, unspecified or multicast, also
-// when it is written as an IPv4-mapped address or carried inside a NAT64, 6to4 or IPv4-compatible
+// when it is written as an IPv4-mapped address or carried inside a well-known NAT64 (local-use NAT64 is refused whole), 6to4 or IPv4-compatible
 // IPv6 address.
 func isPublic(a netip.Addr) bool {
 	a = a.Unmap()
