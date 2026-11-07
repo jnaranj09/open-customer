@@ -7,11 +7,16 @@
 # Both tools run with --network none: Trivy with the checks built into its pinned image
 # (--skip-check-update, never a bundle downloaded at run time), zizmor with --offline. The live
 # trivy-config and zizmor ids of security/allow.json (allow.sh) go to a temp .trivyignore.yaml and a
-# temp zizmor config.
+# temp zizmor config. A trivy-config id is a check id (the check is ignored in every Dockerfile) or
+# <id>@<repo path of a scanned Dockerfile> (ignored in that file only, through the ignore entry's
+# Trivy `paths:`); any other shape is refused.
 #
-# Trivy: a high or critical misconfiguration is red. Trivy exits 1 on its own errors whatever
-# --exit-code says, so findings use exit code 5 and any other non-zero exit is red; its JSON report
-# must show the Dockerfile was scanned, so a file Trivy did not recognise never reads as clean.
+# Trivy runs once on /src, where each Dockerfile is mounted at its repo path, so each result's
+# Target is the repo path that `paths:` matches. A high or critical misconfiguration is red, named
+# by file. Trivy exits 1 on its own errors whatever --exit-code says, so findings use exit code 5
+# and any other non-zero exit is red; its JSON report must list every Dockerfile as scanned, so a
+# file Trivy did not recognise never reads as clean, and an exit that disagrees with the report is
+# red.
 # zizmor exits 11 to 14 for its highest finding (informational, low, medium, high): 13 and 14 are
 # red, 11 and 12 are reported only; 1 (error), 2 (bad arguments), 3 (no inputs) and any other
 # exit are red. SARIF_DIR=<dir> (relative to the repo root) also writes <dir>/zizmor.sarif; the
@@ -68,7 +73,21 @@ allow_ids() {
   done <<<"$ids"
 }
 
-trivy_ids=$(allow_ids trivy-config '^[A-Za-z0-9._:-]+$')
+# trivy_ignore_entry <id>: the .trivyignore.yaml entry for one trivy-config id, or a refusal.
+trivy_ignore_entry() {
+  local id=$1 check path
+  check=${id%%@*}
+  if ! [[ "$check" =~ ^[A-Za-z0-9._:-]+$ ]]; then
+    return 1
+  fi
+  echo "  - id: $check"
+  [ "$check" != "$id" ] || return 0
+  path=${id#*@}
+  printf '%s\n' "${dockerfiles[@]}" | grep -qxF -- "$path" || return 1
+  printf '    paths:\n      - "%s"\n' "$path"
+}
+
+trivy_ids=$(scripts/security/allow.sh trivy-config)
 zizmor_ids=$(allow_ids zizmor '^[a-z0-9-]+$')
 {
   if [ -z "$trivy_ids" ]; then
@@ -76,7 +95,10 @@ zizmor_ids=$(allow_ids zizmor '^[a-z0-9-]+$')
   else
     echo "misconfigurations:"
     while read -r id; do
-      echo "  - id: $id"
+      if ! trivy_ignore_entry "$id"; then
+        echo "config-scan: security/allow.json has a trivy-config id that is not <id> or <id>@<a scanned Dockerfile> (${dockerfiles[*]})" >&2
+        exit 1
+      fi
     done <<<"$trivy_ids"
   fi
 } >"$work/.trivyignore.yaml"
@@ -97,32 +119,43 @@ red() {
   red=$((red + 1))
 }
 
-# trivy_one <Dockerfile path>
-trivy_one() {
-  local file=$1 report rc=0
-  report=$(tr '/' '-' <<<"$file").json
-  echo "== config-scan: trivy config $file"
+# trivy_config: one Trivy config run on every Dockerfile, each mounted at /src/<repo path>.
+trivy_config() {
+  local rc=0 mounts=() f n report=$work/out/trivy-config.json bad=0
+  for f in "${dockerfiles[@]}"; do
+    mounts+=(-v "$PWD/$f:/src/$f:ro")
+  done
+  echo "== config-scan: trivy config ${dockerfiles[*]}"
   docker run --rm --name "$trivy_container" --network none -u "$(id -u):$(id -g)" \
-    -v "$PWD/$(dirname "$file"):/src/$(dirname "$file"):ro" -v "$work:/scan:ro" -v "$work/out:/out" \
+    "${mounts[@]}" -v "$work:/scan:ro" -v "$work/out:/out" \
     "$TRIVY_IMAGE" config --cache-dir /tmp/trivy --skip-check-update --skip-version-check \
     --ignorefile /scan/.trivyignore.yaml --severity HIGH,CRITICAL --exit-code "$findings_exit" \
-    --format json --output "/out/$report" "/src/$file" || rc=$?
+    --format json --output /out/trivy-config.json /src || rc=$?
   case "$rc" in
     0 | "$findings_exit") ;;
     *)
-      red "trivy could not scan $file (exit $rc)"
+      red "trivy could not scan the Dockerfiles (exit $rc)"
       return 0
       ;;
   esac
-  if ! jq -e '[.Results[]? | select(.Type == "dockerfile")] | length > 0' "$work/out/$report" >/dev/null 2>&1; then
-    red "trivy scanned no Dockerfile in $file"
-    return 0
-  fi
-  jq -r '.Results[]?.Misconfigurations[]? | "\(.ID) (\(.Severity)): \(.Title)"' "$work/out/$report"
-  if [ "$rc" -eq "$findings_exit" ]; then
-    red "$file: high or critical misconfigurations"
-  else
-    echo "config-scan: $file: no high or critical misconfigurations"
+  for f in "${dockerfiles[@]}"; do
+    if ! jq -e --arg f "$f" '[.Results[]? | select(.Target == $f and .Type == "dockerfile")] | length == 1' \
+      "$report" >/dev/null 2>&1; then
+      red "trivy scanned no Dockerfile at $f"
+      bad=1
+      continue
+    fi
+    jq -r --arg f "$f" '.Results[] | select(.Target == $f) | .Misconfigurations[]? | "\(.ID) (\(.Severity)): \(.Title)"' "$report"
+    n=$(jq --arg f "$f" '[.Results[] | select(.Target == $f) | .Misconfigurations[]?] | length' "$report")
+    if [ "$n" -gt 0 ]; then
+      red "$f: high or critical misconfigurations"
+      bad=1
+    else
+      echo "config-scan: $f: no high or critical misconfigurations"
+    fi
+  done
+  if [ "$rc" -eq "$findings_exit" ] && [ "$bad" -eq 0 ]; then
+    red "trivy exited $rc (findings) but its report lists none"
   fi
 }
 
@@ -133,9 +166,7 @@ zizmor() {
     "$ZIZMOR_IMAGE" --offline "$@" --config /cfg/zizmor.yml .github/workflows
 }
 
-for f in "${dockerfiles[@]}"; do
-  trivy_one "$f"
-done
+trivy_config
 
 echo "== config-scan: zizmor .github/workflows"
 rc=0

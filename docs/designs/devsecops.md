@@ -201,11 +201,16 @@ rule names its sensor") applied to security.
   `gitleaks` and `expires` is `YYYY-MM-DD`. It started as `[]`. A `zap` id is a rule number (the
   whole rule is ignored) or `<rule number>@<url regex>` (only that rule's alerts on URLs the regex
   matches from the start are dropped, through a ZAP `OUTOFSCOPE` rules line; the rule still fails
-  on every other route); prefer the scoped form. The guard `TestSecurityAllowList`
-  (`internal/guards`) fails on a missing field, an unknown tool, a bad date, an expired date, a date
-  more than 180 days ahead, a duplicate `(tool, id)`, or a `zap` id of another shape (its regex must
-  compile, end in `$` and match none of a few probe URLs: the shell, a built file, an API route;
-  that catches a typo or a catch-all). `scripts/security/allow.sh <tool>` prints
+  on every other route); prefer the scoped form. A `trivy-config` id is a check id (for example
+  `DS-0002`: the check is ignored in every scanned Dockerfile) or `<check id>@<repo path>` (for
+  example `DS-0002@deploy/backup/Dockerfile`: ignored in that Dockerfile only, through Trivy's own
+  `paths:` in the ignore entry, so the same check still blocks on every other file); prefer the
+  scoped form. `config-scan.sh` refuses a scope that is not one of the Dockerfiles it scans. The
+  guard `TestSecurityAllowList` (`internal/guards`) fails on a missing field, an unknown tool, a bad
+  date, an expired date, a date more than 180 days ahead, a duplicate `(tool, id)`, a `zap` id of
+  another shape (its regex must compile, end in `$` and match none of a few probe URLs: the shell,
+  a built file, an API route; that catches a typo or a catch-all), or a `trivy-config` id of another
+  shape (the scope must be a clean repo-relative path, with no glob, to a file that exists). `scripts/security/allow.sh <tool>` prints
   that tool's live ids (expiry today or later, UTC), one per line, and each scan wrapper turns them
   into the tool's own ignore form. gitleaks keeps its `.gitleaksignore` of fingerprints, which this
   guard does not cover. A new entry or a later expiry date needs the owner's agreement, written in

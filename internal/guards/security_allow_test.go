@@ -9,6 +9,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -34,7 +37,7 @@ type allowEntry struct {
 }
 
 // checkAllowList returns every problem in the allow-list, judged on the UTC day today.
-func checkAllowList(data []byte, today time.Time) []string {
+func checkAllowList(data []byte, today time.Time, fileExists func(rel string) bool) []string {
 	var raw []json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil || raw == nil {
 		return []string{"not a JSON array (an empty list is [])"}
@@ -73,6 +76,11 @@ func checkAllowList(data []byte, today time.Time) []string {
 		if e.Tool == "zap" && e.ID != "" {
 			if p := checkZapID(e.ID); p != "" {
 				problems = append(problems, fmt.Sprintf("entry %d: zap id %q: %s", i, e.ID, p))
+			}
+		}
+		if e.Tool == "trivy-config" && e.ID != "" {
+			if p := checkTrivyConfigID(e.ID, fileExists); p != "" {
+				problems = append(problems, fmt.Sprintf("entry %d: trivy-config id %q: %s", i, e.ID, p))
 			}
 		}
 		key := [2]string{e.Tool, e.ID}
@@ -124,6 +132,31 @@ func checkZapID(id string) string {
 	return ""
 }
 
+// probeFileExists stands in for the repo in the probes: only the backup Dockerfile exists.
+func probeFileExists(rel string) bool { return rel == "deploy/backup/Dockerfile" }
+
+// trivyConfigID is a Trivy check id, alone (the check is ignored in every scanned Dockerfile) or
+// with "@<repo path>" (ignored in that file only: scripts/security/config-scan.sh writes the
+// ignore entry with Trivy's `paths:`, and refuses a path it does not scan).
+var trivyConfigID = regexp.MustCompile(`^([A-Za-z0-9._:-]+)(?:@([A-Za-z0-9._/-]+))?$`)
+
+// checkTrivyConfigID returns what is wrong with a trivy-config id, or "". A scope must be a clean
+// repo-relative path to a file that exists (no glob: Trivy matches `paths:` as a pattern).
+func checkTrivyConfigID(id string, fileExists func(rel string) bool) string {
+	m := trivyConfigID.FindStringSubmatch(id)
+	switch {
+	case m == nil:
+		return "want <check id> or <check id>@<repo path of a Dockerfile> (no space, no glob)"
+	case !strings.Contains(id, "@"):
+		return ""
+	case path.IsAbs(m[2]) || path.Clean(m[2]) != m[2] || strings.HasPrefix(m[2], ".."):
+		return "the path must be a clean repo-relative path"
+	case !fileExists(m[2]):
+		return "no such repo path " + m[2]
+	}
+	return ""
+}
+
 func TestSecurityAllowListProbes(t *testing.T) {
 	t.Parallel()
 	today := time.Date(2026, 11, 6, 15, 0, 0, 0, time.UTC)
@@ -137,9 +170,11 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"an entry exactly 180 days ahead", "[" + entry("zap", "10038", "r", "2027-05-05") + "]"},
 		{"the same id for two tools", "[" + good + "," + entry("trivy-config", "CVE-2026-0001", "r", "2026-12-01") + "]"},
 		{"a zap rule scoped to one route", "[" + entry("zap", "40018@.*/api/v1/client-errors$", "r", "2026-12-01") + "]"},
+		{"a trivy-config check", "[" + entry("trivy-config", "DS-0002", "r", "2026-12-01") + "]"},
+		{"a trivy-config check scoped to one file", "[" + entry("trivy-config", "DS-0002@deploy/backup/Dockerfile", "r", "2026-12-01") + "]"},
 	}
 	for _, c := range valid {
-		if got := checkAllowList([]byte(c.data), today); len(got) != 0 {
+		if got := checkAllowList([]byte(c.data), today, probeFileExists); len(got) != 0 {
 			t.Errorf("%s: refused: %q", c.name, got)
 		}
 	}
@@ -168,9 +203,18 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"a zap scope that matches the app shell", "[" + entry("zap", "40018@http://localhost:8080/$", "r", "2026-12-01") + "]"},
 		{"a zap scope that matches every built file", "[" + entry("zap", "40018@.*\\.js$", "r", "2026-12-01") + "]"},
 		{"a zap scope that matches every API route", "[" + entry("zap", "40018@.*/api/v1/.*$", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope that is empty", "[" + entry("trivy-config", "DS-0002@", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope with no check", "[" + entry("trivy-config", "@deploy/backup/Dockerfile", "r", "2026-12-01") + "]"},
+		{"a trivy-config check with a space", "[" + entry("trivy-config", "DS 0002", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope to a missing file", "[" + entry("trivy-config", "DS-0002@deploy/gone/Dockerfile", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope with an absolute path", "[" + entry("trivy-config", "DS-0002@/deploy/backup/Dockerfile", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope outside the repo", "[" + entry("trivy-config", "DS-0002@../deploy/backup/Dockerfile", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope that is not a clean path", "[" + entry("trivy-config", "DS-0002@deploy//backup/Dockerfile", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope with a glob", "[" + entry("trivy-config", "DS-0002@deploy/*/Dockerfile", "r", "2026-12-01") + "]"},
+		{"a trivy-config scope with two @", "[" + entry("trivy-config", "DS-0002@deploy/backup/Dockerfile@x", "r", "2026-12-01") + "]"},
 	}
 	for _, c := range bad {
-		if got := checkAllowList([]byte(c.data), today); len(got) == 0 {
+		if got := checkAllowList([]byte(c.data), today, probeFileExists); len(got) == 0 {
 			t.Errorf("%s: no problem reported", c.name)
 		}
 	}
@@ -193,7 +237,12 @@ func TestSecurityAllowList(t *testing.T) {
 	if got := scriptTools(readText(t, "scripts/security/allow.sh")); !slices.Equal(got, allowTools) {
 		t.Errorf("scripts/security/allow.sh TOOLS = %q, want the guard's %q", got, allowTools)
 	}
-	for _, p := range checkAllowList([]byte(readText(t, allowListPath)), time.Now().UTC()) {
+	base := root(t)
+	fileExists := func(rel string) bool {
+		_, err := os.Stat(filepath.Join(base, filepath.FromSlash(rel)))
+		return err == nil
+	}
+	for _, p := range checkAllowList([]byte(readText(t, allowListPath)), time.Now().UTC(), fileExists) {
 		t.Errorf("%s: %s", allowListPath, p)
 	}
 }

@@ -10,5 +10,11 @@
     "id": "40018@.*/api/v1/auth/password$",
     "reason": "False positive: POST /auth/password compares current_password with the stored Argon2id hash in Go and never sends it to SQL; its per-username rate limit (401, then 429) makes the boolean SQL-injection check see differing answers. Owner decision 2026-11-06.",
     "expires": "2027-05-05"
+  },
+  {
+    "tool": "trivy-config",
+    "id": "DS-0002@deploy/backup/Dockerfile",
+    "reason": "The backup image runs as root by design: backup and restore write to a BACKUP_TARGET host folder of any owner, and restore chowns the media to 65532. In deploy/compose.yaml it has cap_drop ALL plus only DAC_OVERRIDE (restore adds CHOWN and FOWNER), no-new-privileges and no ports. DS-0002 still blocks on every other Dockerfile. Owner decision 2026-11-06.",
+    "expires": "2027-05-05"
   }
 ]

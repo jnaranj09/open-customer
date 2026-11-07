@@ -19,10 +19,13 @@
 #                   one finding to its JSONL output when FAKE_NUCLEI_FINDINGS is set, exits 0
 #   curl-test:1 with `-o /cache/<file>` (the templates download) writes a made-up tarball there
 # and, for config-scan.sh:
-#   trivy-cfg-test:1  writes a JSON report with one scanned Dockerfile (none when
-#                   FAKE_TRIVY_CONFIG_EMPTY is set) to its --output, copies its ignore file to
-#                   $FAKE_LOG.cfgignore, and exits FAKE_TRIVY_CONFIG_CODE (default 0); the value
-#                   `findings` means the run's --exit-code value, as Trivy does
+#   trivy-cfg-test:1  reports each file mounted at /src/<path> as a scanned Dockerfile (all but
+#                   deploy/backup/Dockerfile when FAKE_TRIVY_CONFIG_EMPTY is set) in a JSON report at
+#                   its --output, copies its ignore file to $FAKE_LOG.cfgignore, and gives each path
+#                   in FAKE_TRIVY_CONFIG_FINDINGS (space-separated) a DS-0002 finding unless the
+#                   ignore file drops it, as Trivy does: an entry `- id: DS-0002` with no `paths:`,
+#                   or with `paths:` listing that path. It exits FAKE_TRIVY_CONFIG_CODE when set,
+#                   else the run's --exit-code value when a finding is left, else 0
 #   zizmor-test:1   copies its --config file to $FAKE_LOG.zizmor, prints a made-up SARIF report
 #                   with --format sarif (exit 0), and otherwise exits FAKE_ZIZMOR_CODE (default 0)
 # `docker exec ... setup-link` prints a made-up setup link. The fake also copies the Trivy ignore
@@ -38,7 +41,7 @@ REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
-  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_ZIZMOR_CODE MODE PULL SARIF_DIR \
+  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
 
 mkdir -p "$ROOT/bin"
@@ -118,23 +121,40 @@ case "$1" in
         exit "${FAKE_ZAP_CODE:-0}"
         ;;
       *" trivy-cfg-test:1 "*)
-        out_file='' code=0 prev=''
+        out_file='' code=0 prev='' targets=()
         for a in "$@"; do
           [ "$prev" != --output ] || out_file=$a
           [ "$prev" != --exit-code ] || code=$a
+          if [ "$prev" = -v ]; then
+            case "$a" in *:/src/*:ro) t=${a#*:/src/} && targets+=("${t%:ro}") ;; esac
+          fi
           prev=$a
         done
-        cp "$(mount_of /scan "$@")/.trivyignore.yaml" "$FAKE_LOG.cfgignore"
-        report=$(mount_of /out "$@")/${out_file#/out/}
-        if [ -n "${FAKE_TRIVY_CONFIG_EMPTY:-}" ]; then
-          echo '{"Results":[]}' >"$report"
-        else
-          echo '{"Results":[{"Target":"Dockerfile","Type":"dockerfile","Misconfigurations":[]}]}' >"$report"
-        fi
-        case "${FAKE_TRIVY_CONFIG_CODE:-0}" in
-          findings) exit "$code" ;;
-          *) exit "${FAKE_TRIVY_CONFIG_CODE:-0}" ;;
-        esac
+        ignore=$(mount_of /scan "$@")/.trivyignore.yaml
+        cp "$ignore" "$FAKE_LOG.cfgignore"
+        # The paths DS-0002 is dropped for, one per line; "*" for an entry without paths.
+        dropped=$(awk '/^  - id: /{ if (open) print "*"; open = ($3 == "DS-0002"); paths = 0; next }
+          /^    paths:/{ next }
+          /^      - /{ if (open) { p = $2; gsub(/"/, "", p); print p; paths = 1 } next }
+          END{ if (open && !paths) print "*" }' "$ignore")
+        results='[]' left=0
+        for t in "${targets[@]}"; do
+          [ -z "${FAKE_TRIVY_CONFIG_EMPTY:-}" ] || [ "$t" != deploy/backup/Dockerfile ] || continue
+          m='[]'
+          case " ${FAKE_TRIVY_CONFIG_FINDINGS:-} " in
+            *" $t "*)
+              if ! grep -qxF -e '*' -e "$t" <<<"$dropped"; then
+                m='[{"ID":"DS-0002","Severity":"HIGH","Title":"made up"}]'
+                left=1
+              fi
+              ;;
+          esac
+          results=$(jq -c --arg t "$t" --argjson m "$m" '. + [{Target: $t, Type: "dockerfile", Misconfigurations: $m}]' <<<"$results")
+        done
+        jq -n --argjson r "$results" '{Results: $r}' >"$(mount_of /out "$@")/${out_file#/out/}"
+        if [ -n "${FAKE_TRIVY_CONFIG_CODE:-}" ]; then exit "$FAKE_TRIVY_CONFIG_CODE"; fi
+        [ "$left" -eq 0 ] || exit "$code"
+        exit 0
         ;;
       *" zizmor-test:1 "*)
         prev=''
@@ -574,10 +594,10 @@ JSON
 test_config_clean_run() {
   setup
   config_scan || fail "a clean config scan exited non-zero: $(cat "$W/out")"
-  assert_eq "trivy config runs" 2 "$(count_calls 'trivy-cfg-test:1 config')"
-  has_call "/src/Dockerfile" || fail "the app Dockerfile was not scanned"
-  has_call "/src/deploy/backup/Dockerfile" || fail "the backup Dockerfile was not scanned"
-  assert_eq "trivy config runs with the blocking flags" 2 \
+  assert_eq "trivy config runs" 1 "$(count_calls 'trivy-cfg-test:1 config')"
+  has_call "/Dockerfile:/src/Dockerfile:ro" || fail "the app Dockerfile was not mounted at its repo path"
+  has_call "/deploy/backup/Dockerfile:/src/deploy/backup/Dockerfile:ro" || fail "the backup Dockerfile was not mounted at its repo path"
+  assert_eq "trivy config runs with the blocking flags" 1 \
     "$(count_calls '--skip-check-update --skip-version-check --ignorefile /scan/.trivyignore.yaml --severity HIGH,CRITICAL --exit-code 5')"
   assert_eq "zizmor runs" 1 "$(count_calls 'zizmor-test:1 --offline')"
   assert_eq "scanner runs with a network" 0 "$(grep -E 'trivy-cfg-test:1|zizmor-test:1' "$LOG" | grep -vc -- '--network none')"
@@ -625,21 +645,60 @@ test_zizmor_error_red() {
 
 test_trivy_config_findings_red() {
   setup
-  FAKE_TRIVY_CONFIG_CODE=findings config_scan && fail "a Trivy config finding exited 0"
-  out_has "Dockerfile: high or critical misconfigurations"
+  FAKE_TRIVY_CONFIG_FINDINGS=deploy/backup/Dockerfile config_scan && fail "a Trivy config finding exited 0"
+  out_has "config-scan: deploy/backup/Dockerfile: high or critical misconfigurations"
+  out_has "DS-0002 (HIGH): made up"
+}
+
+# The owner-approved shape: DS-0002 allowed on the backup Dockerfile only.
+scoped_allow() {
+  jq -n --arg id "$1" '[{"tool": "trivy-config", "id": $id, "reason": "made up", "expires": "2099-01-01"}]' \
+    >"$W/security/allow.json"
+}
+
+test_trivy_config_scoped_allow_drops_that_file() {
+  setup
+  scoped_allow DS-0002@deploy/backup/Dockerfile
+  FAKE_TRIVY_CONFIG_FINDINGS=deploy/backup/Dockerfile config_scan ||
+    fail "a finding the scoped id allows on that file exited non-zero: $(cat "$W/out")"
+  assert_eq "ignore file" "$(printf 'misconfigurations:\n  - id: DS-0002\n    paths:\n      - "deploy/backup/Dockerfile"')" \
+    "$(cat "$LOG.cfgignore")"
+}
+
+test_trivy_config_scoped_allow_other_file_red() {
+  setup
+  scoped_allow DS-0002@deploy/backup/Dockerfile
+  FAKE_TRIVY_CONFIG_FINDINGS='Dockerfile deploy/backup/Dockerfile' config_scan &&
+    fail "the same finding on the app Dockerfile exited 0"
+  out_has "config-scan: Dockerfile: high or critical misconfigurations"
+  grep -qF "config-scan: deploy/backup/Dockerfile: high" "$W/out" && fail "the scoped file is still red: $(cat "$W/out")"
+  return 0
+}
+
+test_trivy_config_malformed_scoped_id_refused() {
+  local id
+  for id in 'DS-0002@' 'DS-0002@/src/Dockerfile' 'DS-0002@../Dockerfile' 'DS-0002@deploy/*/Dockerfile' \
+    'DS-0002@deploy/backup/Dockerfile@x' 'DS-0002@deploy/compose.yaml' '@deploy/backup/Dockerfile' \
+    'DS-0002@deploy//backup/Dockerfile' 'DS 0002@deploy/backup/Dockerfile'; do
+    setup
+    scoped_allow "$id"
+    config_scan && fail "the trivy-config id '$id' was accepted"
+    out_has "security/allow.json has a trivy-config id that is not <id> or <id>@<a scanned Dockerfile>"
+    assert_eq "trivy runs with the bad id '$id'" 0 "$(count_calls 'trivy-cfg-test:1')"
+  done
 }
 
 test_trivy_config_error_red() {
   setup
   # Trivy exits 1 on its own errors whatever --exit-code says.
   FAKE_TRIVY_CONFIG_CODE=1 config_scan && fail "a Trivy config error (exit 1) exited 0"
-  out_has "trivy could not scan Dockerfile (exit 1)"
+  out_has "trivy could not scan the Dockerfiles (exit 1)"
 }
 
 test_trivy_config_nothing_scanned_red() {
   setup
   FAKE_TRIVY_CONFIG_EMPTY=1 config_scan && fail "a Trivy config run that scanned no Dockerfile exited 0"
-  out_has "trivy scanned no Dockerfile in Dockerfile"
+  out_has "trivy scanned no Dockerfile at deploy/backup/Dockerfile"
 }
 
 test_config_allow_reaches_tools() {
@@ -750,6 +809,9 @@ t "a zizmor error (exit 1, 2, 3) or a zizmor that cannot start is red" test_zizm
 t "a Trivy config finding is red" test_trivy_config_findings_red
 t "a Trivy config error (exit 1) is red" test_trivy_config_error_red
 t "a Trivy config run that scanned no Dockerfile is red" test_trivy_config_nothing_scanned_red
+t "a scoped trivy-config id drops the finding on that file" test_trivy_config_scoped_allow_drops_that_file
+t "a scoped trivy-config id leaves the same finding on the app Dockerfile red" test_trivy_config_scoped_allow_other_file_red
+t "a malformed scoped trivy-config id is refused" test_trivy_config_malformed_scoped_id_refused
 t "allow-listed trivy-config and zizmor ids reach the tools" test_config_allow_reaches_tools
 t "a zizmor allow id that is not a plain token is refused" test_config_allow_bad_id_refused
 t "SARIF_DIR gets the zizmor SARIF file" test_config_sarif_written
