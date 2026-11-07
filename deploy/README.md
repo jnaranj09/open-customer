@@ -249,15 +249,44 @@ Do it outside her working hours. A rollback drops everything she entered after t
    scripts/upgrade.sh 1.2.3
    ```
 
-   It pulls the new images, takes a backup tagged `pre-upgrade`, sets `APP_VERSION` in `.env`, and
-   runs `docker compose up -d`. The new `app` runs the migrations. If the backup fails (for
-   example the target folder or disk is missing), the script stops and `.env` stays on the old
-   version.
+   It first checks the signature of both new images (the app and the backup image), then pulls
+   them, takes a backup tagged `pre-upgrade`, sets `APP_VERSION` in `.env`, and runs
+   `docker compose up -d`. The new `app` runs the migrations. If the backup fails (for example the
+   target folder or disk is missing), the script stops and `.env` stays on the old version.
 3. Check `docker compose ps` and open the app.
 
 If you upgrade by editing `.env` and running `docker compose up -d` yourself, `app` refuses to
 migrate without a backup from the last 60 minutes and exits with "Pending migrations and no recent
 backup. Run scripts/upgrade.sh."
+
+### Signatures
+
+Each release's images are signed by this repository's release workflow (keyless, with cosign
+through GitHub's OIDC; no key is stored anywhere), and each carries a CycloneDX SBOM attestation.
+`scripts/upgrade.sh` runs cosign from its pinned image (`COSIGN_IMAGE` in `scripts/lib.sh`; you
+install nothing) and accepts only a signature whose identity matches `SIGNER_IDENTITY_REGEXP`
+(this repository's `release.yml` on a `v*` tag) from `SIGNER_ISSUER` (GitHub Actions). If the
+check fails, the script stops before it pulls anything or takes a backup, `.env` stays as it was,
+and the message names the image. Check, in this order: the PC can reach `ghcr.io` and Sigstore's
+public services (`sigstore.dev`); the version exists; for a fork, the lines below. There is no
+option to skip the check.
+
+To check one image by hand, from this folder, with the same pin and identity the script uses (it
+prints `signed` when the signature is good):
+
+```sh
+bash -c '. scripts/lib.sh && verify_image ghcr.io/jnaranj09/open-customer:1.2.3 && echo signed'
+```
+
+**A fork** that builds and publishes its own images changes `SIGNER_IDENTITY_REGEXP` in
+`scripts/lib.sh` to its own repository
+(`^https://github\.com/<owner>/<repo>/\.github/workflows/release\.yml@refs/tags/v`), next to the
+image names in `compose.yaml`. `SIGNER_ISSUER` stays as it is while the fork releases
+from GitHub Actions.
+
+**The cosign pin** (`COSIGN_IMAGE` in `scripts/lib.sh`) is bumped by hand: Dependabot cannot read
+`lib.sh`. Its version must equal `cosign-release` in `.github/workflows/release.yml`; change both
+(and the image digest) in one commit, and `make check-pins` checks that they agree.
 
 ## 10. Restore
 

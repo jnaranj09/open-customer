@@ -162,7 +162,10 @@ once by breaking what they protect, then restored.
   through the API, backup, `down -v`, `restore.sh latest`, old login works, photo bytes identical,
   new photo upload works), check 6 simulated (marker removed: `backup-now.sh` exits non-zero,
   "Disco de respaldo no visible", status line red, nothing written) and the Goal 7 grep (check 10).
-  NOT RUN: the release workflow and `upgrade.sh` end to end (both need a `v*` tag; D6); Verification
+  NOT RUN: the release workflow and `upgrade.sh` end to end (both need a `v*` tag; D6); the
+  release workflow's keyless cosign signature and SBOM attestation (`make release-sign`, added by
+  the security pipeline): there is no OIDC token outside Actions, so the first `v*` tag is its
+  test, and `upgrade.sh` to that release is the first verify of a real signature; Verification
   Plan checks 1-4 and 7-9 on her iPhone through the tunnel; a real removable-disk unplug and a
   `nofail` boot (not used yet: D8); the Ley 8968 check. The owner repeats check 5 on the home PC
   before real data (deploy/README.md section 8).

@@ -2,6 +2,7 @@
 # make check-pins (design doc "Pins"): files that cannot read the Makefile repeat a pin; fail if any
 # copy differs from its source. PG_IMAGE and GITLEAKS_IMAGE come from make, which reads them from
 # security/tools.Dockerfile. Scans only the files below, each once it exists; never docs/ or *.md.
+# The cosign pin is the exception to "each once it exists": its two copies are checked as a pair.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -54,6 +55,18 @@ if [ -f .github/workflows/ci.yml ]; then
   gitleaks_tag=${GITLEAKS_IMAGE%@*}
   [ "$ci_gitleaks" = "${gitleaks_tag##*:v}" ] ||
     bad "ci.yml gitleaks GITLEAKS_VERSION '$ci_gitleaks', GITLEAKS_IMAGE (security/tools.Dockerfile) is $GITLEAKS_IMAGE"
+fi
+
+# The cosign version upgrade.sh verifies with (COSIGN_IMAGE in deploy/scripts/lib.sh, which
+# deployers have without the Makefile) equals the `cosign-release` the release workflow signs with.
+# Dependabot reads neither, so both are bumped by hand in one commit.
+if [ -f .github/workflows/release.yml ] || [ -f deploy/scripts/lib.sh ]; then
+  release_cosign=$(sed -n 's/^ *cosign-release: *\([^ #]*\).*/\1/p' .github/workflows/release.yml 2>/dev/null | head -1 || true)
+  lib_cosign=$(sed -n 's/^COSIGN_IMAGE=[^:]*:\([^@]*\)@.*/\1/p' deploy/scripts/lib.sh 2>/dev/null | head -1 || true)
+  [ -n "$lib_cosign" ] || bad "deploy/scripts/lib.sh has no COSIGN_IMAGE=<image>:<tag>@sha256:<digest>"
+  [ -n "$release_cosign" ] || bad ".github/workflows/release.yml has no cosign-release"
+  [ "$release_cosign" = "$lib_cosign" ] ||
+    bad "release.yml cosign-release '$release_cosign', deploy/scripts/lib.sh COSIGN_IMAGE is cosign '$lib_cosign'"
 fi
 
 [ "$fail" -eq 0 ] && echo "check-pins: ok"

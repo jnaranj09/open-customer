@@ -108,7 +108,7 @@ dashboard and settings (Cloudflare or any other).
 | T65 | client data | An upgrade breaks the schema with no way back | upgrade.sh, serve | test:TestMigrateBlocksWithOldCopy; test:TestMigrateBlocksOnMissingStatusFile; test:TestAdminCommandsRefusePendingMigrations; file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T66 | client data | A restore runs without confirmation or leaves the app on the wrong version | restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T67 | deploy/.env | A killed upgrade or restore leaves a copy of .env (every secret) behind | upgrade.sh, restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
-| T68 | the images | An upgrade pulls an image that was not built by this repo's release workflow | upgrade.sh | gap: Task 7 |
+| T68 | the images | An upgrade pulls an image that was not built by this repo's release workflow | upgrade.sh | file:deploy/scripts/lib.sh; file:deploy/tests/scripts_test.sh; make:test-deploy; make:check-pins |
 | T69 | the images | A known high or critical CVE ships in the app or backup image | Dockerfile, deploy/backup/Dockerfile | make:image-scan; ci:ci.yml/security; ci:release.yml/images; file:scripts/security/tests/run.sh; make:test-sec |
 | T70 | the images | A known CVE in the pinned Postgres or cloudflared image | deploy/compose.yaml | make:image-scan; ci:release.yml/images; ci:security-weekly.yml/rescan; ci:ci.yml/security |
 | T71 | the images | A CVE found after an image shipped goes unnoticed | released images | ci:security-weekly.yml/rescan; make:image-scan |
@@ -124,7 +124,7 @@ dashboard and settings (Cloudflare or any other).
 | T76 | the build | A GitHub Action is swapped under its tag, or a workflow has too-wide permissions or script injection | .github/workflows | test:TestSupplyChainPins; make:config-scan; file:scripts/security/tests/run.sh; ci:ci.yml/gate |
 | T77 | the build | A secret is committed to the repo | git history | make:secrets; ci:ci.yml/gate |
 | T94 | the build | A token for an outside design tool is committed in the design file | design/soft-glass.pen | accepted: Pencil's fileToken is likely a document id, and even if it is a token it reaches only this design, which is public in this repo and holds no PII, and the value is already in public history, which is never rewritten (owner decision, 2026-11-06); file:.gitleaksignore |
-| T78 | the build | A release ships images nobody can verify, with no list of what is in them | release workflow | gap: Task 7 |
+| T78 | the build | A release ships images nobody can verify, with no list of what is in them | release workflow | ci:release.yml/images; file:scripts/security/release-sign.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: the first v* tag's release run proves the keyless signature and the SBOM attestation (no OIDC token outside Actions), then once per release when upgrade.sh verifies it |
 | T79 | the build | A change reaches main without a green CI run | GitHub settings | gap: Task 10 |
 | T80 | the host | The OS, the disk, the Docker daemon, deploy/.env at rest and docker logs (which hold the setup link) | the host machine | out of scope: the deployer who owns the host |
 | T81 | the proxy | The front proxy or tunnel settings (cache rules, HSTS, bot rules) | the proxy dashboard | out of scope: the deployer, in their proxy or tunnel provider's dashboard |

@@ -5,7 +5,9 @@
 # that appends each call to a log and answers from env vars:
 #   FAKE_APP_VERSION    what `compose exec app open-customer version` prints
 #   FAKE_SNAPSHOT_JSON  what `snapshot-info` prints
-#   FAKE_FAIL_ON        a call containing this text exits FAKE_FAIL_CODE (default 1)
+#   FAKE_FAIL_ON        a call containing this text exits FAKE_FAIL_CODE (default 1); every other
+#                       call exits 0, so `run --rm <COSIGN_IMAGE> verify` passes unless
+#                       FAKE_FAIL_ON=verify
 # Only `compose config is valid` uses the real docker, and it starts nothing. The real deploy/.env
 # is never read or copied. All data here is made up.
 set -uo pipefail
@@ -104,14 +106,20 @@ no_call() {
   fi
 }
 
-# line_of <text>: the log line number of the first call containing <text> (empty when none).
+# line_of <text>: the log line number of the first call containing <text> (empty when none; the
+# `|| true` keeps pipefail from ending the test when grep finds nothing).
 line_of() {
-  calls | grep -nF -- "$1" | head -n1 | cut -d: -f1
+  calls | grep -nF -- "$1" | head -n1 | cut -d: -f1 || true
 }
 
 env_value() {
   sed -n "s/^$1=//p" "$W/deploy/.env"
 }
+
+# The pinned cosign image upgrade.sh verifies with, and the two images it must verify at 1.1.0.
+cosign_image=$(sed -n 's/^COSIGN_IMAGE=//p' "$DEPLOY/scripts/lib.sh")
+verify_app="run --rm $cosign_image verify ghcr.io/jnaranj09/open-customer:1.1.0 "
+verify_backup="run --rm $cosign_image verify ghcr.io/jnaranj09/open-customer-backup:1.1.0 "
 
 snapshot_json='{"id":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","time":"2026-11-01T03:00:00.123456789Z","app":"0.9.0"}'
 
@@ -209,6 +217,65 @@ test_upgrade_empty_temp_never_replaces_env() {
   no_temp_left
 }
 
+test_upgrade_verifies_before_pull() {
+  setup
+  local v a b p want_id want_issuer
+  [ -n "$cosign_image" ] || fail "deploy/scripts/lib.sh has no COSIGN_IMAGE"
+  FAKE_APP_VERSION=1.0.0 run upgrade.sh 1.1.0 >"$W/out" 2>&1 || fail "upgrade failed: $(cat "$W/out")"
+  v=$(line_of "compose exec app open-customer version")
+  a=$(line_of "$verify_app")
+  b=$(line_of "$verify_backup")
+  p=$(line_of "compose pull")
+  if [ -z "$a" ] || [ -z "$b" ]; then fail "both images were not verified: $(calls)"; fi
+  if [ "$v" -ge "$a" ] || [ "$v" -ge "$b" ] || [ "$a" -ge "$p" ] || [ "$b" -ge "$p" ]; then
+    fail "wrong order: $(calls)"
+  fi
+  # The exact signer: the release workflow of this repository on a v* tag, through GitHub OIDC.
+  want_id='--certificate-identity-regexp ^https://github\.com/jnaranj09/open-customer/\.github/workflows/release\.yml@refs/tags/v'
+  want_issuer='--certificate-oidc-issuer https://token.actions.githubusercontent.com'
+  [ "$(calls | grep -cF -- "$want_id $want_issuer")" -eq 2 ] ||
+    fail "a verify call does not pin the signer: $(calls)"
+  # Quiet on success.
+  if grep -q "signature" "$W/out"; then fail "verify printed on success: $(cat "$W/out")"; fi
+}
+
+test_upgrade_signature_check_fails() {
+  setup
+  local before rc=0
+  before=$(cat "$W/deploy/.env")
+  FAKE_APP_VERSION=1.0.0 FAKE_FAIL_ON=verify run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+  no_call pull
+  no_call "backup once"
+  no_call "up -d"
+  grep -qF "ghcr.io/jnaranj09/open-customer:1.1.0" "$W/err" || fail "the message does not name the image: $(cat "$W/err")"
+  grep -q "Sigstore" "$W/err" || fail "the message does not say what to check: $(cat "$W/err")"
+}
+
+test_upgrade_backup_image_signature_fails() {
+  setup
+  local rc=0
+  FAKE_APP_VERSION=1.0.0 FAKE_FAIL_ON="verify ghcr.io/jnaranj09/open-customer-backup:" \
+    run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call pull
+  no_call "backup once"
+  grep -qF "ghcr.io/jnaranj09/open-customer-backup:1.1.0" "$W/err" || fail "the message does not name the backup image: $(cat "$W/err")"
+}
+
+test_upgrade_compose_without_backup_image() {
+  setup
+  local rc=0
+  sed -i 's|open-customer-backup:|open-customer:|' "$W/deploy/compose.yaml"
+  FAKE_APP_VERSION=1.0.0 run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call verify
+  no_call pull
+  grep -q "compose.yaml must name the app image and its -backup image" "$W/err" ||
+    fail "the message does not name compose.yaml: $(cat "$W/err")"
+}
+
 test_restore_stops_on_no() {
   setup
   local before rc=0
@@ -296,6 +363,10 @@ t "backup-now passes the tag and the exit code" test_backup_now_tag_and_code
 t "upgrade stops when .env and the running app disagree" test_upgrade_versions_disagree
 t "upgrade stops when the pre-upgrade backup fails" test_upgrade_backup_fails
 t "upgrade happy path order" test_upgrade_happy_path
+t "upgrade verifies before it pulls" test_upgrade_verifies_before_pull
+t "upgrade stops when the signature check fails" test_upgrade_signature_check_fails
+t "upgrade stops when the backup image's signature check fails" test_upgrade_backup_image_signature_fails
+t "upgrade stops when compose.yaml does not name the two release images" test_upgrade_compose_without_backup_image
 t "upgrade stops when .env cannot be written" test_upgrade_env_not_writable
 t "a TERM during the .env edit leaves no temp copy" test_upgrade_term_leaves_no_temp
 t "an empty temp copy never replaces .env" test_upgrade_empty_temp_never_replaces_env

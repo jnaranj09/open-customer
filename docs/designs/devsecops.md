@@ -1,9 +1,9 @@
 # open-customer — Security pipeline
 
 Status: approved by the owner (2026-11-06). Being built: the threat model, the allow-list, the image
-scan, the secret scan, the running-app scan and the config scan (with the compose hardening and the
-supply-chain pins) exist; the code scan, the fuzz tests, SBOM and signing, the live scan and the
-manual audit do not yet.
+scan, the secret scan, the running-app scan, the config scan (with the compose hardening and the
+supply-chain pins), the code scan, the fuzz tests, and SBOM and signing (not yet run: the first
+`v*` tag is its first real test) exist; the live scan and the manual audit do not yet.
 
 ## Intent
 
@@ -150,7 +150,8 @@ rule names its sensor") applied to security.
   `read_only: true` with a tmpfs where it writes, a memory limit; `db` runs as the image's `postgres`
   user and needs no capability; `backup` and `restore` add back only the capabilities each was
   seen failing without), `USER 65532:65532` in the app image, `persist-credentials: false` on every
-  checkout, no Go cache in the release workflow, and `packages: write` on the release job only.
+  checkout, no Go cache in the release workflow, and `packages: write` and `id-token: write` on the
+  release job only.
 - Supply-chain pins: every `uses:` is a full commit SHA with its `# vX.Y.Z` and every image a
   `<tag>@sha256:<index digest>` (every Dockerfile, compose, CI services and job containers, the
   deploy scripts), checked by the guard `TestSupplyChainPins`. The tool and Postgres images live in
@@ -171,10 +172,28 @@ rule names its sensor") applied to security.
   a failed scheduled run with no setup. Until the first `v*` tag exists, the job writes "NOT RUN: no
   release tag" in its summary and passes. My call.
 - My call: the release also writes an SBOM and signs the images keylessly with cosign through
-  GitHub OIDC. Keyless signing stores no key, so it keeps anti-goal 1.
+  GitHub OIDC. Keyless signing stores no key, so it keeps anti-goal 1. Built as `make
+  release-sign IMAGE=<repository>:<tag>` (`scripts/security/release-sign.sh`), run by the release
+  job for the app and the backup image after the scan: `docker push`; the digest from the push's
+  `<tag>: digest: sha256:… size: …` line, which the local image's `RepoDigests` must also hold (no
+  digest, two digests or a mismatch is red before cosign runs); a CycloneDX SBOM of that image
+  with Trivy (the `TRIVY_IMAGE` pin, `--network none`); `cosign sign --yes` and `cosign attest
+  --yes --type cyclonedx` on `<repository>@<digest>`, never the tag. cosign comes from
+  `sigstore/cosign-installer` with `cosign-release`, and the job has `id-token: write`. Tests:
+  `make test-sec` (`release-sign:` cases, fake `docker` and `cosign`). A real keyless sign needs
+  the job's OIDC token, so the first `v*` tag is its first test.
 - My call: `deploy/scripts/upgrade.sh` verifies the signature before it pulls, running cosign from
   its pinned image (no install on the deployer's machine). A bad or missing signature stops the
-  upgrade with nothing changed; `make test-deploy` gets a test for it.
+  upgrade with nothing changed; `make test-deploy` gets a test for it. Built as `verify_image` in
+  `deploy/scripts/lib.sh`: `cosign verify <image>:<version> --certificate-identity-regexp
+  "$SIGNER_IDENTITY_REGEXP" --certificate-oidc-issuer "$SIGNER_ISSUER"` (decision D11: this
+  repository's `release.yml` on a `refs/tags/v` ref, issued by
+  `https://token.actions.githubusercontent.com`), for the app and the backup image, after the
+  version check and before the pull and the pre-upgrade backup. There is no flag to skip it. A fork
+  changes `SIGNER_IDENTITY_REGEXP` (`deploy/README.md` section 9). `COSIGN_IMAGE` lives in
+  `lib.sh`, because deployers have `deploy/` and not the Makefile; `make check-pins` keeps its
+  version equal to `cosign-release` in the release workflow, and Dependabot reads neither, so a
+  cosign bump is made by hand, both copies in one commit.
 
 ### 5. Authorization and business-rule tests
 

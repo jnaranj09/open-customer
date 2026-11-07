@@ -22,7 +22,7 @@ run.
 
 | Command | What it does |
 | --- | --- |
-| `make check-pins` | Pins agree across the Makefile, `security/tools.Dockerfile` (where the tool and Postgres images are pinned), `go.mod`, `web/package.json`, the Dockerfiles, `deploy/compose.yaml` and CI (the Postgres image's digest included) |
+| `make check-pins` | Pins agree across the Makefile, `security/tools.Dockerfile` (where the tool and Postgres images are pinned), `go.mod`, `web/package.json`, the Dockerfiles, `deploy/compose.yaml` and CI (the Postgres image's digest included), and the cosign version in `deploy/scripts/lib.sh` and the release workflow |
 | `make lint` | `go mod tidy -diff`, golangci-lint, `go build` for darwin and windows, deadcode, shellcheck, svelte-check, eslint, prettier, knip, jscpd |
 | `make test` | Go unit tests and Vitest |
 | `make generate` | oapi-codegen, sqlc (Docker image) and openapi-typescript |
@@ -37,7 +37,8 @@ run.
 | `make image-scan` | Trivy on the two `make image` images and the pinned postgres and cloudflared images (needs Docker and network). `MODE=push` (the default) fails only on the app and backup images; `MODE=release` fails on any of the four |
 | `make dast` | ZAP (API scan signed out and signed in, baseline) and Nuclei against the `make image` app image and a throwaway Postgres on a private Docker network (needs Docker and network; publishes no host port; removes its `oc-dast-*` containers and network). A made-up owner is set up and signed in first; reports go to `dast-report/` |
 | `make secrets` | gitleaks over the whole git history (needs Docker); reviewed false positives are in `.gitleaksignore` |
-| `make test-sec` | The scan wrappers' and check-pins' tests (`scripts/security/tests/run.sh`, against a fake `docker`) |
+| `make test-sec` | The scan wrappers', release-sign's and check-pins' tests (`scripts/security/tests/run.sh`, against a fake `docker` and `cosign`) |
+| `make release-sign IMAGE=<repository>:<tag>` | Release workflow only (needs the registry login, cosign and the job's OIDC token; not in the gate): pushes the image, takes the digest from the push, writes a CycloneDX SBOM with Trivy, then signs the digest keylessly with cosign and attests the SBOM |
 | `make config-scan` | Trivy config on the two Dockerfiles and zizmor on `.github/workflows`, offline (needs Docker). Fails on a high or critical Dockerfile finding or a medium or high workflow finding |
 | `make sast` | Semgrep with only the rules written in `security/semgrep`, offline (needs Docker): first the rules' fixtures (`semgrep --test`), then the scan of the repo. Any finding fails |
 | `make fuzz` | The four Go fuzz targets (JSON body decoding, multipart uploads, template parsing, the backup status file), one after another, each for `FUZZTIME` (default `60s`). Any crash fails. Manual: not in the gate; `make test` runs their seeds |

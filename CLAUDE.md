@@ -31,8 +31,8 @@ with fnm, `fnm use` in web/).
 
 - `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript.
 - `make check-generated`: `generate`, then fails on any diff.
-- `make check-pins`: Postgres (digest included), Node, Go, golangci-lint and gitleaks pins agree
-  across files.
+- `make check-pins`: Postgres (digest included), Node, Go, golangci-lint, gitleaks and cosign pins
+  agree across files.
 - `make lint`: `go mod tidy -diff`, golangci-lint, `go build` for darwin and windows, deadcode
   (exact `DEADCODE_BUDGET`), shellcheck, svelte-check, eslint, prettier check, knip, jscpd (fails
   on an empty scan).
@@ -46,7 +46,11 @@ with fnm, `fnm use` in web/).
   compose cloudflared image (`scripts/security/image-scan.sh`). `push` (default) blocks on our two
   images only; `release` blocks on all four. Needs network (the Trivy database).
 - `make secrets`: gitleaks over the whole git history (`.gitleaksignore` honoured). `make test-sec`:
-  the scan wrappers' and check-pins' tests (`scripts/security/tests/run.sh`, fake `docker`).
+  the scan wrappers', release-sign's and check-pins' tests (`scripts/security/tests/run.sh`, fake
+  `docker` and `cosign`).
+- `make release-sign IMAGE=<repository>:<tag>`: release workflow only (registry login, cosign,
+  OIDC token; not in the gate): push, digest from the push, CycloneDX SBOM (Trivy), then `cosign
+  sign` and `cosign attest` on `<repository>@<digest>` (`scripts/security/release-sign.sh`).
 - `make config-scan`: Trivy config on the two Dockerfiles (high or critical blocks) and zizmor
   `--offline` on `.github/workflows` (medium or high blocks), both with no network
   (`scripts/security/config-scan.sh`). `deploy/compose.yaml` is checked by the guard
@@ -151,5 +155,7 @@ copy in one commit, and `make check-pins` must stay green. Every image is pinned
 - sqlc 1.31.1: the `sqlc` stage of `security/tools.Dockerfile`, read into `SQLC_IMAGE`.
 - The scanner images (Trivy, gitleaks, zizmor, ZAP, Nuclei, curl, Semgrep): one stage each in
   `security/tools.Dockerfile`, read into `<NAME>_IMAGE` by the `Makefile`; Dependabot bumps them.
+- cosign v3.1.4: `COSIGN_IMAGE` in `deploy/scripts/lib.sh` (deployers lack the `Makefile`) and
+  `cosign-release` in `release.yml`; Dependabot reads neither, so bump both by hand.
 - Go tools (oapi-codegen, govulncheck, deadcode): `tool` lines in `go.mod`.
 - TypeScript stays on 6.0.x: typescript-eslint and SvelteKit do not accept 7 yet.

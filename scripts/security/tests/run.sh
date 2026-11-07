@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), and
-# for scripts/check-pins.sh's image digest checks. Run by make test-sec on the host. Each test runs
-# a wrapper from a temp copy of the repo parts it reads (scripts/security, security/allow.json,
-# deploy/compose.yaml; made-up Dockerfiles and a workflow for config-scan.sh), with a fake `docker`
-# first on PATH that appends each call to a log and answers from env vars:
+# for scripts/check-pins.sh's image digest and cosign version checks. Run by make test-sec on the
+# host. Each test runs a wrapper from a temp copy of the repo parts it reads (scripts/security,
+# security/allow.json, deploy/compose.yaml; made-up Dockerfiles and a workflow for config-scan.sh),
+# with a fake `docker` first on PATH that appends each call to a log and answers from env vars:
 #   FAKE_FINDINGS   space-separated scan names (app backup postgres cloudflared) whose Trivy run
 #                   finds something: the fake exits with the run's --exit-code value, as Trivy does
 #   FAKE_FAIL_ON    a call containing this text exits FAKE_FAIL_CODE (default 1)
@@ -39,6 +39,15 @@
 #                   scanned files FAKE_SEMGREP_SCANNED (space-separated; default one .go, .ts and
 #                   .svelte file; set but empty: none). It writes a SARIF file to --sarif-output
 #                   and exits FAKE_SEMGREP_CODE (default: 1 with a finding, else 0)
+# and, for release-sign.sh:
+#   push            prints `<tag>: digest: <FAKE_PUSH_DIGEST> size: 1234` (default: a made-up
+#                   digest; none when FAKE_PUSH_NO_DIGEST is set), as docker push does
+#   image inspect   with RepoDigests in its --format, prints <repository>@FAKE_REPO_DIGEST
+#                   (default: the push digest)
+#   sbom-test:1     writes a made-up CycloneDX SBOM to sbom.json in the dir mounted at /scan
+#                   (nothing when FAKE_SBOM_EMPTY is set)
+# and a fake `cosign` that logs "cosign <args>" to the same log, honours FAKE_FAIL_ON and copies
+# the --predicate file it was given to $FAKE_LOG.predicate.
 # `docker exec ... setup-link` prints a made-up setup link. The fake also copies the Trivy ignore
 # file it was given to $FAKE_LOG.ignore. No real container runs and nothing is pulled. All data
 # here is made up.
@@ -53,7 +62,8 @@ ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
   FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
-  FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE MODE PULL SARIF_DIR \
+  FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
+  FAKE_REPO_DIGEST FAKE_SBOM_EMPTY MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
 
 mkdir -p "$ROOT/bin"
@@ -102,9 +112,24 @@ fake_curl() {
       ;;
   esac
 }
+# The made-up digest a push answers with (FAKE_PUSH_DIGEST overrides it).
+push_digest=${FAKE_PUSH_DIGEST:-sha256:$(printf 'made-up pushed image\n' | sha256sum | cut -d' ' -f1)}
 case "$1" in
   save) # docker save -o <file> <image>
     : >"$3"
+    ;;
+  push) # docker push <repository>:<tag>
+    echo "The push refers to repository [${2%:*}]"
+    echo "0123456789ab: Pushed"
+    [ -n "${FAKE_PUSH_NO_DIGEST:-}" ] || echo "${2##*:}: digest: $push_digest size: 1234"
+    ;;
+  image)
+    case "$*" in
+      *RepoDigests*)
+        ref=${*: -1}
+        echo "${ref%:*}@${FAKE_REPO_DIGEST:-$push_digest}"
+        ;;
+    esac
     ;;
   exec)
     case "$*" in *setup-link*) echo "http://localhost:8080/setup#made-up-token" ;; esac
@@ -217,6 +242,12 @@ case "$1" in
         [ -z "${FAKE_SEMGREP_FINDINGS:-}" ] || exit 1
         exit 0
         ;;
+      *" sbom-test:1 "*)
+        if [ -z "${FAKE_SBOM_EMPTY:-}" ]; then
+          echo '{"bomFormat":"CycloneDX","specVersion":"1.6","components":[]}' >"$(mount_of /scan "$@")/sbom.json"
+        fi
+        exit 0
+        ;;
       *" nuclei-test:1 "*)
         out=$(mount_of /out "$@")
         echo "[INF] Templates loaded for current scan: ${FAKE_NUCLEI_TEMPLATES:-5}" >&2
@@ -254,6 +285,22 @@ esac
 exit 0
 FAKE
 chmod +x "$ROOT/bin/docker"
+
+cat >"$ROOT/bin/cosign" <<'FAKE'
+#!/usr/bin/env bash
+# The fake cosign: logs "cosign <args>", honours FAKE_FAIL_ON, keeps the attested predicate.
+echo "cosign $*" >>"$FAKE_LOG"
+if [ -n "${FAKE_FAIL_ON:-}" ]; then
+  case "cosign $*" in *"$FAKE_FAIL_ON"*) exit "${FAKE_FAIL_CODE:-1}" ;; esac
+fi
+prev=''
+for a in "$@"; do
+  [ "$prev" != --predicate ] || cp "$a" "$FAKE_LOG.predicate"
+  prev=$a
+done
+exit 0
+FAKE
+chmod +x "$ROOT/bin/cosign"
 
 # setup: a fresh copy of the repo parts the wrappers read in $W, an empty log in $LOG.
 setup() {
@@ -298,8 +345,10 @@ sast() {
 # the script copied (default: the repo's).
 pins_setup() {
   W=$(mktemp -d "$ROOT/pins.XXXXXX")
-  mkdir -p "$W/scripts" "$W/web" "$W/deploy/backup" "$W/.github/workflows"
+  mkdir -p "$W/scripts" "$W/web" "$W/deploy/backup" "$W/deploy/scripts" "$W/.github/workflows"
   cp "${CHECK_PINS:-$REPO/scripts/check-pins.sh}" "$W/scripts/check-pins.sh"
+  cp "$REPO/deploy/scripts/lib.sh" "$W/deploy/scripts/"
+  cp "$REPO/.github/workflows/release.yml" "$W/.github/workflows/"
   cp "$REPO/web/package.json" "$W/web/"
   cp "$REPO/go.mod" "$REPO/Dockerfile" "$W/"
   cp "$REPO/deploy/compose.yaml" "$W/deploy/"
@@ -998,6 +1047,115 @@ test_pins_pg_image_without_digest_red() {
   out_has "is not postgres:<tag>@sha256:<digest>"
 }
 
+# release_sign <image:tag>: runs release-sign.sh from another folder with the fake docker and
+# cosign; stdout and stderr go to $W/out.
+release_sign() {
+  (cd / && PATH="$ROOT/bin:$PATH" TRIVY_IMAGE=sbom-test:1 "$W/scripts/security/release-sign.sh" "$@") >"$W/out" 2>&1
+}
+
+fake_push_digest=sha256:$(printf 'made-up pushed image\n' | sha256sum | cut -d' ' -f1)
+release_ref=ghcr.io/made-up/app:1.2.3
+
+test_release_sign_signs_the_pushed_digest() {
+  setup
+  release_sign "$release_ref" || fail "release-sign exited non-zero: $(cat "$W/out")"
+  has_call "push $release_ref" || fail "the image was not pushed: $(cat "$LOG")"
+  has_call "--network none" || fail "the SBOM run is not offline: $(cat "$LOG")"
+  has_call "sbom-test:1 image --cache-dir /scan/cache --format cyclonedx --output /scan/sbom.json" ||
+    fail "no CycloneDX SBOM run: $(cat "$LOG")"
+  has_call "cosign sign --yes ghcr.io/made-up/app@$fake_push_digest" || fail "the digest was not signed: $(cat "$LOG")"
+  has_call "cosign attest --yes --type cyclonedx --predicate " || fail "no SBOM attestation: $(cat "$LOG")"
+  has_call " ghcr.io/made-up/app@$fake_push_digest" || fail "the attestation is not on the digest"
+  # Never the tag.
+  if grep -E '^cosign ' "$LOG" | grep -qF ":1.2.3"; then fail "cosign got the tag: $(cat "$LOG")"; fi
+  grep -qF '"bomFormat":"CycloneDX"' "$LOG.predicate" || fail "the attested predicate is not the SBOM"
+  # The push comes first, the signature after the SBOM, the attestation last.
+  [ "$(grep -nF "push $release_ref" "$LOG" | cut -d: -f1)" -lt "$(grep -nF "cosign sign" "$LOG" | cut -d: -f1)" ] ||
+    fail "signed before the push: $(cat "$LOG")"
+  [ "$(grep -nF "cosign sign" "$LOG" | cut -d: -f1)" -lt "$(grep -nF "cosign attest" "$LOG" | cut -d: -f1)" ] ||
+    fail "attested before signing: $(cat "$LOG")"
+}
+
+test_release_sign_no_digest_red() {
+  setup
+  local rc=0
+  FAKE_PUSH_NO_DIGEST=1 release_sign "$release_ref" || rc=$?
+  assert_eq "exit code" 1 "$rc"
+  out_has "no digest"
+  if grep -q '^cosign ' "$LOG"; then fail "cosign ran without a digest: $(cat "$LOG")"; fi
+}
+
+test_release_sign_digest_mismatch_red() {
+  setup
+  local rc=0
+  FAKE_REPO_DIGEST=$other_digest release_sign "$release_ref" || rc=$?
+  assert_eq "exit code" 1 "$rc"
+  out_has "does not record"
+  if grep -q '^cosign ' "$LOG"; then fail "cosign ran on a digest the local image does not have: $(cat "$LOG")"; fi
+}
+
+test_release_sign_push_fails_red() {
+  setup
+  local rc=0
+  FAKE_FAIL_ON="push $release_ref" release_sign "$release_ref" || rc=$?
+  assert_eq "exit code" 1 "$rc"
+  if grep -q '^cosign ' "$LOG"; then fail "cosign ran after a failed push: $(cat "$LOG")"; fi
+}
+
+test_release_sign_sbom_missing_red() {
+  setup
+  local rc=0
+  FAKE_SBOM_EMPTY=1 release_sign "$release_ref" || rc=$?
+  assert_eq "exit code" 1 "$rc"
+  out_has "SBOM"
+  if grep -q '^cosign attest' "$LOG"; then fail "attested without an SBOM: $(cat "$LOG")"; fi
+}
+
+test_release_sign_cosign_fails_red() {
+  local step rc
+  for step in "cosign sign" "cosign attest"; do
+    setup
+    rc=0
+    FAKE_FAIL_ON=$step release_sign "$release_ref" || rc=$?
+    assert_eq "exit code when $step fails" 1 "$rc"
+  done
+}
+
+test_release_sign_bad_args() {
+  setup
+  local rc=0
+  release_sign || rc=$?
+  assert_eq "exit code without an image" 2 "$rc"
+  rc=0
+  release_sign "ghcr.io/made-up/app@$fake_push_digest" || rc=$?
+  assert_eq "exit code for a ref with no tag" 2 "$rc"
+  rc=0
+  (cd / && PATH="$ROOT/bin:$PATH" "$W/scripts/security/release-sign.sh" "$release_ref") >"$W/out" 2>&1 || rc=$?
+  assert_eq "exit code without TRIVY_IMAGE" 2 "$rc"
+  assert_eq "docker calls for bad args" 0 "$(wc -l <"$LOG")"
+}
+
+# The cosign release the workflow installs and the COSIGN_IMAGE tag in lib.sh drift apart, in
+# either file; check-pins must name both.
+test_pins_cosign_drift_red() {
+  local f
+  for f in .github/workflows/release.yml deploy/scripts/lib.sh; do
+    pins_setup
+    grep -qF "v3.1.4" "$W/$f" || fail "$f does not hold cosign v3.1.4"
+    sed -i 's/v3\.1\.4/v3.1.3/' "$W/$f"
+    check_pins && fail "a cosign version drift in $f exited 0"
+    out_has "release.yml cosign-release"
+    out_has "deploy/scripts/lib.sh COSIGN_IMAGE"
+  done
+}
+
+test_pins_cosign_missing_red() {
+  pins_setup
+  sed -i '/^COSIGN_IMAGE=/d' "$W/deploy/scripts/lib.sh"
+  check_pins && fail "a lib.sh without COSIGN_IMAGE exited 0"
+  out_has "deploy/scripts/lib.sh has no COSIGN_IMAGE"
+}
+
 t "an unknown MODE exits 2" test_unknown_mode
 t "push mode: a clean scan covers the four images" test_push_clean_scans_four_images
 t "push mode: an app image finding is red" test_push_app_finding_red
@@ -1066,8 +1224,17 @@ t "sast: an error in the report is red" test_sast_report_error_red
 t "sast: an allow-listed rule is excluded" test_sast_allow_excluded
 t "sast: a malformed or unknown semgrep allow id is refused" test_sast_allow_bad_id_refused
 t "sast: SARIF_DIR gets the semgrep SARIF file" test_sast_sarif_written
+t "release-sign: signs and attests the pushed digest, never the tag" test_release_sign_signs_the_pushed_digest
+t "release-sign: a push with no digest is red and signs nothing" test_release_sign_no_digest_red
+t "release-sign: a push digest the local image does not record is red" test_release_sign_digest_mismatch_red
+t "release-sign: a failed push is red and signs nothing" test_release_sign_push_fails_red
+t "release-sign: a missing SBOM is red and attests nothing" test_release_sign_sbom_missing_red
+t "release-sign: a failed sign or attest is red" test_release_sign_cosign_fails_red
+t "release-sign: a bad argument or a missing TRIVY_IMAGE exits 2" test_release_sign_bad_args
 t "check-pins: the repo's pins agree" test_pins_clean
 t "check-pins: a postgres digest that drifts in any copy is red" test_pins_postgres_digest_drift_red
 t "check-pins: a postgres copy without its digest is red" test_pins_postgres_digest_missing_red
 t "check-pins: a PG_IMAGE without a digest is red" test_pins_pg_image_without_digest_red
+t "check-pins: a cosign version that drifts between release.yml and lib.sh is red" test_pins_cosign_drift_red
+t "check-pins: a lib.sh without COSIGN_IMAGE is red" test_pins_cosign_missing_red
 finish
