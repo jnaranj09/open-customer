@@ -54,7 +54,7 @@ type Options struct {
 	Resolver Resolver
 }
 
-// Resolver is the DNS lookup Subscribe uses; *net.Resolver has it.
+// Resolver is the DNS lookup Check uses; *net.Resolver has it.
 type Resolver interface {
 	LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error)
 }

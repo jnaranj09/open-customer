@@ -12,7 +12,7 @@ import (
 )
 
 // A push endpoint comes from the browser, so the server must only ever reach the public internet
-// with it (threat model T44): Subscribe refuses an IP literal and a host with no public address, and
+// with it (threat model T44): Check refuses an IP literal and a host with no public address, and
 // every send dials through publicOnlyDial, which checks the address the connection actually goes
 // to, so a host that resolves elsewhere at send time (DNS rebinding) is refused too. Redirects are
 // never followed: a public push service could otherwise send the POST on to a private host.
@@ -56,8 +56,8 @@ var embeddingPrefixes = []struct {
 
 // isPublic reports whether a is an address the server may connect to: not loopback, private
 // (RFC 1918, IPv6 ULA), link-local, carrier-grade NAT, reserved, unspecified or multicast, also
-// when it is written as an IPv4-mapped address or carried inside a well-known NAT64 (local-use NAT64 is refused whole), 6to4 or IPv4-compatible
-// IPv6 address.
+// when it is written as an IPv4-mapped address or carried inside a well-known NAT64, 6to4 or
+// IPv4-compatible IPv6 address (local-use NAT64 is refused whole).
 func isPublic(a netip.Addr) bool {
 	a = a.Unmap()
 	if !a.IsValid() || a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() || a.IsUnspecified() ||
