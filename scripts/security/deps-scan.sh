@@ -5,7 +5,8 @@
 # (govulncheck in make vuln stays the reachability check). A high or critical finding with a fixed
 # version blocks; one with no fix is not shown, so an upstream advisory nobody can act on never
 # turns every PR red. The live trivy ids of security/allow.json (allow.sh) go to a temp
-# .trivyignore.yaml, as in make image-scan.
+# .trivyignore.yaml, as in make image-scan (trivy-ignore.sh); an id scoped to an image path ignores
+# nothing here.
 #
 # Trivy downloads its vulnerability database into TRIVY_CACHE_DIR (default: the same cache dir
 # make image-scan uses), so it needs network; without the database it exits 1, which is red. Trivy
@@ -43,23 +44,10 @@ cleanup() {
 trap cleanup EXIT
 mkdir "$work/out"
 
-# The ignore file: the live trivy ids of the allow-list. An id that is not a plain token is
-# refused rather than written into YAML.
-ids=$(scripts/security/allow.sh trivy)
-{
-  if [ -z "$ids" ]; then
-    echo "vulnerabilities: []"
-  else
-    echo "vulnerabilities:"
-    while read -r id; do
-      if ! [[ "$id" =~ ^[A-Za-z0-9._:-]+$ ]]; then
-        echo "deps-scan: security/allow.json has a trivy id that is not a plain token" >&2
-        exit 1
-      fi
-      echo "  - id: $id"
-    done <<<"$ids"
-  fi
-} >"$work/.trivyignore.yaml"
+# The ignore file: the live trivy ids of the allow-list, plain or scoped to one path
+# (trivy-ignore.sh).
+. scripts/security/trivy-ignore.sh deps-scan
+write_trivy_ignore "$work/.trivyignore.yaml"
 
 red=0
 red() {

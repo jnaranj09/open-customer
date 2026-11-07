@@ -7,6 +7,10 @@
 # with a fake `docker` first on PATH that appends each call to a log and answers from env vars:
 #   FAKE_FINDINGS   space-separated scan names (app backup postgres cloudflared) whose Trivy run
 #                   finds something: the fake exits with the run's --exit-code value, as Trivy does
+#   FAKE_VULNS      space-separated <scan name>=<CVE id>@<Target> (app backup postgres cloudflared):
+#                   that scan's Trivy run finds that CVE in that Target unless the ignore file
+#                   drops it, as Trivy does (an entry for the id with no `paths:`, or with `paths:`
+#                   listing the Target); the fake exits with the run's --exit-code value
 #   FAKE_FAIL_ON    a call containing this text exits FAKE_FAIL_CODE (default 1)
 # and, for dast.sh, by the image a `docker run` names:
 #   curl-test:1     answers the app's routes: /readyz ok, setup 201, login 200 with a made-up
@@ -30,7 +34,7 @@
 #                   all but FAKE_DEPS_UNREAD) in a JSON report at its --output, copies its ignore file
 #                   to $FAKE_LOG.depsignore and its arguments to $FAKE_LOG.depsargs, and gives each
 #                   path in FAKE_DEPS_FINDINGS (space-separated) a HIGH CVE-2099-0001 with a fix
-#                   unless the ignore file lists that id. It exits FAKE_DEPS_CODE when set, else the
+#                   unless the ignore file drops that id for that path (see FAKE_VULNS). It exits FAKE_DEPS_CODE when set, else the
 #                   run's --exit-code value when a finding is left, else 0
 # and, for config-scan.sh:
 #   trivy-cfg-test:1  reports each file mounted at /src/<path> as a scanned Dockerfile (all
@@ -77,7 +81,7 @@ ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
   FAKE_NUCLEI_FINDINGS FAKE_HEADERS_DROP FAKE_HEADERS_WRONG FAKE_HEADERS_EXTRA SCAN_PATH SCAN_URL GITHUB_ACTIONS NETWORK FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
-  FAKE_DEPS_UNREAD FAKE_DEPS_FINDINGS FAKE_DEPS_CODE FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
+  FAKE_VULNS FAKE_DEPS_UNREAD FAKE_DEPS_FINDINGS FAKE_DEPS_CODE FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
   FAKE_REPO_DIGEST FAKE_SBOM_EMPTY FAKE_PUSH_SECOND_DIGEST MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
 
@@ -99,6 +103,16 @@ mount_of() {
     fi
     prev=$a
   done
+}
+# ignored <ignore file> <CVE id> <target>: true when the ignore file drops that CVE for that Target,
+# as Trivy does: an entry `- id: <CVE id>` with no `paths:`, or with `paths:` listing the target.
+ignored() {
+  awk -v cve="$2" -v target="$3" '
+    function close_entry() { if (open && (!paths || hit)) found = 1 }
+    /^  - id: /{ close_entry(); open = ($3 == cve); paths = 0; hit = 0; next }
+    /^    paths:/{ paths = 1; next }
+    /^      - /{ p = $2; gsub(/"/, "", p); if (p == target) hit = 1; next }
+    END{ close_entry(); exit !found }' "$1"
 }
 fake_curl() {
   local url='' out='' prev=''
@@ -217,7 +231,7 @@ case "$1" in
           v='[]'
           case " ${FAKE_DEPS_FINDINGS:-} " in
             *" $t "*)
-              if ! grep -qxF '  - id: CVE-2099-0001' "$FAKE_LOG.depsignore"; then
+              if ! ignored "$FAKE_LOG.depsignore" CVE-2099-0001 "$t"; then
                 v='[{"VulnerabilityID":"CVE-2099-0001","Severity":"HIGH","PkgName":"made-up","InstalledVersion":"1.0.0","FixedVersion":"1.0.1"}]'
                 left=1
               fi
@@ -353,6 +367,12 @@ case "$1" in
       cp "$scan_dir/.trivyignore.yaml" "$FAKE_LOG.ignore"
     fi
     case " ${FAKE_FINDINGS:-} " in *" $name "*) exit "$code" ;; esac
+    for v in ${FAKE_VULNS:-}; do
+      [ "${v%%=*}" = "$name" ] || continue
+      cve=${v#*=} target=${cve#*@} cve=${cve%%@*}
+      if [ -f "$FAKE_LOG.ignore" ] && ignored "$FAKE_LOG.ignore" "$cve" "$target"; then continue; fi
+      exit "$code"
+    done
     ;;
 esac
 exit 0
@@ -1855,6 +1875,61 @@ test_deps_allow_listed_passes() {
   grep -qxF '  - id: CVE-2099-0001' "$LOG.depsignore" || fail "the allow id did not reach the ignore file"
 }
 
+# The owner-approved shape: a CVE of the Go standard library, allowed in one binary of one image.
+gosu_vuln=CVE-2099-0001@usr/local/bin/gosu
+
+test_scoped_trivy_id_ignores_only_that_path() {
+  setup
+  allow_with trivy "$gosu_vuln"
+  FAKE_VULNS="postgres=$gosu_vuln" scan release ||
+    fail "a finding the scoped id allows in that binary was red: $(cat "$W/out")"
+  assert_eq "ignore file" "$(printf 'vulnerabilities:\n  - id: CVE-2099-0001\n    paths:\n      - "usr/local/bin/gosu"')" \
+    "$(cat "$LOG.ignore")"
+}
+
+test_scoped_trivy_id_other_target_red() {
+  setup
+  allow_with trivy "$gosu_vuln"
+  # The same CVE in our own binary, and in another binary of the allowed image.
+  FAKE_VULNS="postgres=$gosu_vuln postgres=CVE-2099-0001@usr/local/bin/other app=CVE-2099-0001@usr/local/bin/open-customer" \
+    scan release && fail "the same CVE in other targets exited 0"
+  out_has "image-scan: open-customer:1.2.3: high or critical findings with a fix"
+  out_has "image-scan: postgres:18.6-alpine: high or critical findings with a fix"
+  out_has "image-scan: 2 of 4 images red"
+}
+
+test_scoped_trivy_id_plain_id_ignores_everywhere() {
+  setup
+  allow_with trivy CVE-2099-0001
+  FAKE_VULNS="app=CVE-2099-0001@usr/local/bin/open-customer" scan release ||
+    fail "a plain id did not ignore the CVE in another path: $(cat "$W/out")"
+}
+
+test_scoped_trivy_id_malformed_refused() {
+  local id
+  for id in 'CVE-2099-0001@' '@usr/local/bin/gosu' 'CVE-2099-0001@/usr/local/bin/gosu' 'CVE-2099-0001@../gosu' \
+    'CVE-2099-0001@usr/../bin/gosu' 'CVE-2099-0001@usr//local/bin/gosu' 'CVE-2099-0001@usr/local/bin/' \
+    'CVE-2099-0001@usr/local/bin/*' 'CVE-2099-0001@usr/local/bin/gosu@x' 'CVE-2099-0001@usr/local/{bin,sbin}/gosu' \
+    'CVE-2099-0001@usr/local/bin/go"su' 'CVE 2099@usr/local/bin/gosu'; do
+    setup
+    allow_with trivy "$id"
+    scan release && fail "the trivy id '$id' was accepted by image-scan"
+    out_has "security/allow.json has a trivy id"
+    assert_eq "trivy runs with the bad id '$id'" 0 "$(count_calls 'trivy-test:1')"
+    deps_scan && fail "the trivy id '$id' was accepted by deps-scan"
+    out_has "security/allow.json has a trivy id"
+    assert_eq "deps trivy runs with the bad id '$id'" 0 "$(count_calls 'deps-test:1')"
+  done
+}
+
+test_deps_scoped_id_ignores_nothing_in_manifests() {
+  setup
+  allow_with trivy "$gosu_vuln"
+  FAKE_DEPS_FINDINGS=go.mod deps_scan && fail "an image-path scoped id silenced a manifest finding"
+  out_has "deps-scan: go.mod: high or critical findings with a fix"
+  grep -qxF '      - "usr/local/bin/gosu"' "$LOG.depsignore" || fail "the scoped id did not reach deps-scan's ignore file"
+}
+
 test_deps_bad_input() {
   setup
   local rc=0
@@ -2086,6 +2161,11 @@ t "deps-scan: a trivy error or a trivy that cannot start is red" test_deps_trivy
 t "deps-scan: a manifest missing from the report is red" test_deps_unread_manifest_red
 t "deps-scan: an exit that disagrees with the report is red" test_deps_exit_disagrees_red
 t "deps-scan: an allow-listed trivy id is not red" test_deps_allow_listed_passes
+t "a scoped trivy id ignores the CVE in that path only" test_scoped_trivy_id_ignores_only_that_path
+t "the same CVE in another target stays red under a scoped trivy id" test_scoped_trivy_id_other_target_red
+t "a plain trivy id still ignores the CVE in every target" test_scoped_trivy_id_plain_id_ignores_everywhere
+t "a malformed scoped trivy id is refused by image-scan and deps-scan" test_scoped_trivy_id_malformed_refused
+t "deps-scan: a scoped trivy id ignores nothing in the manifests" test_deps_scoped_id_ignores_nothing_in_manifests
 t "deps-scan: bad arguments, no TRIVY_IMAGE or a missing manifest" test_deps_bad_input
 t "csp-check: a built page with a good policy passes" test_csp_good_page_passes
 t "csp-check: a page with no CSP meta (the web-stub) or no page is red" test_csp_missing_meta_red

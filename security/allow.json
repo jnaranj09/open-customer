@@ -16,5 +16,167 @@
     "id": "DS-0002@deploy/backup/Dockerfile",
     "reason": "The backup image runs as root by design: backup and restore write to a BACKUP_TARGET host folder of any owner, and restore chowns the media to 65532. In deploy/compose.yaml it has cap_drop ALL plus only DAC_OVERRIDE (restore adds CHOWN and FOWNER), no-new-privileges and no ports. DS-0002 still blocks on every other Dockerfile. Owner decision 2026-11-06.",
     "expires": "2027-05-05"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2025-61726@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2025-61729@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2025-68121@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-111943@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-25679@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-27145@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-32280@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-32281@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-32283@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-33811@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-33814@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-33818@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-39820@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-39821@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-39822@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-39836@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-42499@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-42504@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-56853@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-56858@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-56859@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-56860@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-56862@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-78667@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-78669@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-97031@usr/local/bin/gosu",
+    "reason": "Go standard library CVE in the gosu binary of the pinned postgres image (usr/local/bin/gosu only; the same CVE in our own binaries stays blocking). deploy/compose.yaml runs Postgres as `user: postgres`, so the image entrypoint never runs gosu; our backup image removes its own copy. Remove this entry when the pinned postgres image ships a rebuilt gosu. Owner decision 2026-11-07.",
+    "expires": "2027-05-06"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-78661@usr/local/bin/cloudflared",
+    "reason": "golang.org/x/net CVE in the cloudflared binary of the image deploy/compose.yaml pins (usr/local/bin/cloudflared only). cloudflare/cloudflared 2026.10.7 is the newest tag and no fixed tag exists. Remove this entry when Dependabot brings a fixed tag. Owner decision 2026-11-07.",
+    "expires": "2027-02-05"
   }
 ]

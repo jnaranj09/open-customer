@@ -11,7 +11,8 @@
 #
 # Each image is saved to a tar and scanned with `trivy image --input`, so the scanner never gets the
 # Docker socket. The live trivy ids of security/allow.json (allow.sh) go to a temp
-# .trivyignore.yaml. Trivy exits 1 on its own errors (no database, unreadable image) whatever
+# .trivyignore.yaml (trivy-ignore.sh): <CVE id> ignores the CVE in every image, <CVE id>@<path in
+# the image> (usr/local/bin/gosu) only in the result whose Target is that path. Trivy exits 1 on its own errors (no database, unreadable image) whatever
 # --exit-code says, so findings use exit code 5 and any exit other than 0 or 5 is red, for every
 # image and mode: a scan that did not run never reads as clean. Every image is scanned before the
 # script exits, so one run reports them all. Exit 2 on bad arguments, 1 when any image is red.
@@ -86,23 +87,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The ignore file: the live trivy ids of the allow-list. An id that is not a plain token is
-# refused rather than written into YAML.
-ids=$(scripts/security/allow.sh trivy)
-{
-  if [ -z "$ids" ]; then
-    echo "vulnerabilities: []"
-  else
-    echo "vulnerabilities:"
-    while read -r id; do
-      if ! [[ "$id" =~ ^[A-Za-z0-9._:-]+$ ]]; then
-        echo "image-scan: security/allow.json has a trivy id that is not a plain token" >&2
-        exit 1
-      fi
-      echo "  - id: $id"
-    done <<<"$ids"
-  fi
-} >"$work/.trivyignore.yaml"
+# The ignore file: the live trivy ids of the allow-list, plain or scoped to one path
+# (trivy-ignore.sh).
+. scripts/security/trivy-ignore.sh image-scan
+write_trivy_ignore "$work/.trivyignore.yaml"
 
 red=0
 red() {
