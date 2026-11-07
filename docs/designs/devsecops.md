@@ -173,9 +173,13 @@ rule names its sensor") applied to security.
   weekly run block on them. Our own images (app, backup) block on push. My call.
 - **Allow-list:** one shared file, `security/allow.json`: an array of `{"tool", "id", "reason",
   "expires"}`, where `tool` is one of `trivy`, `trivy-config`, `zizmor`, `semgrep`, `zap`, `nuclei`,
-  `gitleaks` and `expires` is `YYYY-MM-DD`. It starts as `[]`. The guard `TestSecurityAllowList`
+  `gitleaks` and `expires` is `YYYY-MM-DD`. It started as `[]`. A `zap` id is a rule number (the
+  whole rule is ignored) or `<rule number>@<url regex>` (only that rule's alerts on URLs the regex
+  matches from the start are dropped, through a ZAP `OUTOFSCOPE` rules line; the rule still fails
+  on every other route); prefer the scoped form. The guard `TestSecurityAllowList`
   (`internal/guards`) fails on a missing field, an unknown tool, a bad date, an expired date, a date
-  more than 180 days ahead, or a duplicate `(tool, id)`. `scripts/security/allow.sh <tool>` prints
+  more than 180 days ahead, a duplicate `(tool, id)`, or a `zap` id of another shape (its regex must
+  compile, end in `$` and not match every route). `scripts/security/allow.sh <tool>` prints
   that tool's live ids (expiry today or later, UTC), one per line, and each scan wrapper turns them
   into the tool's own ignore form. gitleaks keeps its `.gitleaksignore` of fingerprints, which this
   guard does not cover. A new entry or a later expiry date needs the owner's agreement, written in

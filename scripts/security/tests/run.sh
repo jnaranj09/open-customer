@@ -406,6 +406,31 @@ JSON
   grep -qP '^10038\tFAIL\t' "$LOG.zaprules" || fail "another tool's id changed the zap rules"
 }
 
+test_zap_scoped_allow_is_out_of_scope() {
+  setup
+  cat >"$W/security/allow.json" <<'JSON'
+[
+  {"tool": "zap", "id": "40018@.*/api/v1/client-errors$", "reason": "made up", "expires": "2099-01-01"}
+]
+JSON
+  dast || fail "dast exited non-zero: $(cat "$W/out")"
+  grep -qxP '40018\tOUTOFSCOPE\t\.\*/api/v1/client-errors\$' "$LOG.zaprules" ||
+    fail "no OUTOFSCOPE line for the scoped id: $(grep -P '^40018\t' "$LOG.zaprules")"
+  assert_eq "40018 FAIL lines" 1 "$(grep -cP '^40018\tFAIL\t' "$LOG.zaprules")"
+  assert_eq "40018 IGNORE lines" 0 "$(grep -cP '^40018\tIGNORE' "$LOG.zaprules")"
+}
+
+test_zap_malformed_scoped_id_refused() {
+  local id
+  for id in '40018@' '40018@two words' 'x40018@.*/a$' '40018@a@b	tab'; do
+    setup
+    jq -n --arg id "$id" '[{"tool": "zap", "id": $id, "reason": "made up", "expires": "2099-01-01"}]' >"$W/security/allow.json"
+    dast && fail "the zap id '$id' was accepted"
+    out_has "security/allow.json has a zap id that is not <rule number> or <rule number>@<url regex>"
+    assert_eq "zap runs with the bad id '$id'" 0 "$(count_calls 'zap-test:1')"
+  done
+}
+
 test_nuclei_allow_excluded() {
   setup
   cat >"$W/security/allow.json" <<'JSON'
@@ -448,4 +473,6 @@ t "a nuclei run that loads no templates is red" test_nuclei_no_templates_red
 t "a failed nuclei templates download is red" test_templates_download_fails_red
 t "an allow-listed zap rule is IGNORE in the rules file" test_zap_allow_is_ignore
 t "an allow-listed nuclei template reaches -exclude-id" test_nuclei_allow_excluded
+t "a scoped zap id is OUTOFSCOPE for its URL and leaves the rule FAIL" test_zap_scoped_allow_is_out_of_scope
+t "a malformed scoped zap id is refused" test_zap_malformed_scoped_id_refused
 finish

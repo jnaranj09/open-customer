@@ -15,8 +15,9 @@
 #   - ZAP baseline (passive, spider) on /.
 #   - Nuclei with the pinned templates (NUCLEI_TEMPLATES, downloaded once into NUCLEI_CACHE_DIR).
 #
-# security/zap-rules.tsv sets each ZAP rule to FAIL or WARN; the live zap ids of
-# security/allow.json (allow.sh) become IGNORE in the copy ZAP gets, and the live nuclei ids go to
+# security/zap-rules.tsv sets each ZAP rule to FAIL or WARN; in the copy ZAP gets, a live plain zap
+# id of security/allow.json (allow.sh) becomes IGNORE and a scoped one (<id>@<url regex>) an
+# OUTOFSCOPE line for that URL only, and the live nuclei ids go to
 # -exclude-id. ZAP exits 0 clean, 1 on a FAIL rule, 2 on WARN rules only, 3 on its own error: 0
 # and 2 pass, anything else is red. Nuclei exits 0 with findings, so its JSONL lines are counted,
 # and a run that loaded no templates is red. Every scan runs before the script exits, so one run
@@ -121,18 +122,34 @@ if grep -q '/auth/logout' "$report/zap/openapi-session.yaml" || ! grep -q '^  /a
   die "cannot drop /auth/logout from the spec for the signed-in scan"
 fi
 
-# The rules file ZAP gets: security/zap-rules.tsv with each live zap id of the allow-list set to
-# IGNORE (an id the file does not list is added). An id that is not a number is refused.
+# The rules file ZAP gets: security/zap-rules.tsv plus the live zap ids of the allow-list. A plain
+# id (<rule number>) sets that rule to IGNORE (a rule the file does not list is added). A scoped id
+# (<rule number>@<url regex>) leaves the rule as the file sets it and adds a line
+# `<rule number>\tOUTOFSCOPE\t<url regex>`: ZAP's packaged scans then drop only that rule's alerts
+# whose URL the regex matches from its start (re.match). Any other id is refused; the guard
+# TestSecurityAllowList also checks that the regex compiles, ends in $ and is not a catch-all.
 allowed=$(scripts/security/allow.sh zap)
-while read -r id; do
-  [ -z "$id" ] || [[ "$id" =~ ^[0-9]+$ ]] || die "security/allow.json has a zap id that is not a rule number"
+while IFS= read -r id; do
+  [ -z "$id" ] || [[ "$id" =~ ^[0-9]+(@[^[:space:]]+)?$ ]] ||
+    die "security/allow.json has a zap id that is not <rule number> or <rule number>@<url regex>"
 done <<<"$allowed"
 awk -F '\t' -v OFS='\t' -v ids="$allowed" '
-  BEGIN { n = split(ids, list, "\n"); for (i = 1; i <= n; i++) if (list[i] != "") allow[list[i]] = 1 }
+  BEGIN {
+    n = split(ids, list, "\n")
+    for (i = 1; i <= n; i++) {
+      if (list[i] == "") continue
+      at = index(list[i], "@")
+      if (at == 0) allow[list[i]] = 1
+      else scoped[++s] = substr(list[i], 1, at - 1) OFS "OUTOFSCOPE" OFS substr(list[i], at + 1)
+    }
+  }
   /^#/ || NF == 0 { print; next }
   $1 in allow { print $1, "IGNORE", "allow-listed in security/allow.json"; seen[$1] = 1; next }
   { print }
-  END { for (id in allow) if (!(id in seen)) print id, "IGNORE", "allow-listed in security/allow.json" }
+  END {
+    for (id in allow) if (!(id in seen)) print id, "IGNORE", "allow-listed in security/allow.json"
+    for (i = 1; i <= s; i++) print scoped[i]
+  }
 ' security/zap-rules.tsv >"$report/zap/rules.tsv"
 
 docker network create --internal "$net" >/dev/null

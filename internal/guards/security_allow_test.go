@@ -70,6 +70,11 @@ func checkAllowList(data []byte, today time.Time) []string {
 				problems = append(problems, fmt.Sprintf("entry %d: expires %s, more than %d days ahead", i, e.Expires, maxAllowDays))
 			}
 		}
+		if e.Tool == "zap" && e.ID != "" {
+			if p := checkZapID(e.ID); p != "" {
+				problems = append(problems, fmt.Sprintf("entry %d: zap id %q: %s", i, e.ID, p))
+			}
+		}
 		key := [2]string{e.Tool, e.ID}
 		if first, dup := seen[key]; dup && e.Tool != "" && e.ID != "" {
 			problems = append(problems, fmt.Sprintf("entry %d: duplicate of entry %d (%s %s)", i, first, e.Tool, e.ID))
@@ -78,6 +83,36 @@ func checkAllowList(data []byte, today time.Time) []string {
 		}
 	}
 	return problems
+}
+
+// zapID is a ZAP rule number, alone (the whole rule is IGNORE) or with "@<url regex>" (the rule
+// stays as zap-rules.tsv sets it and only alerts on URLs the regex matches from the start are out
+// of scope: scripts/security/dast.sh writes a `<id>\tOUTOFSCOPE\t<regex>` rules line).
+var zapID = regexp.MustCompile(`^([0-9]+)(?:@(\S+))?$`)
+
+// zapScopeProbe is a route no scope may match, so a scope cannot cover every route.
+const zapScopeProbe = "http://localhost:8080/api/v1/zz-scope-probe"
+
+// checkZapID returns what is wrong with a zap id, or "". ZAP compiles the scope with Python's re;
+// Go's syntax is close enough to catch a typo, and the scope must end in $ so it names one route.
+func checkZapID(id string) string {
+	m := zapID.FindStringSubmatch(id)
+	switch {
+	case m == nil:
+		return "want <rule number> or <rule number>@<url regex> (no space, the regex not empty)"
+	case m[2] == "":
+		return ""
+	}
+	re, err := regexp.Compile(m[2])
+	switch {
+	case err != nil:
+		return "the url regex does not compile"
+	case !strings.HasSuffix(m[2], "$"):
+		return "the url regex must end in $, so it names one route"
+	case re.MatchString(zapScopeProbe):
+		return "the url regex matches every route"
+	}
+	return ""
 }
 
 func TestSecurityAllowListProbes(t *testing.T) {
@@ -92,6 +127,7 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"an entry expiring today", "[" + good + "]"},
 		{"an entry exactly 180 days ahead", "[" + entry("zap", "10038", "r", "2027-05-05") + "]"},
 		{"the same id for two tools", "[" + good + "," + entry("trivy-config", "CVE-2026-0001", "r", "2026-12-01") + "]"},
+		{"a zap rule scoped to one route", "[" + entry("zap", "40018@.*/api/v1/client-errors$", "r", "2026-12-01") + "]"},
 	}
 	for _, c := range valid {
 		if got := checkAllowList([]byte(c.data), today); len(got) != 0 {
@@ -114,6 +150,12 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"expired yesterday", "[" + entry("zap", "1", "r", "2026-11-05") + "]"},
 		{"181 days ahead", "[" + entry("zap", "1", "r", "2027-05-06") + "]"},
 		{"duplicate tool and id", "[" + good + "," + entry("trivy", "CVE-2026-0001", "other", "2026-12-01") + "]"},
+		{"a zap id that is not a rule number", "[" + entry("zap", "sql-injection", "r", "2026-12-01") + "]"},
+		{"a zap scope that is empty", "[" + entry("zap", "40018@", "r", "2026-12-01") + "]"},
+		{"a zap scope with a space", "[" + entry("zap", "40018@.*/a b$", "r", "2026-12-01") + "]"},
+		{"a zap scope that does not compile", "[" + entry("zap", "40018@.*/a(b$", "r", "2026-12-01") + "]"},
+		{"a zap scope not anchored with $", "[" + entry("zap", "40018@.*/api/v1/client-errors", "r", "2026-12-01") + "]"},
+		{"a zap scope that matches every route", "[" + entry("zap", "40018@.*$", "r", "2026-12-01") + "]"},
 	}
 	for _, c := range bad {
 		if got := checkAllowList([]byte(c.data), today); len(got) == 0 {

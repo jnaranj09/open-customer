@@ -3,7 +3,8 @@
 # API and baseline scans is listed: High and Medium are FAIL, Low and Informational WARN, except
 # where the reason says otherwise. A rule not listed defaults to WARN, so a new rule from a ZAP bump
 # is added here. Never IGNORE a rule here: an accepted finding goes in security/allow.json, with
-# its reason and expiry, and dast.sh turns its live ids into IGNORE.
+# its reason and expiry, and dast.sh turns its live ids into IGNORE, or a scoped id
+# (<rule>@<url regex>) into an OUTOFSCOPE line for that URL only.
 0	FAIL	Directory Browsing (Active); Medium
 2	WARN	Private IP Disclosure (Passive); Low
 3	FAIL	Session ID in URL Rewrite (Passive); Medium
