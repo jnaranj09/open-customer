@@ -149,9 +149,10 @@ rule names its sensor") applied to security.
 - The fixes it forced: compose hardening (every service `no-new-privileges`, `cap_drop: [ALL]`,
   `read_only: true` with a tmpfs where it writes, a memory limit; `db` runs as the image's `postgres`
   user and needs no capability; `backup` and `restore` add back only the capabilities each was
-  seen failing without), `USER 65532:65532` in the app image, `persist-credentials: false` on every
-  checkout, no Go cache in the release workflow, and `packages: write` and `id-token: write` on the
-  release job only.
+  seen failing without), `USER 65532:65532` in the app image on a distroless static `nonroot`
+  base with no `RUN` in its final stage, so no shell (guard `TestAppImage`),
+  `persist-credentials: false` on every checkout, no Go cache in the release workflow, and
+  `packages: write` and `id-token: write` on the release job only.
 - Supply-chain pins: every `uses:` is a full commit SHA with its `# vX.Y.Z` and every image a
   `<tag>@sha256:<index digest>` (every Dockerfile, compose, CI services and job containers, the
   deploy scripts), checked by the guard `TestSupplyChainPins`. The same guard refuses a
