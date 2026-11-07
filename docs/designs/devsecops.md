@@ -180,8 +180,10 @@ rule names its sensor") applied to security.
   protection was applied has not necessarily passed CI; after it, every commit on `main` came
   through a green PR. Then scan before push; a blocking finding stops the release.
 - Weekly scheduled CI run: scan the images of the latest release tag only (deployers upgrade to the
-  latest). A finding that meets the blocking policy fails the run, and GitHub emails the owner about
-  a failed scheduled run with no setup. Until the first `v*` tag exists, the job writes "NOT RUN: no
+  latest): the newest `vX.Y.Z` tag by version order, pre-release tags (`v1.3.0-rc1`) skipped
+  (`scripts/security/latest-release.sh`; `make test-sec` covers it), so an rc never hides the
+  release deployers run. A finding that meets the blocking policy fails the run, and GitHub emails the owner about
+  a failed scheduled run with no setup. Until the first release tag exists, the job writes "NOT RUN: no
   release tag" in its summary and passes. My call. Limit: in a public repo GitHub turns off a
   schedule after 60 days with no repository activity, with no red run and no email, so the owner
   checks the Actions tab monthly and re-enables `security-weekly` if it was turned off

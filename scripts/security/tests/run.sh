@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), for
-# csp-check.sh (made-up built pages; no docker), for deps-scan.sh, and
+# csp-check.sh (made-up built pages; no docker), for deps-scan.sh, for latest-release.sh (throwaway
+# repos), and
 # for scripts/check-pins.sh's image digest and cosign version checks. Run by make test-sec on the
 # host. Each test runs a wrapper from a temp copy of the repo parts it reads (scripts/security,
 # security/allow.json, deploy/compose.yaml; made-up Dockerfiles and a workflow for config-scan.sh),
@@ -1750,6 +1751,41 @@ test_allow_ids_with_separators_refused() {
   done
 }
 
+
+# latest-release.sh: a throwaway repo with the tags given; prints the script's answer to $W/out.
+latest_release() {
+  setup
+  git_q init -q "$W/tags"
+  (
+    cd "$W/tags" || exit 1
+    echo one >f
+    git_q add f
+    git_q commit -q -m one
+    local tag
+    for tag in "$@"; do
+      git_q tag "$tag"
+    done
+  )
+  (cd "$W/tags" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null "$W/scripts/security/latest-release.sh") >"$W/out" 2>&1
+}
+
+test_latest_release_skips_prereleases() {
+  latest_release v1.2.0 v1.3.0-rc1 v1.3.0-rc.2 v1.2.1-beta || fail "exited non-zero: $(cat "$W/out")"
+  assert_eq "latest release with newer pre-releases" v1.2.0 "$(cat "$W/out")"
+  latest_release v1.3.0-rc1 v1.3.0 || fail "exited non-zero: $(cat "$W/out")"
+  assert_eq "a release and its rc" v1.3.0 "$(cat "$W/out")"
+}
+
+test_latest_release_sorts_by_version() {
+  latest_release v1.9.0 v1.10.0 v1.2.0 || fail "exited non-zero: $(cat "$W/out")"
+  assert_eq "latest of v1.9.0 v1.10.0 v1.2.0" v1.10.0 "$(cat "$W/out")"
+}
+
+test_latest_release_none() {
+  latest_release v1.0.0-rc1 other-tag || fail "exited non-zero: $(cat "$W/out")"
+  assert_eq "no release tag" "" "$(cat "$W/out")"
+}
+
 # deps_scan: runs deps-scan.sh from another folder with the fake docker; stdout and stderr go to
 # $W/out.
 deps_scan() {
@@ -2029,6 +2065,9 @@ t "release-on-main: a failed fetch of main is red" test_release_on_main_fetch_fa
 t "release-on-main: a missing or unknown GITHUB_SHA is red" test_release_on_main_missing_sha_red
 t "release-on-main: a shallow clone is red" test_release_on_main_shallow_clone_red
 t "allow-list: an id with whitespace, a newline or a comma is refused by every wrapper" test_allow_ids_with_separators_refused
+t "latest-release: newer pre-release tags are skipped" test_latest_release_skips_prereleases
+t "latest-release: tags sort by version, not by text" test_latest_release_sorts_by_version
+t "latest-release: no release tag prints nothing and passes" test_latest_release_none
 t "deps-scan: a clean scan reads both manifests with the blocking flags" test_deps_clean_scans_both_manifests
 t "deps-scan: a fixable high finding in either manifest is red" test_deps_finding_red
 t "deps-scan: a trivy error or a trivy that cannot start is red" test_deps_trivy_error_red
