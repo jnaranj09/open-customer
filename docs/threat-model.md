@@ -142,8 +142,9 @@ dashboard and settings (Cloudflare or any other).
 
 ## GitHub settings
 
-These settings live in GitHub, not in a repo file. The owner applies them, once, after the branch is
-merged (a required check must have run on the repo first). The rows T71, T78 and T79 point here. They are
+These settings live in GitHub, not in a repo file. They are applied once, after the branch is merged
+(a required check must have run on the repo first). Branch protection and the tag ruleset were applied
+on 2026-11-07; the ghcr visibility waits for the first release. The rows T71, T78 and T79 point here. They are
 re-checked by hand after any repo settings change.
 
 ### Branch protection on `main`
@@ -167,7 +168,7 @@ gh api -X PUT repos/jnaranj09/open-customer/branches/main/protection --input - <
 JSON
 ```
 
-Confirm: `gh api repos/jnaranj09/open-customer/branches/main/protection`.
+Applied 2026-11-07. Confirm: `gh api repos/jnaranj09/open-customer/branches/main/protection`.
 
 ### Tag ruleset for `v*`
 
@@ -185,8 +186,9 @@ Two controls guard a `v*` tag, and they do different things:
 The body follows GitHub's documented create-ruleset shape (`POST repos/{owner}/{repo}/rulesets`,
 `target: tag`, rule types `creation`, `deletion` and `non_fast_forward`). The docs list no
 `update` parameter for tags (`update_allows_fetch_and_merge` is described for branches), so the
-`update` rule is left out. Not confirmed against the docs: that `non_fast_forward` applies to tags,
-and the Admin role `actor_id` 5 (from memory). If the call is refused, use the settings page
+`update` rule is left out. GitHub accepted this body on 2026-11-07 with all three rules, and reported
+`current_user_can_bypass: always` for the owner, so `actor_id` 5 is the Admin role. If the call is
+ever refused, use the settings page
 instead (Settings, Rules, Rulesets, New tag ruleset, target `v*`, restrict creations and
 deletions, block force pushes, bypass list: Repository admin role).
 
@@ -203,7 +205,8 @@ gh api -X POST repos/jnaranj09/open-customer/rulesets --input - <<'JSON'
 JSON
 ```
 
-Not run against the repo yet. Confirm with `gh api repos/jnaranj09/open-customer/rulesets`.
+Applied 2026-11-07 (ruleset `release-tags`). Confirm with
+`gh api repos/jnaranj09/open-customer/rulesets`.
 
 ### ghcr package visibility
 

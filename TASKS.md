@@ -181,9 +181,9 @@ once by breaking what they protect, then restored.
   tag); `make scan-live` against a real deployment (the deployer's own); the weekly workflow's
   first scheduled run, its fuzz job included; `make e2e` (CI runs it); Dependabot digest-only
   updates for base images (seen only after a push); a real Cloudflare tunnel under the hardened
-  compose. Owner actions after the merge: branch protection on `main`, the `v*` tag ruleset, and
-  both ghcr packages set to public after the first release (commands and steps in
-  `docs/threat-model.md` "GitHub settings").
+  compose. After the merge (PR #4, 53fc19e), branch protection on `main` and the `v*` tag ruleset
+  were applied and read back on 2026-11-07. Left: both ghcr packages set to public after the first
+  release (steps in `docs/threat-model.md` "GitHub settings").
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 
