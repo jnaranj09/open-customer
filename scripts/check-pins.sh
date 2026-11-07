@@ -22,12 +22,15 @@ go_pin=$(sed -n 's/^toolchain go\(.*\)$/\1/p' go.mod)
 [ -n "$pnpm_pin" ] || bad "web/package.json has no packageManager pnpm@<version>"
 [ -n "$go_pin" ] || bad "go.mod has no toolchain line"
 
-# Every postgres: tag must equal PG_IMAGE.
+# PG_IMAGE is <tag>@sha256:<digest>, and every postgres: reference, digest included, equals it: a
+# copy with another digest, or none, pulls a different image under the same tag.
+[[ "$PG_IMAGE" =~ ^postgres:[0-9][A-Za-z0-9._-]*@sha256:[0-9a-f]{64}$ ]] ||
+  bad "Makefile PG_IMAGE '$PG_IMAGE' is not postgres:<tag>@sha256:<digest>"
 for f in deploy/compose.yaml deploy/backup/Dockerfile .github/workflows/ci.yml Dockerfile; do
   [ -f "$f" ] || continue
-  while read -r tag; do
-    [ "$tag" = "$PG_IMAGE" ] || bad "$f uses $tag, Makefile PG_IMAGE is $PG_IMAGE"
-  done < <(grep -oE 'postgres:[0-9][A-Za-z0-9._-]*' "$f" || true)
+  while read -r ref; do
+    [ "$ref" = "$PG_IMAGE" ] || bad "$f uses $ref, Makefile PG_IMAGE is $PG_IMAGE"
+  done < <(grep -oE 'postgres:[0-9][A-Za-z0-9._-]*(@sha256:[0-9a-f]*)?' "$f" || true)
 done
 
 if [ -f Dockerfile ]; then
@@ -44,9 +47,11 @@ if [ -f .github/workflows/ci.yml ]; then
   ci_lint=$(grep -A3 'golangci/golangci-lint-action' .github/workflows/ci.yml | sed -n 's/^ *version: *//p' | head -1)
   [ "$ci_lint" = "$GOLANGCI_LINT_VERSION" ] ||
     bad "ci.yml golangci-lint version '$ci_lint', Makefile GOLANGCI_LINT_VERSION is $GOLANGCI_LINT_VERSION"
-  # The GITLEAKS_VERSION env of the gitleaks action step equals GITLEAKS_IMAGE's tag (without its v).
+  # The GITLEAKS_VERSION env of the gitleaks action step equals GITLEAKS_IMAGE's tag (without its v
+  # and its digest).
   ci_gitleaks=$(grep -A6 'gitleaks/gitleaks-action' .github/workflows/ci.yml | sed -n 's/^ *GITLEAKS_VERSION: *\([^ #]*\).*/\1/p' | head -1)
-  [ "$ci_gitleaks" = "${GITLEAKS_IMAGE##*:v}" ] ||
+  gitleaks_tag=${GITLEAKS_IMAGE%@*}
+  [ "$ci_gitleaks" = "${gitleaks_tag##*:v}" ] ||
     bad "ci.yml gitleaks GITLEAKS_VERSION '$ci_gitleaks', Makefile GITLEAKS_IMAGE is $GITLEAKS_IMAGE"
 fi
 

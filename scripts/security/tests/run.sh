@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10). Run by
-# make test-sec on the host. Each test runs a wrapper from a temp copy of the repo parts it reads
-# (scripts/security, security/allow.json, deploy/compose.yaml), with a fake `docker` first on PATH
+# Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), and for
+# scripts/check-pins.sh's image digest checks. Run by make test-sec on the host. Each test runs a wrapper from a temp copy of the repo parts it reads
+# (scripts/security, security/allow.json, deploy/compose.yaml; made-up Dockerfiles and a workflow
+# for config-scan.sh), with a fake `docker` first on PATH
 # that appends each call to a log and answers from env vars:
 #   FAKE_FINDINGS   space-separated scan names (app backup postgres cloudflared) whose Trivy run
 #                   finds something: the fake exits with the run's --exit-code value, as Trivy does
@@ -17,6 +18,13 @@
 #   nuclei-test:1   prints FAKE_NUCLEI_TEMPLATES (default 5) as its loaded-templates count, writes
 #                   one finding to its JSONL output when FAKE_NUCLEI_FINDINGS is set, exits 0
 #   curl-test:1 with `-o /cache/<file>` (the templates download) writes a made-up tarball there
+# and, for config-scan.sh:
+#   trivy-cfg-test:1  writes a JSON report with one scanned Dockerfile (none when
+#                   FAKE_TRIVY_CONFIG_EMPTY is set) to its --output, copies its ignore file to
+#                   $FAKE_LOG.cfgignore, and exits FAKE_TRIVY_CONFIG_CODE (default 0); the value
+#                   `findings` means the run's --exit-code value, as Trivy does
+#   zizmor-test:1   copies its --config file to $FAKE_LOG.zizmor, prints a made-up SARIF report
+#                   with --format sarif (exit 0), and otherwise exits FAKE_ZIZMOR_CODE (default 0)
 # `docker exec ... setup-link` prints a made-up setup link. The fake also copies the Trivy ignore
 # file it was given to $FAKE_LOG.ignore. No real container runs and nothing is pulled. All data
 # here is made up.
@@ -30,7 +38,8 @@ REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
-  FAKE_NUCLEI_FINDINGS MODE PULL SARIF_DIR REPORT_DIR NUCLEI_CACHE_DIR
+  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_ZIZMOR_CODE MODE PULL SARIF_DIR \
+  REPORT_DIR NUCLEI_CACHE_DIR
 
 mkdir -p "$ROOT/bin"
 cat >"$ROOT/bin/docker" <<'FAKE'
@@ -108,6 +117,41 @@ case "$1" in
         done
         exit "${FAKE_ZAP_CODE:-0}"
         ;;
+      *" trivy-cfg-test:1 "*)
+        out_file='' code=0 prev=''
+        for a in "$@"; do
+          [ "$prev" != --output ] || out_file=$a
+          [ "$prev" != --exit-code ] || code=$a
+          prev=$a
+        done
+        cp "$(mount_of /scan "$@")/.trivyignore.yaml" "$FAKE_LOG.cfgignore"
+        report=$(mount_of /out "$@")/${out_file#/out/}
+        if [ -n "${FAKE_TRIVY_CONFIG_EMPTY:-}" ]; then
+          echo '{"Results":[]}' >"$report"
+        else
+          echo '{"Results":[{"Target":"Dockerfile","Type":"dockerfile","Misconfigurations":[]}]}' >"$report"
+        fi
+        case "${FAKE_TRIVY_CONFIG_CODE:-0}" in
+          findings) exit "$code" ;;
+          *) exit "${FAKE_TRIVY_CONFIG_CODE:-0}" ;;
+        esac
+        ;;
+      *" zizmor-test:1 "*)
+        prev=''
+        for a in "$@"; do
+          if [ "$prev" = --config ]; then
+            cp "$(mount_of "$(dirname "$a")" "$@")/$(basename "$a")" "$FAKE_LOG.zizmor"
+          fi
+          prev=$a
+        done
+        case " $* " in
+          *" --format sarif "*)
+            echo '{"version":"2.1.0","runs":[]}'
+            exit 0
+            ;;
+        esac
+        exit "${FAKE_ZIZMOR_CODE:-0}"
+        ;;
       *" nuclei-test:1 "*)
         out=$(mount_of /out "$@")
         echo "[INF] Templates loaded for current scan: ${FAKE_NUCLEI_TEMPLATES:-5}" >&2
@@ -155,6 +199,10 @@ setup() {
   cp "$REPO/deploy/compose.yaml" "$W/deploy/"
   cp "$REPO/security/zap-rules.tsv" "$W/security/"
   cp "$REPO/api/openapi.yaml" "$W/api/"
+  mkdir -p "$W/deploy/backup" "$W/.github/workflows"
+  printf 'FROM scratch\n' >"$W/Dockerfile"
+  printf 'FROM scratch\n' >"$W/deploy/backup/Dockerfile"
+  printf 'name: made-up\n' >"$W/.github/workflows/ci.yml"
   echo '[]' >"$W/security/allow.json"
   LOG=$W/docker.log
   : >"$LOG"
@@ -167,6 +215,41 @@ scan() {
   (cd / && PATH="$ROOT/bin:$PATH" TRIVY_IMAGE=trivy-test:1 PG_IMAGE=postgres:18.6-alpine \
     VERSION=1.2.3 TRIVY_CACHE_DIR="$W/cache" "$W/scripts/security/image-scan.sh" "$@") >"$W/out" 2>&1
 }
+
+# config_scan: runs config-scan.sh from another folder with the fake docker; stdout and stderr go
+# to $W/out.
+config_scan() {
+  (cd / && PATH="$ROOT/bin:$PATH" TRIVY_IMAGE=trivy-cfg-test:1 ZIZMOR_IMAGE=zizmor-test:1 \
+    "$W/scripts/security/config-scan.sh" "$@") >"$W/out" 2>&1
+}
+
+# pins_setup: a fresh copy, in $W, of the files scripts/check-pins.sh reads. CHECK_PINS overrides
+# the script copied (default: the repo's).
+pins_setup() {
+  W=$(mktemp -d "$ROOT/pins.XXXXXX")
+  mkdir -p "$W/scripts" "$W/web" "$W/deploy/backup" "$W/.github/workflows"
+  cp "${CHECK_PINS:-$REPO/scripts/check-pins.sh}" "$W/scripts/check-pins.sh"
+  cp "$REPO/web/package.json" "$W/web/"
+  cp "$REPO/go.mod" "$REPO/Dockerfile" "$W/"
+  cp "$REPO/deploy/compose.yaml" "$W/deploy/"
+  cp "$REPO/deploy/backup/Dockerfile" "$W/deploy/backup/"
+  cp "$REPO/.github/workflows/ci.yml" "$W/.github/workflows/"
+}
+
+# The Makefile's pins, as make check-pins passes them.
+make_pin() {
+  sed -n "s/^$1 := //p" "$REPO/Makefile"
+}
+
+# check_pins: runs the copied check-pins.sh with the Makefile's pins (PG_PIN overrides PG_IMAGE);
+# stdout and stderr go to $W/out.
+check_pins() {
+  (cd / && PG_IMAGE="${PG_PIN:-$(make_pin PG_IMAGE)}" GOLANGCI_LINT_VERSION="$(make_pin GOLANGCI_LINT_VERSION)" \
+    GITLEAKS_IMAGE="$(make_pin GITLEAKS_IMAGE)" "$W/scripts/check-pins.sh") >"$W/out" 2>&1
+}
+
+# A digest that is not the pinned one.
+other_digest=sha256:$(printf 'made-up image\n' | sha256sum | cut -d' ' -f1)
 
 # The sha256 of the fake curl's made-up templates tarball.
 fake_tarball_sha=$(printf 'made-up templates tarball\n' | sha256sum | cut -d' ' -f1)
@@ -488,6 +571,144 @@ JSON
   return 0
 }
 
+test_config_clean_run() {
+  setup
+  config_scan || fail "a clean config scan exited non-zero: $(cat "$W/out")"
+  assert_eq "trivy config runs" 2 "$(count_calls 'trivy-cfg-test:1 config')"
+  has_call "/src/Dockerfile" || fail "the app Dockerfile was not scanned"
+  has_call "/src/deploy/backup/Dockerfile" || fail "the backup Dockerfile was not scanned"
+  assert_eq "trivy config runs with the blocking flags" 2 \
+    "$(count_calls '--skip-check-update --skip-version-check --ignorefile /scan/.trivyignore.yaml --severity HIGH,CRITICAL --exit-code 5')"
+  assert_eq "zizmor runs" 1 "$(count_calls 'zizmor-test:1 --offline')"
+  assert_eq "scanner runs with a network" 0 "$(grep -E 'trivy-cfg-test:1|zizmor-test:1' "$LOG" | grep -vc -- '--network none')"
+  has_call "rm -f oc-config-scan-trivy oc-config-scan-zizmor" || fail "the containers were not removed"
+}
+
+test_config_bad_args() {
+  setup
+  local rc=0
+  config_scan extra || rc=$?
+  assert_eq "exit code with an argument" 2 "$rc"
+  rc=0
+  (cd / && PATH="$ROOT/bin:$PATH" ZIZMOR_IMAGE=zizmor-test:1 "$W/scripts/security/config-scan.sh") >"$W/out" 2>&1 || rc=$?
+  assert_eq "exit code without TRIVY_IMAGE" 2 "$rc"
+  assert_eq "docker calls for bad args" 0 "$(wc -l <"$LOG")"
+}
+
+# zizmor exits 11 to 14 for its highest finding: informational, low, medium, high.
+test_zizmor_medium_and_high_red() {
+  local code
+  for code in 13 14; do
+    setup
+    FAKE_ZIZMOR_CODE=$code config_scan && fail "zizmor exit $code exited 0"
+    out_has "zizmor: medium or high findings (exit $code)"
+  done
+}
+
+test_zizmor_low_and_info_reported() {
+  local code
+  for code in 11 12; do
+    setup
+    FAKE_ZIZMOR_CODE=$code config_scan || fail "zizmor exit $code exited non-zero: $(cat "$W/out")"
+    out_has "zizmor: informational or low findings only (exit $code), reported, not blocking"
+  done
+}
+
+test_zizmor_error_red() {
+  local code
+  for code in 1 2 3 125; do
+    setup
+    FAKE_ZIZMOR_CODE=$code config_scan && fail "zizmor exit $code (an error) exited 0"
+    out_has "zizmor could not scan .github/workflows (exit $code)"
+  done
+}
+
+test_trivy_config_findings_red() {
+  setup
+  FAKE_TRIVY_CONFIG_CODE=findings config_scan && fail "a Trivy config finding exited 0"
+  out_has "Dockerfile: high or critical misconfigurations"
+}
+
+test_trivy_config_error_red() {
+  setup
+  # Trivy exits 1 on its own errors whatever --exit-code says.
+  FAKE_TRIVY_CONFIG_CODE=1 config_scan && fail "a Trivy config error (exit 1) exited 0"
+  out_has "trivy could not scan Dockerfile (exit 1)"
+}
+
+test_trivy_config_nothing_scanned_red() {
+  setup
+  FAKE_TRIVY_CONFIG_EMPTY=1 config_scan && fail "a Trivy config run that scanned no Dockerfile exited 0"
+  out_has "trivy scanned no Dockerfile in Dockerfile"
+}
+
+test_config_allow_reaches_tools() {
+  setup
+  cat >"$W/security/allow.json" <<'JSON'
+[
+  {"tool": "trivy-config", "id": "DS-9001", "reason": "made up", "expires": "2099-01-01"},
+  {"tool": "trivy-config", "id": "DS-9002", "reason": "made up, expired", "expires": "2000-01-01"},
+  {"tool": "zizmor", "id": "made-up-audit", "reason": "made up", "expires": "2099-01-01"},
+  {"tool": "trivy", "id": "DS-9003", "reason": "made up, other tool", "expires": "2099-01-01"}
+]
+JSON
+  config_scan || fail "config scan exited non-zero: $(cat "$W/out")"
+  grep -qx '  - id: DS-9001' "$LOG.cfgignore" || fail "the live trivy-config id is not ignored: $(cat "$LOG.cfgignore")"
+  grep -q 'DS-9002\|DS-9003' "$LOG.cfgignore" && fail "an expired or other-tool id is ignored"
+  grep -qx '  made-up-audit:' "$LOG.zizmor" || fail "the live zizmor id is not in the zizmor config: $(cat "$LOG.zizmor")"
+  grep -qx '    disable: true' "$LOG.zizmor" || fail "the zizmor rule is not disabled: $(cat "$LOG.zizmor")"
+}
+
+test_config_allow_bad_id_refused() {
+  setup
+  jq -n '[{"tool": "zizmor", "id": "two words", "reason": "made up", "expires": "2099-01-01"}]' >"$W/security/allow.json"
+  config_scan && fail "a zizmor id that is not a plain token was accepted"
+  out_has "security/allow.json has a zizmor id that is not a plain token"
+  assert_eq "zizmor runs with the bad id" 0 "$(count_calls 'zizmor-test:1')"
+}
+
+test_config_sarif_written() {
+  setup
+  SARIF_DIR=$W/sarif config_scan || fail "config scan exited non-zero: $(cat "$W/out")"
+  has_call "zizmor-test:1 --offline --format sarif" || fail "zizmor was not run for SARIF"
+  jq -e '.version == "2.1.0"' "$W/sarif/zizmor.sarif" >/dev/null || fail "no zizmor SARIF file: $(cat "$W/out")"
+}
+
+test_pins_clean() {
+  pins_setup
+  check_pins || fail "check-pins on the repo's files exited non-zero: $(cat "$W/out")"
+}
+
+# Each copy of the Postgres pin in turn gets another digest; check-pins must name that file.
+test_pins_postgres_digest_drift_red() {
+  local pin f
+  pin=$(make_pin PG_IMAGE)
+  for f in deploy/compose.yaml deploy/backup/Dockerfile .github/workflows/ci.yml; do
+    pins_setup
+    grep -qF "$pin" "$W/$f" || fail "$f does not hold the pin $pin"
+    sed -i "s|${pin#*@}|$other_digest|" "$W/$f"
+    check_pins && fail "a postgres digest drift in $f exited 0"
+    out_has "check-pins: $f uses ${pin%@*}@$other_digest"
+  done
+}
+
+test_pins_postgres_digest_missing_red() {
+  local pin
+  pin=$(make_pin PG_IMAGE)
+  pins_setup
+  sed -i "s|$pin|${pin%@*}|" "$W/deploy/compose.yaml"
+  check_pins && fail "a postgres copy without its digest exited 0"
+  out_has "check-pins: deploy/compose.yaml uses ${pin%@*},"
+}
+
+test_pins_pg_image_without_digest_red() {
+  local pin
+  pin=$(make_pin PG_IMAGE)
+  pins_setup
+  PG_PIN=${pin%@*} check_pins && fail "a PG_IMAGE without a digest exited 0"
+  out_has "is not postgres:<tag>@sha256:<digest>"
+}
+
 t "an unknown MODE exits 2" test_unknown_mode
 t "push mode: a clean scan covers the four images" test_push_clean_scans_four_images
 t "push mode: an app image finding is red" test_push_app_finding_red
@@ -521,4 +742,19 @@ t "an allow-listed zap rule is IGNORE in the rules file" test_zap_allow_is_ignor
 t "an allow-listed nuclei template reaches -exclude-id" test_nuclei_allow_excluded
 t "a scoped zap id is OUTOFSCOPE for its URL and leaves the rule FAIL" test_zap_scoped_allow_is_out_of_scope
 t "a malformed scoped zap id is refused" test_zap_malformed_scoped_id_refused
+t "config scan: a clean run scans both Dockerfiles and the workflows offline" test_config_clean_run
+t "config scan: an argument or a missing image exits 2" test_config_bad_args
+t "zizmor medium or high findings (exit 13, 14) are red" test_zizmor_medium_and_high_red
+t "zizmor informational or low findings (exit 11, 12) are reported, not red" test_zizmor_low_and_info_reported
+t "a zizmor error (exit 1, 2, 3) or a zizmor that cannot start is red" test_zizmor_error_red
+t "a Trivy config finding is red" test_trivy_config_findings_red
+t "a Trivy config error (exit 1) is red" test_trivy_config_error_red
+t "a Trivy config run that scanned no Dockerfile is red" test_trivy_config_nothing_scanned_red
+t "allow-listed trivy-config and zizmor ids reach the tools" test_config_allow_reaches_tools
+t "a zizmor allow id that is not a plain token is refused" test_config_allow_bad_id_refused
+t "SARIF_DIR gets the zizmor SARIF file" test_config_sarif_written
+t "check-pins: the repo's pins agree" test_pins_clean
+t "check-pins: a postgres digest that drifts in any copy is red" test_pins_postgres_digest_drift_red
+t "check-pins: a postgres copy without its digest is red" test_pins_postgres_digest_missing_red
+t "check-pins: a PG_IMAGE without a digest is red" test_pins_pg_image_without_digest_red
 finish

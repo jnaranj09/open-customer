@@ -6,21 +6,26 @@ SHELL := bash
 .DEFAULT_GOAL := build
 
 # Pins (design doc "Pins"). A bump changes every copy in one commit; check-pins keeps them equal.
-PG_IMAGE := postgres:18.6-alpine
+# Every image is <tag>@<digest of its multi-arch index>, so a tag moved upstream is never pulled
+# (guard TestSupplyChainPins). Dependabot does not read this file: these are bumped by hand, tag
+# and digest together.
+PG_IMAGE := postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
 GOLANGCI_LINT_VERSION := v2.15.0
-SQLC_IMAGE := sqlc/sqlc:1.31.1
+SQLC_IMAGE := sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537
 # Security pipeline scanners (docs/designs/devsecops.md). GITLEAKS_IMAGE's version is also the CI
 # gitleaks action's GITLEAKS_VERSION; check-pins keeps the two equal.
-TRIVY_IMAGE := aquasec/trivy:0.76.1
-GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.24.3
+TRIVY_IMAGE := aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055
+# make config-scan: zizmor on .github/workflows (Trivy config, above, reads the Dockerfiles).
+ZIZMOR_IMAGE := ghcr.io/zizmorcore/zizmor:1.31.1@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9
 # make dast: ZAP, Nuclei and its templates release, and the curl image that drives the app.
-ZAP_IMAGE := zaproxy/zap-stable:2.17.0
-NUCLEI_IMAGE := projectdiscovery/nuclei:v3.11.1
+ZAP_IMAGE := zaproxy/zap-stable:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+NUCLEI_IMAGE := projectdiscovery/nuclei:v3.11.1@sha256:582d5546902e67052097cb2d07296c642d50a1afc5e44623cb038845df9a32eb
 NUCLEI_TEMPLATES := v10.5.1
 # sha256 of that release's GitHub archive (refs/tags/$(NUCLEI_TEMPLATES).tar.gz); dast.sh refuses
 # any other bytes. A templates bump changes both lines.
 NUCLEI_TEMPLATES_SHA256 := 30fe1cfaced4635f886e4a2673641bba86998dceec28e468274524e789aa56eb
-CURL_IMAGE := curlimages/curl:8.22.0
+CURL_IMAGE := curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
 export PG_IMAGE
 
 VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)
@@ -71,7 +76,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 PNPM := cd web && pnpm
 
 .PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
-	image-scan secrets test-sec dast
+	image-scan secrets test-sec dast config-scan
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -207,6 +212,12 @@ dast:
 		NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) NUCLEI_TEMPLATES_SHA256=$(NUCLEI_TEMPLATES_SHA256) \
 		CURL_IMAGE=$(CURL_IMAGE) REPORT_DIR=$(REPORT_DIR) \
 		scripts/security/dast.sh
+
+# devsecops.md section 3: Trivy config on Dockerfile and deploy/backup/Dockerfile (high or critical
+# blocks), and zizmor --offline on .github/workflows (medium or high blocks), both with no network.
+# SARIF_DIR=<dir> also writes <dir>/zizmor.sarif (CI).
+config-scan:
+	TRIVY_IMAGE=$(TRIVY_IMAGE) ZIZMOR_IMAGE=$(ZIZMOR_IMAGE) scripts/security/config-scan.sh
 
 # gitleaks over the whole git history, offline; reviewed false positives are in .gitleaksignore.
 secrets:

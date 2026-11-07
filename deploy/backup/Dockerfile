@@ -1,7 +1,8 @@
 # Backup image (design doc item 84): the pinned Postgres image, so pg_dump and pg_restore match the
 # server's major version, plus bash, restic and jq. Busybox already has flock (with -n), so no
-# extra package is needed (checked at P7).
-FROM postgres:18.6-alpine
+# extra package is needed (checked at P7). The pin, digest included, is PG_IMAGE in the Makefile;
+# make check-pins fails if this copy differs.
+FROM postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
 
 RUN apk add --no-cache bash restic jq
 

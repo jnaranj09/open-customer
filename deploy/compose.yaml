@@ -2,13 +2,31 @@
 # (copy .env.example; the variables are in the design doc's "Configuration (`.env`)" table). No
 # service publishes a port: cloudflared reaches app:8080 on the Compose network. Start it with
 # `docker compose up -d`; upgrades, restores and manual backups go through scripts/.
+#
+# Hardening (docs/designs/devsecops.md section 3; guard TestComposeHardening in internal/guards):
+# every service drops every Linux capability, cannot gain privileges (no-new-privileges), has a
+# memory limit and a read-only root file system with a tmpfs where it writes outside its volumes.
+# The image pins carry their digest, so a tag moved upstream is never pulled.
 name: open-customer
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
 
 services:
   db:
     # The pin is PG_IMAGE in the Makefile; make check-pins fails if this copy differs.
-    image: postgres:18.6-alpine
+    image: postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
     restart: unless-stopped
+    <<: *hardening
+    # As the image's postgres user, the entrypoint needs no capability. As root it needs CHOWN,
+    # SETUID and SETGID to hand the data folder to postgres and switch to it (checked); the image
+    # already owns /var/lib/postgresql as postgres, so a fresh volume starts owned by it.
+    user: postgres
+    mem_limit: 1g
+    # The server's socket and lock files, and its temp files.
+    tmpfs: [/var/run/postgresql, /tmp]
     environment:
       POSTGRES_USER: ${DB_USER:-open_customer}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in .env}
@@ -29,6 +47,8 @@ services:
     image: ghcr.io/jnaranj09/open-customer:${APP_VERSION:?APP_VERSION is required in .env}
     # The image's own command is `serve`; it runs as the non-root user 65532.
     restart: unless-stopped
+    <<: *hardening
+    mem_limit: 512m
     environment:
       PUBLIC_URL: ${PUBLIC_URL:?PUBLIC_URL is required in .env}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in .env}
@@ -61,8 +81,10 @@ services:
 
   cloudflared:
     # Bumped by Dependabot (the docker-compose entry for /deploy).
-    image: cloudflare/cloudflared:2026.10.7
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
     restart: unless-stopped
+    <<: *hardening
+    mem_limit: 256m
     command: ["tunnel", "run"]
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN is required in .env}
@@ -77,6 +99,15 @@ services:
     restart: unless-stopped
     # The postgres base image sets SIGINT; backup.sh traps TERM and INT.
     stop_signal: SIGTERM
+    <<: *hardening
+    # It runs as root, but without capabilities root cannot write a folder it does not own:
+    # DAC_OVERRIDE lets it open /backup-status/backup.lock (the volume is owned by 65532 when app
+    # made it) and write a BACKUP_TARGET folder owned by another user. Without it every run stops
+    # with "cannot open the lock file" (checked).
+    cap_add: [DAC_OVERRIDE]
+    mem_limit: 1g
+    # restic's cache and the snapshot-info error file.
+    tmpfs: [/tmp, /root/.cache]
     environment: &backup-env
       RESTIC_PASSWORD: ${RESTIC_PASSWORD:?RESTIC_PASSWORD is required in .env}
       # Every snapshot is tagged app=<APP_VERSION>.
@@ -107,6 +138,14 @@ services:
     image: ghcr.io/jnaranj09/open-customer-backup:${APP_VERSION:?APP_VERSION is required in .env}
     profiles: ["restore"]
     stop_signal: SIGTERM
+    <<: *hardening
+    # Each one checked by a restore without it: DAC_OVERRIDE as for backup (it creates
+    # /backup-status/restore-first and clears /backup-status/work); CHOWN, because restic restores
+    # each file's owner (lchown) and backup.sh then hands the media files to 65532; FOWNER, because
+    # restic then restores the times of files it no longer owns.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    mem_limit: 1g
+    tmpfs: [/tmp, /root/.cache]
     environment: *backup-env
     volumes:
       - media:/media

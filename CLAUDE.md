@@ -31,7 +31,8 @@ with fnm, `fnm use` in web/).
 
 - `make generate`: oapi-codegen, sqlc (Docker image), openapi-typescript.
 - `make check-generated`: `generate`, then fails on any diff.
-- `make check-pins`: Postgres, Node, Go, golangci-lint and gitleaks pins agree across files.
+- `make check-pins`: Postgres (digest included), Node, Go, golangci-lint and gitleaks pins agree
+  across files.
 - `make lint`: `go mod tidy -diff`, golangci-lint, `go build` for darwin and windows, deadcode
   (exact `DEADCODE_BUDGET`), shellcheck, svelte-check, eslint, prettier check, knip, jscpd (fails
   on an empty scan).
@@ -45,7 +46,11 @@ with fnm, `fnm use` in web/).
   compose cloudflared image (`scripts/security/image-scan.sh`). `push` (default) blocks on our two
   images only; `release` blocks on all four. Needs network (the Trivy database).
 - `make secrets`: gitleaks over the whole git history (`.gitleaksignore` honoured). `make test-sec`:
-  the scan wrappers' tests (`scripts/security/tests/run.sh`, fake `docker`).
+  the scan wrappers' and check-pins' tests (`scripts/security/tests/run.sh`, fake `docker`).
+- `make config-scan`: Trivy config on the two Dockerfiles (high or critical blocks) and zizmor
+  `--offline` on `.github/workflows` (medium or high blocks), both with no network
+  (`scripts/security/config-scan.sh`). `deploy/compose.yaml` is checked by the guard
+  `TestComposeHardening` instead.
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
@@ -57,11 +62,11 @@ with fnm, `fnm use` in web/).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec`,
+`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan`,
 plus `make image image-scan dast` for a change to an image, a scan or what the app serves. CI
 (`.github/workflows/ci.yml`) also runs the gitleaks action, `pnpm audit --audit-level high` and
-`make e2e` (after `make build`) in job `gate`, and `make image image-scan MODE=push dast` in job
-`security`.
+`make e2e` (after `make build`) in job `gate`, and `make image image-scan MODE=push dast` (and the
+zizmor SARIF upload) in job `security`.
 
 A check that could not run is reported as NOT RUN, never as passing.
 
@@ -124,12 +129,15 @@ A check that could not run is reported as NOT RUN, never as passing.
 ## Versions (don't bump in passing)
 
 Pinned at P0, each in the one place the design doc's "Pins" table names. A bump changes every
-copy in one commit, and `make check-pins` must stay green.
+copy in one commit, and `make check-pins` must stay green. Every image is pinned
+`<tag>@sha256:<index digest>` and every Action by its full commit SHA with `# vX.Y.Z` (guard
+`TestSupplyChainPins`): a bump changes the tag and the digest (or SHA and comment) together.
 
 - Go 1.27.3: `go.mod` (`go 1.27.0` + `toolchain go1.27.3`); `golang:` in the `Dockerfile`.
 - Node 26.13.0 and pnpm 12.16.1: `web/package.json` (`engines.node`, `packageManager`); `node:` and
   `pnpm@` in the `Dockerfile`.
-- Postgres 18.6: `PG_IMAGE` in the `Makefile`.
+- Postgres 18.6: `PG_IMAGE` in the `Makefile` (with its digest); `deploy/compose.yaml`,
+  `deploy/backup/Dockerfile` and the CI service repeat it, digest included.
 - golangci-lint v2.15.0: `GOLANGCI_LINT_VERSION` in the `Makefile`; `version:` in CI.
 - sqlc 1.31.1: `SQLC_IMAGE` in the `Makefile`.
 - Go tools (oapi-codegen, govulncheck, deadcode): `tool` lines in `go.mod`.

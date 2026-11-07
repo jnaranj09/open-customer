@@ -1,6 +1,10 @@
-# Design doc item 10. postgres, node and golang are bumped by hand, every copy in one commit
-# (design doc "Pins"); make check-pins keeps them equal. The docker-compose entry bumps the other
-# image tags in deploy/compose.yaml (cloudflared); the app and backup images use ${APP_VERSION}.
+# Design doc item 10. postgres, node and golang are bumped by hand, every copy in one commit, tag and
+# digest together (design doc "Pins"); make check-pins keeps them equal. Every image is pinned
+# <tag>@sha256:<digest> and Dependabot bumps both parts: the docker entry for / the distroless base
+# of Dockerfile, and the docker-compose entry the other images of deploy/compose.yaml
+# (cloudflared); the app and backup images use ${APP_VERSION}. The scanner and tool images in the
+# Makefile are bumped by hand: Dependabot does not read a Makefile. The github-actions entry bumps
+# each action's commit SHA and its `# vX.Y.Z` comment together (guard TestSupplyChainPins).
 version: 2
 updates:
   - package-ecosystem: gomod

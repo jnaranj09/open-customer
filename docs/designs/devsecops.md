@@ -1,7 +1,9 @@
 # open-customer — Security pipeline
 
-Status: approved by the owner (2026-11-06). Being built: the threat model and the allow-list exist;
-the scans do not yet.
+Status: approved by the owner (2026-11-06). Being built: the threat model, the allow-list, the image
+scan, the secret scan, the running-app scan and the config scan (with the compose hardening and the
+supply-chain pins) exist; the code scan, the fuzz tests, SBOM and signing, the live scan and the
+manual audit do not yet.
 
 ## Intent
 
@@ -89,14 +91,28 @@ rule names its sensor") applied to security.
 
 ### 3. Config scan (Dockerfiles, compose, workflows)
 
-- Scans `Dockerfile`, `deploy/backup/Dockerfile`, `deploy/compose.yaml` and `.github/workflows/`.
-  Checkov or Trivy's config scanner: the builder checks which one reads Compose files and picks
-  the one that covers all three.
-- The workflows get a dedicated check for Actions risks (unpinned actions, too-wide permissions,
-  script injection). Builder's call which tool.
-- Expected fixes it forces: compose hardening (`read_only` where the service allows it, `cap_drop`,
-  `no-new-privileges`, memory limits), and every Action pinned by commit SHA (Dependabot keeps SHAs
-  current).
+- `make config-scan` (`scripts/security/config-scan.sh`, in the gate). Neither Checkov nor Trivy's
+  config scanner reads Compose files (tool research, 2026-11-06), so each config kind has its own
+  sensor and Checkov is not used:
+  - **Dockerfiles** (`Dockerfile`, `deploy/backup/Dockerfile`): Trivy config, with the checks built
+    into the pinned Trivy image (`--skip-check-update`, no bundle fetched at run time) and no
+    network. A high or critical finding blocks; medium and low are not reported.
+  - **Workflows** (`.github/workflows/`): zizmor `--offline` (unpinned actions, too-wide
+    permissions, script injection, credential persistence, cache poisoning), no network. A medium
+    or high finding blocks (exit 13, 14); informational and low are printed only (exit 11, 12). CI
+    job `security` uploads its SARIF.
+  - **`deploy/compose.yaml`**: the Go guard `TestComposeHardening` (`internal/guards`, run by
+    `make test`).
+- The fixes it forced: compose hardening (every service `no-new-privileges`, `cap_drop: [ALL]`,
+  `read_only: true` with a tmpfs where it writes, a memory limit; `db` runs as the image's `postgres`
+  user and needs no capability; `backup` and `restore` add back only the capabilities each was
+  seen failing without), `USER 65532:65532` in the app image, `persist-credentials: false` on every
+  checkout, no Go cache in the release workflow, and `packages: write` on the release job only.
+- Supply-chain pins: every `uses:` is a full commit SHA with its `# vX.Y.Z` and every image a
+  `<tag>@sha256:<index digest>` (Dockerfiles, compose, CI services, the Makefile, the deploy
+  scripts), checked by the guard `TestSupplyChainPins`; `make check-pins` keeps the copies of the
+  Postgres pin, digest included, equal. Dependabot bumps the SHA or digest and the version together
+  where it reads the file (not the Makefile).
 
 ### 4. Image scan and supply chain (Trivy)
 
@@ -167,9 +183,11 @@ rule names its sensor") applied to security.
 
 - **CVE scanners** (Trivy on images and dependencies): high or critical with a fixed version
   available blocks. Medium and low are reported, not blocking.
-- **Every other tool** (Semgrep, config scan, Actions scan, Nuclei, the threat-model guard):
-  every finding blocks unless it is allow-listed. Their severity scales differ and have no "fix
-  available", and a missing header or `cap_drop` must go red to be fixed. My call.
+- **Every other tool** (Semgrep, Nuclei, the compose and threat-model guards): every finding
+  blocks unless it is allow-listed. Their severity scales differ and have no "fix available", and a
+  missing header or `cap_drop` must go red to be fixed. My call. The config scan blocks from a set
+  severity instead (builder's call, section 3): Trivy config on high and critical, zizmor on medium
+  and high; zizmor's informational and low findings are printed only.
 - **ZAP** blocks on its High and Medium rules and on the header rules 10021 (`nosniff`) and 10035
   (HSTS), all FAIL in `security/zap-rules.tsv`. Its Low and Informational rules only WARN,
   10011 (cookie without `Secure`, the scan is plain http) and 10116 (ZAP out of date) included
@@ -227,6 +245,6 @@ separate `make dast`, like `make e2e`.
 ## Left to the builder
 
 - Exact tool versions, images and flags (verified against each tool's docs; pinned per "Pins").
-- Checkov vs Trivy config, and the Actions-specific scanner.
+- Checkov vs Trivy config, and the Actions-specific scanner (decided: section 3).
 - The phase split and order, with the image scan and the running-app scan (with the headers fix)
   first, because they close the two gaps found today.
