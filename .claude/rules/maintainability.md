@@ -51,8 +51,8 @@ Every change keeps these rules. Each one names its sensor, or says "prose only".
   `message` and `stack` of `POST /client-errors` are logged (`code=client_error`, with the route and
   app version; a message over 2000 characters is rejected, a stack over 8000 is cut to 8000), because they come from our own PWA and are the
   only way to debug it (design doc 'Observability'). Sensor, in part: Semgrep `no-slog-of-request-body`
-  (`make sast`: a log call with the request body, a value decoded from it or the decode error) and
-  `no-raw-error-to-client`; prose only for the other values.
+  (`make sast`: a log call with the request body, a value decoded from it or the decode error);
+  prose only for the other values.
 - **A guard that stays green when the code it protects is broken is not a guard.** Break the code,
   see it red, restore. Prose only (reviewer step 2).
 - **"Why" comments stay.** A comment that states a constraint or an incident is kept; a commit that

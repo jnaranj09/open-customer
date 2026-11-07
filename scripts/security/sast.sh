@@ -6,19 +6,19 @@
 #
 # Two runs, both in the pinned image: `semgrep --test` (every rule file has a fixture with at least
 # one `ruleid:` line, and every annotation matches what the rule reports), then the scan of the
-# repo (what is skipped is listed in .semgrepignore). Semgrep reads the files git lists: tracked ones, and untracked
-# ones that are not git-ignored (checked: a new file is scanned before it is added); in CI all are
-# tracked. The live `semgrep` ids of security/allow.json
-# (allow.sh) become --exclude-rule; an id must be the plain id of a rule in security/semgrep (Semgrep
-# prefixes it with the config path: security.semgrep.<id>, which the script adds), so a typo or a
-# removed rule is refused instead of silently excluding nothing.
+# repo (what is skipped is listed in .semgrepignore). Semgrep reads the files git lists: tracked
+# ones, and untracked ones that are not git-ignored (checked: a new file is scanned before it is
+# added); in CI all are tracked. The live `semgrep` ids of security/allow.json (allow.sh) become
+# --exclude-rule; an id must be the plain id of a rule in security/semgrep (Semgrep prefixes it
+# with the config path: security.semgrep.<id>, which the script adds), so a typo or a removed rule
+# is refused instead of silently excluding nothing.
 #
 # Fail closed: any exit other than 0 (clean) and 1 (findings, --error) is red; so is a JSON report
 # that is missing, lists an error, lists no scanned Go, TypeScript and Svelte file (a scan of 0
-# files reads as clean otherwise), or disagrees with the exit code. Limit: Semgrep does not report a parse error in a Go file
-# (it does in TypeScript), so a Go file that does not parse is skipped without a word; make lint and
-# make build catch it. SARIF_DIR=<dir> (relative to the
-# repo root) also writes <dir>/semgrep.sarif from the same run. Exit 2 on bad arguments, 1 when red.
+# files reads as clean otherwise), or disagrees with the exit code. Limit: Semgrep does not report
+# a parse error in a Go file (it does in TypeScript), so a Go file that does not parse is skipped
+# without a word; make lint and make build catch it. SARIF_DIR=<dir> (relative to the repo root)
+# also writes <dir>/semgrep.sarif from the same run. Exit 2 on bad arguments, 1 when red.
 set -euo pipefail
 
 if [ "$#" -ne 0 ]; then

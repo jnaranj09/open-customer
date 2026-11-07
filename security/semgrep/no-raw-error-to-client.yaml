@@ -15,8 +15,8 @@ rules:
         - /internal/httpapi/gen/
     # Semgrep cannot type `err` when it comes from another package's call, so an error is found by
     # its Error() method (any variable name), or, as a bare value, by a name that is `err` or ends in
-    # Err or Error. $W (a response writer) is only checked where the sink is not http.Error or a
-    # problem/writeJSON call: the names the handlers use for it.
+    # Err or Error. $W is not narrowed: Write and fmt.Fprint* match on any receiver, so writing an
+    # error's text into a buffer is flagged too (no such write exists today).
     pattern-either:
           - patterns:
               - pattern-either:
