@@ -55,6 +55,10 @@ with fnm, `fnm use` in web/).
   fixture each in `security/semgrep/testdata`; never a registry rule), no network
   (`scripts/security/sast.sh`): `semgrep --test` on the fixtures, then the scan; any finding blocks.
   `.semgrepignore` lists what is skipped (tests, fixtures).
+- `make fuzz [FUZZTIME=60s]`: the four Go fuzz targets (`FuzzDecodeJSON`, `FuzzMultipartUpload`,
+  `FuzzParseTemplate`, `FuzzBackupStatusRead`), one after another, each for `FUZZTIME`; any crash
+  fails. Manual: not in the gate or CI (`make test` runs their seeds). A crash input lands in the
+  package's `testdata/fuzz/<Name>/`: keep it as a seed and fix the code with its own test.
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against

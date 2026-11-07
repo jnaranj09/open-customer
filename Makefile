@@ -84,7 +84,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 PNPM := cd web && pnpm
 
 .PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
-	image-scan secrets test-sec dast config-scan sast
+	image-scan secrets test-sec dast config-scan sast fuzz
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -220,6 +220,19 @@ dast:
 		NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) NUCLEI_TEMPLATES_SHA256=$(NUCLEI_TEMPLATES_SHA256) \
 		CURL_IMAGE=$(CURL_IMAGE) REPORT_DIR=$(REPORT_DIR) \
 		scripts/security/dast.sh
+
+# devsecops.md section 7: each fuzz target for FUZZTIME, one after another (go test -fuzz takes one
+# target per package). Manual, not in the gate or CI; the seeds run in `make test`. A crash writes
+# its input to testdata/fuzz/<Name>/ in the package: keep it as a seed and fix the code.
+FUZZTIME ?= 60s
+FUZZ_TARGETS := ./internal/httpapi:FuzzDecodeJSON ./internal/httpapi:FuzzMultipartUpload \
+	./internal/templates:FuzzParseTemplate ./internal/platform/backupstatus:FuzzBackupStatusRead
+fuzz: web-stub
+	@for t in $(FUZZ_TARGETS); do \
+		pkg=$${t%%:*}; name=$${t##*:}; \
+		echo "fuzz: $$name ($$pkg) for $(FUZZTIME)"; \
+		go test "$$pkg" -run '^$$' -fuzz "^$$name$$" -fuzztime "$(FUZZTIME)" || exit 1; \
+	done
 
 # devsecops.md section 3: Trivy config on Dockerfile and deploy/backup/Dockerfile (high or critical
 # blocks), and zizmor --offline on .github/workflows (medium or high blocks), both with no network.

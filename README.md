@@ -40,6 +40,7 @@ run.
 | `make test-sec` | The scan wrappers' and check-pins' tests (`scripts/security/tests/run.sh`, against a fake `docker`) |
 | `make config-scan` | Trivy config on the two Dockerfiles and zizmor on `.github/workflows`, offline (needs Docker). Fails on a high or critical Dockerfile finding or a medium or high workflow finding |
 | `make sast` | Semgrep with only the rules written in `security/semgrep`, offline (needs Docker): first the rules' fixtures (`semgrep --test`), then the scan of the repo. Any finding fails |
+| `make fuzz` | The four Go fuzz targets (JSON body decoding, multipart uploads, template parsing, the backup status file), one after another, each for `FUZZTIME` (default `60s`). Any crash fails. Manual: not in the gate; `make test` runs their seeds |
 | `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary: the CUJ specs and the UI probe (axe and layout checks on every route at phone and desktop size). Needs the Playwright WebKit browser and its host libraries, port 8080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
 
 The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`.

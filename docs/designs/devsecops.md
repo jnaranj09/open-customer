@@ -206,10 +206,22 @@ rule names its sensor") applied to security.
 
 ### 7. Fuzz tests
 
-- Go native fuzz tests on the parsers that take outside input: JSON body decoding, the multipart
-  upload handlers, template parsing, and the backup status file reader.
-- The gate runs each seed corpus as a normal test; a longer fuzz run is a manual or scheduled job.
-  A crash found by fuzzing becomes a seed and a fix.
+- Go native fuzz tests on the parsers that take outside input, one per seam:
+  - `FuzzDecodeJSON` (`internal/httpapi`): `decodeJSON` and `decodePatch`, the one parse site of
+    every JSON route. A route cannot be driven without a database (the session check is first), so
+    the fuzzer drives the decoders. A body is decoded (no U+0000 in it, nothing written) or refused
+    with a 4xx problem; never a panic or a 5xx.
+  - `FuzzMultipartUpload` (`internal/httpapi`): `readIconParts` and `readMediaParts`, the multipart
+    parse before any database call, for any content type and body. Read, or a 415, 413 or 422
+    problem; never a panic or a 5xx.
+  - `FuzzParseTemplate` (`internal/templates`): `Parse` and `Render` never panic; the error is a
+    validation on field `body`; positions are inside the body; a parsed body rendered with a value
+    for every variable parses again with no variable.
+  - `FuzzBackupStatusRead` (`internal/platform/backupstatus`): `Read` returns a status or
+    `ErrInvalid`, never a panic, and its error never names the path.
+- `make test` runs each seed (the `f.Add` calls and `testdata/fuzz/<Name>/`) as a normal test.
+  `make fuzz FUZZTIME=60s` runs each target for that long, one after another; it is manual and not
+  in the gate or CI. A crash found by fuzzing becomes a seed and a fix.
 
 ### 8. Manual audit (once, then on big changes)
 
@@ -283,6 +295,7 @@ rule names its sensor") applied to security.
 | SBOM + signing | | yes | | |
 | ZAP + Nuclei (CI app) | yes | | | `make dast` |
 | Fuzz seed corpus | yes (in `make test`) | | | in the gate |
+| Fuzzing (`make fuzz`) | | | | `make fuzz` (manual, not in the gate) |
 | Live scan | never | never | never | `make scan-live URL=…` |
 
 My call: the tools that run offline-ish in Docker join the local gate (`CLAUDE.md` "Gate"), so an
