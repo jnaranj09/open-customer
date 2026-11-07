@@ -15,6 +15,7 @@ export APP_VERSION=0.0.0-test
 export RESTIC_REPOSITORY=/target/restic
 BACKUP=/backup.sh
 STATUS=/backup-status/status.json
+DUMP=/backup-status/work/db.dump
 MARKER=/target/.open-customer-backup-target
 LOGS=$(mktemp -d)
 trap 'rm -rf "$LOGS"' EXIT
@@ -53,6 +54,19 @@ wait_until() {
     [ "$i" -lt "$limit" ] || fail "timed out waiting for: $*"
     sleep 0.1
   done
+}
+
+# with_dump_mode_probe: puts a restic wrapper first on PATH that records the plaintext dump's file
+# mode, when the dump exists, each time backup.sh calls restic.
+with_dump_mode_probe() {
+  mkdir -p "$LOGS/bin"
+  rm -f "$LOGS/dump-mode"
+  cat >"$LOGS/bin/restic" <<EOF
+#!/usr/bin/env bash
+if [ -e $DUMP ]; then stat -c %a $DUMP >>"$LOGS/dump-mode"; fi
+exec $(command -v restic) "\$@"
+EOF
+  chmod +x "$LOGS/bin/restic"
 }
 
 # exited <pid>: true once the process is gone.
@@ -95,6 +109,18 @@ test_first_run() {
   assert_eq "last_error" null "$(field last_error)"
   assert_eq "last_error_at" null "$(field last_error_at)"
   assert_eq "status.json mode" 644 "$(stat -c %a "$STATUS")"
+  [ ! -e "$DUMP" ] || fail "the plaintext dump $DUMP is left after a successful backup"
+}
+
+# The plaintext dump holds every client and secret: it is written readable by root only.
+test_dump_private() {
+  fresh
+  touch "$MARKER"
+  with_dump_mode_probe
+  local rc=0
+  PATH="$LOGS/bin:$PATH" "$BACKUP" once >"$LOGS/out" 2>&1 || rc=$?
+  assert_eq "exit code" 0 "$rc"
+  assert_eq "dump modes seen by restic" 600 "$(sort -u "$LOGS/dump-mode")"
 }
 
 test_pre_upgrade_kept() {
@@ -123,6 +149,7 @@ test_unreadable_repo() {
   assert_prefix "last_error" "copy: " "$(field last_error)"
   assert_eq "files under /target" "$before" "$(cd /target && find . -type f -exec md5sum {} + | sort)"
   assert_ne "last_dump_at" "2000-01-01T00:00:00Z" "$(field last_dump_at)"
+  [ ! -e "$DUMP" ] || fail "the plaintext dump $DUMP is left after a failed copy"
 }
 
 # restic init itself refuses a folder that has a config, so the check is seen only on a broken
@@ -139,6 +166,7 @@ test_broken_repo() {
   assert_prefix "last_error" "copy: " "$(field last_error)"
   assert_ne "last_dump_at" "2000-01-01T00:00:00Z" "$(field last_dump_at)"
   assert_eq "files under /target/restic" "/target/restic/data" "$(find /target/restic -mindepth 1)"
+  [ ! -e "$DUMP" ] || fail "the plaintext dump $DUMP is left after a failed copy"
 }
 
 test_dump_failure() {
@@ -503,6 +531,7 @@ test_placeholder_secrets() {
 
 t "marker missing writes nothing to the target" test_marker_missing
 t "first run initialises the repository and backs up" test_first_run
+t "the plaintext dump is readable by root only" test_dump_private
 t "pre-upgrade tag is kept by forget" test_pre_upgrade_kept
 t "an unreadable repository is never re-initialised" test_unreadable_repo
 t "a repository folder without a config is never re-initialised" test_broken_repo
