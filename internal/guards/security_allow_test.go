@@ -1,7 +1,7 @@
 package guards
 
 // security-allow-list (docs/designs/devsecops.md "Blocking policy", decision D4): every entry in
-// security/allow.json names a known tool, a finding id, a one-line reason and an expiry date that
+// security/allow.json names a known tool, a finding id (no whitespace, no comma), a one-line reason and an expiry date that
 // has not passed and is at most maxAllowDays ahead; no (tool, id) pair appears twice. A new entry
 // or a later date needs the owner's agreement in the commit message (prose only).
 
@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 )
 
 const (
@@ -73,6 +74,9 @@ func checkAllowList(data []byte, today time.Time, fileExists func(rel string) bo
 				problems = append(problems, fmt.Sprintf("entry %d: expires %s, more than %d days ahead", i, e.Expires, maxAllowDays))
 			}
 		}
+		if strings.ContainsFunc(e.ID, idSeparator) {
+			problems = append(problems, fmt.Sprintf("entry %d: id %q has whitespace, a newline or a comma: a wrapper would read it as two ids", i, e.ID))
+		}
 		if e.Tool == "zap" && e.ID != "" {
 			if p := checkZapID(e.ID); p != "" {
 				problems = append(problems, fmt.Sprintf("entry %d: zap id %q: %s", i, e.ID, p))
@@ -92,6 +96,11 @@ func checkAllowList(data []byte, today time.Time, fileExists func(rel string) bo
 	}
 	return problems
 }
+
+// idSeparator reports a rune no allow-list id may hold, of any tool: allow.sh prints one id per
+// line, and dast.sh joins the nuclei ids with commas, so an id with whitespace or a comma would
+// silence two findings with one approved entry.
+func idSeparator(r rune) bool { return unicode.IsSpace(r) || r == ',' }
 
 // zapID is a ZAP rule number, alone (the whole rule is IGNORE) or with "@<url regex>" (the rule
 // stays as zap-rules.tsv sets it and only alerts on URLs the regex matches from the start are out
@@ -211,6 +220,21 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"a trivy-config scope outside the repo", "[" + entry("trivy-config", "DS-0002@../deploy/backup/Dockerfile", "r", "2026-12-01") + "]"},
 		{"a trivy-config scope that is not a clean path", "[" + entry("trivy-config", "DS-0002@deploy//backup/Dockerfile", "r", "2026-12-01") + "]"},
 		{"a trivy-config scope with a glob", "[" + entry("trivy-config", "DS-0002@deploy/*/Dockerfile", "r", "2026-12-01") + "]"},
+		{"a trivy id with a newline", "[" + entry("trivy", "CVE-2026-0001\nCVE-2026-0002", "r", "2026-12-01") + "]"},
+		{"a trivy id with a space", "[" + entry("trivy", "CVE-2026-0001 CVE-2026-0002", "r", "2026-12-01") + "]"},
+		{"a trivy id with a comma", "[" + entry("trivy", "CVE-2026-0001,CVE-2026-0002", "r", "2026-12-01") + "]"},
+		{"a trivy-config id with a newline", "[" + entry("trivy-config", "DS-0001\nDS-0002", "r", "2026-12-01") + "]"},
+		{"a trivy-config id with a comma", "[" + entry("trivy-config", "DS-0001,DS-0002", "r", "2026-12-01") + "]"},
+		{"a zizmor id with a newline", "[" + entry("zizmor", "artipacked\nexcessive-permissions", "r", "2026-12-01") + "]"},
+		{"a zizmor id with a comma", "[" + entry("zizmor", "artipacked,excessive-permissions", "r", "2026-12-01") + "]"},
+		{"a semgrep id with a tab", "[" + entry("semgrep", "ts-no-eval\tts-no-inner-html", "r", "2026-12-01") + "]"},
+		{"a semgrep id with a comma", "[" + entry("semgrep", "ts-no-eval,ts-no-inner-html", "r", "2026-12-01") + "]"},
+		{"a zap id with a newline", "[" + entry("zap", "10021\n10035", "r", "2026-12-01") + "]"},
+		{"a zap scope with a comma", "[" + entry("zap", "40018@.*/api/v1/a{1,2}$", "r", "2026-12-01") + "]"},
+		{"a nuclei id with a comma", "[" + entry("nuclei", "made-up-a,made-up-b", "r", "2026-12-01") + "]"},
+		{"a nuclei id with a newline", "[" + entry("nuclei", "made-up-a\nmade-up-b", "r", "2026-12-01") + "]"},
+		{"a gitleaks id with a space", "[" + entry("gitleaks", "made-up a", "r", "2026-12-01") + "]"},
+		{"a gitleaks id with a non-breaking space", "[" + entry("gitleaks", "made-up\u00a0a", "r", "2026-12-01") + "]"},
 		{"a trivy-config scope with two @", "[" + entry("trivy-config", "DS-0002@deploy/backup/Dockerfile@x", "r", "2026-12-01") + "]"},
 	}
 	for _, c := range bad {

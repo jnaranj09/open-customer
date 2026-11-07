@@ -1702,6 +1702,45 @@ test_release_on_main_shallow_clone_red() {
 
 
 
+
+# allow_with <tool> <id>: an allow.json with one live entry.
+allow_with() {
+  jq -n --arg t "$1" --arg id "$2" '[{"tool": $t, "id": $id, "reason": "made up", "expires": "2099-01-01"}]' >"$W/security/allow.json"
+}
+
+# refused <tool> <id> <runner> <tool image>: the wrapper run by <runner> is red on an allow id with
+# a separator in it, and never starts <tool image>.
+refused() {
+  setup
+  allow_with "$1" "$2"
+  "$3" ${5:+"$5"} && fail "$1 id '$2' passed through $3"
+  if has_call " $4 "; then fail "$1 id '$2': $4 still ran"; fi
+  return 0
+}
+
+test_allow_ids_with_separators_refused() {
+  local id
+  for id in $'CVE-2099-0001\nCVE-2099-0002' 'CVE-2099-0001 CVE-2099-0002' 'CVE-2099-0001,CVE-2099-0002'; do
+    refused trivy "$id" scan trivy-test:1 push
+    refused trivy "$id" deps_scan deps-test:1
+  done
+  for id in $'DS-0001\nDS-0002' 'DS-0001,DS-0002' $'DS-0001\tDS-0002'; do
+    refused trivy-config "$id" config_scan trivy-cfg-test:1
+  done
+  for id in $'artipacked\nexcessive-permissions' 'artipacked,excessive-permissions'; do
+    refused zizmor "$id" config_scan zizmor-test:1
+  done
+  for id in $'ts-no-eval\nts-no-inner-html' 'ts-no-eval,ts-no-inner-html'; do
+    refused semgrep "$id" sast semgrep-test:1
+  done
+  for id in $'10021\n10035' '10021,10035' '10021@.*/a,b$'; do
+    refused zap "$id" dast zap-test:1
+  done
+  for id in $'made-up-a\nmade-up-b' 'made-up-a,made-up-b' 'made-up-a made-up-b' 'made-up;a'; do
+    refused nuclei "$id" dast nuclei-test:1
+  done
+}
+
 # deps_scan: runs deps-scan.sh from another folder with the fake docker; stdout and stderr go to
 # $W/out.
 deps_scan() {
@@ -1980,6 +2019,7 @@ t "release-on-main: a commit only on a side branch is red" test_release_on_main_
 t "release-on-main: a failed fetch of main is red" test_release_on_main_fetch_fails_red
 t "release-on-main: a missing or unknown GITHUB_SHA is red" test_release_on_main_missing_sha_red
 t "release-on-main: a shallow clone is red" test_release_on_main_shallow_clone_red
+t "allow-list: an id with whitespace, a newline or a comma is refused by every wrapper" test_allow_ids_with_separators_refused
 t "deps-scan: a clean scan reads both manifests with the blocking flags" test_deps_clean_scans_both_manifests
 t "deps-scan: a fixable high finding in either manifest is red" test_deps_finding_red
 t "deps-scan: a trivy error or a trivy that cannot start is red" test_deps_trivy_error_red

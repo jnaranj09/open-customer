@@ -94,9 +94,16 @@ fetch_nuclei_templates() {
   rm -f "$templates_cache/$tarball"
 }
 
-# valid_zap_id <id>: a rule number, or <rule number>@<url regex> with no whitespace.
+# valid_zap_id <id>: a rule number, or <rule number>@<url regex> with no whitespace and no comma
+# (one id is one entry: an allow-list id never holds a separator).
 valid_zap_id() {
-  [[ "$1" =~ ^[0-9]+(@[^[:space:]]+)?$ ]]
+  [[ "$1" =~ ^[0-9]+(@[^[:space:],]+)?$ ]]
+}
+
+# valid_nuclei_id <id>: a template id (letters, digits, dots, dashes, underscores). Nuclei gets the
+# ids joined by commas in -exclude-id, so a comma would turn one entry into two.
+valid_nuclei_id() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
 }
 
 # zap_rules_file <rules.tsv> <dest> <ids> <comment>: copies the rules file to <dest> with the

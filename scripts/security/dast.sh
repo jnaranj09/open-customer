@@ -19,8 +19,8 @@
 #
 # security/zap-rules.tsv sets each ZAP rule to FAIL or WARN; in the copy ZAP gets, a live plain zap
 # id of security/allow.json (allow.sh) becomes IGNORE and a scoped one (<id>@<url regex>) an
-# OUTOFSCOPE line for that URL only, and the live nuclei ids go to
-# -exclude-id. ZAP exits 0 clean, 1 on a FAIL rule, 2 on WARN rules only, 3 on its own error: 0
+# OUTOFSCOPE line for that URL only, and the live nuclei ids (each a plain template id; any other
+# is refused before a container starts) go to -exclude-id. ZAP exits 0 clean, 1 on a FAIL rule, 2 on WARN rules only, 3 on its own error: 0
 # and 2 pass, anything else is red. Nuclei exits 0 with findings, so its JSONL lines are counted,
 # and a run that loaded no templates is red. Every scan runs before the script exits, so one run
 # reports them all. Reports go to REPORT_DIR (default dast-report, git-ignored).
@@ -104,6 +104,12 @@ while IFS= read -r id; do
     die "security/allow.json has a zap id that is not <rule number> or <rule number>@<url regex>"
 done <<<"$allowed"
 zap_rules_file security/zap-rules.tsv "$report/zap/rules.tsv" "$allowed" "allow-listed in security/allow.json"
+# The live nuclei ids, for -exclude-id (joined by commas, so each must be a plain template id).
+nuclei_allowed=$(scripts/security/allow.sh nuclei)
+while IFS= read -r id; do
+  [ -z "$id" ] || valid_nuclei_id "$id" || die "security/allow.json has a nuclei id that is not a template id"
+done <<<"$nuclei_allowed"
+nuclei_ids=$(paste -sd, - <<<"$nuclei_allowed")
 
 docker network create --internal "$net" >/dev/null
 docker run -d --name "$pg" --network "$net" \
@@ -170,7 +176,6 @@ status=$(session_status)
 [ "$status" = 200 ] || red "the session ended during the authenticated scan (GET /api/v1/me answered $status): part of it ran signed out"
 run_zap "$report" baseline zap-baseline.py -t "$origin/" -z "$origin_opts"
 
-nuclei_ids=$(scripts/security/allow.sh nuclei | paste -sd, -)
 run_nuclei "$report" "$templates" "$nuclei_ids" "$origin"
 
 finish "$report"

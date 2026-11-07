@@ -140,7 +140,7 @@ if [ -f "$allow_file" ]; then
         zap_ids+="$id"$'\n'
         ;;
       nuclei)
-        [[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || bad_allow "$line_no" "'$id' is not a template id"
+        valid_nuclei_id "$id" || bad_allow "$line_no" "'$id' is not a template id"
         nuclei_ids+="${nuclei_ids:+,}$id"
         ;;
       header)

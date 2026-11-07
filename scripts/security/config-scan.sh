@@ -68,7 +68,8 @@ mkdir "$work/out"
 # regex is refused rather than written into YAML.
 allow_ids() {
   local ids id
-  ids=$(scripts/security/allow.sh "$1")
+  # In a command substitution set -e is off, so a refusal from allow.sh is passed on by hand.
+  ids=$(scripts/security/allow.sh "$1") || return 1
   [ -n "$ids" ] || return 0
   while read -r id; do
     if ! [[ "$id" =~ $2 ]]; then
