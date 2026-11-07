@@ -1727,7 +1727,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     4.  Prints the setup link if there are no users: `Setup: <PUBLIC_URL>/setup#<token>`, one plain stdout line, not slog (see "Auth, sessions and handover"). `NewSetupToken` runs in its own `db.WithTx`. (P2)
     5.  Builds the modules and `httpapi.Server`. (P1, with each phase adding its modules)
     6.  Starts `scheduler.Run` in a goroutine on a one-minute ticker; on shutdown it cancels it and waits for it to return. (P4, built)
-    7.  Serves on `:8080`. (P1)
+    7.  Serves on `:8080`. (P1) The `http.Server` (`newHTTPServer`) has `ReadHeaderTimeout` 10 s, `ReadTimeout` 2 min (a 12 MB photo in 2 minutes needs about 0.8 Mbit/s of upload) and `IdleTimeout` 2 min, so a slow body or an idle connection is closed (threat model T55). It has no `WriteTimeout`, because `GET /export` streams. Test: `TestHTTPServerTimeouts`.
     8.  Shuts down gracefully on SIGTERM. (P1)
 
 ##### 19. `cmd/open-customer/admin.go` (Create)

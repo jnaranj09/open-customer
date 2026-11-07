@@ -42,6 +42,13 @@ const (
 	shutdownTimeout = 10 * time.Second
 	// readHeaderTimeout bounds a client that never finishes its request headers.
 	readHeaderTimeout = 10 * time.Second
+	// readTimeout bounds the whole request, headers and body, so a client cannot drip a body
+	// forever (threat model T55). The largest body is a 12 MB photo upload (POST /media): 12 MB in
+	// 2 minutes needs 100 KB/s, about 0.8 Mbit/s, which a phone's upload on a weak signal still
+	// reaches. There is no WriteTimeout: GET /export streams for as long as the ZIP takes.
+	readTimeout = 2 * time.Minute
+	// idleTimeout closes a keep-alive connection that sends no new request.
+	idleTimeout = 2 * time.Minute
 	// timerInterval is the daily timer's tick (design doc "Process model").
 	timerInterval = time.Minute
 )
@@ -203,12 +210,19 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		pool.Close()
 		return nil, nil, nil, fmt.Errorf("serve: %w", err)
 	}
+	return newHTTPServer(handler, log), timer, pool, nil
+}
+
+// newHTTPServer is the app's http.Server around handler.
+func newHTTPServer(handler http.Handler, log *slog.Logger) *http.Server {
 	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
 		// net/http's own errors (a bad TLS handshake, a broken connection) go to the JSON log too.
 		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelWarn),
-	}, timer, pool, nil
+	}
 }
 
 // modules are the domain modules serve and the admin subcommands build.
