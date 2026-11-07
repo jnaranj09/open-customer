@@ -173,7 +173,9 @@ Two controls guard a `v*` tag, and they do different things:
 - The release workflow enforces the commit. Its first step, `scripts/security/release-on-main.sh`,
   fails the release unless the tagged commit is an ancestor of `main`, before anything is built,
   scanned or pushed. It fails closed (a missing SHA, a shallow clone and a failed fetch are red).
-  Its limit: an ancestor of `main` has not necessarily passed CI.
+  Its limit: a commit that reached `main` before branch protection was applied has not
+  necessarily passed CI. After it (strict required checks, enforced on admins), every commit on
+  `main` came through a green PR.
 - The ruleset below limits who can create, move or delete a `v*` tag. The owner is on its bypass
   list, so it does not stop her; it is defence in depth against anyone else with push access.
 

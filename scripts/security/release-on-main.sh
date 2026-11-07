@@ -2,7 +2,8 @@
 # The release workflow's first step after checkout (docs/designs/devsecops.md section 4): refuses a
 # v* tag whose commit is not an ancestor of main, so a tag on a side branch never builds, scans,
 # pushes or signs anything. The repo's tag ruleset only limits who can create tags; this is the
-# check that tests the commit. Limit: an ancestor of main has not necessarily passed CI.
+# check that tests the commit. Limit: a commit that reached main before branch protection (strict
+# required checks, enforced on admins) was applied has not necessarily passed CI.
 #
 # Fails closed. It is red when GITHUB_SHA is missing or not a commit in the clone, when the clone
 # is shallow (the ancestry cannot be decided; check out with fetch-depth: 0), when the fetch of
