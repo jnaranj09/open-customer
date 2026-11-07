@@ -245,7 +245,8 @@ scan-live:
 		scripts/security/scan-live.sh
 
 # devsecops.md section 7: each fuzz target for FUZZTIME, one after another (go test -fuzz takes one
-# target per package). Manual, not in the gate or CI; the seeds run in `make test`. A crash writes
+# target per package). Not in the gate; CI runs it weekly with FUZZTIME=30s (security-weekly.yml job
+# fuzz); the seeds run in `make test`. A crash writes
 # its input to testdata/fuzz/<Name>/ in the package: keep it as a seed and fix the code.
 FUZZTIME ?= 60s
 FUZZ_TARGETS := ./internal/httpapi:FuzzDecodeJSON ./internal/httpapi:FuzzMultipartUpload \

@@ -37,9 +37,9 @@ its sensor, or says "prose only".
 - **Every parser of outside input has a `Fuzz` test** (JSON body, multipart upload, template, backup
   status file), beside the package it drives, and its property is "never panic, never a 5xx", plus
   what that parser promises. Seeds: the bad inputs of the boundary tests as `f.Add`, and crashing
-  inputs kept in `testdata/fuzz/<Name>/`. `make test` runs the seeds; `make fuzz` (manual, not in the
-  gate) runs the fuzzer. A crash is a real bug: keep the input, fix the code with its own test.
-  Prose only (`TestThreatModel` checks the `test:Fuzz...` references exist).
+  inputs kept in `testdata/fuzz/<Name>/`. `make test` runs the seeds; `make fuzz` (not in the gate;
+  CI runs it weekly, `security-weekly.yml` job `fuzz`) runs the fuzzer. A crash is a real bug: keep
+  the input, fix the code with its own test. Prose only (`TestThreatModel` checks the `test:Fuzz...` references exist).
 
 ## Mocks, time, files
 

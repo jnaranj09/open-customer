@@ -255,8 +255,11 @@ rule names its sensor") applied to security.
   - `FuzzBackupStatusRead` (`internal/platform/backupstatus`): `Read` returns a status or
     `ErrInvalid`, never a panic, and its error never names the path.
 - `make test` runs each seed (the `f.Add` calls and `testdata/fuzz/<Name>/`) as a normal test.
-  `make fuzz FUZZTIME=60s` runs each target for that long, one after another; it is manual and not
-  in the gate or CI. A crash found by fuzzing becomes a seed and a fix.
+  `make fuzz FUZZTIME=60s` runs each target for that long, one after another. It is not in the
+  gate; `security-weekly.yml` job `fuzz` runs `make fuzz FUZZTIME=30s` every week (a step timeout
+  of 20 minutes, a crash fails the run and its input is uploaded as an artifact), so the rows that
+  cite `make:fuzz` also cite `ci:security-weekly.yml/fuzz`. A crash found by fuzzing becomes a seed
+  and a fix.
 
 ### 8. Manual audit (once, then on big changes)
 
@@ -350,7 +353,7 @@ rule names its sensor") applied to security.
 | SBOM + signing | | yes | | |
 | ZAP + Nuclei (CI app) | yes | | | `make dast` |
 | Fuzz seed corpus | yes (in `make test`) | | | in the gate |
-| Fuzzing (`make fuzz`) | | | | `make fuzz` (manual, not in the gate) |
+| Fuzzing (`make fuzz`) | | | `make fuzz FUZZTIME=30s` | `make fuzz` (not in the gate) |
 | Live scan | never | never | never | `make scan-live URL=…` |
 
 My call: the tools that run offline-ish in Docker join the local gate (`CLAUDE.md` "Gate"), so an

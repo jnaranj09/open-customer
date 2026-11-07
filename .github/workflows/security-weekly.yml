@@ -4,6 +4,11 @@
 # MODE=release PULL=1): a high or critical finding with a fix in any of the four images, or an
 # image that cannot be pulled, fails the run, and GitHub emails the owner about a failed scheduled
 # run. With no v* tag yet the job writes "NOT RUN: no release tag" to its summary and passes.
+#
+# Job fuzz (devsecops.md section 7) runs the four Go fuzz targets on the default branch for 30 s
+# each (make fuzz FUZZTIME=30s). A crash fails the run, its input is uploaded as an artifact (keep
+# it as a seed in testdata/fuzz/<Name>/ and fix the code), and the step timeout keeps a hung fuzzer
+# from holding the runner.
 name: security-weekly
 
 on:
@@ -45,3 +50,24 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         run: make image-scan MODE=release PULL=1 VERSION="${TAG#v}"
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Fuzz
+        # Four targets at 30 s each plus the builds take a few minutes; 20 is the hang limit.
+        timeout-minutes: 20
+        run: make fuzz FUZZTIME=30s
+      - name: Upload crash inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crashers
+          path: internal/**/testdata/fuzz/
+          if-no-files-found: ignore
