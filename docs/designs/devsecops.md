@@ -69,7 +69,7 @@ rule names its sensor") applied to security.
 - Out-of-scope items (host, Cloudflare dashboard) are rows too, marked `out of scope:` with who owns
   them, so the list is visibly complete.
 - The "Covered by" cell holds typed references, separated by `; `: `test:<GoTestName>` (a `Test`
-  or `Fuzz` function some `_test.go` declares), `file:<repo path>`, `make:<target>`,
+  or `Fuzz` function some `_test.go` declares, with one `*testing.T` or `*testing.F` parameter), `file:<repo path>`, `make:<target>`,
   `ci:<workflow>/<job>`, `accepted: <reason>`, `out of scope: <who owns it>`, `manual: <what and how
   often>` (GitHub settings). There is no `gap:` type: it was allowed while the pipeline was built
   and the guard now refuses it.

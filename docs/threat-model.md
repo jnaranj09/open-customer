@@ -14,7 +14,7 @@ Each cell holds one or more references, separated by `; `:
 
 | Reference | Meaning | The guard checks |
 | --- | --- | --- |
-| `test:<Name>` | A Go `Test` or `Fuzz` function | some `_test.go` declares it |
+| `test:<Name>` | A Go `Test` or `Fuzz` function | some `_test.go` declares it with one `*testing.T` parameter (`Fuzz`: `*testing.F`), so `TestMain` and helpers do not count |
 | `file:<path>` | A file that carries the check (a shell test, a web test, a config) | the path exists |
 | `make:<target>` | A make target that runs the check | the Makefile has the target |
 | `ci:<workflow>/<job>` | A CI job that runs the check | the job is in `.github/workflows/<workflow>` |

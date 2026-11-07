@@ -30,8 +30,10 @@ type refIndex struct {
 	fileExists  func(rel string) bool      // a repo-relative path exists
 }
 
-// testNames returns the top-level Test* and Fuzz* functions the given test files declare. A name
-// that only appears in a comment or a string literal does not count.
+// testNames returns the top-level test and fuzz functions the given test files declare: a Test*
+// function whose one parameter is *testing.T and a Fuzz* function whose one parameter is
+// *testing.F, with no result, so `go test` runs it. TestMain and a helper named Test... do not
+// count, and neither does a name that only appears in a comment or a string literal.
 func testNames(files []goFile) map[string]bool {
 	names := map[string]bool{}
 	for _, f := range files {
@@ -40,12 +42,34 @@ func testNames(files []goFile) map[string]bool {
 		}
 		for _, d := range f.file.Decls {
 			fn, ok := d.(*ast.FuncDecl)
-			if ok && fn.Recv == nil && (strings.HasPrefix(fn.Name.Name, "Test") || strings.HasPrefix(fn.Name.Name, "Fuzz")) {
-				names[fn.Name.Name] = true
+			if !ok || fn.Recv != nil || fn.Type.Results != nil {
+				continue
+			}
+			name := fn.Name.Name
+			if (strings.HasPrefix(name, "Test") && onlyParam(fn, "T")) || (strings.HasPrefix(name, "Fuzz") && onlyParam(fn, "F")) {
+				names[name] = true
 			}
 		}
 	}
 	return names
+}
+
+// onlyParam reports whether fn takes exactly one parameter, of type *testing.<typ>.
+func onlyParam(fn *ast.FuncDecl, typ string) bool {
+	params := fn.Type.Params.List
+	if len(params) != 1 || len(params[0].Names) > 1 {
+		return false
+	}
+	star, ok := params[0].Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "testing" && sel.Sel.Name == typ
 }
 
 // makeTargets returns the explicit targets of a Makefile: rule lines `name [name...]:`, never a
@@ -228,7 +252,15 @@ func TestThreatModelProbes(t *testing.T) {
 		"func FuzzReal(f *testing.F) {}\n" +
 		"type s struct{}\n\nfunc (s) TestMethod(t *testing.T) {}\n" +
 		"// func TestInComment(t *testing.T)\n" +
-		"var probe = `func TestInString(t *testing.T) {}`\n"
+		"var probe = `func TestInString(t *testing.T) {}`\n" +
+		"func TestMain(m *testing.M) {}\n" +
+		"func TestHelper(name string) {}\n" +
+		"func TestNoParam() {}\n" +
+		"func TestTwoParams(t *testing.T, name string) {}\n" +
+		"func TestByValue(t testing.T) {}\n" +
+		"func FuzzWithT(t *testing.T) {}\n" +
+		"func TestWithF(f *testing.F) {}\n" +
+		"func TestWithResult(t *testing.T) error { return nil }\n"
 	tests := testNames([]goFile{parseGo(t, "probe_test.go", []byte(src)), parseGo(t, "shipped.go", []byte("package p\n\nfunc TestShipped() {}\n"))})
 	if want := map[string]bool{"TestReal": true, "FuzzReal": true}; !maps.Equal(tests, want) {
 		t.Errorf("testNames = %v, want %v", tests, want)
