@@ -156,17 +156,22 @@ jobs:
         with:
           sarif_file: trivy-sarif/cloudflared.sarif
           category: trivy-cloudflared
-      # The Nuclei templates release is pinned (NUCLEI_TEMPLATES), so the cache key is the Makefile
-      # line that pins it.
+      # The Nuclei templates release and its tarball's sha256 are pinned (NUCLEI_TEMPLATES,
+      # NUCLEI_TEMPLATES_SHA256), so the cache key is both Makefile values: a new sha256 never
+      # restores a cache unpacked from another tarball (dast.sh names the folder the same way).
       - name: Nuclei templates cache key
         id: nuclei-templates
         if: ${{ !cancelled() }}
-        run: echo "version=$(sed -n 's/^NUCLEI_TEMPLATES := //p' Makefile)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(sed -n 's/^NUCLEI_TEMPLATES := //p' Makefile)
+          sha=$(sed -n 's/^NUCLEI_TEMPLATES_SHA256 := //p' Makefile)
+          [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && $sha =~ ^[0-9a-f]{64}$ ]] || { echo "no NUCLEI_TEMPLATES pin in the Makefile" >&2; exit 1; }
+          echo "key=$version-$sha" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: ${{ !cancelled() }}
         with:
           path: ${{ runner.temp }}/nuclei
-          key: nuclei-templates-${{ steps.nuclei-templates.outputs.version }}
+          key: nuclei-templates-${{ steps.nuclei-templates.outputs.key }}
       - run: make dast
         if: ${{ !cancelled() }}
         env:

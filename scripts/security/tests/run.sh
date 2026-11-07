@@ -461,7 +461,7 @@ fake_tarball_sha=$(printf 'made-up templates tarball\n' | sha256sum | cut -d' ' 
 # overrides the pinned tarball sha256 (default: the fake tarball's).
 dast() {
   mkdir -p "$W/nuclei-cache"
-  [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
+  [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1-${TEMPLATES_SHA:-$fake_tarball_sha}"
   (cd / && PATH="${SCAN_PATH:-$ROOT/bin:$PATH}" IMAGE=open-customer:1.2.3 PG_IMAGE=postgres:18.6-alpine \
     ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
     NUCLEI_TEMPLATES_SHA256="${TEMPLATES_SHA:-$fake_tarball_sha}" \
@@ -473,7 +473,7 @@ dast() {
 # DEFAULT_REPORT is set (the script then picks security/reports/scan-live-<UTC timestamp>).
 scan_live() {
   mkdir -p "$W/nuclei-cache"
-  [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
+  [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1-${TEMPLATES_SHA:-$fake_tarball_sha}"
   # A test that scans more than once starts each scan with a new default report folder.
   [ -n "${REPORT_DIR_GIVEN:-}${DEFAULT_REPORT:-}" ] || rm -rf "$W/report"
   (cd / && PATH="${SCAN_PATH:-$ROOT/bin:$PATH}" REPORT_DIR="$([ -n "${DEFAULT_REPORT:-}" ] || echo "${REPORT_DIR_GIVEN:-$W/report}")" \
@@ -1091,12 +1091,24 @@ test_templates_download_fails_red() {
   out_has "cannot download the nuclei templates"
 }
 
+test_templates_cache_of_another_sha256_not_reused() {
+  setup
+  # A cache unpacked under the release name alone, as an earlier pin of the same release would
+  # leave it: a new NUCLEI_TEMPLATES_SHA256 must download and check again, never reuse it.
+  mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1" "$W/nuclei-cache/nuclei-templates-v10.5.1-$fake_tarball_sha"
+  TEMPLATES_SHA=$(printf 'other\n' | sha256sum | cut -d' ' -f1) EMPTY_CACHE=1 dast &&
+    fail "a cached templates folder of another sha256 was reused"
+  out_has "the nuclei templates tarball v10.5.1 does not match NUCLEI_TEMPLATES_SHA256"
+  assert_eq "nuclei runs with a cache of another sha256" 0 "$(count_calls 'nuclei-test:1')"
+}
+
 test_templates_checksum_mismatch_red() {
   setup
   TEMPLATES_SHA=$(printf 'other\n' | sha256sum | cut -d' ' -f1) EMPTY_CACHE=1 dast &&
     fail "a templates tarball with the wrong sha256 exited 0"
   out_has "the nuclei templates tarball v10.5.1 does not match NUCLEI_TEMPLATES_SHA256"
-  [ ! -d "$W/nuclei-cache/nuclei-templates-v10.5.1" ] || fail "a tarball with the wrong sha256 was unpacked"
+  [ -z "$(find "$W/nuclei-cache" -mindepth 1 -maxdepth 1 -name 'nuclei-templates-v10.5.1*' -type d)" ] ||
+    fail "a tarball with the wrong sha256 was unpacked"
   assert_eq "nuclei runs after a checksum mismatch" 0 "$(count_calls 'nuclei-test:1')"
 }
 
@@ -1973,6 +1985,7 @@ t "nuclei findings with exit 0 are red" test_nuclei_findings_exit_0_red
 t "a nuclei run that loads no templates is red" test_nuclei_no_templates_red
 t "a failed nuclei templates download is red" test_templates_download_fails_red
 t "a nuclei templates tarball with the wrong sha256 is red" test_templates_checksum_mismatch_red
+t "a nuclei templates cache of another sha256 is not reused" test_templates_cache_of_another_sha256_not_reused
 t "an alert from a rule zap-rules.tsv does not list is red" test_zap_unknown_rule_red
 t "a scoped zap regex reaches zap byte for byte" test_zap_scope_regex_kept_byte_for_byte
 t "an allow-listed zap rule is IGNORE in the rules file" test_zap_allow_is_ignore

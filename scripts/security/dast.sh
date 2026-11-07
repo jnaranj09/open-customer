@@ -55,7 +55,9 @@ owner_password=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 
 report=${REPORT_DIR:-dast-report}
 templates_cache=${NUCLEI_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/open-customer/nuclei}
-templates=$templates_cache/nuclei-templates-$NUCLEI_TEMPLATES
+# Named after the release and its pinned sha256, so a new sha256 for the same release never reuses
+# a folder unpacked from another tarball.
+templates=$templates_cache/nuclei-templates-$NUCLEI_TEMPLATES-$NUCLEI_TEMPLATES_SHA256
 
 cleanup() {
   docker rm -f -v "$scanner" "$app" "$pg" >/dev/null 2>&1 || true
