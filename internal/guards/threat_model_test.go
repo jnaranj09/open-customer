@@ -2,8 +2,8 @@ package guards
 
 // threat-model (docs/designs/devsecops.md section 1, decision D12): docs/threat-model.md has one
 // table under "## Threats", and every row's "Covered by" cell names a check that exists (a Go test,
-// a file, a make target, a CI job) or says in words why there is none (accepted, out of scope,
-// manual, or a gap a later task closes).
+// a file, a make target, a CI job) or says in words why there is none (accepted, out of scope
+// or manual). There is no "gap" type: a threat with no check is accepted, out of scope or manual.
 
 import (
 	"fmt"
@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -149,7 +148,7 @@ func threatTable(doc string) ([]threatRow, []string) {
 func checkReference(ref string, idx refIndex) string {
 	kind, value, ok := strings.Cut(ref, ":")
 	if !ok {
-		return fmt.Sprintf("%q has no type (want test:, file:, make:, ci:, accepted:, out of scope:, manual: or gap:)", ref)
+		return fmt.Sprintf("%q has no type (want test:, file:, make:, ci:, accepted:, out of scope: or manual:)", ref)
 	}
 	text := strings.TrimSpace(value)
 	switch kind {
@@ -160,12 +159,6 @@ func checkReference(ref string, idx refIndex) string {
 	case "accepted", "out of scope", "manual":
 		if text == "" {
 			return fmt.Sprintf("%q: %s: needs its reason", ref, kind)
-		}
-		return ""
-	case "gap":
-		n, err := strconv.Atoi(strings.TrimPrefix(text, "Task "))
-		if !strings.HasPrefix(text, "Task ") || err != nil || n < 2 || n > 10 {
-			return fmt.Sprintf("%q: want gap: Task <2-10>", ref)
 		}
 		return ""
 	default:
@@ -259,7 +252,7 @@ func TestThreatModelProbes(t *testing.T) {
 		return "# T\n\n## Threats\n\n| ID | Asset | Threat | Entry point | Covered by |\n| --- | --- | --- | --- | --- |\n" +
 			strings.Join(rows, "\n") + "\n\n## GitHub settings\n\n| not | the table |\n| --- | --- |\n"
 	}
-	good := "| T1 | a | b | c | test:TestReal; file:deploy/compose.yaml; make:vuln; ci:ci.yml/gate; accepted: why; out of scope: the host owner; manual: monthly; gap: Task 3 |"
+	good := "| T1 | a | b | c | test:TestReal; file:deploy/compose.yaml; make:vuln; ci:ci.yml/gate; accepted: why; out of scope: the host owner; manual: monthly |"
 	if got := checkThreatModel(doc(good), idx); len(got) != 0 {
 		t.Errorf("a valid row is refused: %q", got)
 	}
@@ -282,8 +275,8 @@ func TestThreatModelProbes(t *testing.T) {
 		{"ci job not in the workflow", doc("| T1 | a | b | c | ci:ci.yml/security |")},
 		{"ci workflow that does not exist", doc("| T1 | a | b | c | ci:release.yml/gate |")},
 		{"accepted without a reason", doc("| T1 | a | b | c | accepted:  |")},
+		{"gap for a later task", doc("| T1 | a | b | c | gap: Task 3 |")},
 		{"gap without a task", doc("| T1 | a | b | c | gap: later |")},
-		{"gap for task 1", doc("| T1 | a | b | c | gap: Task 1 |")},
 		{"backticked test", doc("| T1 | a | b | c | test:`TestReal` |")},
 	}
 	for _, c := range bad {

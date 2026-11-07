@@ -904,6 +904,7 @@ The "Read by" column says who reads each variable. The app reads and checks only
 *   Releases are signed (`docs/designs/devsecops.md` section 4): the release workflow signs both images keylessly with cosign through GitHub OIDC on their pushed digests and attests a CycloneDX SBOM of each (item 9, `make release-sign`), and `upgrade.sh` stops before any pull when either image is not signed by that workflow, and before the backup when a pulled image is not the digest it verified ("Upgrades and the migration guard", step 2).
 *   A push endpoint comes from the browser, so the server reaches only public addresses with it: `Check` refuses an IP literal and a host with no public address, every send dials through a check on the address being dialled, and no redirect is followed (item 57).
 *   Cloudflare sees decrypted traffic at its edge: see "Accepted risks".
+*   Every threat and the check that covers it: `docs/threat-model.md` (guard `TestThreatModel`). The GitHub settings that cannot live in the repo (branch protection, the `v*` tag ruleset, public ghcr packages) are in its "GitHub settings".
 
 ## Risks
 
@@ -1488,7 +1489,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 ##### 11. `docs/designs/release-1.md` (Modify)
 
 *   **Type / Scope**: Design doc.
-*   **Proposed Changes**: This document. It stays the only architecture source. `docs/sad.md` (item 13) is an index of ADRs that links here, and it changes only when an ADR is added or changes status. Its links to the repo root are rewritten in P7 by item 14, in the same commit that moves the files (item 87).
+*   **Proposed Changes**: This document. It stays the only architecture source for the app (the security pipeline has `docs/designs/devsecops.md`). `docs/sad.md` (item 13) is an index of ADRs that links here, and it changes only when an ADR is added or changes status. Its links to the repo root are rewritten in P7 by item 14, in the same commit that moves the files (item 87).
 
 ##### 12. `docs/prd.md` (Create, moved from `PRD — Sistema de citas para emprendimientos.md`; the old file is deleted)
 

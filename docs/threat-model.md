@@ -21,10 +21,10 @@ Each cell holds one or more references, separated by `; `:
 | `accepted: <reason>` | A risk the owner accepted (`docs/designs/release-1.md` "Accepted risks") | a reason is given |
 | `out of scope: <who owns it>` | Outside what the repo can check | the owner is named |
 | `manual: <what and how often>` | Checked by hand (GitHub settings) | the text is given |
-| `gap: Task <N>` | Not covered yet; task N of the security pipeline plan closes it | N is 2 to 10 |
 
-A `test:` row names the test that fails when the defence breaks, not every test nearby. `gap:` is
-allowed only until the pipeline is built; its last task removes the word from the guard.
+A `test:` row names the test that fails when the defence breaks, not every test nearby. There is no
+`gap:` type: a threat with no check is `accepted:`, `out of scope:` or `manual:`, and the guard
+refuses a `gap:` reference.
 
 ## Scope
 
@@ -108,7 +108,7 @@ dashboard and settings (Cloudflare or any other).
 | T65 | client data | An upgrade breaks the schema with no way back | upgrade.sh, serve | test:TestMigrateBlocksWithOldCopy; test:TestMigrateBlocksOnMissingStatusFile; test:TestAdminCommandsRefusePendingMigrations; file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T66 | client data | A restore runs without confirmation or leaves the app on the wrong version | restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T67 | deploy/.env | A killed upgrade or restore leaves a copy of .env (every secret) behind | upgrade.sh, restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
-| T68 | the images | An upgrade, a restore, a manual backup or the first install pulls an image that was not built by this repo's release workflow, or one the tag was moved to after its signature was checked | upgrade.sh, restore.sh, backup-now.sh, pull.sh, deploy/compose.yaml | file:deploy/scripts/lib.sh; file:deploy/scripts/pull.sh; file:deploy/tests/scripts_test.sh; make:test-deploy; make:check-pins; test:TestComposeHardening |
+| T68 | the images | An upgrade, a restore, a manual backup or the first install pulls an image that was not built by this repo's release workflow, or one the tag was moved to after its signature was checked | upgrade.sh, restore.sh, backup-now.sh, pull.sh, deploy/compose.yaml | file:deploy/scripts/lib.sh; file:deploy/scripts/pull.sh; file:deploy/tests/scripts_test.sh; make:test-deploy; make:check-pins; test:TestComposeHardening; out of scope: the deployer's own hand-typed `docker compose` commands pull with no signature check, and deploy/README section 6 says run scripts/pull.sh first |
 | T69 | the images | A known high or critical CVE ships in the app or backup image | Dockerfile, deploy/backup/Dockerfile | make:image-scan; ci:ci.yml/security; ci:release.yml/images; file:scripts/security/tests/run.sh; make:test-sec |
 | T70 | the images | A known CVE in the pinned Postgres or cloudflared image | deploy/compose.yaml | make:image-scan; ci:release.yml/images; ci:security-weekly.yml/rescan; ci:ci.yml/security |
 | T71 | the images | A CVE found after an image shipped goes unnoticed | released images | ci:security-weekly.yml/rescan; make:image-scan |
@@ -124,8 +124,8 @@ dashboard and settings (Cloudflare or any other).
 | T76 | the build | A GitHub Action is swapped under its tag, or a workflow has too-wide permissions or script injection | .github/workflows | test:TestSupplyChainPins; make:config-scan; file:scripts/security/tests/run.sh; ci:ci.yml/gate |
 | T77 | the build | A secret is committed to the repo | git history | make:secrets; ci:ci.yml/gate |
 | T94 | the build | A token for an outside design tool is committed in the design file | design/soft-glass.pen | accepted: Pencil's fileToken is likely a document id, and even if it is a token it reaches only this design, which is public in this repo and holds no PII, and the value is already in public history, which is never rewritten (owner decision, 2026-11-06); file:.gitleaksignore |
-| T78 | the build | A release ships images nobody can verify, with no list of what is in them, or a v* tag on an unreviewed commit gives a release that verifies | release workflow | ci:release.yml/images; file:scripts/security/release-sign.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: the first v* tag's release run proves the keyless signature and the SBOM attestation (no OIDC token outside Actions), then once per release when upgrade.sh verifies it; manual: a tag ruleset limits who can create v* tags, so a signed release comes only from a reviewed commit on main (the owner adds it in Task 10 and re-checks it with the branch protection) |
-| T79 | the build | A change reaches main without a green CI run, or a v* tag is pushed on a commit that is not on main | GitHub settings | gap: Task 10; manual: the tag ruleset for v* that the owner adds in Task 10 beside the branch protection on main |
+| T78 | the build | A release ships images nobody can verify, with no list of what is in them, or a v* tag on an unreviewed commit gives a release that verifies | release workflow | ci:release.yml/images; file:scripts/security/release-sign.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: the first v* tag's release run proves the keyless signature and the SBOM attestation (no OIDC token outside Actions), then once per release when upgrade.sh verifies it; manual: a tag ruleset limits who can create v* tags to the repository admin, who tags only reviewed commits on main (set once in GitHub settings, re-checked after any settings change, commands in GitHub settings); manual: ghcr packages open-customer and open-customer-backup set to public after the first release, so a deployer pulls and verifies without logging in |
+| T79 | the build | A change reaches main without a green CI run, or a v* tag is pushed on a commit that is not on main | GitHub settings | manual: branch protection on main, re-checked by hand after any repo settings change; manual: tag ruleset limiting v* tags to the repository admin (reviewed commits on main only), set once in GitHub settings, re-checked after any settings change |
 | T80 | the host | The OS, the disk, the Docker daemon, deploy/.env at rest and docker logs (which hold the setup link) | the host machine | out of scope: the deployer who owns the host |
 | T81 | the proxy | The front proxy or tunnel settings (cache rules, HSTS, bot rules) | the proxy dashboard | out of scope: the deployer, in their proxy or tunnel provider's dashboard |
 | T82 | client data | Cloudflare sees decrypted traffic at its edge, because TLS ends there | the tunnel | accepted: accepted for the reference install and written in deploy/README.md (release-1 Accepted risks) |
@@ -139,5 +139,71 @@ dashboard and settings (Cloudflare or any other).
 
 ## GitHub settings
 
-Filled in by the last task of the security pipeline: the branch protection on `main`, the command
-that applies it, and how often it is re-checked by hand.
+These settings live in GitHub, not in a repo file. The owner applies them, once, after the branch is
+merged (a required check must have run on the repo first). The rows T78 and T79 point here. They are
+re-checked by hand after any repo settings change.
+
+### Branch protection on `main`
+
+Required checks are the CI job names `gate` and `security`; a renamed job silently blocks every PR.
+No required review: the owner cannot approve her own PR. The repo merges with merge commits, so
+linear history is off. Free plan, public repo.
+
+```sh
+gh api -X PUT repos/jnaranj09/open-customer/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": {"strict": true, "checks": [{"context": "gate"}, {"context": "security"}]},
+  "enforce_admins": true,
+  "required_pull_request_reviews": {"required_approving_review_count": 0, "dismiss_stale_reviews": true},
+  "restrictions": null,
+  "required_linear_history": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true
+}
+JSON
+```
+
+Confirm: `gh api repos/jnaranj09/open-customer/branches/main/protection`.
+
+### Tag ruleset for `v*`
+
+A `v*` tag makes a release whose signature verifies, so only the repository admin may create,
+move or delete one. A ruleset cannot test that the tagged commit is on `main`; the admin tags only
+a commit that merged through the protected `main`. The body follows GitHub's documented create-ruleset
+shape (`POST repos/{owner}/{repo}/rulesets`, `target: tag`, rule types `creation`, `update`,
+`deletion`). The `actor_id` 5 for the Admin role is from memory, not checked against the docs: if the
+call is refused or the Admin role is not 5, use the settings page instead (Settings, Rules,
+Rulesets, New tag ruleset, target `v*`, restrict creations, updates and deletions, bypass list:
+Repository admin role).
+
+```sh
+gh api -X POST repos/jnaranj09/open-customer/rulesets --input - <<'JSON'
+{
+  "name": "release-tags",
+  "target": "tag",
+  "enforcement": "active",
+  "bypass_actors": [{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}],
+  "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
+  "rules": [
+    {"type": "creation"},
+    {"type": "update", "parameters": {"update_allows_fetch_and_merge": false}},
+    {"type": "deletion"}
+  ]
+}
+JSON
+```
+
+Not run against the repo yet. Confirm with `gh api repos/jnaranj09/open-customer/rulesets`.
+
+### ghcr package visibility
+
+After the first release pushes the images, each package starts private. Set both to public so a
+deployer pulls and verifies without logging in: github.com, the repo's Packages, `open-customer`,
+Package settings, Danger Zone, Change visibility, Public; then the same for `open-customer-backup`.
+Check with `docker logout ghcr.io` and a pull of the released tag.
+
+### Re-check
+
+After any repo settings change, read the three back: the branch protection and rulesets commands
+above, and the packages' visibility on their pages.

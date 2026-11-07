@@ -134,7 +134,8 @@ A check that could not run is reported as NOT RUN, never as passing.
   forbid-only, threat-model, security-allow-list for `security/allow.json`) and `web/tests/guards`
   (Vitest: layers, catch-blocks, test-hygiene, forbid-only, raw-colors, design-tokens,
   design-parity, ui-lint, eslint suppression budget, bulk file and inline comments). Allow-lists
-  only shrink.
+  only shrink. `docs/threat-model.md` has no `gap:` row (the guard refuses one); its "GitHub settings"
+  hold the branch protection, tag ruleset and ghcr steps, re-checked by hand after a settings change.
 - Lint suppressions: a pinned total that only falls (guard `suppression-budget`, `svelte-ignore`
   included).
 - UI pipeline (`rules/ui.md`): tokens and components follow `design/soft-glass.pen` (guards

@@ -7,6 +7,7 @@ SvelteKit PWA, with PostgreSQL, meant to run on a home PC behind a Cloudflare Tu
 
 - Install and operate: [deploy/README.md](deploy/README.md).
 - Architecture and build plan: [docs/designs/release-1.md](docs/designs/release-1.md).
+- Security pipeline: [docs/designs/devsecops.md](docs/designs/devsecops.md); every threat and its check, plus the GitHub settings the owner applies: [docs/threat-model.md](docs/threat-model.md).
 - Architecture decisions (ADR index, Spanish): [docs/sad.md](docs/sad.md).
 - Product requirements (Spanish): [docs/prd.md](docs/prd.md).
 - License: not chosen yet.

@@ -15,7 +15,7 @@ Rules for every task:
   `.gitignore` → item 4, golangci config → item 5, CI → item 8, web package and config → items
   62–63, guards and harness files → item 88).
 
-## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit, P6 exit, P7 exit)
+## Done (T1–T8, P1 exit, P2 exit, P3 exit, P4 exit, P5 exit, P6 exit, P7 exit, Security pipeline exit)
 
 Each "Done when" was proven by a command run on this tree; the guards and checks were each seen red
 once by breaking what they protect, then restored.
@@ -169,6 +169,19 @@ once by breaking what they protect, then restored.
   Plan checks 1-4 and 7-9 on her iPhone through the tunnel; a real removable-disk unplug and a
   `nofail` boot (not used yet: D8); the Ley 8968 check. The owner repeats check 5 on the home PC
   before real data (deploy/README.md section 8).
+- **Security pipeline exit** (2026-11-07), branch devsecops (`docs/designs/devsecops.md`, built).
+  CI run IDs for `gate` and `security`: pending, the owner pushes. Ran locally: `make check-pins
+  lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`
+  and `make image image-scan dast`, each exits 0 (outputs in the task 10 report). Every new guard
+  and wrapper was seen red once by breaking what it protects (per task). `docs/threat-model.md` has
+  no `gap:` row and its guard refuses the word (seen red on a probe). NOT RUN: keyless signing, and
+  `upgrade.sh`, `restore.sh` and `pull.sh` verification against a real release (all need a `v*`
+  tag); `make scan-live` against a real deployment (the deployer's own); the weekly workflow's
+  first scheduled run, its fuzz job included; `make e2e` (CI runs it); Dependabot digest-only
+  updates for base images (seen only after a push); a real Cloudflare tunnel under the hardened
+  compose. Owner actions after the merge: branch protection on `main`, the `v*` tag ruleset, and
+  both ghcr packages set to public after the first release (commands and steps in
+  `docs/threat-model.md` "GitHub settings").
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 

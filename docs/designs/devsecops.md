@@ -1,9 +1,9 @@
 # open-customer — Security pipeline
 
-Status: approved by the owner (2026-11-06). Being built: the threat model, the allow-list, the image
-scan, the secret scan, the running-app scan, the config scan (with the compose hardening and the
-supply-chain pins), the code scan, the fuzz tests, and SBOM and signing (not yet run: the first
-`v*` tag is its first real test) exist; the live scan and the manual audit do not yet.
+Status: built (2026-11-07). The owner approved it on 2026-11-06. Every part exists and ran locally
+except what the TASKS.md "Security pipeline exit" entry lists as NOT RUN: the first real keyless
+signature (it needs a `v*` tag), the live scan against a real deployment, and the weekly workflow's
+first scheduled run.
 
 ## Intent
 
@@ -51,8 +51,8 @@ rule names its sensor") applied to security.
   shrink; a check that could not run is reported as NOT RUN.
 - Every tool and image is pinned in one place and kept equal by `make check-pins` (design doc
   "Pins"). Dependabot bumps what it can.
-- `CLAUDE.md` says `docs/designs/release-1.md` is the only architecture source. The change that
-  builds this pipeline updates that line to name this document too.
+- `CLAUDE.md` names `docs/designs/release-1.md` as the architecture source for the app and this
+  document for the security pipeline.
 - CI already builds the app image and can start it with a throwaway Postgres. The dynamic scans
   run against that (section 6), so there is no staging environment.
 
@@ -71,11 +71,11 @@ rule names its sensor") applied to security.
 - The "Covered by" cell holds typed references, separated by `; `: `test:<GoTestName>` (a `Test`
   or `Fuzz` function some `_test.go` declares), `file:<repo path>`, `make:<target>`,
   `ci:<workflow>/<job>`, `accepted: <reason>`, `out of scope: <who owns it>`, `manual: <what and how
-  often>` (GitHub settings), and `gap: Task <N>` for a threat a later task of the build plan closes
-  (allowed only while the pipeline is being built; its last task removes the word from the guard).
+  often>` (GitHub settings). There is no `gap:` type: it was allowed while the pipeline was built
+  and the guard now refuses it.
   The allow-list is not a check, so it is never a reference.
 - The guard `TestThreatModel` (`internal/guards`, run by `make test`) fails on a row with an empty
-  "Covered by", a reference of another type, a test no `_test.go` declares, a file that does not
+  "Covered by", a reference of another type (`gap:` included), a test no `_test.go` declares, a file that does not
   exist, a make target the Makefile lacks, a CI job the workflow lacks, or a duplicate ID.
 - The one-time manual audit (section 8) adds rows.
 
@@ -337,9 +337,10 @@ rule names its sensor") applied to security.
 - **"Blocks a merge" is enforced by GitHub (owner's decision):** `main` gets branch protection (or
   a ruleset) that requires a pull request and every blocking CI job as a required status check,
   and forbids force-push and deletion. Changes reach `main` only through a green PR; no local merge
-  and push to `main`. This is a GitHub setting, not a repo file: the plan writes the exact setting
-  (and the `gh api` command that applies it), and the owner applies it or approves it being
-  applied. The threat model lists it as a row whose check is "GitHub setting, re-checked by hand".
+  and push to `main`. This is a GitHub setting, not a repo file: `docs/threat-model.md` "GitHub settings" holds the
+  exact `gh api` command, with the tag ruleset for `v*` and the public ghcr packages, and the owner
+  applies them after the merge (a required check must have run first). The threat model lists
+  them as `manual:` rows, "re-checked by hand after any repo settings change".
   The job names in CI stay stable, because a renamed required check silently blocks every PR.
 
 ## Where each check runs
