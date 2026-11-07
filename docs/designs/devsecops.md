@@ -196,7 +196,13 @@ rule names its sensor") applied to security.
   after `compose pull` each pulled image's `RepoDigests` must hold `<image>@<that digest>`, or the
   upgrade stops before the backup with `.env` unchanged: a tag moved between the check and the pull
   cannot be run. The tag is never resolved again, and `compose.yaml` sets no `pull_policy` that
-  pulls by itself (guard `TestComposeHardening`), so `up -d` runs the checked local images. A fork
+  pulls by itself (guard `TestComposeHardening`), so `up -d` runs the checked local images. The
+  same steps are `pull_verified <version>` in `lib.sh`, the one way a script brings release images
+  onto the PC: `upgrade.sh` (step 2), `deploy/scripts/pull.sh` (the first install, before `up -d`),
+  and, through `ensure_release_images` (no network when both images are local; a local image came
+  through `pull_verified` or a local build), `restore.sh` (for `.env`'s version before it reads
+  the snapshot, and for the snapshot's version before it stops anything) and `backup-now.sh`. A
+  fork
   changes `SIGNER_IDENTITY_REGEXP` and `SIGNER_REPOSITORY` (`deploy/README.md` section 9). `COSIGN_IMAGE` lives in
   `lib.sh`, because deployers have `deploy/` and not the Makefile; `make check-pins` keeps its
   version equal to `cosign-release` in the release workflow, and Dependabot reads neither, so a

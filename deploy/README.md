@@ -111,12 +111,18 @@ Never commit `.env`. After first setup, `scripts/upgrade.sh` and `scripts/restor
 Restoring onto a new PC, or after the volumes were lost? Do sections 1 to 5, then section 10. Do
 not run this section.
 
-1. Start the stack. On a first start the `backup` service sees no earlier backup and runs one:
+1. Pull the app and backup images of `APP_VERSION` through the signature check, then start the
+   stack. On a first start the `backup` service sees no earlier backup and runs one:
 
    ```sh
+   scripts/pull.sh
    docker compose up -d
    docker compose ps
    ```
+
+   `scripts/pull.sh` stops, and nothing is pulled, if an image is not signed by this repository's
+   release workflow (see "Signatures" in section 9). Do not run `docker compose up -d` before it
+   succeeds: compose would pull the missing images without the check.
 
    Wait until `db` and `app` show `healthy`.
 
@@ -256,9 +262,9 @@ Do it outside her working hours. A rollback drops everything she entered after t
    target folder or disk is missing), the script stops and `.env` stays on the old version.
 3. Check `docker compose ps` and open the app.
 
-If you upgrade by editing `.env` and running `docker compose up -d` yourself, `app` refuses to
-migrate without a backup from the last 60 minutes and exits with "Pending migrations and no recent
-backup. Run scripts/upgrade.sh."
+If you upgrade by editing `.env` and running `docker compose up -d` yourself, compose pulls the new
+images without the signature check, and `app` refuses to migrate without a backup from the last
+60 minutes and exits with "Pending migrations and no recent backup. Run scripts/upgrade.sh."
 
 ### Signatures
 
@@ -273,7 +279,16 @@ image. cosign reports the digest it verified; after the pull, each pulled image 
 that digest, or the script stops before the backup with `.env` unchanged (the tag changed in the
 registry between the check and the pull: run the upgrade again, and look into the registry if it
 repeats). `compose.yaml` sets no `pull_policy`, so `docker compose up -d` runs those checked local
-images. Check, in this order: the PC can reach `ghcr.io` and Sigstore's
+images.
+
+**Local images are trusted.** An app or backup image already on this PC got there through a
+verified pull (`scripts/pull.sh`, `scripts/upgrade.sh`, `scripts/restore.sh`,
+`scripts/backup-now.sh`) or through a local build, so the scripts use it without the network: an
+offline restore of local images still works. Each script runs the check before a `docker compose`
+command that would pull a missing app or backup image (`restore.sh` for `.env`'s version and for
+the snapshot's version, before it stops anything; `backup-now.sh` for `.env`'s version). A
+`docker compose` command you type yourself has no check: on a PC that does not have the images of
+`APP_VERSION` yet, run `scripts/pull.sh` first. Check, in this order: the PC can reach `ghcr.io` and Sigstore's
 public services (`sigstore.dev`); the version exists; for a fork, the lines below. There is no
 option to skip the check.
 
@@ -331,7 +346,8 @@ docker compose run --rm --entrypoint sh backup -c 'echo {} > /backup-status/stat
 scripts/backup-now.sh
 ```
 
-1. Find the snapshot id. From this folder:
+1. Find the snapshot id. On a new PC, run `scripts/pull.sh` first (the command below runs the
+   backup image, and compose would pull it without the check). From this folder:
 
    ```sh
    docker compose --profile restore run --rm restore snapshot-info latest
@@ -351,7 +367,10 @@ scripts/backup-now.sh
 
    It shows the snapshot's time and app version and asks `[y/N]`. Answer it yourself at the
    prompt; piped input is not supported. Anything but `y` cancels with nothing stopped.
-3. It stops `app` and `backup`, recreates the database from the snapshot, replaces the media
+3. Before it stops anything, it makes sure the app and backup images of the snapshot's version
+   are on this PC, pulling them through the signature check when they are not (it does the same
+   for `.env`'s version before it reads the snapshot); a failed check stops it with nothing
+   changed. Then it stops `app` and `backup`, recreates the database from the snapshot, replaces the media
    folder (owned by `65532:65532`, so `app` can write photos), sets `APP_VERSION` in `.env` to the
    snapshot's version, and runs `docker compose up -d`.
 

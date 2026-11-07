@@ -1,7 +1,9 @@
 # The production stack (design doc "Deployment", item 81). Values come from .env next to this file
 # (copy .env.example; the variables are in the design doc's "Configuration (`.env`)" table). No
 # service publishes a port: cloudflared reaches app:8080 on the Compose network. Start it with
-# `docker compose up -d`; upgrades, restores and manual backups go through scripts/.
+# `scripts/pull.sh` (the app and backup images through the signature check), then
+# `docker compose up -d`; upgrades, restores and manual backups go through scripts/. No service
+# sets a pull_policy that pulls by itself, so compose runs the checked local images.
 #
 # Hardening (docs/designs/devsecops.md section 3; guard TestComposeHardening in internal/guards):
 # every service drops all Linux capabilities and adds back only what it needs (backup:

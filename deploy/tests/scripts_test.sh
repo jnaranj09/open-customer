@@ -13,6 +13,8 @@
 #                       also prints cosign's "Verification for" lines on stderr, as cosign does)
 #   FAKE_PULLED_DIGEST  the digest `image inspect --format <RepoDigests> <repo>:<tag>` prints as
 #                       <repo>@<digest> (default: the same made-up digest of <repo>)
+#   FAKE_MISSING_IMAGES space-separated <repository>:<tag> refs a plain `image inspect <ref>` does
+#                       not find (exit 1), as for an image that is not on this PC
 # The made-up digest of a repository is sha256 of "made-up <repository>".
 # Only `compose config is valid` uses the real docker, and it starts nothing. The real deploy/.env
 # is never read or copied. All data here is made up.
@@ -27,7 +29,7 @@ ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 # The scripts must not see a version from the caller's shell, only from .env.
 unset APP_VERSION FAKE_APP_VERSION FAKE_SNAPSHOT_JSON FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_VERIFY_JSON \
-  FAKE_PULLED_DIGEST
+  FAKE_PULLED_DIGEST FAKE_MISSING_IMAGES
 
 mkdir -p "$ROOT/bin"
 cat >"$ROOT/bin/docker" <<'EOF'
@@ -54,6 +56,9 @@ case "$*" in
       printf '[{"critical":{"identity":{"docker-reference":"%s"},"image":{"docker-manifest-digest":"%s"},"type":"https://sigstore.dev/cosign/sign/v1"},"optional":{}}]\n' \
         "$ref" "$(made_up_digest "${ref%:*}")"
     fi
+    ;;
+  "image inspect "[!-]*)
+    case " ${FAKE_MISSING_IMAGES:-} " in *" $3 "*) exit 1 ;; esac
     ;;
   "image inspect --format "*RepoDigests*)
     ref=${*: -1}
@@ -161,6 +166,8 @@ test_missing_args() {
   run backup-now.sh --tag other >/dev/null 2>&1 && fail "backup-now.sh --tag other exited 0"
   run upgrade.sh not-a-version >/dev/null 2>&1 && fail "upgrade.sh with a bad version exited 0"
   run restore.sh 'latest; rm' </dev/null >/dev/null 2>&1 && fail "restore.sh with a bad id exited 0"
+  run pull.sh not-a-version >/dev/null 2>&1 && fail "pull.sh with a bad version exited 0"
+  run pull.sh 1.0.0 1.1.0 >/dev/null 2>&1 && fail "pull.sh with two versions exited 0"
   calls_made=$(wc -l <"$LOG")
   assert_eq "docker calls for bad args" 0 "$calls_made"
 }
@@ -170,7 +177,32 @@ test_backup_now_tag_and_code() {
   local rc=0
   FAKE_FAIL_ON='compose run' FAKE_FAIL_CODE=3 run backup-now.sh --tag pre-upgrade || rc=$?
   assert_eq "exit code" 3 "$rc"
-  assert_eq "docker call" "compose run --rm backup once --tag pre-upgrade" "$(calls)"
+  # The images of .env's version are local, so only their presence is checked, then the backup.
+  assert_eq "docker calls" "image inspect ghcr.io/jnaranj09/open-customer:1.0.0
+image inspect ghcr.io/jnaranj09/open-customer-backup:1.0.0
+compose run --rm backup once --tag pre-upgrade" "$(calls)"
+}
+
+test_backup_now_missing_image_verifies_first() {
+  setup
+  local v p r
+  FAKE_MISSING_IMAGES=ghcr.io/jnaranj09/open-customer-backup:1.0.0 run backup-now.sh >/dev/null 2>&1 ||
+    fail "backup-now failed: $(calls)"
+  v=$(line_of "verify ghcr.io/jnaranj09/open-customer-backup:1.0.0 ")
+  p=$(line_of "compose pull")
+  r=$(line_of "compose run --rm backup once")
+  if [ -z "$v" ] || [ -z "$p" ] || [ -z "$r" ]; then fail "missing a step: $(calls)"; fi
+  if [ "$v" -ge "$p" ] || [ "$p" -ge "$r" ]; then fail "wrong order: $(calls)"; fi
+}
+
+test_backup_now_verify_fails() {
+  setup
+  local rc=0
+  FAKE_MISSING_IMAGES=ghcr.io/jnaranj09/open-customer-backup:1.0.0 FAKE_FAIL_ON=verify \
+    run backup-now.sh >/dev/null 2>&1 || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call pull
+  no_call "backup once"
 }
 
 test_upgrade_versions_disagree() {
@@ -356,6 +388,118 @@ test_upgrade_verify_output_two_digests() {
   grep -q "more than one digest" "$W/err" || fail "the message does not name two digests: $(cat "$W/err")"
 }
 
+# The snapshot is from app 0.9.0; .env and the running stack are on 1.0.0.
+test_restore_missing_images_verifies_before_stop() {
+  setup
+  local va vb p da db st u
+  printf 'y\n' | FAKE_SNAPSHOT_JSON=$snapshot_json FAKE_MISSING_IMAGES=ghcr.io/jnaranj09/open-customer:0.9.0 \
+    run restore.sh latest >/dev/null 2>"$W/err" || fail "restore failed: $(cat "$W/err")"
+  va=$(line_of "verify ghcr.io/jnaranj09/open-customer:0.9.0 ")
+  vb=$(line_of "verify ghcr.io/jnaranj09/open-customer-backup:0.9.0 ")
+  p=$(line_of "compose pull")
+  da=$(line_of "RepoDigests}}{{println .}}{{end}} ghcr.io/jnaranj09/open-customer:0.9.0")
+  db=$(line_of "RepoDigests}}{{println .}}{{end}} ghcr.io/jnaranj09/open-customer-backup:0.9.0")
+  st=$(line_of "compose stop app backup")
+  u=$(line_of "compose up -d")
+  if [ -z "$va" ] || [ -z "$vb" ] || [ -z "$p" ] || [ -z "$da" ] || [ -z "$db" ] || [ -z "$st" ] ||
+    [ -z "$u" ]; then
+    fail "missing a step: $(calls)"
+  fi
+  if [ "$va" -ge "$p" ] || [ "$vb" -ge "$p" ] || [ "$p" -ge "$da" ] || [ "$p" -ge "$db" ] ||
+    [ "$da" -ge "$st" ] || [ "$db" -ge "$st" ] || [ "$st" -ge "$u" ]; then
+    fail "wrong order: $(calls)"
+  fi
+  grep -qxF "compose pull | APP_VERSION=0.9.0" "$LOG" || fail "the pull did not get APP_VERSION=0.9.0: $(cat "$LOG")"
+}
+
+test_restore_verify_failure_changes_nothing() {
+  setup
+  local before rc=0
+  before=$(cat "$W/deploy/.env")
+  printf 'y\n' | FAKE_SNAPSHOT_JSON=$snapshot_json FAKE_MISSING_IMAGES=ghcr.io/jnaranj09/open-customer:0.9.0 \
+    FAKE_FAIL_ON=verify run restore.sh latest >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call pull
+  no_call stop
+  no_call "restore restore"
+  no_call "up -d"
+  assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+  grep -q "nothing was stopped" "$W/err" || fail "the message does not say nothing was stopped: $(cat "$W/err")"
+}
+
+test_restore_pulled_digest_differs_changes_nothing() {
+  setup
+  local before rc=0
+  before=$(cat "$W/deploy/.env")
+  printf 'y\n' | FAKE_SNAPSHOT_JSON=$snapshot_json FAKE_MISSING_IMAGES=ghcr.io/jnaranj09/open-customer:0.9.0 \
+    FAKE_PULLED_DIGEST=$other_digest run restore.sh latest >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  has_call "compose pull" || fail "the pull did not run: $(calls)"
+  no_call stop
+  no_call "restore restore"
+  no_call "up -d"
+  assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+}
+
+test_restore_local_images_no_verify() {
+  setup
+  printf 'y\n' | FAKE_SNAPSHOT_JSON=$snapshot_json run restore.sh latest >/dev/null 2>&1 ||
+    fail "restore failed: $(calls)"
+  has_call "image inspect ghcr.io/jnaranj09/open-customer:0.9.0" || fail "the snapshot's images were not looked for: $(calls)"
+  no_call verify
+  no_call pull
+}
+
+# snapshot-info runs the backup image of .env's version (1.0.0); on a new PC it is not local yet.
+test_restore_missing_current_image_verifies_before_snapshot_info() {
+  setup
+  local v i
+  printf 'y\n' | FAKE_SNAPSHOT_JSON=$snapshot_json FAKE_MISSING_IMAGES=ghcr.io/jnaranj09/open-customer-backup:1.0.0 \
+    run restore.sh latest >/dev/null 2>&1 || fail "restore failed: $(calls)"
+  v=$(line_of "verify ghcr.io/jnaranj09/open-customer-backup:1.0.0 ")
+  i=$(line_of "snapshot-info latest")
+  if [ -z "$v" ] || [ -z "$i" ]; then fail "missing a step: $(calls)"; fi
+  [ "$v" -lt "$i" ] || fail "snapshot-info ran before the verify: $(calls)"
+}
+
+test_pull_verifies_then_pulls() {
+  setup
+  local va vb p da db
+  run pull.sh >/dev/null 2>"$W/err" || fail "pull.sh failed: $(cat "$W/err")"
+  va=$(line_of "verify ghcr.io/jnaranj09/open-customer:1.0.0 ")
+  vb=$(line_of "verify ghcr.io/jnaranj09/open-customer-backup:1.0.0 ")
+  p=$(line_of "compose pull")
+  da=$(line_of "RepoDigests}}{{println .}}{{end}} ghcr.io/jnaranj09/open-customer:1.0.0")
+  db=$(line_of "RepoDigests}}{{println .}}{{end}} ghcr.io/jnaranj09/open-customer-backup:1.0.0")
+  if [ -z "$va" ] || [ -z "$vb" ] || [ -z "$p" ] || [ -z "$da" ] || [ -z "$db" ]; then
+    fail "missing a step: $(calls)"
+  fi
+  if [ "$va" -ge "$p" ] || [ "$vb" -ge "$p" ] || [ "$p" -ge "$da" ] || [ "$p" -ge "$db" ]; then
+    fail "wrong order: $(calls)"
+  fi
+  no_call "up -d"
+  run pull.sh 1.0.0 >/dev/null 2>&1 || fail "pull.sh with .env's version failed"
+}
+
+test_pull_verify_fails() {
+  setup
+  local rc=0
+  FAKE_FAIL_ON="verify ghcr.io/jnaranj09/open-customer-backup:" run pull.sh >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call pull
+  grep -qF "ghcr.io/jnaranj09/open-customer-backup:1.0.0" "$W/err" || fail "the message does not name the image: $(cat "$W/err")"
+}
+
+test_pull_other_version_than_env() {
+  setup
+  local rc=0
+  run pull.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call verify
+  no_call pull
+  grep -q "APP_VERSION in .env is '1.0.0'" "$W/err" || fail "the message does not name .env's version: $(cat "$W/err")"
+}
+
 test_restore_stops_on_no() {
   setup
   local before rc=0
@@ -443,6 +587,8 @@ test_compose_config() {
 
 t "each script without its arg exits non-zero" test_missing_args
 t "backup-now passes the tag and the exit code" test_backup_now_tag_and_code
+t "backup-now verifies a missing image before it runs the backup" test_backup_now_missing_image_verifies_first
+t "backup-now stops when the missing image's signature check fails" test_backup_now_verify_fails
 t "upgrade stops when .env and the running app disagree" test_upgrade_versions_disagree
 t "upgrade stops when the pre-upgrade backup fails" test_upgrade_backup_fails
 t "upgrade happy path order" test_upgrade_happy_path
@@ -460,6 +606,14 @@ t "restore asks first and stops on no" test_restore_stops_on_no
 t "restore failure leaves app and backup stopped" test_restore_failure_leaves_stopped
 t "restore stops with app and backup stopped when .env cannot be written" test_restore_env_not_writable
 t "restore happy path sets APP_VERSION from the snapshot" test_restore_happy_path
+t "restore with missing images verifies and pulls them before it stops anything" test_restore_missing_images_verifies_before_stop
+t "restore with a verify failure changes nothing" test_restore_verify_failure_changes_nothing
+t "restore with a pulled digest that differs changes nothing" test_restore_pulled_digest_differs_changes_nothing
+t "restore with local images makes no verify call" test_restore_local_images_no_verify
+t "restore verifies a missing image of the current version before snapshot-info" test_restore_missing_current_image_verifies_before_snapshot_info
+t "pull verifies both images, pulls, then checks the digests" test_pull_verifies_then_pulls
+t "pull stops when a signature check fails" test_pull_verify_fails
+t "pull refuses a version other than .env's" test_pull_other_version_than_env
 t "restore refuses a snapshot without an app version" test_restore_snapshot_without_version
 t "compose config is valid" test_compose_config
 finish

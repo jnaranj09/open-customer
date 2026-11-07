@@ -38,27 +38,9 @@ running=$(printf '%s' "$running" | tr -d '[:space:]')
 [ "$running" = "$current" ] ||
   die "APP_VERSION in .env is '$current' but the running app is '$running'; fix .env first"
 
-# 2. The new images: first their signatures (a failure stops before any pull or backup), then the
-# pull, then a check that each pulled image is the very digest cosign verified, so a tag moved
-# between the two cannot slip in (compose.yaml sets no pull_policy, so `up -d` below runs these
-# local images; guard TestComposeHardening). .env is not changed yet.
-images=$(release_images "$new") ||
-  die "compose.yaml must name the app image and its -backup image with the tag \${APP_VERSION}"
-verified=()
-# The two refs hold no spaces (release_images builds them from compose.yaml's image: lines).
-for image in $images; do
-  ref=$(verify_image "$image") || die "nothing changed; .env and the running containers stay on $current"
-  verified+=("$image $ref")
-done
-APP_VERSION=$new docker compose pull || die "pull failed; nothing changed"
-for pair in "${verified[@]}"; do
-  image=${pair% *}
-  ref=${pair#* }
-  pulled_is_verified "$image" "$ref" ||
-    die "the pulled $image is not the digest whose signature was verified ($ref); stop before" \
-      "the backup: .env and the running containers stay on $current. Run scripts/upgrade.sh $new" \
-      "again; if it repeats, the registry tag changed after the signature check"
-done
+# 2. The new images, verified, pulled and checked against the verified digests (pull_verified in
+# lib.sh: a failed signature check pulls nothing). .env is not changed yet.
+pull_verified "$new" || die "nothing changed; .env and the running containers stay on $current"
 
 # 3. The backup the migration guard asks for.
 scripts/backup-now.sh --tag pre-upgrade ||

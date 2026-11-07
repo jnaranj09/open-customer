@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # restore.sh <snapshot-id|latest> (design doc item 86, the restore steps in "Upgrades and the
-# migration guard"): shows the snapshot and asks first, stops app and backup, restores the
-# database and the media folder, sets APP_VERSION in .env to the snapshot's version and starts the
-# stack. A failure after the stop leaves app and backup stopped and says so. Runs from any folder:
-# the stack is the one next to this script.
+# migration guard"): shows the snapshot and asks first, makes sure the images of .env's and of the
+# snapshot's version are on this PC (pulled through the signature check when not; a failure stops
+# before anything is stopped), stops app and backup, restores the database and the media folder,
+# sets APP_VERSION in .env to the snapshot's version and starts the stack. A failure after the
+# stop leaves app and backup stopped and says so. Runs from any folder: the stack is the one next
+# to this script.
 set -euo pipefail
 
 usage() {
@@ -33,6 +35,11 @@ cd "$(dirname "$0")/.."
 . scripts/lib.sh
 check_env_file
 
+# 0. snapshot-info and the restore run the backup image of .env's version; on a new PC it is not
+# here yet, and compose would pull it unchecked.
+ensure_release_images "$(env_app_version)" ||
+  die "the images of .env's APP_VERSION are not verified; nothing was stopped"
+
 # 1. One JSON line {"id","time","app"} from the backup image (jq is not needed on the host).
 info=$(docker compose --profile restore run --rm restore snapshot-info "$1") ||
   die "cannot read snapshot $1; nothing was stopped"
@@ -50,6 +57,11 @@ printf 'Restore snapshot %s from %s (app %s)? [y/N] ' "$id" "$time" "$version"
 answer=
 read -r answer || true
 [ "$answer" = y ] || die "cancelled; nothing was stopped"
+
+# The images `up -d` will run at the snapshot's version: checked before anything is stopped or
+# changed, so a failed signature check leaves the stack as it was.
+ensure_release_images "$version" ||
+  die "the images of app $version are not verified; nothing was stopped"
 
 # 2. Nothing writes to the database and no hourly backup starts.
 docker compose stop app backup ||

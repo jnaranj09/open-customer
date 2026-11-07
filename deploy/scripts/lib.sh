@@ -1,6 +1,6 @@
-# Shared by upgrade.sh and restore.sh (sourced, never run; design doc item 86): the checks on
-# deploy/.env and the one edit both scripts make to it, and the signature check upgrade.sh runs
-# before it pulls. The caller has done `cd "$(dirname "$0")/.."` and defines die <message> (prints
+# Shared by the operator scripts (sourced, never run; design doc item 86): the checks on
+# deploy/.env and the one edit upgrade.sh and restore.sh make to it, and the signature check every
+# script runs before it brings a release image onto this PC (pull_verified, ensure_release_images). The caller has done `cd "$(dirname "$0")/.."` and defines die <message> (prints
 # one line and exits non-zero).
 # shellcheck shell=bash
 
@@ -103,4 +103,56 @@ verify_image() {
 # image whose signature verify_image checked.
 pulled_is_verified() {
   docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$1" | grep -qxF "$2"
+}
+
+# pull_verified <version>: the one way a script brings release images onto this PC. verify_image
+# for the app and the backup image at <version> (a failure pulls nothing), then
+# `APP_VERSION=<version> docker compose pull`, then pulled_is_verified for each, so the local
+# images are the digests whose signatures were checked; the tags are never resolved again.
+# compose.yaml sets no pull_policy (guard TestComposeHardening), so a later `up -d` or `run` uses
+# these local images. Returns non-zero with the reason on stderr; the caller says what is left as
+# it was.
+pull_verified() {
+  local images image ref pair verified=()
+  images=$(release_images "$1") || {
+    echo "compose.yaml must name the app image and its -backup image with the tag \${APP_VERSION}" >&2
+    return 1
+  }
+  # The two refs hold no spaces (release_images builds them from compose.yaml's image: lines).
+  for image in $images; do
+    ref=$(verify_image "$image") || return 1
+    verified+=("$image $ref")
+  done
+  APP_VERSION=$1 docker compose pull || {
+    echo "docker compose pull of $1 failed" >&2
+    return 1
+  }
+  for pair in "${verified[@]}"; do
+    image=${pair% *}
+    ref=${pair#* }
+    pulled_is_verified "$image" "$ref" || {
+      echo "the pulled $image is not the digest whose signature was verified ($ref): the" \
+        "registry tag changed after the signature check. Run the command again; if it repeats," \
+        "look into the registry" >&2
+      return 1
+    }
+  done
+}
+
+# ensure_release_images <version>: exit 0 when the app and backup images at <version> are on this
+# PC (a local image is trusted: it came through pull_verified or a local build), touching no
+# network; otherwise pull_verified <version>. Every script runs it before a compose command that
+# would otherwise pull a missing release image unchecked.
+ensure_release_images() {
+  local images image
+  images=$(release_images "$1") || {
+    echo "compose.yaml must name the app image and its -backup image with the tag \${APP_VERSION}" >&2
+    return 1
+  }
+  for image in $images; do
+    docker image inspect "$image" >/dev/null 2>&1 || {
+      pull_verified "$1"
+      return
+    }
+  done
 }
