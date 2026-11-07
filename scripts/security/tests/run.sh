@@ -886,14 +886,23 @@ test_unknown_mode() {
   assert_eq "docker calls for bad args" 0 "$(wc -l <"$LOG")"
 }
 
+# saved_and_scanned <name> <image>: image-scan.sh saved <image> to <name>.tar (a `docker save` of
+# exactly that image) and ran trivy on that tar (`--input /scan/<name>.tar`). An `image inspect`
+# or a pull of the image alone does not pass.
+saved_and_scanned() {
+  grep -qE -- "^save -o [^ ]*/$1\.tar $(sed 's/[.[\*^$/]/\\&/g' <<<"$2")\$" "$LOG" || fail "$2 was not saved to $1.tar"
+  grep -F -- "--input /scan/$1.tar" "$LOG" | grep -qF -- "trivy-test:1 image " || fail "trivy did not scan $1.tar ($2)"
+}
+
 test_push_clean_scans_four_images() {
   setup
   scan push || fail "a clean push scan exited non-zero: $(cat "$W/out")"
-  has_call "save -o" || fail "no image was saved"
-  local image
-  for image in open-customer:1.2.3 open-customer-backup:1.2.3 postgres:18.6-alpine "$cloudflared"; do
-    has_call " $image" || fail "$image was not scanned"
-  done
+  has_call "image inspect open-customer:1.2.3" || fail "the local app image was not looked for"
+  has_call "image inspect open-customer-backup:1.2.3" || fail "the local backup image was not looked for"
+  saved_and_scanned app open-customer:1.2.3
+  saved_and_scanned backup open-customer-backup:1.2.3
+  saved_and_scanned postgres postgres:18.6-alpine
+  saved_and_scanned cloudflared "$cloudflared"
   assert_eq "trivy runs" 4 "$(count_calls 'run --rm')"
   assert_eq "trivy runs with the blocking flags" 4 \
     "$(count_calls 'trivy-test:1 image --cache-dir /cache --ignorefile /scan/.trivyignore.yaml --severity HIGH,CRITICAL --ignore-unfixed')"
@@ -956,9 +965,9 @@ test_pull_scans_released_images() {
   local image
   for image in ghcr.io/jnaranj09/open-customer:1.2.3 ghcr.io/jnaranj09/open-customer-backup:1.2.3; do
     has_call "pull -q $image" || fail "$image was not pulled"
-    has_call "save -o" || fail "no image was saved"
-    has_call " $image" || fail "$image was not scanned"
   done
+  saved_and_scanned app ghcr.io/jnaranj09/open-customer:1.2.3
+  saved_and_scanned backup ghcr.io/jnaranj09/open-customer-backup:1.2.3
   has_call "image inspect open-customer:1.2.3" && fail "a pull scan looked for the local build"
   return 0
 }
