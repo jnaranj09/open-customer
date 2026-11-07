@@ -2067,7 +2067,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
 
 *   **Type / Scope**: Templates.
 *   **Proposed Changes**:
-    *   `parse.go`: a tokenizer for `{{ ns.key | "fallback" }}` that accepts only what the chip serializer writes (straight quotes). The parse result lists the variables used.
+    *   `parse.go`: a tokenizer for `{{ ns.key | "fallback" }}` that accepts only what the chip serializer writes (straight quotes). The parse result lists the variables used. Each `{{` that starts no valid variable is one `MsgTemplateUnclosed` error with its rune position, for the first 20 only (`maxParseErrors`, audit A8; `TestParseManyBadBracesIsLinearAndOrdered`, `TestParseKeepsVarsPastTheErrorCap`).
     *   `render.go`: `Render(tpl, Data) string`. It never returns an error; missing values become the fallback or empty text. `Data` holds values that are already formatted:
 
         ```go

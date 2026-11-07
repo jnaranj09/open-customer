@@ -210,3 +210,8 @@ own change.
 - `cloudflare/cloudflared:2026.10.7` has CVE-2026-78661 (golang.org/x/net, fixed in 0.62.0); found
   by `make image-scan`. It only reports on a push, and blocks a release and the weekly rescan until
   a cloudflared tag with the fix is pinned.
+- `api/openapi.yaml` has no `maxLength` on any text field (security audit A8). The modules already
+  refuse long text (client name 120 runes, other names and labels 80, notes and template body
+  2000, a text attribute value 500), but the contract does not say so and no web input has a
+  `maxlength`, so she learns the limit only from the 422. The owner picks the limits for the spec
+  and the Spanish message the form shows.

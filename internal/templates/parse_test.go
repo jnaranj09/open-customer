@@ -138,12 +138,23 @@ func TestParseManyBadBracesIsLinearAndOrdered(t *testing.T) {
 	const n = 1000
 	_, err := Parse(strings.Repeat("{{", n))
 	got := bodyErrors(t, err)
-	if len(got) != n {
-		t.Fatalf("got %d errors, want %d", len(got), n)
+	if len(got) != 20 {
+		t.Fatalf("got %d errors, want the first 20", len(got))
 	}
 	for i, e := range got {
 		if want := unclosed(2*i + 1); e != want {
 			t.Fatalf("error %d = %+v, want %+v", i, e, want)
 		}
+	}
+}
+
+func TestParseKeepsVarsPastTheErrorCap(t *testing.T) {
+	got, err := Parse(strings.Repeat("{{ ", 30) + "{{client.name}}")
+	if errs := bodyErrors(t, err); len(errs) != 20 {
+		t.Errorf("got %d errors, want 20", len(errs))
+	}
+	want := []VarRef{{NS: "client", Key: "name", Pos: 91}}
+	if !reflect.DeepEqual(got.Vars, want) {
+		t.Errorf("Vars = %+v, want %+v", got.Vars, want)
 	}
 }
