@@ -1,9 +1,9 @@
 # Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
 # in P2, e2e in P6, test-deploy in P7, secrets, test-sec, config-scan and sast with the security
 # pipeline). The job security scans the images and the running app (docs/designs/devsecops.md
-# sections 4 and 6) and uploads the zizmor and Semgrep SARIF (sections 3 and 2). The job names gate and security are
-# required checks on main: never rename them. Every action is pinned by commit SHA, with its
-# version in the comment (guard TestSupplyChainPins; Dependabot bumps both).
+# sections 4 and 6) and uploads the zizmor and Semgrep SARIF (sections 3 and 2). The job names gate
+# and security are required checks on main: never rename them. Every action is pinned by commit
+# SHA, with its version in the comment (guard TestSupplyChainPins; Dependabot bumps both).
 name: ci
 
 on:

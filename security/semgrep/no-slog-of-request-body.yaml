@@ -52,6 +52,25 @@ rules:
                         ...
                       }
                       ...
+                  - pattern-inside: |
+                      json.NewDecoder($R.Body).Decode(&$V)
+                      ...
+                  - pattern-inside: |
+                      $E := json.NewDecoder($R.Body).Decode(&$V)
+                      ...
+                  - pattern-inside: |
+                      $E = json.NewDecoder($R.Body).Decode(&$V)
+                      ...
+                  - pattern-inside: |
+                      if json.NewDecoder($R.Body).Decode(&$V) != nil {
+                        ...
+                      }
+                      ...
+                  - pattern-inside: |
+                      if $E := json.NewDecoder($R.Body).Decode(&$V); $C {
+                        ...
+                      }
+                      ...
               - pattern: $LOG.$M(..., <... $V ...>, ...)
           - patterns:
               - pattern-either:
@@ -77,7 +96,65 @@ rules:
                         ...
                       }
                       ...
+                  - pattern-inside: |
+                      $ERR := json.NewDecoder($R.Body).Decode(...)
+                      ...
+                  - pattern-inside: |
+                      $ERR = json.NewDecoder($R.Body).Decode(...)
+                      ...
+                  - pattern-inside: |
+                      if $ERR := json.NewDecoder($R.Body).Decode(...); $C {
+                        ...
+                      }
+                      ...
               - pattern: $LOG.$M(..., <... $ERR ...>, ...)
+              # Not after the error variable is given another call's error (until then it is the
+              # decode error): a reassignment, a redeclaration or an `if err := ...` shadow.
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $ERR = $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $ERR := $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $X, $ERR := $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        $X, $ERR = $F(...)
+                        ...
+                        $LOG.$M(..., <... $ERR ...>, ...)
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
+              - pattern-not-inside:
+                  patterns:
+                    - pattern: |
+                        if $ERR := $F(...); $C {
+                          ...
+                        }
+                    - metavariable-regex:
+                        metavariable: $F
+                        regex: ^(?!decodeJSON$|decodePatch$|.*\.Decode$)
           # The request itself, anywhere.
           - pattern: $LOG.$M(..., $R.Body, ...)
           - pattern: $LOG.$M(..., $R.Form, ...)
@@ -85,4 +162,4 @@ rules:
           - pattern: $LOG.$M(..., $R.MultipartForm, ...)
       - metavariable-regex:
           metavariable: $M
-          regex: ^(Debug|Info|Warn|Error|Log)(Context|Attrs)?$
+          regex: ^((Debug|Info|Warn|Error|Log)(Context|Attrs)?|(Print|Fatal|Panic)(f|ln)?)$

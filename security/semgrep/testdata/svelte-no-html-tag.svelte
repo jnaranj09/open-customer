@@ -8,6 +8,13 @@
 <!-- ruleid: svelte-no-html-tag -->
 <p>{@html '<b>' + name + '</b>'}</p>
 
+<!-- ruleid: svelte-no-html-tag -->
+<p>{ @html name}</p>
+
+<!-- ruleid: svelte-no-html-tag -->
+<p>{
+	@html name}</p>
+
 <!-- ok: svelte-no-html-tag -->
 <p>{name}</p>
 

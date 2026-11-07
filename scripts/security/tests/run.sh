@@ -31,7 +31,9 @@
 # and, for sast.sh:
 #   semgrep-test:1  with --test, prints a Semgrep test report on stdout that lists every rule id of
 #                   the copied security/semgrep/*.yaml as passed with one expected line (except
-#                   FAKE_SEMGREP_UNTESTED, a rule id it leaves out), exits FAKE_SEMGREP_TEST_CODE
+#                   FAKE_SEMGREP_UNTESTED, a rule id it leaves out; FAKE_SEMGREP_MISSING_TESTS and
+#                   FAKE_SEMGREP_TEST_ERRORS add a config_missing_tests / config_with_errors entry;
+#                   FAKE_SEMGREP_TEST_JSON replaces the whole output), exits FAKE_SEMGREP_TEST_CODE
 #                   (default 0); otherwise writes a scan report to --json-output: one finding when
 #                   FAKE_SEMGREP_FINDINGS is set, one error when FAKE_SEMGREP_ERRORS is set, and the
 #                   scanned files FAKE_SEMGREP_SCANNED (space-separated; default one .go, .ts and
@@ -50,7 +52,7 @@ REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
-  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_FINDINGS \
+  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
   FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
 
@@ -187,7 +189,13 @@ case "$1" in
         case " $* " in
           *" --test "*)
             ids=$(sed -n 's/^  - id: \([a-z0-9-]*\)$/\1/p' "$src"/security/semgrep/*.yaml | grep -vxF -- "${FAKE_SEMGREP_UNTESTED:-}")
-            jq -n --arg ids "$ids" '{config_missing_tests: [], config_with_errors: [],
+            if [ -n "${FAKE_SEMGREP_TEST_JSON+x}" ]; then
+              printf '%s\n' "$FAKE_SEMGREP_TEST_JSON"
+              exit "${FAKE_SEMGREP_TEST_CODE:-0}"
+            fi
+            jq -n --arg ids "$ids" --arg missing "${FAKE_SEMGREP_MISSING_TESTS:-}" --arg errs "${FAKE_SEMGREP_TEST_ERRORS:-}" \
+              '{config_missing_tests: ($missing | split(" ") | map(select(. != ""))),
+              config_with_errors: ($errs | split(" ") | map(select(. != ""))),
               results: {"x.yaml": {checks: ($ids | split("\n") | map({key: ., value: {passed: true,
                 matches: {"f": {expected_lines: [1], reported_lines: [1]}}, errors: []}}) | from_entries)}}}'
             exit "${FAKE_SEMGREP_TEST_CODE:-0}"
@@ -861,6 +869,24 @@ test_sast_rule_without_fixture_red() {
   out_has "every rule in security/semgrep needs a fixture"
 }
 
+test_sast_config_missing_tests_red() {
+  setup
+  FAKE_SEMGREP_MISSING_TESTS=made-up.yaml sast && fail "a rule file with no fixture file exited 0"
+  out_has "every rule in security/semgrep needs a fixture"
+}
+
+test_sast_config_with_errors_red() {
+  setup
+  FAKE_SEMGREP_TEST_ERRORS=made-up.yaml sast && fail "a rule file with errors exited 0"
+  out_has "every rule in security/semgrep needs a fixture"
+}
+
+test_sast_unparseable_test_report_red() {
+  setup
+  FAKE_SEMGREP_TEST_JSON='not json at all' sast && fail "a --test report that is not JSON (exit 0) exited 0"
+  out_has "semgrep --test failed or its fixtures do not match the rules (exit 0)"
+}
+
 test_sast_exit_1_without_findings_red() {
   setup
   FAKE_SEMGREP_CODE=1 sast && fail "exit 1 with an empty report exited 0"
@@ -1029,6 +1055,9 @@ t "sast: a semgrep error (exit 2 and others) is red" test_sast_tool_error_red
 t "sast: a semgrep that cannot start is red" test_sast_tool_cannot_start_red
 t "sast: fixtures that do not match their rules are red" test_sast_fixtures_that_fail_red
 t "sast: a rule with no fixture is red" test_sast_rule_without_fixture_red
+t "sast: a rule file with no fixture file is red" test_sast_config_missing_tests_red
+t "sast: a rule file with errors is red" test_sast_config_with_errors_red
+t "sast: a --test report that is not JSON, with exit 0, is red" test_sast_unparseable_test_report_red
 t "sast: exit 1 with no finding in the report is red" test_sast_exit_1_without_findings_red
 t "sast: findings with exit 0 are red" test_sast_findings_with_exit_0_red
 t "sast: a scan of 0 files is red" test_sast_scanned_nothing_red

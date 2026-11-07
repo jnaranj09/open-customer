@@ -29,8 +29,9 @@ paths:
 - **Writes commit before the response.** Every non-GET handler that reads or writes the database runs its
   module call in `db.WithTx` and commits before it writes the body, so a failed commit is never
   shown as saved. Sensor: Semgrep `non-get-handler-in-withtx` (`make sast`: a handler whose name starts
-  with a non-GET verb never uses `s.pool`; add a new verb to the rule and its fixture); reviewer check
-  for the rest.
+  with a non-GET verb never uses `s.pool`; guard `TestSemgrepWriteVerbsMatchTheSpec` fails when the
+  rule's verb list stops matching the non-GET operations of `api/openapi.yaml`); reviewer check for
+  the rest.
 - **Handlers stay thin**: parse → call the module → map the result. Logic lives in the module.
   Sensor: depguard (module rules); reviewer.
 - **Security headers on every response** (`X-Content-Type-Options`, `Referrer-Policy`, the header

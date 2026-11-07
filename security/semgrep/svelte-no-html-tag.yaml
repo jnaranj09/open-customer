@@ -11,4 +11,4 @@ rules:
     paths:
       include:
         - '*.svelte'
-    pattern-regex: '\{@html\s'
+    pattern-regex: '\{\s*@html\s'

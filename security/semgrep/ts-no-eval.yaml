@@ -12,6 +12,11 @@ rules:
       - pattern: eval(...)
       - pattern: window.eval(...)
       - pattern: globalThis.eval(...)
+      - pattern: self.eval(...)
+      - pattern: 'window["eval"](...)'
+      - pattern: 'globalThis["eval"](...)'
+      - pattern: 'self["eval"](...)'
+      - pattern: '(0, eval)(...)'
       - pattern: new Function(...)
       - pattern: Function(...)
       - pattern: 'setTimeout("...", ...)'

@@ -20,7 +20,9 @@ rules:
             ...
           }
       - metavariable-regex:
-          # The verbs of the non-GET operationIds in api/openapi.yaml. A new verb is added here, and
-          # a test case for it in testdata/non-get-handler-in-withtx.go.
+          # The verbs of the non-GET operationIds in api/openapi.yaml. The guard
+          # TestSemgrepWriteVerbsMatchTheSpec (internal/guards) reads this regex and fails on a
+          # non-GET operationId it does not match and on a GET one it does; the fix is to add the
+          # verb here and a case for it in testdata/non-get-handler-in-withtx.go.
           metavariable: $H
           regex: ^(Complete|Login|Logout|Change|Update|Upload|Create|Set|Preview|Record|Subscribe|Log[A-Z]|Delete|Patch|Post|Put|Archive|Remove)

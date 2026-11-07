@@ -12,6 +12,14 @@ function unsafe(code: string): void {
 	window.eval(code);
 	// ruleid: ts-no-eval
 	globalThis.eval(code);
+	// ruleid: ts-no-eval
+	self.eval(code);
+	// ruleid: ts-no-eval
+	window['eval'](code);
+	// ruleid: ts-no-eval
+	globalThis['eval'](code);
+	// ruleid: ts-no-eval
+	(0, eval)(code);
 }
 
 function safe(run: () => void): void {

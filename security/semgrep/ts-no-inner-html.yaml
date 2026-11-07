@@ -15,3 +15,12 @@ rules:
       - pattern: $EL.insertAdjacentHTML(...)
       - pattern: document.write(...)
       - pattern: document.writeln(...)
+      - pattern: '$EL["innerHTML"] = $X'
+      - pattern: '$EL["innerHTML"] += $X'
+      - pattern: '$EL["outerHTML"] = $X'
+      - pattern: '$EL["outerHTML"] += $X'
+      - pattern: 'Object.assign($EL, {..., innerHTML: $X, ...})'
+      - pattern: 'Object.assign($EL, {..., outerHTML: $X, ...})'
+      - pattern: $R.createContextualFragment(...)
+      - pattern: $EL.setHTMLUnsafe(...)
+      - pattern: $D.parseHTMLUnsafe(...)

@@ -83,36 +83,49 @@ rule names its sensor") applied to security.
 
 - `make sast` (`scripts/security/sast.sh`, in the gate) runs Semgrep with **only rules written in
   this repo** (decision D2): `security/semgrep/<rule id>.yaml`, one rule per file, each with an
-  annotated fixture in `security/semgrep/testdata/` (named `testdata` so the Go tools and linters skip the Go fixtures) (`ruleid:` lines the rule must report, `ok:` lines
-  it must not). The Semgrep Rules License forbids redistributing the registry rules, and fetching
+  annotated fixture in `security/semgrep/testdata/` (`ruleid:` lines the rule must report, `ok:`
+  lines it must not; the folder is named `testdata` so the Go tools and linters skip the Go
+  fixtures). The Semgrep Rules License forbids redistributing the registry rules, and fetching
   them at run time is unpinned, so none is used; a licensed ruleset is a later owner decision.
   Generic Go security stays with gosec in golangci-lint; Semgrep carries the repo-specific rules and
-  the TypeScript and Svelte ones.
+  the TypeScript and Svelte ones. Overlap with the existing linters is on purpose, as defence in
+  depth: `no-dynamic-sql` overlaps gosec G201 and G202, and `svelte-no-html-tag` overlaps eslint
+  `svelte/no-at-html-tags`. The linter stays the first sensor; the Semgrep rule is the second.
 - The rules, each with the threat it closes (`docs/threat-model.md`):
-  - `no-slog-of-request-body` (T22): a log call with `r.Body`, `r.Form`, a value `decodeJSON` or
-    `decodePatch` filled (or a field of it) or the error they return. It replaced the "log a code,
-    never the value" prose in `boundaries.md` for those values.
-  - `no-raw-error-to-client` (T23): `http.Error` or a write to the response with an error value in
-    it. The generated `internal/httpapi/gen` is skipped (its default handler is replaced).
+  - `no-slog-of-request-body` (T22): a `slog` or standard `log` call with `r.Body`, `r.Form`, a
+    value `decodeJSON`, `decodePatch` or `json.NewDecoder(r.Body).Decode` filled (or a field of it)
+    or the error they return, until that error variable is given another call's error. It replaced
+    the "log a code, never the value" prose in `boundaries.md` for those values.
+  - `no-raw-error-to-client` (T23): an `.Error()` call (any variable), or an error-named value,
+    in `http.Error`, a write to the response, `writeJSON`, `json.NewEncoder(w).Encode`,
+    `problem.Field` or a `problem.FieldError` message. The generated `internal/httpapi/gen` is
+    skipped (its default handler is replaced).
   - `no-dynamic-sql` (T27): a `fmt.Sprintf`, `+` or `String()` result reaching a query argument
     of `Exec`, `Query`, `QueryRow` or `Prepare`.
   - `non-get-handler-in-withtx` (T96): a handler on `*Server` whose name starts with a non-GET verb
     uses `s.pool`. Semgrep cannot see the HTTP method, so the rule lists the verbs of the non-GET
     `operationId`s; a new verb is added to the rule and its fixture. A non-GET handler that
-    reaches the pool another way is left to the reviewer.
-  - `ts-no-inner-html` (T28): `innerHTML`, `outerHTML`, `insertAdjacentHTML` and `document.write`
-    in TypeScript and JavaScript.
+    reaches the pool another way is left to the reviewer. The guard
+    `TestSemgrepWriteVerbsMatchTheSpec` (`internal/guards`) reads the rule's verb regex and the
+    non-GET `operationId`s of `api/openapi.yaml`, and fails on a non-GET one the regex does not
+    match or a GET one it does, so a new verb cannot slip by.
+  - `ts-no-inner-html` (T28): `innerHTML`, `outerHTML` (also by `el['innerHTML']` and
+    `Object.assign`), `insertAdjacentHTML`, `createContextualFragment`, `setHTMLUnsafe`,
+    `parseHTMLUnsafe` and `document.write` in TypeScript and JavaScript.
   - `svelte-no-html-tag` (T28): `{@html` in `.svelte` files. Semgrep 1.182 has no Svelte parser,
     so this rule reads the file as text (`generic`).
-  - `ts-no-eval` (T29): `eval`, `new Function`, `Function(...)` and a string handed to `setTimeout`
-    or `setInterval`.
+  - `ts-no-eval` (T29): `eval` (also `window.eval`, `self['eval']`, `(0, eval)(x)`), `new Function`,
+    `Function(...)` and a string handed to `setTimeout` or `setInterval`.
 - Each rule was seen red once on real code (a forbidden call added, `make sast` red, removed).
 - The wrapper runs `semgrep --test` first (every rule file needs a fixture with a `ruleid:` line,
   and every annotation must match), then the scan, both in the pinned image with `--network none`,
   `--metrics=off` and `--disable-version-check`. A scan that checked no Go, TypeScript or Svelte
   file, a report with errors and a tool error are red. `.semgrepignore` lists what is skipped: tests
   (`*_test.go`, `*.test.ts`, `web/tests/`) and the rule fixtures, which hold every forbidden call on
-  purpose.
+  purpose. Semgrep reads the files git lists, so a new file is scanned before it is added; in CI
+  all are tracked. Limit: Semgrep does not report a parse error in a Go file (it does in
+  TypeScript), so a Go file that does not parse is skipped silently; `make lint` and `make build`
+  catch it.
 - An allow-list entry for Semgrep (`{"tool": "semgrep", "id": "<rule id>"}`) is the plain rule id,
   which `sast.sh` turns into `--exclude-rule security.semgrep.<id>`; an id that is no rule of
   `security/semgrep` is refused. A rule cannot be narrowed to one file by the allow-list: narrow the
