@@ -5,6 +5,9 @@ ARG VERSION=dev
 
 FROM node:26.13.0-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS web
 ARG VERSION
+# pnpm is installed by exact version with no lockfile or integrity pin. Accepted (threat model T91):
+# the npm registry never lets a published version be replaced, so the pinned version is always the
+# same package.
 RUN npm install -g pnpm@12.16.1
 WORKDIR /src/web
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./

@@ -10,6 +10,10 @@ package guards
 // itself. Every Dockerfile in the repo is found by name (`Dockerfile`, `*.Dockerfile`), and every
 // workflow (`*.yml`, `*.yaml`). make check-pins keeps the copies of each pin equal; this guard keeps
 // each one a pin.
+//
+// Two gaps a digest does not close (security audit A9) are checked too: an `apk add` installs only
+// the packages in acceptedApk (a new tool comes from its own image by digest instead), and every Dependabot ecosystem that proposes versions waits
+// 14 days (cooldown default-days), the "at least two weeks old" rule.
 
 import (
 	"fmt"
@@ -38,6 +42,66 @@ var (
 	makeToolImage = regexp.MustCompile(`^\$\(call tool_image,([a-z0-9-]+)\)$`)
 	shellImageVar = regexp.MustCompile(`^[ \t]*(?:readonly[ \t]+|export[ \t]+)?([A-Z0-9_]+_IMAGE)=(\S*)`)
 )
+
+// acceptedApk are the Alpine packages a Dockerfile may `apk add` unpinned. The base image pins the
+// Alpine release by digest. bash and jq are accepted (threat model T91). restic is here only until
+// the owner decides (TASKS.md "Found, not fixed"): its official images fail make image-scan.
+var acceptedApk = []string{"bash", "jq", "restic"}
+
+// apkAdd matches an `apk add` and captures its arguments, up to the end of the shell command.
+var apkAdd = regexp.MustCompile(`apk[ \t]+add[ \t]+([^&;|\n]*)`)
+
+// checkApkAdds returns the packages a Dockerfile's `apk add` installs that acceptedApk does not hold.
+func checkApkAdds(name, src string) []string {
+	var problems []string
+	for i, line := range strings.Split(src, "\n") {
+		for _, m := range apkAdd.FindAllStringSubmatch(line, -1) {
+			for _, arg := range strings.Fields(m[1]) {
+				if !strings.HasPrefix(arg, "-") && !slices.Contains(acceptedApk, arg) {
+					problems = append(problems, fmt.Sprintf("%s:%d: apk add %s is not an accepted package (copy it from a digest-pinned image)", name, i+1, arg))
+				}
+			}
+		}
+	}
+	return problems
+}
+
+// cooldownEcosystems are the Dependabot ecosystems that must wait 14 days before a version.
+var cooldownEcosystems = []string{"gomod", "npm", "docker", "docker-compose"}
+
+// checkDependabotCooldown returns the dependabot.yml entries of cooldownEcosystems whose
+// cooldown default-days is under 14, and an ecosystem of that list with no entry at all.
+func checkDependabotCooldown(name string, src []byte) []string {
+	var doc struct {
+		Updates []struct {
+			Ecosystem string `yaml:"package-ecosystem"`
+			Directory string `yaml:"directory"`
+			Cooldown  struct {
+				DefaultDays int `yaml:"default-days"`
+			} `yaml:"cooldown"`
+		} `yaml:"updates"`
+	}
+	if err := yaml.Unmarshal(src, &doc); err != nil {
+		return []string{fmt.Sprintf("%s: not valid YAML: %v", name, err)}
+	}
+	var problems []string
+	seen := map[string]bool{}
+	for _, u := range doc.Updates {
+		if !slices.Contains(cooldownEcosystems, u.Ecosystem) {
+			continue
+		}
+		seen[u.Ecosystem] = true
+		if u.Cooldown.DefaultDays < 14 {
+			problems = append(problems, fmt.Sprintf("%s: %s %s: cooldown default-days is %d, want at least 14", name, u.Ecosystem, u.Directory, u.Cooldown.DefaultDays))
+		}
+	}
+	for _, e := range cooldownEcosystems {
+		if !seen[e] {
+			problems = append(problems, fmt.Sprintf("%s: no %s entry", name, e))
+		}
+	}
+	return problems
+}
 
 // ownImages are the compose images pinned by the release tag, not a digest (see the header).
 var ownImages = []string{"ghcr.io/jnaranj09/open-customer", "ghcr.io/jnaranj09/open-customer-backup"}
@@ -190,8 +254,13 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 	stages := map[string]string{"postgres": "postgres:18.6-alpine" + digest}
 	goodShell := "readonly COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.4" + digest + "\nOTHER=x\n"
 	goodCompose := "services:\n  db:\n    image: postgres:18.6-alpine" + digest + "\n  app:\n    image: ghcr.io/jnaranj09/open-customer:${APP_VERSION:?x}\n  backup:\n    image: ghcr.io/jnaranj09/open-customer-backup:${APP_VERSION:?x}\n"
+	goodApk := "RUN apk add --no-cache bash jq && rm -rf /x\nRUN apk add jq; echo restic\n"
+	goodDependabot := "updates:\n  - package-ecosystem: gomod\n    cooldown:\n      default-days: 14\n  - package-ecosystem: npm\n    cooldown:\n      default-days: 21\n" +
+		"  - package-ecosystem: docker\n    cooldown:\n      default-days: 14\n  - package-ecosystem: docker-compose\n    cooldown:\n      default-days: 14\n" +
+		"  - package-ecosystem: github-actions\n"
 	if got := slices.Concat(checkWorkflowPins("w", goodWorkflow), checkDockerfilePins("d", goodDockerfile), checkMakefilePins("m", goodMakefile, stages),
-		checkVarPins("s", goodShell, shellImageVar), checkComposePins("c", []byte(goodCompose))); len(got) != 0 {
+		checkVarPins("s", goodShell, shellImageVar), checkComposePins("c", []byte(goodCompose)), checkApkAdds("d", goodApk),
+		checkDependabotCooldown("b", []byte(goodDependabot))); len(got) != 0 {
 		t.Fatalf("pinned files are refused: %q", got)
 	}
 	bad := []struct {
@@ -220,6 +289,11 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 		{"compose own image with a fixed tag", checkComposePins("c", []byte("services:\n  app:\n    image: ghcr.io/jnaranj09/open-customer:1.0.0\n"))},
 		{"compose other image with the APP_VERSION tag", checkComposePins("c", []byte("services:\n  x:\n    image: ghcr.io/someone/else:${APP_VERSION:?x}\n"))},
 		{"compose not YAML", checkComposePins("c", []byte("services: ["))},
+		{"apk add of a package not accepted", checkApkAdds("d", "RUN apk add --no-cache bash curl jq\n")},
+		{"apk add of a package after a flag", checkApkAdds("d", "RUN apk add --virtual .x curl\n")},
+		{"gomod without a cooldown", checkDependabotCooldown("b", []byte("updates:\n  - package-ecosystem: gomod\n"))},
+		{"npm with a short cooldown", checkDependabotCooldown("b", []byte("updates:\n  - package-ecosystem: npm\n    cooldown:\n      default-days: 7\n"))},
+		{"dependabot not YAML", checkDependabotCooldown("b", []byte("updates: ["))},
 	}
 	for _, c := range bad {
 		if len(c.problems) == 0 {
@@ -256,7 +330,9 @@ func TestSupplyChainPins(t *testing.T) {
 	}
 	for _, rel := range dockerfiles {
 		problems = append(problems, checkDockerfilePins(rel, readText(t, rel))...)
+		problems = append(problems, checkApkAdds(rel, readText(t, rel))...)
 	}
+	problems = append(problems, checkDependabotCooldown(".github/dependabot.yml", []byte(readText(t, ".github/dependabot.yml")))...)
 	stages, dups := toolStages(readText(t, toolsDockerfile))
 	for _, d := range dups {
 		problems = append(problems, fmt.Sprintf("%s: stage %s is named twice", toolsDockerfile, d))

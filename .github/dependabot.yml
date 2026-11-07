@@ -12,18 +12,23 @@
 # current tag as a candidate and compares its digest). Each entry opens its own PRs, and none reads
 # ci.yml's service image or the gitleaks action's GITLEAKS_VERSION, so a PR that bumps one copy of a
 # pin make check-pins compares (postgres in four files, gitleaks in two) is red until the other
-# copies change in the same PR. The docker entries wait 14
-# days before proposing a new version or digest (the "at least two weeks old" rule).
+# copies change in the same PR. The gomod, npm, docker and docker-compose entries wait 14 days
+# before proposing a new version or digest (the "at least two weeks old" rule; guard
+# TestSupplyChainPins).
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
   - package-ecosystem: docker
     directory: /
     schedule:

@@ -215,3 +215,9 @@ own change.
   2000, a text attribute value 500), but the contract does not say so and no web input has a
   `maxlength`, so she learns the limit only from the 422. The owner picks the limits for the spec
   and the Spanish message the form shows.
+- restic in the backup image comes from `apk add` with no version pin (security audit A9). The
+  plan was to copy it from the official `restic/restic` image by digest, but both candidates fail
+  `make image-scan` on the binary (checked 2026-11-07: 0.18.1, built with Go 1.25.1, has 54 high or
+  critical findings; 0.19.1, built with Go 1.26.4, has 23 high), while Alpine's rebuilt package
+  passes. The owner picks: keep the Alpine package (accepted in T91), allow-list the restic
+  findings in `security/allow.json`, or build restic from source in a pinned Go stage.
