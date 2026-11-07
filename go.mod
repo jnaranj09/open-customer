@@ -6,7 +6,7 @@ toolchain go1.27.3
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
-	github.com/getkin/kin-openapi v0.149.0
+	github.com/getkin/kin-openapi v0.152.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/nyaruka/phonenumbers v1.8.1
