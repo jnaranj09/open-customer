@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # backup-now.sh [--tag pre-upgrade] (design doc item 86, the notes in "Backups"): one backup now,
 # through the backup service's `once` mode, after ensure_release_images (lib.sh) for .env's
-# version. It waits for the backup to finish (no polling, no timeout) and exits with its code. Runs from any folder: the stack is the one next to this script.
+# version. It waits for the backup to finish (no polling, no timeout) and exits with its code.
+# Runs from any folder: the stack is the one next to this script.
 set -euo pipefail
 
 usage() {

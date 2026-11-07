@@ -160,7 +160,7 @@ func checkComposeHardening(src []byte, writableRoot map[string]string, capAdd ma
 			bad(name, "maps host devices")
 		}
 		if !slices.Contains(composeLocalPullPolicies, s.PullPolicy) {
-			bad(name, "pull_policy %s pulls by itself; upgrade.sh's verified-digest check would not cover what up -d runs", s.PullPolicy)
+			bad(name, "pull_policy %s pulls by itself, past the scripts' verified-digest check", s.PullPolicy)
 		}
 		for _, v := range s.Volumes {
 			if strings.Contains(fmt.Sprint(v), "docker.sock") {

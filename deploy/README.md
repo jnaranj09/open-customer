@@ -275,22 +275,30 @@ install nothing) and accepts only a signature whose identity matches `SIGNER_IDE
 (this repository's `release.yml` on a `v*` tag) from `SIGNER_ISSUER` (GitHub Actions), made in
 `SIGNER_REPOSITORY` on a `SIGNER_TRIGGER` (tag push) event. If the check fails, the script stops
 before it pulls anything or takes a backup, `.env` stays as it was, and the message names the
-image. cosign reports the digest it verified; after the pull, each pulled image must carry exactly
-that digest, or the script stops before the backup with `.env` unchanged (the tag changed in the
-registry between the check and the pull: run the upgrade again, and look into the registry if it
-repeats). `compose.yaml` sets no `pull_policy`, so `docker compose up -d` runs those checked local
-images.
+image. Check, in this order: the PC can reach `ghcr.io` and Sigstore's public services
+(`sigstore.dev`); the version exists; for a fork, the lines below. There is no option to skip
+the check.
 
-**Local images are trusted.** An app or backup image already on this PC got there through a
-verified pull (`scripts/pull.sh`, `scripts/upgrade.sh`, `scripts/restore.sh`,
-`scripts/backup-now.sh`) or through a local build, so the scripts use it without the network: an
-offline restore of local images still works. Each script runs the check before a `docker compose`
+cosign reports the digest it verified; after the pull, each pulled image must carry exactly that
+digest, or the script stops before the backup with `.env` unchanged (the tag changed in the
+registry between the check and the pull: run the upgrade again, and look into the registry if it
+repeats). When the pull or this digest check fails, the script removes both images of that
+version from this PC, so nothing that failed stays under a release name. If it cannot remove one
+(a container still uses it), it says so with a `WARNING:` line and the `docker image rm` command
+to run by hand; do that before anything else. `compose.yaml` sets no `pull_policy`, so
+`docker compose up -d` runs the checked local images.
+
+**Local images are trusted.** The scripts use an app or backup image that is already on this PC
+under its release name (`ghcr.io/jnaranj09/open-customer:<version>`, and the `-backup` one)
+without the network, so an offline restore of local images still works. The scripts put an image
+under those names only through the verified pull (`scripts/pull.sh`, `scripts/upgrade.sh`,
+`scripts/restore.sh`, `scripts/backup-now.sh`), which removes what fails its check. `make image`
+tags `open-customer:<version>`, not the release names. Never pull or tag an image under a release
+name by hand: the scripts would trust it. Each script runs the check before a `docker compose`
 command that would pull a missing app or backup image (`restore.sh` for `.env`'s version and for
 the snapshot's version, before it stops anything; `backup-now.sh` for `.env`'s version). A
 `docker compose` command you type yourself has no check: on a PC that does not have the images of
-`APP_VERSION` yet, run `scripts/pull.sh` first. Check, in this order: the PC can reach `ghcr.io` and Sigstore's
-public services (`sigstore.dev`); the version exists; for a fork, the lines below. There is no
-option to skip the check.
+`APP_VERSION` yet, run `scripts/pull.sh` first.
 
 To check one image by hand, from this folder, with the same pin and identity the script uses (it
 prints the verified `<image>@<digest>` when the signature is good):
@@ -370,9 +378,9 @@ scripts/backup-now.sh
 3. Before it stops anything, it makes sure the app and backup images of the snapshot's version
    are on this PC, pulling them through the signature check when they are not (it does the same
    for `.env`'s version before it reads the snapshot); a failed check stops it with nothing
-   changed. Then it stops `app` and `backup`, recreates the database from the snapshot, replaces the media
-   folder (owned by `65532:65532`, so `app` can write photos), sets `APP_VERSION` in `.env` to the
-   snapshot's version, and runs `docker compose up -d`.
+   changed. Then it stops `app` and `backup`, recreates the database from the snapshot, replaces
+   the media folder (owned by `65532:65532`, so `app` can write photos), sets `APP_VERSION` in
+   `.env` to the snapshot's version, and runs `docker compose up -d`.
 
 After a rollback on a working install, the hourly check still sees the recent pre-upgrade backup
 and skips for up to 24 h. Run `scripts/backup-now.sh` after the restore to back up the restored

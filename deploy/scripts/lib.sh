@@ -1,7 +1,8 @@
 # Shared by the operator scripts (sourced, never run; design doc item 86): the checks on
-# deploy/.env and the one edit upgrade.sh and restore.sh make to it, and the signature check every
-# script runs before it brings a release image onto this PC (pull_verified, ensure_release_images). The caller has done `cd "$(dirname "$0")/.."` and defines die <message> (prints
-# one line and exits non-zero).
+# deploy/.env, the one edit upgrade.sh and restore.sh make to it, and the signature check every
+# script runs before it brings a release image onto this PC (pull_verified,
+# ensure_release_images). The caller has done `cd "$(dirname "$0")/.."` and defines die <message>
+# (prints one line and exits non-zero).
 # shellcheck shell=bash
 
 # The temp copy of .env (it holds every secret) is removed on any exit; bash also runs the EXIT
@@ -88,11 +89,13 @@ verify_image() {
   digests=$(grep -oE '"docker-manifest-digest": *"sha256:[0-9a-f]{64}"' <<<"$out" |
     grep -oE 'sha256:[0-9a-f]{64}' | sort -u || true)
   if [ -z "$digests" ]; then
-    echo "the signature check of $1 gave no verified digest; nothing was pulled" >&2
+    echo "the signature check of $1 gave no verified digest; nothing was pulled. Check that" \
+      "COSIGN_IMAGE in scripts/lib.sh is the one this release names; if it repeats, report it" >&2
     return 1
   fi
   if [ "$(wc -l <<<"$digests")" -ne 1 ]; then
-    echo "the signature check of $1 gave more than one digest; nothing was pulled" >&2
+    echo "the signature check of $1 gave more than one digest; nothing was pulled. Check that" \
+      "COSIGN_IMAGE in scripts/lib.sh is the one this release names; if it repeats, report it" >&2
     return 1
   fi
   echo "$repo@$digests"
@@ -110,21 +113,25 @@ pulled_is_verified() {
 # `APP_VERSION=<version> docker compose pull`, then pulled_is_verified for each, so the local
 # images are the digests whose signatures were checked; the tags are never resolved again.
 # compose.yaml sets no pull_policy (guard TestComposeHardening), so a later `up -d` or `run` uses
-# these local images. Returns non-zero with the reason on stderr; the caller says what is left as
-# it was.
+# these local images. After a failed pull or digest check it removes both tags
+# (untrust_release_images), so nothing that failed stays under a release name for
+# ensure_release_images to trust. Returns non-zero with the reason on stderr; the caller says what
+# is left as it was.
 pull_verified() {
-  local images image ref pair verified=()
+  local images image ref pair verified=() refs=()
   images=$(release_images "$1") || {
     echo "compose.yaml must name the app image and its -backup image with the tag \${APP_VERSION}" >&2
     return 1
   }
-  # The two refs hold no spaces (release_images builds them from compose.yaml's image: lines).
-  for image in $images; do
+  mapfile -t refs <<<"$images"
+  for image in "${refs[@]}"; do
     ref=$(verify_image "$image") || return 1
     verified+=("$image $ref")
   done
   APP_VERSION=$1 docker compose pull || {
-    echo "docker compose pull of $1 failed" >&2
+    echo "docker compose pull of $1 failed; check the network and the registry, then run the" \
+      "command again" >&2
+    untrust_release_images "${refs[@]}"
     return 1
   }
   for pair in "${verified[@]}"; do
@@ -134,15 +141,33 @@ pull_verified() {
       echo "the pulled $image is not the digest whose signature was verified ($ref): the" \
         "registry tag changed after the signature check. Run the command again; if it repeats," \
         "look into the registry" >&2
+      untrust_release_images "${refs[@]}"
       return 1
     }
   done
 }
 
+# untrust_release_images <repository:tag>...: removes each of these tags that is on this PC, after
+# a pull_verified that failed, so ensure_release_images never trusts what failed the check. A tag
+# that cannot be removed (a container still uses its image) gets a loud message with the command
+# to run; the caller still fails.
+untrust_release_images() {
+  local image
+  for image in "$@"; do
+    docker image inspect "$image" >/dev/null 2>&1 || continue
+    docker image rm "$image" >/dev/null 2>&1 || {
+      echo "WARNING: cannot remove $image, which did not pass the signature check (is a" \
+        "container using it?). Until it is gone the scripts trust it as local: stop the" \
+        "container that uses it, run 'docker image rm $image', then run the command again" >&2
+    }
+  done
+}
+
 # ensure_release_images <version>: exit 0 when the app and backup images at <version> are on this
-# PC (a local image is trusted: it came through pull_verified or a local build), touching no
-# network; otherwise pull_verified <version>. Every script runs it before a compose command that
-# would otherwise pull a missing release image unchecked.
+# PC, touching no network; otherwise pull_verified <version>. A local image under a release name is
+# trusted: the scripts put one there only through pull_verified, which removes what fails its
+# check (make image tags open-customer:<version>, not the release names). Every script runs it
+# before a compose command that would otherwise pull a missing release image unchecked.
 ensure_release_images() {
   local images image
   images=$(release_images "$1") || {

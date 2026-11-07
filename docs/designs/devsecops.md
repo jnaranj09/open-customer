@@ -199,14 +199,16 @@ rule names its sensor") applied to security.
   pulls by itself (guard `TestComposeHardening`), so `up -d` runs the checked local images. The
   same steps are `pull_verified <version>` in `lib.sh`, the one way a script brings release images
   onto the PC: `upgrade.sh` (step 2), `deploy/scripts/pull.sh` (the first install, before `up -d`),
-  and, through `ensure_release_images` (no network when both images are local; a local image came
-  through `pull_verified` or a local build), `restore.sh` (for `.env`'s version before it reads
-  the snapshot, and for the snapshot's version before it stops anything) and `backup-now.sh`. A
-  fork
-  changes `SIGNER_IDENTITY_REGEXP` and `SIGNER_REPOSITORY` (`deploy/README.md` section 9). `COSIGN_IMAGE` lives in
-  `lib.sh`, because deployers have `deploy/` and not the Makefile; `make check-pins` keeps its
-  version equal to `cosign-release` in the release workflow, and Dependabot reads neither, so a
-  cosign bump is made by hand, both copies in one commit.
+  and, through `ensure_release_images` (no network when both images are local), `restore.sh` (for
+  `.env`'s version before it reads the snapshot, and for the snapshot's version before it stops
+  anything) and `backup-now.sh`. A local image under a release name is trusted: the scripts put
+  one there only through `pull_verified`, which removes both tags when its pull or digest check
+  fails (a tag it cannot remove gets a loud message with the `docker image rm` command); `make
+  image` tags `open-customer:<version>`, not the release names. A fork changes
+  `SIGNER_IDENTITY_REGEXP` and `SIGNER_REPOSITORY` (`deploy/README.md` section 9). `COSIGN_IMAGE`
+  lives in `lib.sh`, because deployers have `deploy/` and not the Makefile; `make check-pins` keeps
+  its version equal to `cosign-release` in the release workflow, and Dependabot reads neither, so
+  a cosign bump is made by hand, both copies in one commit.
 
 ### 5. Authorization and business-rule tests
 

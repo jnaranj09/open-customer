@@ -14,7 +14,10 @@
 #   FAKE_PULLED_DIGEST  the digest `image inspect --format <RepoDigests> <repo>:<tag>` prints as
 #                       <repo>@<digest> (default: the same made-up digest of <repo>)
 #   FAKE_MISSING_IMAGES space-separated <repository>:<tag> refs a plain `image inspect <ref>` does
-#                       not find (exit 1), as for an image that is not on this PC
+#                       not find (exit 1), as for an image that is not on this PC. The fake
+#                       keeps this as state in $FAKE_LOG.absent (made from FAKE_MISSING_IMAGES
+#                       on its first call, so it lasts across runs of one test): `image rm <ref>`
+#                       adds <ref>, and a passing `compose pull` empties it (all images local)
 # The made-up digest of a repository is sha256 of "made-up <repository>".
 # Only `compose config is valid` uses the real docker, and it starts nothing. The real deploy/.env
 # is never read or copied. All data here is made up.
@@ -39,6 +42,11 @@ echo "$* | APP_VERSION=${APP_VERSION-unset}" >>"$FAKE_LOG"
 if [ -n "${FAKE_FAIL_ON:-}" ]; then
   case "$*" in *"$FAKE_FAIL_ON"*) exit "${FAKE_FAIL_CODE:-1}" ;; esac
 fi
+# The refs that are not local (see FAKE_MISSING_IMAGES).
+absent=$FAKE_LOG.absent
+if [ ! -f "$absent" ]; then
+  for ref in ${FAKE_MISSING_IMAGES:-}; do echo "$ref"; done >"$absent"
+fi
 # made_up_digest <repository>
 made_up_digest() {
   echo "sha256:$(printf 'made-up %s\n' "$1" | sha256sum | cut -d' ' -f1)"
@@ -58,8 +66,10 @@ case "$*" in
     fi
     ;;
   "image inspect "[!-]*)
-    case " ${FAKE_MISSING_IMAGES:-} " in *" $3 "*) exit 1 ;; esac
+    grep -qxF -- "$3" "$absent" && exit 1
     ;;
+  "image rm "*) echo "$3" >>"$absent" ;;
+  "compose pull") : >"$absent" ;;
   "image inspect --format "*RepoDigests*)
     ref=${*: -1}
     echo "${ref%:*}@${FAKE_PULLED_DIGEST:-$(made_up_digest "${ref%:*}")}"
@@ -500,6 +510,41 @@ test_pull_other_version_than_env() {
   grep -q "APP_VERSION in .env is '1.0.0'" "$W/err" || fail "the message does not name .env's version: $(cat "$W/err")"
 }
 
+# A failed digest check removes both tags, so the next run cannot trust the image as local.
+test_pulled_digest_mismatch_untags_and_next_run_verifies() {
+  setup
+  local rc=0 first
+  FAKE_MISSING_IMAGES=ghcr.io/jnaranj09/open-customer-backup:1.0.0 FAKE_PULLED_DIGEST=$other_digest \
+    run backup-now.sh >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code of the first run" 0 "$rc"
+  has_call "image rm ghcr.io/jnaranj09/open-customer:1.0.0" || fail "the app tag was not removed: $(calls)"
+  has_call "image rm ghcr.io/jnaranj09/open-customer-backup:1.0.0" || fail "the backup tag was not removed: $(calls)"
+  no_call "backup once"
+  first=$(wc -l <"$LOG")
+  run backup-now.sh >/dev/null 2>&1 || fail "the second run failed: $(calls)"
+  tail -n +"$((first + 1))" "$LOG" | grep -qF "verify ghcr.io/jnaranj09/open-customer-backup:1.0.0 " ||
+    fail "the second run trusted the image that failed the check: $(tail -n +"$((first + 1))" "$LOG")"
+}
+
+test_failed_pull_untags() {
+  setup
+  local rc=0
+  FAKE_FAIL_ON="compose pull" run pull.sh >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  has_call "image rm ghcr.io/jnaranj09/open-customer:1.0.0" || fail "the app tag was not removed: $(calls)"
+  has_call "image rm ghcr.io/jnaranj09/open-customer-backup:1.0.0" || fail "the backup tag was not removed: $(calls)"
+  grep -q "check the network and the registry" "$W/err" || fail "the message names no next step: $(cat "$W/err")"
+}
+
+test_untag_failure_is_loud() {
+  setup
+  local rc=0
+  FAKE_PULLED_DIGEST=$other_digest FAKE_FAIL_ON="image rm" run pull.sh >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  grep -qF "cannot remove ghcr.io/jnaranj09/open-customer:1.0.0" "$W/err" || fail "no loud message: $(cat "$W/err")"
+  grep -qF "docker image rm ghcr.io/jnaranj09/open-customer:1.0.0" "$W/err" || fail "the message does not name the command: $(cat "$W/err")"
+}
+
 test_restore_stops_on_no() {
   setup
   local before rc=0
@@ -614,6 +659,9 @@ t "restore verifies a missing image of the current version before snapshot-info"
 t "pull verifies both images, pulls, then checks the digests" test_pull_verifies_then_pulls
 t "pull stops when a signature check fails" test_pull_verify_fails
 t "pull refuses a version other than .env's" test_pull_other_version_than_env
+t "a pulled digest mismatch removes both tags and the next run verifies again" test_pulled_digest_mismatch_untags_and_next_run_verifies
+t "a failed pull removes both tags" test_failed_pull_untags
+t "a tag that cannot be removed is reported loudly with the command" test_untag_failure_is_loud
 t "restore refuses a snapshot without an app version" test_restore_snapshot_without_version
 t "compose config is valid" test_compose_config
 finish
