@@ -28,7 +28,7 @@ require_host_tools() {
     echo "$name needs bash 4 or newer on this machine (install it, then run again)" >&2
     exit 2
   fi
-  for tool in docker jq awk sed grep sort comm paste tee tr head cut sha256sum tar mktemp id date dirname; do
+  for tool in docker jq awk sed grep sort comm paste tee tr head cut sha256sum tar mktemp id date dirname ls; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       echo "$name needs $tool on this machine (install it, then run again)" >&2
       exit 2
