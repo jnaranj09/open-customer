@@ -229,11 +229,15 @@ own change.
   its copy of `gosu`. On or before 2027-05-06: bump the pinned Postgres image if it ships a rebuilt
   `gosu` and delete the entries; otherwise ask the owner for a new date. An expired entry turns the
   release and the weekly rescan red again.
-- `cloudflare/cloudflared:2026.10.7` has CVE-2026-78661 (golang.org/x/net, fixed in 0.62.0); found
-  by `make image-scan`. Allow-listed until 2027-02-05 (owner decision 2026-11-07), scoped to
-  `usr/local/bin/cloudflared`: 2026.10.7 is the newest tag and no fixed tag exists. Delete the entry
-  when Dependabot brings a fixed tag; if none exists by 2027-02-05, ask the owner for a new date. An
-  expired entry turns the release and the weekly rescan red again.
+- `cloudflare/cloudflared:2026.10.7` has three findings, found by `make image-scan`, allow-listed
+  until 2027-02-05 (owner decisions 2026-11-07): CVE-2026-78661 (golang.org/x/net, fixed in
+  0.62.0), scoped to `usr/local/bin/cloudflared`; and CVE-2026-76844 and CVE-2026-85091 (HIGH, in
+  the Debian `zlib1g` package), scoped to the image (`@image:cloudflare/cloudflared`), so the same
+  CVEs in our own images still block. cloudflared is a Go binary and Go ships its own
+  `compress/zlib`, so it most likely does not use the system zlib (not checked). 2026.10.7 is the
+  newest tag and no rebuilt one exists. Delete the three entries when Dependabot brings a fixed or
+  rebuilt tag; if none exists by 2027-02-05, ask the owner for a new date. An expired entry turns
+  the release and the weekly rescan red again.
 - `make dast` loads 6519 Nuclei templates (v10.5.1) and 262 of them do not run: Nuclei reports
   them as templates with a runtime error, and dast.sh prints "262 templates did not run" but stays
   green (seen 2026-11-07). Not investigated: which templates, and whether any of them would apply

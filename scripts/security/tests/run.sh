@@ -1922,6 +1922,59 @@ test_scoped_trivy_id_malformed_refused() {
   done
 }
 
+# The owner-approved shape for an OS package: its Target is "<tar> (<os>)", which a path cannot name,
+# so the id names the image's repository instead.
+os_vuln='CVE-2099-0002@cloudflared.tar (debian 13.7)'
+image_id=CVE-2099-0002@image:cloudflare/cloudflared
+
+test_image_scoped_trivy_id_ignores_that_image() {
+  setup
+  allow_with trivy "$image_id"
+  FAKE_VULNS="cloudflared=$os_vuln" scan release ||
+    fail "a finding the image-scoped id allows in that image was red: $(cat "$W/out")"
+  assert_eq "ignore file of the allowed image" "$(printf 'vulnerabilities:\n  - id: CVE-2099-0002')" "$(cat "$LOG.ignore")"
+}
+
+test_image_scoped_trivy_id_other_image_red() {
+  setup
+  allow_with trivy "$image_id"
+  # The same CVE in the other three images stays red; the repository must match exactly.
+  FAKE_VULNS="postgres=CVE-2099-0002@postgres.tar app=CVE-2099-0002@open-customer backup=CVE-2099-0002@open-customer-backup" \
+    scan release && fail "the same CVE in other images exited 0"
+  out_has "image-scan: open-customer:1.2.3: high or critical findings with a fix"
+  out_has "image-scan: open-customer-backup:1.2.3: high or critical findings with a fix"
+  out_has "image-scan: postgres:18.6-alpine: high or critical findings with a fix"
+  out_has "image-scan: 3 of 4 images red"
+  setup
+  allow_with trivy CVE-2099-0002@image:cloudflare
+  FAKE_VULNS="cloudflared=$os_vuln" scan release && fail "a repository prefix ignored the CVE in cloudflare/cloudflared"
+  out_has "$cloudflared: high or critical findings with a fix"
+}
+
+test_deps_scan_skips_image_scoped_id() {
+  setup
+  allow_with trivy "$image_id"
+  deps_scan || fail "a clean deps scan was red: $(cat "$W/out")"
+  assert_eq "deps ignore file" "vulnerabilities: []" "$(cat "$LOG.depsignore")"
+}
+
+test_image_scoped_trivy_id_malformed_refused() {
+  local id
+  for id in 'CVE-2099-0002@image:' 'CVE-2099-0002@image:cloudflare/cloudflared:2026.10.7' \
+    'CVE-2099-0002@image:cloudflare/cloudflared@sha256:abc' 'CVE-2099-0002@image:Cloudflare/cloudflared' \
+    'CVE-2099-0002@image:cloudflare/*' 'CVE-2099-0002@image:cloudflare/cloud"flared' \
+    'CVE-2099-0002@image:cloudflare/cloud flared'; do
+    setup
+    allow_with trivy "$id"
+    scan release && fail "the trivy id '$id' was accepted by image-scan"
+    out_has "security/allow.json has a trivy id whose image repository is not lowercase"
+    assert_eq "trivy runs with the bad id '$id'" 0 "$(count_calls 'trivy-test:1')"
+    deps_scan && fail "the trivy id '$id' was accepted by deps-scan"
+    out_has "security/allow.json has a trivy id whose image repository is not lowercase"
+    assert_eq "deps trivy runs with the bad id '$id'" 0 "$(count_calls 'deps-test:1')"
+  done
+}
+
 test_deps_scoped_id_ignores_nothing_in_manifests() {
   setup
   allow_with trivy "$gosu_vuln"
@@ -2166,6 +2219,10 @@ t "the same CVE in another target stays red under a scoped trivy id" test_scoped
 t "a plain trivy id still ignores the CVE in every target" test_scoped_trivy_id_plain_id_ignores_everywhere
 t "a malformed scoped trivy id is refused by image-scan and deps-scan" test_scoped_trivy_id_malformed_refused
 t "deps-scan: a scoped trivy id ignores nothing in the manifests" test_deps_scoped_id_ignores_nothing_in_manifests
+t "an image-scoped trivy id ignores the CVE in that image" test_image_scoped_trivy_id_ignores_that_image
+t "the same CVE in another image stays red under an image-scoped trivy id" test_image_scoped_trivy_id_other_image_red
+t "deps-scan: an image-scoped trivy id is skipped" test_deps_scan_skips_image_scoped_id
+t "a malformed image-scoped trivy id is refused by image-scan and deps-scan" test_image_scoped_trivy_id_malformed_refused
 t "deps-scan: bad arguments, no TRIVY_IMAGE or a missing manifest" test_deps_bad_input
 t "csp-check: a built page with a good policy passes" test_csp_good_page_passes
 t "csp-check: a page with no CSP meta (the web-stub) or no page is red" test_csp_missing_meta_red
