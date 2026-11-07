@@ -166,7 +166,10 @@ rule names its sensor") applied to security.
 
 - On every push: build the app and backup images and scan them, plus the pinned `postgres` and
   `cloudflared` images from `deploy/compose.yaml`.
-- In the release workflow: scan before push; a blocking finding stops the release.
+- In the release workflow: the first step, `scripts/security/release-on-main.sh`, refuses a tag
+  whose commit is not an ancestor of `main` (fail closed: a missing SHA, a shallow clone and a
+  failed fetch are red; `make test-sec` covers it). An ancestor of `main` has not necessarily
+  passed CI. Then scan before push; a blocking finding stops the release.
 - Weekly scheduled CI run: scan the images of the latest release tag only (deployers upgrade to the
   latest). A finding that meets the blocking policy fails the run, and GitHub emails the owner about
   a failed scheduled run with no setup. Until the first `v*` tag exists, the job writes "NOT RUN: no
@@ -337,11 +340,12 @@ rule names its sensor") applied to security.
 - **"Blocks a merge" is enforced by GitHub (owner's decision):** `main` gets branch protection (or
   a ruleset) that requires a pull request and every blocking CI job as a required status check,
   and forbids force-push and deletion. Changes reach `main` only through a green PR; no local merge
-  and push to `main`. This is a GitHub setting, not a repo file: `docs/threat-model.md` "GitHub settings" holds the
-  exact `gh api` command, with the tag ruleset for `v*` and the public ghcr packages, and the owner
-  applies them after the merge (a required check must have run first). The threat model lists
-  them as `manual:` rows, "re-checked by hand after any repo settings change".
-  The job names in CI stay stable, because a renamed required check silently blocks every PR.
+  and push to `main`. This is a GitHub setting, not a repo file: `docs/threat-model.md` "GitHub
+  settings" holds the exact `gh api` command, with the tag ruleset for `v*` and the public ghcr packages. The ruleset
+  only limits who can tag (the owner is on its bypass list); the check that the tagged commit is on
+  `main` is `release-on-main.sh` (section 4). The owner applies the settings after the merge (a
+  required check must have run first). The threat model lists them as `manual:` rows, "re-checked
+  by hand after any repo settings change". The job names in CI stay stable, because a renamed required check silently blocks every PR.
 
 ## Where each check runs
 

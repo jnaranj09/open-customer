@@ -124,8 +124,8 @@ dashboard and settings (Cloudflare or any other).
 | T76 | the build | A GitHub Action is swapped under its tag, or a workflow has too-wide permissions or script injection | .github/workflows | test:TestSupplyChainPins; make:config-scan; file:scripts/security/tests/run.sh; ci:ci.yml/gate |
 | T77 | the build | A secret is committed to the repo | git history | make:secrets; ci:ci.yml/gate |
 | T94 | the build | A token for an outside design tool is committed in the design file | design/soft-glass.pen | accepted: Pencil's fileToken is likely a document id, and even if it is a token it reaches only this design, which is public in this repo and holds no PII, and the value is already in public history, which is never rewritten (owner decision, 2026-11-06); file:.gitleaksignore |
-| T78 | the build | A release ships images nobody can verify, with no list of what is in them, or a v* tag on an unreviewed commit gives a release that verifies | release workflow | ci:release.yml/images; file:scripts/security/release-sign.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: the first v* tag's release run proves the keyless signature and the SBOM attestation (no OIDC token outside Actions), then once per release when upgrade.sh verifies it; manual: a tag ruleset limits who can create v* tags to the repository admin, who tags only reviewed commits on main (set once in GitHub settings, re-checked after any settings change, commands in GitHub settings); manual: ghcr packages open-customer and open-customer-backup set to public after the first release, so a deployer pulls and verifies without logging in |
-| T79 | the build | A change reaches main without a green CI run, or a v* tag is pushed on a commit that is not on main | GitHub settings | manual: branch protection on main, re-checked by hand after any repo settings change; manual: tag ruleset limiting v* tags to the repository admin (reviewed commits on main only), set once in GitHub settings, re-checked after any settings change |
+| T78 | the build | A release ships images nobody can verify, with no list of what is in them, or a v* tag on a commit that is not on main gives a release that verifies | release workflow | ci:release.yml/images; file:scripts/security/release-sign.sh; file:scripts/security/release-on-main.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: the first v* tag's release run proves the keyless signature and the SBOM attestation (no OIDC token outside Actions), then once per release when upgrade.sh verifies it; manual: ghcr packages open-customer and open-customer-backup set to public after the first release, so a deployer pulls and verifies without logging in |
+| T79 | the build | A change reaches main without a green CI run, or a v* tag is pushed on a commit that is not on main | GitHub settings, release workflow | ci:release.yml/images; file:scripts/security/release-on-main.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: branch protection on main, re-checked by hand after any repo settings change; manual: tag ruleset limiting who creates, moves or deletes v* tags, defence in depth only because the owner is on its bypass list, set once in GitHub settings and re-checked after any settings change |
 | T80 | the host | The OS, the disk, the Docker daemon, deploy/.env at rest and docker logs (which hold the setup link) | the host machine | out of scope: the deployer who owns the host |
 | T81 | the proxy | The front proxy or tunnel settings (cache rules, HSTS, bot rules) | the proxy dashboard | out of scope: the deployer, in their proxy or tunnel provider's dashboard |
 | T82 | client data | Cloudflare sees decrypted traffic at its edge, because TLS ends there | the tunnel | accepted: accepted for the reference install and written in deploy/README.md (release-1 Accepted risks) |
@@ -168,14 +168,22 @@ Confirm: `gh api repos/jnaranj09/open-customer/branches/main/protection`.
 
 ### Tag ruleset for `v*`
 
-A `v*` tag makes a release whose signature verifies, so only the repository admin may create,
-move or delete one. A ruleset cannot test that the tagged commit is on `main`; the admin tags only
-a commit that merged through the protected `main`. The body follows GitHub's documented create-ruleset
-shape (`POST repos/{owner}/{repo}/rulesets`, `target: tag`, rule types `creation`, `update`,
-`deletion`). The `actor_id` 5 for the Admin role is from memory, not checked against the docs: if the
-call is refused or the Admin role is not 5, use the settings page instead (Settings, Rules,
-Rulesets, New tag ruleset, target `v*`, restrict creations, updates and deletions, bypass list:
-Repository admin role).
+Two controls guard a `v*` tag, and they do different things:
+
+- The release workflow enforces the commit. Its first step, `scripts/security/release-on-main.sh`,
+  fails the release unless the tagged commit is an ancestor of `main`, before anything is built,
+  scanned or pushed. It fails closed (a missing SHA, a shallow clone and a failed fetch are red).
+  Its limit: an ancestor of `main` has not necessarily passed CI.
+- The ruleset below limits who can create, move or delete a `v*` tag. The owner is on its bypass
+  list, so it does not stop her; it is defence in depth against anyone else with push access.
+
+The body follows GitHub's documented create-ruleset shape (`POST repos/{owner}/{repo}/rulesets`,
+`target: tag`, rule types `creation`, `deletion` and `non_fast_forward`). The docs list no
+`update` parameter for tags (`update_allows_fetch_and_merge` is described for branches), so the
+`update` rule is left out. Not confirmed against the docs: that `non_fast_forward` applies to tags,
+and the Admin role `actor_id` 5 (from memory). If the call is refused, use the settings page
+instead (Settings, Rules, Rulesets, New tag ruleset, target `v*`, restrict creations and
+deletions, block force pushes, bypass list: Repository admin role).
 
 ```sh
 gh api -X POST repos/jnaranj09/open-customer/rulesets --input - <<'JSON'
@@ -185,11 +193,7 @@ gh api -X POST repos/jnaranj09/open-customer/rulesets --input - <<'JSON'
   "enforcement": "active",
   "bypass_actors": [{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}],
   "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
-  "rules": [
-    {"type": "creation"},
-    {"type": "update", "parameters": {"update_allows_fetch_and_merge": false}},
-    {"type": "deletion"}
-  ]
+  "rules": [{"type": "creation"}, {"type": "deletion"}, {"type": "non_fast_forward"}]
 }
 JSON
 ```

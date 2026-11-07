@@ -1587,6 +1587,75 @@ test_pins_cosign_missing_red() {
   out_has "deploy/scripts/lib.sh has no COSIGN_IMAGE"
 }
 
+# release-on-main.sh: a throwaway repo with a bare "origin" and a main branch. $W/repo is the
+# checkout the script runs in. git_q runs git with no user config. The commit ids are in $c_main
+# (on main) and $c_side (only on a side branch).
+git_q() {
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null git -c user.name=made-up -c user.email=made-up@example.invalid \
+    -c init.defaultBranch=main -c protocol.file.allow=always "$@"
+}
+
+main_repo() {
+  setup
+  git_q init -q --bare "$W/origin.git"
+  git_q init -q "$W/repo"
+  (
+    cd "$W/repo" || exit 1
+    git_q remote add origin "$W/origin.git"
+    echo one >f
+    git_q add f
+    git_q commit -q -m one
+    git_q push -q origin main
+    git_q checkout -q -b side
+    echo two >g
+    git_q add g
+    git_q commit -q -m two
+  )
+  c_main=$(git_q -C "$W/repo" rev-parse main)
+  c_side=$(git_q -C "$W/repo" rev-parse side)
+}
+
+# on_main <sha>: runs the script in the checkout; output goes to $W/out.
+on_main() {
+  (cd "$W/repo" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GITHUB_SHA=$1 \
+    "$W/scripts/security/release-on-main.sh") >"$W/out" 2>&1
+}
+
+test_release_on_main_commit_on_main_passes() {
+  main_repo
+  on_main "$c_main" || fail "a commit on main was refused: $(cat "$W/out")"
+}
+
+test_release_on_main_side_branch_red() {
+  main_repo
+  on_main "$c_side" && fail "a commit on a side branch passed"
+  out_has "is not an ancestor of main"
+}
+
+test_release_on_main_fetch_fails_red() {
+  main_repo
+  git_q -C "$W/repo" remote set-url origin "$W/gone.git"
+  on_main "$c_main" && fail "a failed fetch passed"
+  out_has "cannot fetch main"
+}
+
+test_release_on_main_missing_sha_red() {
+  main_repo
+  on_main "" && fail "an empty GITHUB_SHA passed"
+  out_has "GITHUB_SHA is missing"
+  (cd "$W/repo" && env -u GITHUB_SHA "$W/scripts/security/release-on-main.sh") >"$W/out" 2>&1 && fail "no GITHUB_SHA passed"
+  out_has "GITHUB_SHA is missing"
+  on_main "0000000000000000000000000000000000000000" && fail "an unknown commit passed"
+  out_has "is not a commit in this clone"
+}
+
+test_release_on_main_shallow_clone_red() {
+  main_repo
+  git_q clone -q --depth 1 "file://$W/origin.git" "$W/shallow"
+  (cd "$W/shallow" && GITHUB_SHA=$c_main "$W/scripts/security/release-on-main.sh") >"$W/out" 2>&1 && fail "a shallow clone passed"
+  out_has "the clone is shallow"
+}
+
 t "an unknown MODE exits 2" test_unknown_mode
 t "push mode: a clean scan covers the four images" test_push_clean_scans_four_images
 t "push mode: an app image finding is red" test_push_app_finding_red
@@ -1700,4 +1769,9 @@ t "check-pins: a postgres copy without its digest is red" test_pins_postgres_dig
 t "check-pins: a PG_IMAGE without a digest is red" test_pins_pg_image_without_digest_red
 t "check-pins: a cosign version that drifts between release.yml and lib.sh is red" test_pins_cosign_drift_red
 t "check-pins: a lib.sh without COSIGN_IMAGE is red" test_pins_cosign_missing_red
+t "release-on-main: a commit on main passes" test_release_on_main_commit_on_main_passes
+t "release-on-main: a commit only on a side branch is red" test_release_on_main_side_branch_red
+t "release-on-main: a failed fetch of main is red" test_release_on_main_fetch_fails_red
+t "release-on-main: a missing or unknown GITHUB_SHA is red" test_release_on_main_missing_sha_red
+t "release-on-main: a shallow clone is red" test_release_on_main_shallow_clone_red
 finish

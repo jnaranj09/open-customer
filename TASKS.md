@@ -172,9 +172,10 @@ once by breaking what they protect, then restored.
 - **Security pipeline exit** (2026-11-07), branch devsecops (`docs/designs/devsecops.md`, built).
   CI run IDs for `gate` and `security`: pending, the owner pushes. Ran locally: `make check-pins
   lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`
-  and `make image image-scan dast`, each exits 0 (outputs in the task 10 report). Every new guard
-  and wrapper was seen red once by breaking what it protects (per task). `docs/threat-model.md` has
-  no `gap:` row and its guard refuses the word (seen red on a probe). NOT RUN: keyless signing, and
+  and `make image image-scan dast`: all 16 targets (the 13 of the gate list plus those 3) exit 0.
+  Every new guard and wrapper was seen red once by breaking what it protects (per task). `docs/threat-model.md` has
+  no `gap:` row and its guard refuses the word (seen red on a probe). NOT RUN: `release-on-main.sh` inside a real
+  Actions checkout (tested only against throwaway repos); keyless signing, and
   `upgrade.sh`, `restore.sh` and `pull.sh` verification against a real release (all need a `v*`
   tag); `make scan-live` against a real deployment (the deployer's own); the weekly workflow's
   first scheduled run, its fuzz job included; `make e2e` (CI runs it); Dependabot digest-only
