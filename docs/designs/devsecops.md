@@ -265,21 +265,28 @@ rule names its sensor") applied to security.
 
 ### 9. Live scan (`make scan-live URL=…`)
 
-- Runs on the deployer's own machine against any deployment, behind any proxy, with only Docker.
-  Uses no key and never logs in. `scripts/security/scan-live.sh`, shared with `dast.sh` through
+- Runs on the deployer's own machine against any deployment, behind any proxy. The tools run in
+  Docker; the host needs Docker, the repository checkout, `make`, bash 4, `jq` and coreutils
+  (checked first: a missing one exits 2 naming it). Uses no key and never logs in. `scripts/security/scan-live.sh`, shared with `dast.sh` through
   `scripts/security/lib.sh` (the ZAP rules file, the ZAP report checks, the pinned Nuclei templates
   and the Nuclei run).
 - A `curl` header check (the fixed headers of section 6 with the app's exact values, plus HSTS on
   https; a missing header or a wrong value is a finding), the ZAP baseline (passive), and Nuclei
-  without the intrusive, dos and fuzz tags (its `ssl` templates cover the TLS of an https URL).
-- Exit 0 clean, 1 on any finding or a tool that failed to run, 2 on bad arguments. The report goes
-  to `security/reports/scan-live-<UTC timestamp>/` (git-ignored). `deploy/README.md` documents the
-  exit code, the report and how to schedule it with cron.
+  (non-intrusive but active probes, default-credential checks on other products' paths among them;
+  no intrusive, dos or fuzz templates; its `ssl` templates cover the TLS of an https URL).
+- The script exits 0 clean, 1 on any finding or a tool that failed to run, 2 on bad arguments.
+  Through `make` any failure is exit 2 and the script's code is in make's `Error N` line, so a
+  schedule reads non-zero as "not clean". The report goes to
+  `security/reports/scan-live-<UTC timestamp>/` (git-ignored); an existing non-empty `REPORT_DIR` is
+  refused, never cleared. `deploy/README.md` documents the exit code, the report and how to
+  schedule it with cron.
 - Never runs in GitHub: it exits 2 when `GITHUB_ACTIONS=true`, and no workflow calls it.
 - Its allow-list is a local file the deployer owns, kept out of git (`deploy/.scan-live.allow`,
   git-ignored), because what a proxy adds or strips differs per deployment. My call. Each line is
   `<tool> <id> # <reason>` for `zap` (a rule number, or `<rule>@<url regex>`), `nuclei` (a template
-  id) or `header` (a header name); a malformed line is refused with its line number. There is no
+  id) or `header` (a header name); a malformed line is refused with its line number, and a scoped
+  `zap` regex gets the checks of `TestSecurityAllowList` (ends in `$`, compiles, matches none of the
+  probe URLs on localhost or on the scanned origin). There is no
   expiry date: the file is the deployer's own, not the repo's.
 - The app answers plain http only on localhost, so the URL must be https. `NETWORK=` (a Docker
   network or `container:<name>`) is a test hook: the tool containers join it and `http://localhost`

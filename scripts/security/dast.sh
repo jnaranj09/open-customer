@@ -35,6 +35,7 @@ if [ "$#" -ne 0 ]; then
 fi
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib.sh" dast
+require_host_tools
 require_env IMAGE PG_IMAGE ZAP_IMAGE NUCLEI_IMAGE NUCLEI_TEMPLATES NUCLEI_TEMPLATES_SHA256 CURL_IMAGE
 check_nuclei_pins
 

@@ -19,6 +19,23 @@ die() {
   exit 1
 }
 
+# require_host_tools: exit 2 unless bash is 4 or newer and every host tool the scripts use is on
+# PATH (the tool containers bring their own). Without jq, for one, every ZAP report would read as
+# unreadable; this says what is missing instead.
+require_host_tools() {
+  local tool
+  if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    echo "$name needs bash 4 or newer on this machine (install it, then run again)" >&2
+    exit 2
+  fi
+  for tool in docker jq awk sed grep sort comm paste tee tr head cut sha256sum tar mktemp id date dirname; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      echo "$name needs $tool on this machine (install it, then run again)" >&2
+      exit 2
+    fi
+  done
+}
+
 # require_env <variable>...: exit 2 when one is unset or empty.
 require_env() {
   local var
@@ -112,11 +129,12 @@ zap_rules_file() {
 }
 
 # run_zap <report dir> <report name> <zap script and args...>: one ZAP run with <report dir>/zap
-# as its work folder (rules.tsv, the rules file ZAP gets, is in it); 0 and 2 (WARN rules only) pass. Then, from its JSON report: ZAP's rule 100000 is
-# one id for 4xx (Informational) and 5xx (Low) answers, so the rules file cannot fail only on
-# 5xx, and a 5xx is red here (an app that answers 500 to a bad request crashed past its
-# boundary). An alert from a rule the rules file does not list is red too: ZAP would only WARN it,
-# so a ZAP bump could add a High rule that passes silently.
+# as its work folder (rules.tsv, the rules file ZAP gets, is in it); 0 and 2 (WARN rules only)
+# pass. Then, from its JSON report: ZAP's rule 100000 is one id for 4xx (Informational) and 5xx
+# (Low) answers, so the rules file cannot fail only on 5xx, and a 5xx is red here (an app that
+# answers 500 to a bad request crashed past its boundary). An alert from a rule the rules file
+# does not list is red too: ZAP would only WARN it, so a ZAP bump could add a High rule that
+# passes silently.
 run_zap() {
   local report=$1 zname=$2 rc=0 errors ids unknown known_rules report_abs
   shift 2

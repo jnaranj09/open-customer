@@ -20,6 +20,8 @@ restarts it (`restore` then fails, and `scripts/restore.sh` says so).
 - A Cloudflare account with a domain you control, and Cloudflare Zero Trust enabled.
 - A folder for the backups (section 4).
 - A way to keep a copy of `RESTIC_PASSWORD` outside this PC, for example a password manager.
+- Only to run `make scan-live` (section 14): the repository checkout, `make`, bash 4 or newer,
+  `jq` and the usual coreutils (`tar`, `sha256sum`, `awk`) on the machine you run it from.
 
 ## 2. Create the tunnel and the public hostname
 
@@ -415,10 +417,12 @@ If you do not use Cloudflare, put any reverse proxy in front of `app:8080` and s
 ## 14. Scan your deployment
 
 `make scan-live` checks your own live URL from your own machine, from the repository root (not
-`deploy/`). It needs only Docker and network access to the URL: no account, key or token, and it
-never logs in. It is passive and safe to run against production: it sends ordinary page requests
-and probes known paths, and it leaves out the intrusive, denial-of-service and fuzzing checks. It
-never runs in GitHub.
+`deploy/`). Besides Docker and network access to the URL it needs the repository checkout, `make`,
+bash 4 or newer, `jq` and the usual coreutils; it stops with exit 2 and names the one that is
+missing. It needs no account, key or token, and it never logs in. It is built to be safe against
+production, but it is not purely passive: the ZAP crawl only reads, while Nuclei sends
+non-intrusive but active probes, including default-credential checks on other products' paths.
+The intrusive, denial-of-service and fuzzing templates are off. It never runs in GitHub.
 
 ```sh
 make scan-live URL=https://clients.example.com
@@ -430,17 +434,19 @@ It runs three checks, one after another, and reports all of them:
   `Content-Security-Policy` of `frame-ancestors 'none'; base-uri 'self'; object-src 'none';
   form-action 'self'` and, over https, `Strict-Transport-Security: max-age=31536000`. A missing
   header, or one with another value (a proxy that rewrites it), is a finding.
-- **ZAP baseline.** A passive crawl of the URL. Rules and levels are in `security/zap-rules.tsv`.
-- **Nuclei.** Known weaknesses, exposed files and TLS (its `ssl` templates), from a pinned
-  templates release. The first run downloads it into `~/.cache/open-customer/nuclei` and checks
+- **ZAP baseline.** A passive crawl of the URL (it reads pages and attacks nothing). Rules and levels are in `security/zap-rules.tsv`.
+- **Nuclei.** Known weaknesses, exposed files and TLS (its `ssl` templates), as non-intrusive
+  active probes, from a pinned templates release. The first run downloads it into `~/.cache/open-customer/nuclei` and checks
   its sha256.
 
 The URL must be `https://`. Plain http is refused. The first run pulls the tool images and takes a
 few minutes.
 
-**Result.** The script exits 0 when clean and 1 on a finding, or when a tool could not run (a scan
-that did not run is never clean). It exits 2 on a bad URL or a bad allow file. `make` shows any
-failure as its own `Error 2`: read the line above it, and the scan's output, for the cause. The
+**Result.** Through `make`, a non-zero exit means "not clean": `make` always exits 2 when the
+script fails, and the script's own code (1 for a finding or a tool that could not run, since a scan
+that did not run is never clean, and 2 for a bad URL, a bad allow file or a missing host tool) is in
+make's `Error N` line. Read that line and the scan's output for the cause. A `REPORT_DIR` that
+already holds files is refused (exit 2) so old results are never mistaken for this run's. The
 report is in `security/reports/scan-live-<UTC timestamp>/` (git-ignored): `headers.txt` (only the
 checked headers), `zap/` and `nuclei/`. The scan is signed out, so it sets and sends no session
 cookie.
@@ -455,12 +461,13 @@ line number.
 # The proxy sets its own HSTS.
 header strict-transport-security # set by the proxy with a longer max-age
 zap 10049 # caching header added by the proxy
-zap 10096@https://clients\.example\.com/_app/.*$ # a build timestamp, on the app files only
-nuclei tech-detect # informational
+zap 10096@https://clients\.example\.com/service-worker\.js$ # a build timestamp, on that file only
+nuclei google-api-key # the public maps key on our own page
 ```
 
 `zap` takes a rule number, or `<rule number>@<url regex>` to allow the rule on matching URLs only
-(a regex that matches from the start of the URL; end it with `$`). `nuclei` takes a template id
+(a regex that matches from the start of the URL and ends in `$`; one that matches `/`,
+`/_app/x.js` or `/api/v1/zz-scope-probe` on your URL, or does not compile, is refused). `nuclei` takes a template id
 from the report. `header` takes `x-content-type-options`, `referrer-policy`,
 `content-security-policy` or `strict-transport-security`.
 

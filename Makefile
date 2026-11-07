@@ -227,18 +227,22 @@ dast:
 		CURL_IMAGE=$(CURL_IMAGE) REPORT_DIR=$(REPORT_DIR) \
 		scripts/security/dast.sh
 
-# devsecops.md section 9: a manual, passive scan of your own deployment (URL=https://...): the
-# security headers, the ZAP baseline and Nuclei, all signed out. Needs Docker and network; uses no
-# key; never runs in CI (exit 2 when GITHUB_ACTIONS=true). The allow-list is the git-ignored
+# devsecops.md section 9: a manual scan of your own deployment (URL=https://...): the security
+# headers, the ZAP baseline (passive) and Nuclei (non-intrusive active probes), all signed out.
+# Needs Docker, bash 4, jq and coreutils on the host, and network; uses no key; never runs in CI (exit 2 when GITHUB_ACTIONS=true). The allow-list is the git-ignored
 # deploy/.scan-live.allow. The report goes to security/reports/scan-live-<UTC timestamp>/ unless
 # REPORT_DIR is set. NETWORK (a Docker network or container:<name>) is a test hook that puts the
 # tool containers on that network and allows http://localhost; see scripts/security/scan-live.sh.
 # (REPORT_DIR above is make dast's default, so only a REPORT_DIR the caller gave reaches this one.)
+# URL, NETWORK and REPORT_DIR reach the script through the environment, never pasted into the
+# recipe text, so a quote, backtick or $( in them cannot run in the shell; the script validates them.
+scan-live: export SCAN_URL := $(URL)
+scan-live: export NETWORK := $(NETWORK)
+scan-live: export REPORT_DIR := $(if $(filter command line environment,$(origin REPORT_DIR)),$(REPORT_DIR))
 scan-live:
 	ZAP_IMAGE=$(ZAP_IMAGE) NUCLEI_IMAGE=$(NUCLEI_IMAGE) NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) \
 		NUCLEI_TEMPLATES_SHA256=$(NUCLEI_TEMPLATES_SHA256) CURL_IMAGE=$(CURL_IMAGE) \
-		NETWORK=$(NETWORK) REPORT_DIR=$(if $(filter command line environment,$(origin REPORT_DIR)),$(REPORT_DIR)) \
-		scripts/security/scan-live.sh "$(URL)"
+		scripts/security/scan-live.sh
 
 # devsecops.md section 7: each fuzz target for FUZZTIME, one after another (go test -fuzz takes one
 # target per package). Manual, not in the gate or CI; the seeds run in `make test`. A crash writes

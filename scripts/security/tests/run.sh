@@ -20,8 +20,9 @@
 #   curl-test:1 with `-D -` (scan-live.sh's header check) prints a made-up response's headers: the
 #                   four security headers with their right values (no Strict-Transport-Security
 #                   for an http URL), except the headers named in FAKE_HEADERS_DROP
-#                   (space-separated) and with FAKE_HEADERS_WRONG's header (one name) set to
-#                   "wrong"; a Set-Cookie header with a made-up cookie is always in the answer
+#                   (space-separated), with FAKE_HEADERS_WRONG's header set to "wrong" (or to
+#                   the value after an `=`: Name=value), and with the line FAKE_HEADERS_EXTRA
+#                   (a second instance of a header, say) added; a Set-Cookie header with a made-up cookie is always in the answer
 #   curl-test:1 with `-o /cache/<file>` (the templates download) writes a made-up tarball there
 # and, for config-scan.sh:
 #   trivy-cfg-test:1  reports each file mounted at /src/<path> as a scanned Dockerfile (all
@@ -67,7 +68,7 @@ REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
-  FAKE_NUCLEI_FINDINGS FAKE_HEADERS_DROP FAKE_HEADERS_WRONG GITHUB_ACTIONS NETWORK FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
+  FAKE_NUCLEI_FINDINGS FAKE_HEADERS_DROP FAKE_HEADERS_WRONG FAKE_HEADERS_EXTRA SCAN_PATH SCAN_URL GITHUB_ACTIONS NETWORK FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
   FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
   FAKE_REPO_DIGEST FAKE_SBOM_EMPTY FAKE_PUSH_SECOND_DIGEST MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
@@ -118,9 +119,13 @@ fake_curl() {
       } | while IFS= read -r h; do
         h=${h%$'\r'}
         case " ${FAKE_HEADERS_DROP:-} " in *" ${h%%:*} "*) continue ;; esac
-        [ "${h%%:*}" != "${FAKE_HEADERS_WRONG:-}" ] || h="${h%%:*}: wrong"
+        case "${FAKE_HEADERS_WRONG:-}" in
+          "${h%%:*}") h="${h%%:*}: wrong" ;;
+          "${h%%:*}="*) h="${h%%:*}: ${FAKE_HEADERS_WRONG#*=}" ;;
+        esac
         printf '%s\r\n' "$h"
       done
+      [ -z "${FAKE_HEADERS_EXTRA:-}" ] || printf '%s\r\n' "$FAKE_HEADERS_EXTRA"
       return 0
       ;;
   esac
@@ -412,7 +417,7 @@ fake_tarball_sha=$(printf 'made-up templates tarball\n' | sha256sum | cut -d' ' 
 dast() {
   mkdir -p "$W/nuclei-cache"
   [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
-  (cd / && PATH="$ROOT/bin:$PATH" IMAGE=open-customer:1.2.3 PG_IMAGE=postgres:18.6-alpine \
+  (cd / && PATH="${SCAN_PATH:-$ROOT/bin:$PATH}" IMAGE=open-customer:1.2.3 PG_IMAGE=postgres:18.6-alpine \
     ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
     NUCLEI_TEMPLATES_SHA256="${TEMPLATES_SHA:-$fake_tarball_sha}" \
     REPORT_DIR="$W/report" NUCLEI_CACHE_DIR="$W/nuclei-cache" "$W/scripts/security/dast.sh" "$@") >"$W/out" 2>&1
@@ -424,10 +429,17 @@ dast() {
 scan_live() {
   mkdir -p "$W/nuclei-cache"
   [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
-  (cd / && PATH="$ROOT/bin:$PATH" REPORT_DIR="$([ -n "${DEFAULT_REPORT:-}" ] || echo "$W/report")" \
+  # A test that scans more than once starts each scan with a new default report folder.
+  [ -n "${REPORT_DIR_GIVEN:-}${DEFAULT_REPORT:-}" ] || rm -rf "$W/report"
+  (cd / && PATH="${SCAN_PATH:-$ROOT/bin:$PATH}" REPORT_DIR="$([ -n "${DEFAULT_REPORT:-}" ] || echo "${REPORT_DIR_GIVEN:-$W/report}")" \
     ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
     NUCLEI_TEMPLATES_SHA256="${TEMPLATES_SHA:-$fake_tarball_sha}" NUCLEI_CACHE_DIR="$W/nuclei-cache" \
     "$W/scripts/security/scan-live.sh" "$@") >"$W/out" 2>&1
+}
+
+# scan_live_noarg: scan-live.sh with no argument (the URL comes from SCAN_URL, as make passes it).
+scan_live_noarg() {
+  scan_live
 }
 
 test_scan_live_clean_run() {
@@ -441,7 +453,8 @@ test_scan_live_clean_run() {
   has_call "-etags intrusive,dos,fuzz" || fail "nuclei was not run without the intrusive tags"
   grep -qE '(^| )(-p|--publish)( |=)' "$LOG" && fail "a container published a port"
   has_call "--network" && fail "a scanner was given a network without NETWORK"
-  has_call "rm -f -v oc-scan-live-scanner" || fail "the scanner container was not removed"
+  assert_eq "removals of the scanner container (before and after)" 2 "$(grep -cE 'rm -f -v oc-scan-live-[0-9]+$' "$LOG")"
+  assert_eq "scanner container names in one run" 1 "$(grep -oE -- '--name oc-scan-live-[0-9]+' "$LOG" | sort -u | wc -l)"
   out_has "scan-live: ok"
   [ -f "$W/report/zap/baseline.json" ] || fail "no zap report in the report folder"
   [ -f "$W/report/headers.txt" ] || fail "no header report in the report folder"
@@ -471,9 +484,74 @@ test_scan_live_gitignore() {
 test_scan_live_make_target() {
   local out
   out=$(cd "$REPO" && make -n scan-live URL=https://example.com NETWORK=oc-made-up 2>&1) || fail "make -n scan-live failed: $out"
-  grep -qF 'scripts/security/scan-live.sh "https://example.com"' <<<"$out" || fail "make does not pass URL: $out"
-  grep -qF 'NETWORK=oc-made-up' <<<"$out" || fail "make does not pass NETWORK: $out"
   grep -q 'CURL_IMAGE=curlimages/curl:[^ ]*@sha256:' <<<"$out" || fail "make does not pass the pinned curl image: $out"
+  grep -qF 'example.com' <<<"$out" && fail "make pastes the URL into the recipe text: $out"
+  return 0
+}
+
+# URL, NETWORK and REPORT_DIR reach the script through the environment, not the recipe text: a
+# backtick, a quote or a $( in them is refused by the script's validator, never run by a shell.
+test_scan_live_make_passes_values_unchanged() {
+  setup
+  local arg out rc want marker=$W/marker
+  for arg in "URL=https://a.example.com/\`touch $marker\`" 'URL=https://a.example.com/"x' "URL=https://a.example.com/\$\$(touch $marker)" \
+    "URL=https://a.example.com/'x"; do
+    rc=0
+    out=$(cd "$REPO" && PATH="$ROOT/bin:$PATH" make scan-live "$arg" 2>&1) || rc=$?
+    assert_ne "make exit code for $arg" 0 "$rc"
+    grep -qF "is not https://host[:port][/path]" <<<"$out" || fail "the script did not refuse $arg: $out"
+    want=${arg#URL=}
+    want=${want//\$\$/\$}
+    grep -qF -- "$want" <<<"$out" || fail "the URL reached the script changed ($arg): $out"
+  done
+  [ ! -e "$marker" ] || fail "a shell ran the command inside the URL"
+  rc=0
+  out=$(cd "$REPO" && PATH="$ROOT/bin:$PATH" make scan-live URL=http://localhost:8080 'NETWORK=oc-x;touch '"$marker" 2>&1) || rc=$?
+  assert_ne "make exit code for a bad NETWORK" 0 "$rc"
+  grep -qF "NETWORK 'oc-x;touch $marker' is not a Docker network" <<<"$out" || fail "NETWORK did not reach the script unchanged: $out"
+  [ ! -e "$marker" ] || fail "a shell ran the command inside NETWORK"
+  assert_eq "docker calls" 0 "$(wc -l <"$LOG")"
+}
+
+test_scan_live_url_from_environment() {
+  setup
+  SCAN_URL=https://example.com scan_live_noarg || fail "scan-live with SCAN_URL exited non-zero: $(cat "$W/out")"
+  has_call "zap-baseline.py -t https://example.com" || fail "SCAN_URL did not reach zap"
+}
+
+# tools_path <dir> <tool to leave out>: <dir> holds symlinks to the host tools the scripts use,
+# bash and env included, without <tool>, and the fake docker.
+tools_path() {
+  local t
+  mkdir -p "$1"
+  for t in bash env docker jq awk sed grep sort comm paste tee tr head cut sha256sum tar mktemp id date dirname cat rm mv mkdir chmod cp wc od; do
+    [ "$t" = "$2" ] || { [ -e "$1/$t" ] || ln -s "$(PATH="$ROOT/bin:$PATH" command -v "$t")" "$1/$t"; }
+  done
+}
+
+test_scan_live_missing_host_tool_exits_2() {
+  setup
+  local tool rc
+  for tool in jq tar sha256sum comm awk; do
+    rm -rf "$ROOT/tools"
+    tools_path "$ROOT/tools" "$tool"
+    rc=0
+    SCAN_PATH=$ROOT/tools scan_live https://example.com || rc=$?
+    assert_eq "exit code without $tool" 2 "$rc"
+    out_has "scan-live needs $tool on this machine (install it, then run again)"
+  done
+  assert_eq "docker calls without a host tool" 0 "$(wc -l <"$LOG")"
+}
+
+test_dast_missing_host_tool_exits_2() {
+  setup
+  rm -rf "$ROOT/tools"
+  tools_path "$ROOT/tools" jq
+  local rc=0
+  SCAN_PATH=$ROOT/tools dast || rc=$?
+  assert_eq "exit code without jq" 2 "$rc"
+  out_has "dast needs jq on this machine (install it, then run again)"
+  assert_eq "docker calls without jq" 0 "$(wc -l <"$LOG")"
 }
 
 test_scan_live_without_url_exits_2() {
@@ -520,6 +598,14 @@ test_scan_live_http_only_on_localhost_with_network() {
   local rc=0
   NETWORK=container:oc-made-up scan_live http://example.com || rc=$?
   assert_eq "exit code for http on another host, with NETWORK" 2 "$rc"
+  local url before
+  before=$(wc -l <"$LOG")
+  for url in http://localhost.evil.com http://LOCALHOST:8080 http://localhost@evil.com http://evil.com/localhost http://127.0.0.1:8080 http://localhost.:8080; do
+    rc=0
+    NETWORK=container:oc-made-up scan_live "$url" || rc=$?
+    assert_eq "exit code for '$url' with NETWORK" 2 "$rc"
+  done
+  assert_eq "docker calls for refused http hosts" "$before" "$(wc -l <"$LOG")"
 }
 
 test_scan_live_missing_header_is_a_finding() {
@@ -540,6 +626,27 @@ test_scan_live_wrong_header_value_is_a_finding() {
     FAKE_HEADERS_WRONG=$h scan_live https://example.com && fail "a response with a wrong $h exited 0"
     out_has "header $h is 'wrong', want"
   done
+}
+
+test_scan_live_near_miss_header_value_is_a_finding() {
+  setup
+  FAKE_HEADERS_WRONG=X-Content-Type-Options=nosniffX scan_live https://example.com && fail "nosniffX exited 0"
+  out_has "header X-Content-Type-Options is 'nosniffX', want 'nosniff'"
+  FAKE_HEADERS_WRONG=Strict-Transport-Security=max-age=31536000X scan_live https://example.com && fail "a near-miss HSTS exited 0"
+  FAKE_HEADERS_WRONG=Referrer-Policy=same-origin,no-referrer scan_live https://example.com && fail "a longer Referrer-Policy exited 0"
+  return 0
+}
+
+test_scan_live_duplicate_header_every_instance_checked() {
+  setup
+  FAKE_HEADERS_EXTRA='X-Content-Type-Options: sniff' scan_live https://example.com && fail "a second, weaker header exited 0"
+  out_has "header X-Content-Type-Options is 'sniff', want 'nosniff'"
+  grep -c '^X-Content-Type-Options:' "$W/report/headers.txt" | grep -qx 2 || fail "headers.txt does not list both instances: $(cat "$W/report/headers.txt")"
+  FAKE_HEADERS_EXTRA='x-content-type-options: nosniff' scan_live https://example.com ||
+    fail "a second, equal header exited non-zero: $(cat "$W/out")"
+  FAKE_HEADERS_WRONG=X-Content-Type-Options=sniff FAKE_HEADERS_EXTRA='X-Content-Type-Options: nosniff' scan_live https://example.com &&
+    fail "a weak first header followed by a good one exited 0"
+  return 0
 }
 
 test_scan_live_hsts_only_on_https() {
@@ -641,6 +748,39 @@ JSON
   return 0
 }
 
+test_scan_live_scoped_zap_id_accepted() {
+  setup
+  printf 'zap 40018@https://example\\.com/service-worker\\.js$ # made up\nzap 10096@.*/api/v1/client-errors$ # made up\n' >"$W/deploy/.scan-live.allow"
+  scan_live https://example.com || fail "good scoped ids were refused: $(cat "$W/out")"
+  grep -qxF "$(printf '40018\tOUTOFSCOPE\t%s' 'https://example\.com/service-worker\.js$')" "$LOG.zaprules" || fail "no OUTOFSCOPE line: $(cat "$LOG.zaprules")"
+}
+
+test_scan_live_report_dir_in_use_refused() {
+  setup
+  mkdir -p "$W/old-report"
+  echo old >"$W/old-report/x"
+  local rc=0
+  REPORT_DIR_GIVEN=$W/old-report scan_live https://example.com || rc=$?
+  assert_eq "exit code for a report folder with files" 2 "$rc"
+  out_has "already exists and is not empty"
+  [ -f "$W/old-report/x" ] || fail "the old report folder was changed"
+  assert_eq "docker calls" 0 "$(wc -l <"$LOG")"
+  rm "$W/old-report/x"
+  REPORT_DIR_GIVEN=$W/old-report scan_live https://example.com || fail "an empty report folder was refused: $(cat "$W/out")"
+  [ -f "$W/old-report/headers.txt" ] || fail "no report in the empty folder"
+  rc=0
+  REPORT_DIR_GIVEN=$W/old-report scan_live https://example.com || rc=$?
+  assert_eq "exit code for the report folder just written" 2 "$rc"
+}
+
+test_scan_live_container_name_is_unique_per_run() {
+  setup
+  scan_live https://example.com || fail "scan-live exited non-zero: $(cat "$W/out")"
+  rm -rf "$W/report"
+  scan_live https://example.com || fail "scan-live exited non-zero: $(cat "$W/out")"
+  assert_eq "scanner container names in two runs" 2 "$(grep -oE -- '--name oc-scan-live-[0-9]+' "$LOG" | sort -u | wc -l)"
+}
+
 test_scan_live_malformed_allow_line_refused() {
   local line want
   while IFS='|' read -r line want; do
@@ -659,6 +799,13 @@ trivy CVE-2026-1 # reason|unknown tool 'trivy'
 zap abc # reason|'abc' is not <rule number> or <rule number>@<url regex>
 zap 40018@ # reason|'40018@' is not <rule number> or <rule number>@<url regex>
 zap 10021 10020 # reason|expected <tool> <id> # <reason>
+zap 40018@.*/api/v1/client-errors # reason|the url regex must end in $
+zap 40018@(a$ # reason|the url regex does not compile
+zap 40018@.*$ # reason|the url regex matches http://localhost:8080/, so it is a catch-all
+zap 40018@.*/_app/.*$ # reason|the url regex matches http://localhost:8080/_app/x.js, so it is a catch-all
+zap 40018@.*/api/v1/.*$ # reason|the url regex matches http://localhost:8080/api/v1/zz-scope-probe, so it is a catch-all
+zap 40018@https://example\.com/.*$ # reason|the url regex matches https://example.com/, so it is a catch-all
+zap 40018@https://example\.com/_app/.*$ # reason|the url regex matches https://example.com/_app/x.js, so it is a catch-all
 nuclei bad,id # reason|'bad,id' is not a template id
 nuclei -exclude # reason|'-exclude' is not a template id
 header Strict_Transport # reason|'Strict_Transport' is not a checked header
@@ -1498,6 +1645,15 @@ t "scan-live: no cookie reaches the report or the output" test_scan_live_report_
 t "scan-live: the report goes to security/reports/scan-live-<UTC timestamp>" test_scan_live_default_report_folder
 t "scan-live: the report folder and the local allow file are git-ignored" test_scan_live_gitignore
 t "scan-live: make passes URL, NETWORK and the pinned images" test_scan_live_make_target
+t "scan-live: make passes URL and NETWORK through the environment, unchanged" test_scan_live_make_passes_values_unchanged
+t "scan-live: the URL may come from SCAN_URL" test_scan_live_url_from_environment
+t "scan-live: a missing host tool (jq, tar, sha256sum...) exits 2 naming it" test_scan_live_missing_host_tool_exits_2
+t "dast: a missing host tool exits 2 naming it" test_dast_missing_host_tool_exits_2
+t "scan-live: a near-miss header value is a finding" test_scan_live_near_miss_header_value_is_a_finding
+t "scan-live: every instance of a duplicated header is checked" test_scan_live_duplicate_header_every_instance_checked
+t "scan-live: a good scoped zap id is accepted" test_scan_live_scoped_zap_id_accepted
+t "scan-live: a report folder with files is refused" test_scan_live_report_dir_in_use_refused
+t "scan-live: the scanner container name is unique per run" test_scan_live_container_name_is_unique_per_run
 t "scan-live without URL exits 2" test_scan_live_without_url_exits_2
 t "scan-live exits 2 in GitHub Actions" test_scan_live_in_github_actions_exits_2
 t "scan-live refuses a non-https URL" test_scan_live_refuses_non_https_url
