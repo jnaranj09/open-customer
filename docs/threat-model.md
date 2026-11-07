@@ -127,7 +127,7 @@ dashboard and settings (Cloudflare or any other).
 | T76 | the build | A GitHub Action is swapped under its tag, or a workflow has too-wide permissions or script injection | .github/workflows | test:TestSupplyChainPins; make:config-scan; file:scripts/security/tests/run.sh; ci:ci.yml/gate |
 | T77 | the build | A secret is committed to the repo | git history | make:secrets; ci:ci.yml/gate |
 | T94 | the build | A token for an outside design tool is committed in the design file | design/soft-glass.pen | accepted: Pencil's fileToken is likely a document id, and even if it is a token it reaches only this design, which is public in this repo and holds no PII, and the value is already in public history, which is never rewritten (owner decision, 2026-11-06); file:.gitleaksignore |
-| T78 | the build | A release ships images nobody can verify, with no list of what is in them, or a v* tag on a commit that is not on main gives a release that verifies | release workflow | ci:release.yml/images; file:scripts/security/release-sign.sh; file:scripts/security/release-on-main.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: the first v* tag's release run proves the keyless signature and the SBOM attestation (no OIDC token outside Actions), then once per release when upgrade.sh verifies it; manual: ghcr packages open-customer and open-customer-backup set to public after the first release, so a deployer pulls and verifies without logging in |
+| T78 | the build | A release ships images nobody can verify, with no list of what is in them, or a v* tag on a commit that is not on main gives a release that verifies | release workflow | ci:release.yml/images; file:scripts/security/release-sign.sh; file:scripts/security/release-on-main.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: each release run proves the keyless signature and the SBOM attestation (no OIDC token outside Actions), first for v0.1.0 on 2026-11-07, then once per release when upgrade.sh verifies it; manual: ghcr packages open-customer and open-customer-backup stay public (they were at v0.1.0), so a deployer pulls and verifies without logging in |
 | T79 | the build | A change reaches main without a green CI run, or a v* tag is pushed on a commit that is not on main | GitHub settings, release workflow | ci:release.yml/images; file:scripts/security/release-on-main.sh; file:scripts/security/tests/run.sh; make:test-sec; manual: branch protection on main, re-checked by hand after any repo settings change; manual: tag ruleset limiting who creates, moves or deletes v* tags, defence in depth only because the owner is on its bypass list, set once in GitHub settings and re-checked after any settings change |
 | T80 | the host | The OS, the disk, the Docker daemon, deploy/.env at rest and docker logs (which hold the setup link) | the host machine | out of scope: the deployer who owns the host |
 | T81 | the proxy | The front proxy or tunnel settings (cache rules, HSTS, bot rules) | the proxy dashboard | out of scope: the deployer, in their proxy or tunnel provider's dashboard |
@@ -144,7 +144,7 @@ dashboard and settings (Cloudflare or any other).
 
 These settings live in GitHub, not in a repo file. They are applied once, after the branch is merged
 (a required check must have run on the repo first). Branch protection and the tag ruleset were applied
-on 2026-11-07; the ghcr visibility waits for the first release. The rows T71, T78 and T79 point here. They are
+on 2026-11-07; the ghcr packages were public at the first release (v0.1.0). The rows T71, T78 and T79 point here. They are
 re-checked by hand after any repo settings change.
 
 ### Branch protection on `main`
@@ -210,10 +210,11 @@ Applied 2026-11-07 (ruleset `release-tags`). Confirm with
 
 ### ghcr package visibility
 
-After the first release pushes the images, each package starts private. Set both to public so a
-deployer pulls and verifies without logging in: github.com, the repo's Packages, `open-customer`,
-Package settings, Danger Zone, Change visibility, Public; then the same for `open-customer-backup`.
-Check with `docker logout ghcr.io` and a pull of the released tag.
+Both packages must be public, so a deployer pulls and verifies without logging in. At the first
+release (v0.1.0, 2026-11-07) they were public with no change: they follow the public repo. If one
+is ever private: github.com, the repo's Packages, the package, Package settings, Danger Zone,
+Change visibility, Public. Check with `docker logout ghcr.io` (or an empty `DOCKER_CONFIG`) and a
+pull of the released tag.
 
 ### Weekly rescan stays on
 

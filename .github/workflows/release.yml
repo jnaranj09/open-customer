@@ -5,8 +5,8 @@
 # of the four stops the release, docs/designs/devsecops.md section 4), then pushes the two images
 # it scanned and, on the digest each push answered, writes a CycloneDX SBOM, signs the image
 # keylessly with cosign through GitHub OIDC and attests the SBOM (make release-sign).
-# deploy/scripts/upgrade.sh verifies that signature before it pulls. The first v* tag is the first
-# real test of the signing (there is no OIDC token outside Actions).
+# deploy/scripts/upgrade.sh verifies that signature before it pulls. Keyless signing needs the
+# job's OIDC token, so it runs only here; v0.1.0 was the first signed release.
 name: release
 
 on:
