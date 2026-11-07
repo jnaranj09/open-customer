@@ -223,5 +223,6 @@ two months would stop the weekly rescan (T71) silently. Once a month, open the A
 
 ### Re-check
 
-After any repo settings change, read the three back: the branch protection and rulesets commands
-above, and the packages' visibility on their pages.
+After any repo settings change, read the four back: the branch protection and rulesets commands
+above, the packages' visibility on their pages, and the weekly workflow's state
+(`gh workflow list --all`).

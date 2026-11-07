@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), for
-# csp-check.sh (made-up built pages; no docker), for deps-scan.sh, for latest-release.sh (throwaway
-# repos), and
-# for scripts/check-pins.sh's image digest and cosign version checks. Run by make test-sec on the
+# csp-check.sh (made-up built pages; no docker), for deps-scan.sh, for release-on-main.sh and
+# latest-release.sh (throwaway repos), and for scripts/check-pins.sh's image digest and cosign version checks. Run by make test-sec on the
 # host. Each test runs a wrapper from a temp copy of the repo parts it reads (scripts/security,
 # security/allow.json, deploy/compose.yaml; made-up Dockerfiles and a workflow for config-scan.sh),
 # with a fake `docker` first on PATH that appends each call to a log and answers from env vars:

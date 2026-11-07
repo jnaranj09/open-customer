@@ -52,8 +52,8 @@ with fnm, `fnm use` in web/).
   `security/allow.json` are honoured. Needs network (the Trivy database). `make vuln` stays the Go
   reachability check.
 - `make secrets`: gitleaks over the whole git history (`.gitleaksignore` honoured). `make test-sec`:
-  the scan wrappers', csp-check's, release-sign's and check-pins' tests
-  (`scripts/security/tests/run.sh`, fake `docker` and `cosign`).
+  the tests of the scan wrappers, csp-check, deps-scan, release-sign, release-on-main,
+  latest-release and check-pins (`scripts/security/tests/run.sh`, fake `docker` and `cosign`).
 - `make release-sign IMAGE=<repository>:<tag>`: release workflow only (registry login, cosign,
   OIDC token; not in the gate): push, digest from the push, CycloneDX SBOM (Trivy), then `cosign
   sign` and `cosign attest` on `<repository>@<digest>` (`scripts/security/release-sign.sh`).
