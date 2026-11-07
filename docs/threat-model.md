@@ -82,7 +82,7 @@ dashboard and settings (Cloudflare or any other).
 | T39 | photos | A path in a request reads a file outside the build or media folder | static files, GET /media/{id} | test:TestGetMediaBadUUIDIs422; test:TestDirectoryHasNoListing; gap: Task 9 |
 | T40 | client data | The export is downloaded without a session | GET /export | test:TestExportNeedsSession |
 | T41 | client data | A failed export looks like a complete file | GET /export | test:TestExportAbortsAfterStreamStarts; test:TestExportFailsBeforeStreamIsProblem |
-| T42 | client data | A client name or note starting with = or + runs as a formula when the CSV is opened in a spreadsheet | GET /export | gap: Task 9 |
+| T42 | client data | A client name or note starting with = or + runs as a formula when the CSV is opened in a spreadsheet | GET /export | test:TestExportNeutralizesFormulaCells |
 | T43 | the whole app | A push subscription with a bad endpoint or keys is stored | POST /push/subscriptions | test:TestSubscribePushHttpEndpointIs422; test:TestSubscribePushPrivateEndpointIs422; test:TestSubscribeRejects; test:TestSubscribePushMissingKeysIs422; test:TestSubscribePushNeedsSession |
 | T44 | the home network | A push endpoint pointing at a private address makes the server send requests into the home network | POST /push/subscriptions, the daily push | test:TestSubscribeRejects; test:TestSubscribePushPrivateEndpointIs422; test:TestSendAllNeverDialsANonPublicAddress; test:TestSendAllFollowsNoRedirect |
 | T45 | the whole app | The VAPID key pair is lost, so every push subscription stops working | push keys | test:TestEnsureKeysCreatesOnce; make:test-deploy |

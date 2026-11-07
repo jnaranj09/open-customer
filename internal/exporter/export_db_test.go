@@ -233,8 +233,8 @@ func TestExportAccentedNameAndCommaNote(t *testing.T) {
 	if got := column(t, rows, 1, "notas"); got != "Uñas, cortas" {
 		t.Errorf("notas = %q", got)
 	}
-	if got := column(t, rows, 1, "telefono"); got != *c.PhoneE164 {
-		t.Errorf("telefono = %q, want %q", got, *c.PhoneE164)
+	if got := column(t, rows, 1, "telefono"); got != "'"+*c.PhoneE164 {
+		t.Errorf("telefono = %q, want %q", got, "'"+*c.PhoneE164)
 	}
 	if got := column(t, rows, 1, "creada"); got != "2026-10-20" {
 		t.Errorf("creada = %q, want 2026-10-20", got)
