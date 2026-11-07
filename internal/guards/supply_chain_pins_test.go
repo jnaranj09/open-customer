@@ -9,7 +9,8 @@ package guards
 // each Makefile `*_IMAGE` must read its stage there (`$(call tool_image,<stage>)`) or be a pin
 // itself. Every Dockerfile in the repo is found by name (`Dockerfile`, `*.Dockerfile`), and every
 // workflow (`*.yml`, `*.yaml`). make check-pins keeps the copies of each pin equal; this guard keeps
-// each one a pin.
+// each one a pin. A docker/setup-buildx-action step must not pull the default BuildKit image, a
+// moving tag (checkBuildxDriver).
 //
 // Two gaps a digest does not close (security audit A9) are checked too: an `apk add` installs only
 // the packages in acceptedApk, each accepted in threat model T91 with its reason (a new tool comes
@@ -122,6 +123,51 @@ func checkWorkflowPins(name, src string) []string {
 		}
 	}
 	return problems
+}
+
+// checkBuildxDriver returns each docker/setup-buildx-action step of a workflow that would run an
+// unpinned BuildKit image. With no driver the action uses the docker-container driver, which pulls
+// the moving tag moby/buildkit:buildx-stable-1 (security review I1); so a step must use the runner's
+// own engine (`driver: docker`) or name the BuildKit image by digest in driver-opts
+// (`image=moby/buildkit:<tag>@sha256:<64 hex>`).
+func checkBuildxDriver(name string, src []byte) []string {
+	var doc struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				Uses string            `yaml:"uses"`
+				With map[string]string `yaml:"with"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(src, &doc); err != nil {
+		return []string{fmt.Sprintf("%s: not valid YAML: %v", name, err)}
+	}
+	var problems []string
+	for _, job := range slices.Sorted(maps.Keys(doc.Jobs)) {
+		for i, step := range doc.Jobs[job].Steps {
+			if !strings.HasPrefix(step.Uses, "docker/setup-buildx-action@") || buildxPinned(step.With) {
+				continue
+			}
+			problems = append(problems, fmt.Sprintf("%s: job %s step %d: setup-buildx-action needs driver: docker or "+
+				"driver-opts image=<image>:<tag>@sha256:<digest> (the default BuildKit image is a moving tag)", name, job, i+1))
+		}
+	}
+	return problems
+}
+
+// buildxPinned reports whether a setup-buildx-action `with:` runs no unpinned BuildKit image.
+func buildxPinned(with map[string]string) bool {
+	switch with["driver"] {
+	case "docker":
+		return true
+	case "", "docker-container":
+		for _, opt := range strings.FieldsFunc(with["driver-opts"], func(r rune) bool { return r == '\n' || r == ',' }) {
+			if image, ok := strings.CutPrefix(strings.TrimSpace(opt), "image="); ok && pinnedImage.MatchString(image) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkDockerfilePins returns the FROM lines of a Dockerfile whose image has no digest (a FROM of
@@ -259,12 +305,16 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 	goodShell := "readonly COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.4" + digest + "\nOTHER=x\n"
 	goodCompose := "services:\n  db:\n    image: postgres:18.6-alpine" + digest + "\n  app:\n    image: ghcr.io/jnaranj09/open-customer:${APP_VERSION:?x}\n  backup:\n    image: ghcr.io/jnaranj09/open-customer-backup:${APP_VERSION:?x}\n"
 	goodApk := "RUN apk add --no-cache bash jq && rm -rf /x\nRUN apk add jq; echo restic\n"
+	buildx := func(with string) string {
+		return "jobs:\n  a:\n    steps:\n      - uses: docker/setup-buildx-action@" + sha + " # v4.4.1" + with + "\n"
+	}
 	goodDependabot := "updates:\n  - package-ecosystem: gomod\n    cooldown:\n      default-days: 14\n  - package-ecosystem: npm\n    cooldown:\n      default-days: 21\n" +
 		"  - package-ecosystem: docker\n    cooldown:\n      default-days: 14\n  - package-ecosystem: docker-compose\n    cooldown:\n      default-days: 14\n" +
 		"  - package-ecosystem: github-actions\n    cooldown:\n      default-days: 14\n"
 	if got := slices.Concat(checkWorkflowPins("w", goodWorkflow), checkDockerfilePins("d", goodDockerfile), checkMakefilePins("m", goodMakefile, stages),
 		checkVarPins("s", goodShell, shellImageVar), checkComposePins("c", []byte(goodCompose)), checkApkAdds("d", goodApk),
-		checkDependabotCooldown("b", []byte(goodDependabot))); len(got) != 0 {
+		checkDependabotCooldown("b", []byte(goodDependabot)), checkBuildxDriver("w", []byte(buildx("\n        with:\n          driver: docker"))),
+		checkBuildxDriver("w", []byte(buildx("\n        with:\n          driver-opts: |\n            network=host\n            image=moby/buildkit:v0.26.0"+digest)))); len(got) != 0 {
 		t.Fatalf("pinned files are refused: %q", got)
 	}
 	bad := []struct {
@@ -300,6 +350,11 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 		{"github-actions without a cooldown", checkDependabotCooldown("b", []byte(strings.Replace(goodDependabot,
 			"github-actions\n    cooldown:\n      default-days: 14\n", "github-actions\n", 1)))},
 		{"an ecosystem missing", checkDependabotCooldown("b", []byte(strings.Replace(goodDependabot, "github-actions", "pip", 1)))},
+		{"setup-buildx with no driver", checkBuildxDriver("w", []byte(buildx("")))},
+		{"setup-buildx with the docker-container driver and no image", checkBuildxDriver("w", []byte(buildx("\n        with:\n          driver: docker-container")))},
+		{"setup-buildx with a BuildKit image by tag", checkBuildxDriver("w", []byte(buildx("\n        with:\n          driver-opts: image=moby/buildkit:v0.26.0")))},
+		{"setup-buildx with the kubernetes driver", checkBuildxDriver("w", []byte(buildx("\n        with:\n          driver: kubernetes\n          driver-opts: image=moby/buildkit:v0.26.0"+digest)))},
+		{"buildx workflow not YAML", checkBuildxDriver("w", []byte("jobs: ["))},
 		{"dependabot not YAML", checkDependabotCooldown("b", []byte("updates: ["))},
 	}
 	for _, c := range bad {
@@ -328,6 +383,7 @@ func TestSupplyChainPins(t *testing.T) {
 	for _, w := range workflows {
 		rel := ".github/workflows/" + filepath.Base(w)
 		problems = append(problems, checkWorkflowPins(rel, readText(t, rel))...)
+		problems = append(problems, checkBuildxDriver(rel, []byte(readText(t, rel)))...)
 	}
 	dockerfiles := repoDockerfiles(t)
 	for _, want := range []string{"Dockerfile", "deploy/backup/Dockerfile", toolsDockerfile} {

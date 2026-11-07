@@ -154,7 +154,10 @@ rule names its sensor") applied to security.
   release job only.
 - Supply-chain pins: every `uses:` is a full commit SHA with its `# vX.Y.Z` and every image a
   `<tag>@sha256:<index digest>` (every Dockerfile, compose, CI services and job containers, the
-  deploy scripts), checked by the guard `TestSupplyChainPins`. The tool and Postgres images live in
+  deploy scripts), checked by the guard `TestSupplyChainPins`. The same guard refuses a
+  `docker/setup-buildx-action` step that would pull an unpinned BuildKit image: it must use
+  `driver: docker` (the runner's own engine; the release workflow does) or name the BuildKit image
+  by digest in `driver-opts`. The tool and Postgres images live in
   `security/tools.Dockerfile` (never built; `make config-scan` lists it as such), which the Makefile
   reads and Dependabot's docker ecosystem bumps; `make check-pins` keeps the copies of the Postgres
   pin, digest included, equal. Dependabot bumps the SHA or digest and the version together; for

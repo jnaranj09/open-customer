@@ -39,7 +39,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      # The docker driver builds in the runner's own Docker engine. With no driver the action starts
+      # the docker-container driver, which pulls moby/buildkit:buildx-stable-1, a moving tag, into
+      # the job that signs (TestSupplyChainPins refuses that). The two builds need no
+      # docker-container feature: one platform, load: true, no cache export, and the push is make
+      # release-sign's docker push.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
