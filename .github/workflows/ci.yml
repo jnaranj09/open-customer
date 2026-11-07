@@ -1,7 +1,7 @@
 # Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
 # in P2, e2e in P6, test-deploy in P7, secrets and test-sec with the security pipeline). The job
-# security scans the images (docs/designs/devsecops.md section 4). The job names gate and security
-# are required checks on main: never rename them.
+# security scans the images and the running app (docs/designs/devsecops.md sections 4 and 6). The
+# job names gate and security are required checks on main: never rename them.
 name: ci
 
 on:
@@ -87,7 +87,8 @@ jobs:
 
   # Trivy on the app and backup images built here and on the pinned postgres and cloudflared images
   # (make image-scan MODE=push: only the app and backup images block). The SARIF files go to the
-  # repo's Security tab, also when the scan is red.
+  # repo's Security tab, also when the scan is red. Then ZAP and Nuclei on the app image (make dast);
+  # its reports are an artifact when it is red.
   security:
     runs-on: ubuntu-latest
     permissions:
@@ -139,3 +140,25 @@ jobs:
         with:
           sarif_file: trivy-sarif/cloudflared.sarif
           category: trivy-cloudflared
+      # The Nuclei templates release is pinned (NUCLEI_TEMPLATES), so the cache key is the Makefile
+      # line that pins it.
+      - name: Nuclei templates cache key
+        id: nuclei-templates
+        if: ${{ !cancelled() }}
+        run: echo "version=$(sed -n 's/^NUCLEI_TEMPLATES := //p' Makefile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        if: ${{ !cancelled() }}
+        with:
+          path: ${{ runner.temp }}/nuclei
+          key: nuclei-templates-${{ steps.nuclei-templates.outputs.version }}
+      - run: make dast
+        if: ${{ !cancelled() }}
+        env:
+          NUCLEI_CACHE_DIR: ${{ runner.temp }}/nuclei
+      - name: Upload dast reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dast-report
+          path: dast-report/
+          if-no-files-found: ignore

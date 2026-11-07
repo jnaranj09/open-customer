@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"runtime/debug"
+	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/jackc/pgx/v5"
@@ -33,15 +34,44 @@ type middlewareConfig struct {
 }
 
 // wrap applies design doc item 34 steps 1–5 around next, outermost first: request ID and log
-// line, X-App-Version, panic recovery, client IP, Origin check. The innermost layer records the
-// mux's route pattern for the log line.
+// line, the security headers (devsecops.md decision D8), X-App-Version, panic recovery, client
+// IP, Origin check. The innermost layer records the mux's route pattern for the log line.
 func wrap(next http.Handler, cfg middlewareConfig) http.Handler {
 	h := recordRoute(next)
 	h = checkOrigin(cfg, h)
 	h = withClientIP(cfg, h)
 	h = recoverPanic(cfg, h)
 	h = appVersion(cfg.Version, h)
+	h = securityHeaders(cfg, h)
 	return logging.Middleware(cfg.Log, h)
+}
+
+// headerCSP is the Content-Security-Policy header on every response: only the directives a
+// <meta> CSP cannot carry (frame-ancestors) or that hold for every response. The script, style,
+// image and connect sources are SvelteKit's kit.csp in web/vite.config.ts, written as a <meta>
+// tag into the built pages with the hashes of their inline scripts; a browser enforces both
+// policies.
+const headerCSP = "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+
+// hstsValue is Strict-Transport-Security when PUBLIC_URL is https. Over plain http (localhost in
+// development and e2e) a browser ignores the header, and sending it would claim a promise the
+// app cannot keep.
+const hstsValue = "max-age=31536000"
+
+// securityHeaders sets the fixed security headers (devsecops.md section 6, decision D8) before
+// anything inside can write, so problems, panics, files and probes all carry them.
+func securityHeaders(cfg middlewareConfig, next http.Handler) http.Handler {
+	https := strings.HasPrefix(cfg.PublicOrigin, "https://")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("Content-Security-Policy", headerCSP)
+		if https {
+			h.Set("Strict-Transport-Security", hstsValue)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // recordRoute passes the matched pattern back to logging.Middleware. The mux sets Pattern on the

@@ -17,3 +17,6 @@ web/tests/e2e/.auth/
 
 # Agent plan workspaces (local only)
 .superpowers/
+
+# make dast reports (never committed)
+dast-report/

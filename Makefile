@@ -13,6 +13,11 @@ SQLC_IMAGE := sqlc/sqlc:1.31.1
 # gitleaks action's GITLEAKS_VERSION; check-pins keeps the two equal.
 TRIVY_IMAGE := aquasec/trivy:0.76.1
 GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.24.3
+# make dast: ZAP, Nuclei and its templates release, and the curl image that drives the app.
+ZAP_IMAGE := zaproxy/zap-stable:2.17.0
+NUCLEI_IMAGE := projectdiscovery/nuclei:v3.11.1
+NUCLEI_TEMPLATES := v10.5.1
+CURL_IMAGE := curlimages/curl:8.22.0
 export PG_IMAGE
 
 VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)
@@ -63,7 +68,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 PNPM := cd web && pnpm
 
 .PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
-	image-scan secrets test-sec
+	image-scan secrets test-sec dast
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -189,6 +194,15 @@ MODE ?= push
 PULL ?=
 image-scan:
 	TRIVY_IMAGE=$(TRIVY_IMAGE) VERSION=$(VERSION) PULL=$(PULL) scripts/security/image-scan.sh $(MODE)
+
+# devsecops.md section 6: ZAP (API scan signed out and signed in, baseline) and Nuclei against
+# open-customer:$(VERSION) (built by make image) on a private network, with no published port.
+# Reports go to REPORT_DIR (git-ignored); NUCLEI_CACHE_DIR keeps the downloaded templates.
+REPORT_DIR ?= dast-report
+dast:
+	IMAGE=open-customer:$(VERSION) PG_IMAGE=$(PG_IMAGE) ZAP_IMAGE=$(ZAP_IMAGE) NUCLEI_IMAGE=$(NUCLEI_IMAGE) \
+		NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) CURL_IMAGE=$(CURL_IMAGE) REPORT_DIR=$(REPORT_DIR) \
+		scripts/security/dast.sh
 
 # gitleaks over the whole git history, offline; reviewed false positives are in .gitleaksignore.
 secrets:

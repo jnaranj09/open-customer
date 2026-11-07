@@ -51,13 +51,17 @@ with fnm, `fnm use` in web/).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
   a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit), then
   `deploy/tests/scripts_test.sh` (the operator scripts, with a fake `docker`) on the host.
+- `make dast`: the running-app scan (`scripts/security/dast.sh`): the app image from `make image`
+  and a throwaway Postgres on a private network (`oc-dast-*`, no host port), a made-up owner signed
+  in, then ZAP (API scan signed out and signed in, baseline) and Nuclei. Reports in `dast-report/`.
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
 `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec`,
-plus `make image image-scan` for a change to an image or the scan. CI (`.github/workflows/ci.yml`)
-also runs the gitleaks action, `pnpm audit --audit-level high` and `make e2e` (after `make build`)
-in job `gate`, and `make image image-scan MODE=push` in job `security`.
+plus `make image image-scan dast` for a change to an image, a scan or what the app serves. CI
+(`.github/workflows/ci.yml`) also runs the gitleaks action, `pnpm audit --audit-level high` and
+`make e2e` (after `make build`) in job `gate`, and `make image image-scan MODE=push dast` in job
+`security`.
 
 A check that could not run is reported as NOT RUN, never as passing.
 

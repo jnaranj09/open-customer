@@ -6,8 +6,18 @@
 #   FAKE_FINDINGS   space-separated scan names (app backup postgres cloudflared) whose Trivy run
 #                   finds something: the fake exits with the run's --exit-code value, as Trivy does
 #   FAKE_FAIL_ON    a call containing this text exits FAKE_FAIL_CODE (default 1)
-# The fake also copies the Trivy ignore file it was given to $FAKE_LOG.ignore. No real container
-# runs and nothing is pulled. All data here is made up.
+# and, for dast.sh, by the image a `docker run` names:
+#   curl-test:1     answers the app's routes: /readyz ok, setup 201, login 200 with a made-up
+#                   session cookie, /api/v1/me the next status of FAKE_ME_STATUS (space-separated,
+#                   the last one repeats; default 200)
+#   zap-test:1      writes FAKE_ZAP_REPORT (default: no alerts) as its -J report, exits
+#                   FAKE_ZAP_CODE (default 0) and copies the rules file it was given to
+#                   $FAKE_LOG.zaprules
+#   nuclei-test:1   prints FAKE_NUCLEI_TEMPLATES (default 5) as its loaded-templates count, writes
+#                   one finding to its JSONL output when FAKE_NUCLEI_FINDINGS is set, exits 0
+# `docker exec ... setup-link` prints a made-up setup link. The fake also copies the Trivy ignore
+# file it was given to $FAKE_LOG.ignore. No real container runs and nothing is pulled. All data
+# here is made up.
 set -uo pipefail
 
 # lib.sh is shellchecked on its own (make lint runs shellcheck without -x).
@@ -17,7 +27,8 @@ set -uo pipefail
 REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
-unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE MODE PULL SARIF_DIR
+unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
+  FAKE_NUCLEI_FINDINGS MODE PULL SARIF_DIR REPORT_DIR NUCLEI_CACHE_DIR
 
 mkdir -p "$ROOT/bin"
 cat >"$ROOT/bin/docker" <<'FAKE'
@@ -27,11 +38,68 @@ echo "$*" >>"$FAKE_LOG"
 if [ -n "${FAKE_FAIL_ON:-}" ]; then
   case "$*" in *"$FAKE_FAIL_ON"*) exit "${FAKE_FAIL_CODE:-1}" ;; esac
 fi
+# mount_of <container path> <args...>: the host side of `-v <host>:<container path>[:mode]`.
+mount_of() {
+  local want=$1 prev=''
+  shift
+  for a in "$@"; do
+    if [ "$prev" = -v ]; then
+      case "$a" in *:"$want" | *:"$want":*) echo "${a%%:"$want"*}" && return ;; esac
+    fi
+    prev=$a
+  done
+}
+fake_curl() {
+  local url=''
+  for a in "$@"; do
+    case "$a" in http*) url=$a ;; esac
+  done
+  case "$url" in
+    */readyz) ;;
+    */api/v1/setup) printf '201' ;;
+    */api/v1/auth/login) printf '200\noc_session=made-up-session; Path=/; HttpOnly; SameSite=Lax' ;;
+    */api/v1/me)
+      local n statuses
+      n=$(($(cat "$FAKE_LOG.me" 2>/dev/null || echo 0) + 1))
+      echo "$n" >"$FAKE_LOG.me"
+      read -ra statuses <<<"${FAKE_ME_STATUS:-200}"
+      [ "$n" -le "${#statuses[@]}" ] || n=${#statuses[@]}
+      printf '%s' "${statuses[$((n - 1))]}"
+      ;;
+  esac
+}
 case "$1" in
   save) # docker save -o <file> <image>
     : >"$3"
     ;;
+  exec)
+    case "$*" in *setup-link*) echo "http://localhost:8080/setup#made-up-token" ;; esac
+    ;;
   run)
+    case " $* " in
+      *" curl-test:1 "*)
+        fake_curl "$@"
+        exit 0
+        ;;
+      *" zap-test:1 "*)
+        wrk=$(mount_of /zap/wrk "$@")
+        cp "$wrk/rules.tsv" "$FAKE_LOG.zaprules"
+        prev=''
+        for a in "$@"; do
+          [ "$prev" != -J ] || printf '%s' "${FAKE_ZAP_REPORT:-{\"site\":[]\}}" >"$wrk/$a"
+          prev=$a
+        done
+        exit "${FAKE_ZAP_CODE:-0}"
+        ;;
+      *" nuclei-test:1 "*)
+        out=$(mount_of /out "$@")
+        echo "[INF] Templates loaded for current scan: ${FAKE_NUCLEI_TEMPLATES:-5}" >&2
+        if [ -n "${FAKE_NUCLEI_FINDINGS:-}" ]; then
+          echo '{"template-id":"made-up-template","info":{"severity":"medium"}}' >"$out/nuclei.jsonl"
+        fi
+        exit 0
+        ;;
+    esac
     shift
     scan_dir='' name='' code=0
     while [ "$#" -gt 0 ]; do
@@ -65,8 +133,11 @@ chmod +x "$ROOT/bin/docker"
 setup() {
   W=$(mktemp -d "$ROOT/run.XXXXXX")
   mkdir -p "$W/scripts" "$W/security" "$W/deploy"
+  mkdir -p "$W/api"
   cp -r "$REPO/scripts/security" "$W/scripts/"
   cp "$REPO/deploy/compose.yaml" "$W/deploy/"
+  cp "$REPO/security/zap-rules.tsv" "$W/security/"
+  cp "$REPO/api/openapi.yaml" "$W/api/"
   echo '[]' >"$W/security/allow.json"
   LOG=$W/docker.log
   : >"$LOG"
@@ -78,6 +149,15 @@ setup() {
 scan() {
   (cd / && PATH="$ROOT/bin:$PATH" TRIVY_IMAGE=trivy-test:1 PG_IMAGE=postgres:18.6-alpine \
     VERSION=1.2.3 TRIVY_CACHE_DIR="$W/cache" "$W/scripts/security/image-scan.sh" "$@") >"$W/out" 2>&1
+}
+
+# dast: runs dast.sh from another folder with the fake docker and a templates cache that already
+# holds the pinned templates; stdout and stderr go to $W/out.
+dast() {
+  mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
+  (cd / && PATH="$ROOT/bin:$PATH" IMAGE=open-customer:1.2.3 PG_IMAGE=postgres:18.6-alpine \
+    ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
+    REPORT_DIR="$W/report" NUCLEI_CACHE_DIR="$W/nuclei-cache" "$W/scripts/security/dast.sh" "$@") >"$W/out" 2>&1
 }
 
 has_call() {
@@ -206,6 +286,140 @@ test_sarif_written_per_image() {
   has_call "--output /sarif/app.sarif" || fail "no SARIF for the app image"
 }
 
+test_dast_clean_run() {
+  setup
+  dast || fail "a clean dast run exited non-zero: $(cat "$W/out")"
+  assert_eq "zap runs" 3 "$(count_calls 'zap-test:1')"
+  assert_eq "nuclei runs" 1 "$(count_calls 'nuclei-test:1')"
+  grep -qE '(^| )(-p|--publish)( |=)' "$LOG" && fail "a container published a port"
+  assert_eq "scanners outside the app's network namespace" 0 \
+    "$(grep -E 'zap-test:1|nuclei-test:1|curl-test:1 .*localhost' "$LOG" | grep -vc -- '--network container:oc-dast-app')"
+  has_call "rm -f -v oc-dast-scanner oc-dast-app oc-dast-pg" || fail "the containers were not removed"
+  has_call "network rm oc-dast-net" || fail "the network was not removed"
+}
+
+test_dast_bad_args() {
+  setup
+  local rc=0
+  dast extra || rc=$?
+  assert_eq "exit code with an argument" 2 "$rc"
+  assert_eq "docker calls for bad args" 0 "$(wc -l <"$LOG")"
+}
+
+test_dast_session_check_fails() {
+  setup
+  FAKE_ME_STATUS=401 dast && fail "a failed session check exited 0"
+  out_has "GET /api/v1/me answered 401"
+  assert_eq "scans after a failed session check" 0 "$(count_calls 'zap-test:1')"
+  assert_eq "nuclei runs after a failed session check" 0 "$(count_calls 'nuclei-test:1')"
+}
+
+test_dast_authenticated_scan_sends_session_headers() {
+  setup
+  dast || fail "a clean dast run exited non-zero: $(cat "$W/out")"
+  has_call 'replacer.full_list(0).matchstr=Origin -config replacer.full_list(0).regex=false -config replacer.full_list(0).replacement=http://localhost:8080' ||
+    fail "zap was not given the Origin header"
+  has_call 'replacer.full_list(1).matchstr=Cookie -config replacer.full_list(1).regex=false -config replacer.full_list(1).replacement=oc_session=made-up-session' ||
+    fail "the authenticated zap scan was not given the session cookie"
+  assert_eq "zap runs with the session cookie" 1 "$(count_calls 'replacement=oc_session=made-up-session')"
+}
+
+test_dast_session_ends_during_scan() {
+  setup
+  FAKE_ME_STATUS='200 401' dast && fail "a session that ended during the authenticated scan exited 0"
+  out_has "the session ended during the authenticated scan"
+}
+
+test_zap_exit_3_red() {
+  setup
+  FAKE_ZAP_CODE=3 dast && fail "zap exit 3 (zap error) exited 0"
+  out_has "zap could not scan"
+}
+
+test_zap_exit_1_red() {
+  setup
+  FAKE_ZAP_CODE=1 dast && fail "zap exit 1 (a FAIL rule) exited 0"
+  out_has "blocking findings"
+}
+
+test_zap_exit_2_passes() {
+  setup
+  FAKE_ZAP_CODE=2 dast || fail "zap exit 2 (WARN rules only) exited non-zero: $(cat "$W/out")"
+}
+
+test_zap_server_error_red() {
+  setup
+  FAKE_ZAP_REPORT='{"site":[{"alerts":[{"pluginid":"100000","riskcode":"0","count":"7"},{"pluginid":"100000","riskcode":"1","count":"2"}]}]}' \
+    dast && fail "a 5xx answer during a zap scan exited 0"
+  out_has "the app answered 2 requests with a 5xx"
+}
+
+test_zap_client_errors_pass() {
+  setup
+  FAKE_ZAP_REPORT='{"site":[{"alerts":[{"pluginid":"100000","riskcode":"0","count":"7"}]}]}' dast ||
+    fail "4xx answers during a zap scan exited non-zero: $(cat "$W/out")"
+}
+
+test_zap_no_report_red() {
+  setup
+  FAKE_ZAP_REPORT='not json' dast && fail "a zap run without a readable report exited 0"
+  out_has "wrote no readable JSON report"
+}
+
+test_nuclei_findings_exit_0_red() {
+  setup
+  FAKE_NUCLEI_FINDINGS=1 dast && fail "nuclei findings with exit 0 exited 0"
+  out_has "nuclei: 1 findings"
+}
+
+test_nuclei_no_templates_red() {
+  setup
+  FAKE_NUCLEI_TEMPLATES=0 dast && fail "a nuclei run with no templates exited 0"
+  out_has "nuclei loaded no templates"
+}
+
+test_templates_download_fails_red() {
+  setup
+  rm -rf "$W/nuclei-cache"
+  mkdir -p "$W/nuclei-cache"
+  (cd / && FAKE_FAIL_ON=nuclei-templates PATH="$ROOT/bin:$PATH" IMAGE=open-customer:1.2.3 PG_IMAGE=postgres:18.6-alpine \
+    ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
+    REPORT_DIR="$W/report" NUCLEI_CACHE_DIR="$W/nuclei-cache" "$W/scripts/security/dast.sh") >"$W/out" 2>&1 &&
+    fail "a failed templates download exited 0"
+  out_has "cannot download the nuclei templates"
+}
+
+test_zap_allow_is_ignore() {
+  setup
+  cat >"$W/security/allow.json" <<'JSON'
+[
+  {"tool": "zap", "id": "10021", "reason": "made up", "expires": "2099-01-01"},
+  {"tool": "zap", "id": "10020", "reason": "made up, expired", "expires": "2000-01-01"},
+  {"tool": "nuclei", "id": "10038", "reason": "made up, other tool", "expires": "2099-01-01"}
+]
+JSON
+  dast || fail "dast exited non-zero: $(cat "$W/out")"
+  [ -f "$LOG.zaprules" ] || fail "zap was given no rules file"
+  grep -qP '^10021\tIGNORE\t' "$LOG.zaprules" || fail "the live zap id is not IGNORE: $(cat "$LOG.zaprules")"
+  assert_eq "lines for the live id" 1 "$(grep -cP '^10021\t' "$LOG.zaprules")"
+  grep -qP '^10020\tFAIL\t' "$LOG.zaprules" || fail "an expired zap id is not FAIL"
+  grep -qP '^10038\tFAIL\t' "$LOG.zaprules" || fail "another tool's id changed the zap rules"
+}
+
+test_nuclei_allow_excluded() {
+  setup
+  cat >"$W/security/allow.json" <<'JSON'
+[
+  {"tool": "nuclei", "id": "made-up-template", "reason": "made up", "expires": "2099-01-01"},
+  {"tool": "nuclei", "id": "made-up-expired", "reason": "made up, expired", "expires": "2000-01-01"}
+]
+JSON
+  dast || fail "dast exited non-zero: $(cat "$W/out")"
+  has_call "-exclude-id made-up-template " || fail "the live nuclei id did not reach -exclude-id"
+  has_call "made-up-expired" && fail "an expired nuclei id reached nuclei"
+  return 0
+}
+
 t "an unknown MODE exits 2" test_unknown_mode
 t "push mode: a clean scan covers the four images" test_push_clean_scans_four_images
 t "push mode: an app image finding is red" test_push_app_finding_red
@@ -218,4 +432,20 @@ t "PULL=1 scans the released images from compose.yaml" test_pull_scans_released_
 t "a released image that cannot be pulled is red" test_missing_image_red
 t "a local image make image did not build is red" test_local_build_missing_red
 t "SARIF_DIR gets one SARIF file per image" test_sarif_written_per_image
+t "dast: a clean run scans in the app's network namespace and cleans up" test_dast_clean_run
+t "dast: an argument exits 2" test_dast_bad_args
+t "dast stops when the session check fails" test_dast_session_check_fails
+t "dast: the authenticated scan sends the Origin and session cookie" test_dast_authenticated_scan_sends_session_headers
+t "dast: a session that ends during the authenticated scan is red" test_dast_session_ends_during_scan
+t "zap exit 3 is red" test_zap_exit_3_red
+t "zap exit 1 is red" test_zap_exit_1_red
+t "zap exit 2 (WARN rules only) passes" test_zap_exit_2_passes
+t "a 5xx answer in a zap scan is red" test_zap_server_error_red
+t "4xx answers in a zap scan pass" test_zap_client_errors_pass
+t "a zap run with no readable report is red" test_zap_no_report_red
+t "nuclei findings with exit 0 are red" test_nuclei_findings_exit_0_red
+t "a nuclei run that loads no templates is red" test_nuclei_no_templates_red
+t "a failed nuclei templates download is red" test_templates_download_fails_red
+t "an allow-listed zap rule is IGNORE in the rules file" test_zap_allow_is_ignore
+t "an allow-listed nuclei template reaches -exclude-id" test_nuclei_allow_excluded
 finish

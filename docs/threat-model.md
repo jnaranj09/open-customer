@@ -68,12 +68,12 @@ dashboard and settings (Cloudflare or any other).
 | T25 | client data | A malformed, oversized or unexpected JSON body is half accepted | JSON request body | test:TestDecodeJSON; test:TestPostSetupUnknownFieldIs422; test:TestPostSetupMalformedIs422; test:TestLoginOversizeIs413; gap: Task 6 |
 | T26 | client data | A bad path or query parameter reaches a module | path and query params | test:TestErrorHandlerFuncWritesValidation; test:TestPatchAttributeBadUUIDIs422; test:TestListAppointmentsBadDateIs422 |
 | T27 | client data | SQL injection | every database query | make:lint; gap: Task 5 |
-| T28 | client data | Stored script (XSS): a client name or note runs as code in the app | the web app | file:web/eslint.config.js; make:lint; gap: Task 3 |
-| T29 | the session | A script injected by any means reads data or acts as her | the web app | test:TestSessionCookieAttributes; gap: Task 3 |
-| T30 | the session | Clickjacking: the app is framed by another site | every response | gap: Task 3 |
-| T31 | client data | MIME sniffing turns an uploaded file into a script | photos, icons | test:TestUploadMediaNotJPEGIs415; test:TestUploadIconNotPNGIs415; gap: Task 3 |
-| T32 | client data | Another site reads API responses with her cookie (CORS) | JSON API | gap: Task 3 |
-| T33 | client data | Known weaknesses a scanner finds in the running app (headers, misconfiguration, exposed files) | the running app | gap: Task 3 |
+| T28 | client data | Stored script (XSS): a client name or note runs as code in the app | the web app | file:web/eslint.config.js; make:lint; file:web/vite.config.ts; make:dast; ci:ci.yml/security |
+| T29 | the session | A script injected by any means reads data or acts as her | the web app | test:TestSessionCookieAttributes; file:web/vite.config.ts; test:TestSecurityHeadersOnEveryResponse; make:dast |
+| T30 | the session | Clickjacking: the app is framed by another site | every response | test:TestSecurityHeadersOnEveryResponse; make:dast; ci:ci.yml/security |
+| T31 | client data | MIME sniffing turns an uploaded file into a script | photos, icons | test:TestUploadMediaNotJPEGIs415; test:TestUploadIconNotPNGIs415; test:TestSecurityHeadersOnEveryResponse |
+| T32 | client data | Another site reads API responses with her cookie (CORS) | JSON API | test:TestSecurityHeadersOnEveryResponse; make:dast; ci:ci.yml/security |
+| T33 | client data | Known weaknesses a scanner finds in the running app (headers, misconfiguration, exposed files) | the running app | make:dast; ci:ci.yml/security; file:scripts/security/tests/run.sh |
 | T34 | client data | The deployed app, behind its real proxy, has a weakness the CI app does not | the deployment | gap: Task 8 |
 | T35 | photos | A photo upload that is not a JPEG, or is too large, is stored | POST /media | test:TestUploadMediaNotJPEGIs415; test:TestUploadMediaFullOver10MBIs413; test:TestUploadMediaRequestOver12MBIs413; test:TestUploadMediaNotMultipartIs415; test:TestSaveRejectsUnreadableJPEG; gap: Task 6 |
 | T36 | photos | A half-failed upload leaves files without a row, or a row without its file | POST /media | test:TestSaveWritesFilesBeforeRow; test:TestSaveInsertFailureRemovesFiles; test:TestUploadMediaCommitFailureRemovesFiles |

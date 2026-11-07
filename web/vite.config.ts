@@ -13,6 +13,28 @@ export default defineConfig({
 			// SPA: every unknown path gets index.html; the Go server serves it (design doc item 35).
 			adapter: adapter({ fallback: 'index.html' }),
 			serviceWorker: { register: true },
+			// The script, style and fetch sources (devsecops.md decision D8). The SPA's pages are
+			// written at build time, so SvelteKit puts this policy in a <meta> tag with the hashes of
+			// its inline scripts; the Go server adds the header-only directives (frame-ancestors) in
+			// internal/httpapi/middleware.go. A browser enforces both.
+			csp: {
+				mode: 'hash',
+				directives: {
+					'default-src': ['self'],
+					'script-src': ['self'],
+					'style-src': ['self'],
+					// Widening: inline style attributes. Svelte writes a component's static style="..."
+					// into the HTML it clones, and app.html's wrapper div has one; neither can be hashed
+					// (a hash for an attribute needs 'unsafe-hashes' and the exact text). Style
+					// elements and every script stay 'self' or hashed.
+					'style-src-attr': ['unsafe-inline'],
+					// blob: for the photo previews made on the phone, data: for small inlined images.
+					'img-src': ['self', 'blob:', 'data:'],
+					'connect-src': ['self'],
+					'worker-src': ['self'],
+					'manifest-src': ['self']
+				}
+			},
 			// The same value as the Go -ldflags version; the Makefile and the Dockerfile pass VERSION.
 			version: { name: process.env['VERSION'] ?? 'dev' }
 		})

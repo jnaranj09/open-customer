@@ -51,8 +51,8 @@ rule names its sensor") applied to security.
   "Pins"). Dependabot bumps what it can.
 - `CLAUDE.md` says `docs/designs/release-1.md` is the only architecture source. The change that
   builds this pipeline updates that line to name this document too.
-- CI already starts the real app and a Postgres for `make e2e`. The dynamic scans reuse that, so
-  there is no staging environment.
+- CI already builds the app image and can start it with a throwaway Postgres. The dynamic scans
+  run against that (section 6), so there is no staging environment.
 
 ## What gets built
 
@@ -123,13 +123,21 @@ rule names its sensor") applied to security.
 
 ### 6. Running-app scan in CI (ZAP + Nuclei)
 
-- Against the app CI starts for e2e, after `make e2e`.
-- ZAP API scan driven by `api/openapi.yaml`, unauthenticated and authenticated (a made-up user
-  created the way e2e creates one).
-- Nuclei against the same app.
-- Expected fix it forces: security headers on every response (`Content-Security-Policy` including
-  `frame-ancestors`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and `Strict-Transport-Security`
-  only where the app knows it is behind HTTPS). Today the app sets none. Each header gets a Go test.
+- Against the app image `make image` builds, in CI job `security` (`make dast`,
+  `scripts/security/dast.sh`): the app and a throwaway Postgres on a private Docker network with no
+  published port (host :8080 stays free for `make e2e`). The scanners run in the app container's
+  network namespace and reach it as `http://localhost:8080`, its `PUBLIC_URL` (the app takes plain
+  http only on localhost).
+- ZAP API scan driven by `api/openapi.yaml`, unauthenticated and authenticated: a made-up owner is
+  created through `setup-link` and `POST /setup` and logs in, and `GET /me` must answer 200 with
+  her cookie before any scan runs (and again after the signed-in pass, which leaves logout out).
+  Plus a ZAP baseline (passive) scan of `/`.
+- Nuclei against the same app, with a pinned templates release.
+- The fix it forced: security headers on every response (`Content-Security-Policy` including
+  `frame-ancestors`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, and
+  `Strict-Transport-Security` only when `PUBLIC_URL` is https), set by the middleware, with the
+  script and style sources in a `<meta>` CSP that SvelteKit writes with script hashes. Go test:
+  `TestSecurityHeadersOnEveryResponse`.
 
 ### 7. Fuzz tests
 
