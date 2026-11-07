@@ -172,8 +172,8 @@ rule names its sensor") applied to security.
   a failed scheduled run with no setup. Until the first `v*` tag exists, the job writes "NOT RUN: no
   release tag" in its summary and passes. My call.
 - My call: the release also writes an SBOM and signs the images keylessly with cosign through
-  GitHub OIDC. Keyless signing stores no key, so it keeps anti-goal 1. Built as `make
-  release-sign IMAGE=<repository>:<tag>` (`scripts/security/release-sign.sh`), run by the release
+  GitHub OIDC. Keyless signing stores no key, so it keeps anti-goal 1. Built as
+  `make release-sign IMAGE=<repository>:<tag>` (`scripts/security/release-sign.sh`), run by the release
   job for the app and the backup image after the scan: `docker push`; the digest from the push's
   `<tag>: digest: sha256:… size: …` line, which the local image's `RepoDigests` must also hold (no
   digest, two digests or a mismatch is red before cosign runs); a CycloneDX SBOM of that image
@@ -203,8 +203,8 @@ rule names its sensor") applied to security.
   `.env`'s version before it reads the snapshot, and for the snapshot's version before it stops
   anything) and `backup-now.sh`. A local image under a release name is trusted: the scripts put
   one there only through `pull_verified`, which removes both tags when its pull or digest check
-  fails (a tag it cannot remove gets a loud message with the `docker image rm` command); `make
-  image` tags `open-customer:<version>`, not the release names. A fork changes
+  fails (a tag it cannot remove gets a loud message with the `docker image rm` command);
+  `make image` tags `open-customer:<version>`, not the release names. A fork changes
   `SIGNER_IDENTITY_REGEXP` and `SIGNER_REPOSITORY` (`deploy/README.md` section 9). `COSIGN_IMAGE`
   lives in `lib.sh`, because deployers have `deploy/` and not the Makefile; `make check-pins` keeps
   its version equal to `cosign-release` in the release workflow, and Dependabot reads neither, so
