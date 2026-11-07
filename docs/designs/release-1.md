@@ -1896,7 +1896,7 @@ The items below are grouped by area, not by order. Build them in these phases. A
     *   Serves `web.Build` (item 36) through `fs.Sub(web.Build, "build")`. It has no `go:embed` of its own.
     *   `/index.html` and the fallback write the embedded `index.html` with `http.ServeContent`, status 200. Not `http.FileServer` or `http.ServeFileFS`: both answer `/index.html` with a 301 to `/`, and the service worker would precache that redirect, which breaks the cold open with the server off.
     *   Other built files (JS, CSS, images) go through `http.FileServerFS`.
-    *   `/` is routed to the same index handler. Unknown files and directories (no listings) fall back to `index.html`. Unknown `/api/` paths never reach this file (item 32).
+    *   `/` is routed to the same index handler. Unknown files and directories (no listings) fall back to `index.html`. A path with `..` never reaches a file outside the build: the mux answers a raw `..` with a 307 to the cleaned path, and an encoded form (`%2e%2e`, `..%2f`) is the app shell (`TestDotDotPathRedirectsToTheCleanPath`, `TestEncodedDotDotPathServesTheAppShell`; threat model T39). Photos are opened through `os.OpenRoot(MEDIA_DIR)`, so a stored key that leaves the folder is a 500 (`TestGetMediaKeyOutsideTheMediaFolderIsRefused`). Unknown `/api/` paths never reach this file (item 32).
     *   `_app/version.json` is `no-cache`.
     *   Cache headers:
         *   `_app/immutable/*`: `public, max-age=31536000, immutable`.

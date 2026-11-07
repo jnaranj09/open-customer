@@ -411,3 +411,27 @@ func TestListClientMediaUnknownIs404(t *testing.T) {
 	f := newMediaFixture(t, nil)
 	assertProblem(t, f.send(http.MethodGet, clientMediaPath(uuid.New()), ""), http.StatusNotFound, ":not-found")
 }
+
+// A storage key that leaves the media folder (a bad row, threat model T39) is refused by
+// os.OpenRoot: the file beside the folder is never served.
+func TestGetMediaKeyOutsideTheMediaFolderIsRefused(t *testing.T) {
+	f := newMediaFixture(t, nil)
+	got := f.uploadOK(t)
+	const secret = "made-up file outside the media folder"
+	outside := filepath.Join(filepath.Dir(f.dir), "x")
+	if err := os.WriteFile(outside, []byte(secret), 0o600); err != nil {
+		t.Fatalf("write the outside file: %v", err)
+	}
+	if _, err := f.pool.Exec(t.Context(), `UPDATE media SET storage_key = '../x', thumb_key = $2 WHERE id = $1`, got.Id, outside); err != nil {
+		t.Fatalf("point the row outside: %v", err)
+	}
+	for _, target := range []string{mediaPath + "/" + got.Id.String(), mediaPath + "/" + got.Id.String() + "/thumb"} {
+		t.Run(target, func(t *testing.T) {
+			rec := f.send(http.MethodGet, target, "")
+			assertProblem(t, rec, http.StatusInternalServerError, ":internal")
+			if strings.Contains(rec.Body.String(), secret) {
+				t.Fatalf("body %q is the file outside the media folder", rec.Body.String())
+			}
+		})
+	}
+}

@@ -102,3 +102,26 @@ func TestMissingIndexIsInternalProblem(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want problem+json", ct)
 	}
 }
+
+// A path with ".." never reaches a file outside the build (threat model T39): the router answers a
+// raw ".." with a redirect to the cleaned path, and the cleaned path, like every encoded form, is
+// the app shell.
+func TestDotDotPathRedirectsToTheCleanPath(t *testing.T) {
+	h := newTestApp(t, testServerConfig{}).handler
+	rec := serve(h, http.MethodGet, "/../../etc/passwd")
+	if rec.Code != http.StatusTemporaryRedirect || rec.Header().Get("Location") != "/etc/passwd" {
+		t.Fatalf("got %d Location %q, want 307 to /etc/passwd", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestEncodedDotDotPathServesTheAppShell(t *testing.T) {
+	h := newTestApp(t, testServerConfig{}).handler
+	for _, target := range []string{"/etc/passwd", "/%2e%2e/%2e%2e/etc/passwd", "/_app/%2e%2e/%2e%2e/etc/passwd", "/..%2f..%2fetc/passwd"} {
+		t.Run(target, func(t *testing.T) {
+			rec := serve(h, http.MethodGet, target)
+			if rec.Code != http.StatusOK || rec.Body.String() != indexBody {
+				t.Fatalf("got %d %q, want 200 with the index body", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
