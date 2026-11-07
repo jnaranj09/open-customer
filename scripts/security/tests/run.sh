@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), and for
-# scripts/check-pins.sh's image digest checks. Run by make test-sec on the host. Each test runs a wrapper from a temp copy of the repo parts it reads
-# (scripts/security, security/allow.json, deploy/compose.yaml; made-up Dockerfiles and a workflow
-# for config-scan.sh), with a fake `docker` first on PATH
-# that appends each call to a log and answers from env vars:
+# Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), and
+# for scripts/check-pins.sh's image digest checks. Run by make test-sec on the host. Each test runs
+# a wrapper from a temp copy of the repo parts it reads (scripts/security, security/allow.json,
+# deploy/compose.yaml; made-up Dockerfiles and a workflow for config-scan.sh), with a fake `docker`
+# first on PATH that appends each call to a log and answers from env vars:
 #   FAKE_FINDINGS   space-separated scan names (app backup postgres cloudflared) whose Trivy run
 #                   finds something: the fake exits with the run's --exit-code value, as Trivy does
 #   FAKE_FAIL_ON    a call containing this text exits FAKE_FAIL_CODE (default 1)
@@ -19,13 +19,13 @@
 #                   one finding to its JSONL output when FAKE_NUCLEI_FINDINGS is set, exits 0
 #   curl-test:1 with `-o /cache/<file>` (the templates download) writes a made-up tarball there
 # and, for config-scan.sh:
-#   trivy-cfg-test:1  reports each file mounted at /src/<path> as a scanned Dockerfile (all but
-#                   deploy/backup/Dockerfile when FAKE_TRIVY_CONFIG_EMPTY is set) in a JSON report at
-#                   its --output, copies its ignore file to $FAKE_LOG.cfgignore, and gives each path
-#                   in FAKE_TRIVY_CONFIG_FINDINGS (space-separated) a DS-0002 finding unless the
-#                   ignore file drops it, as Trivy does: an entry `- id: DS-0002` with no `paths:`,
-#                   or with `paths:` listing that path. It exits FAKE_TRIVY_CONFIG_CODE when set,
-#                   else the run's --exit-code value when a finding is left, else 0
+#   trivy-cfg-test:1  reports each file mounted at /src/<path> as a scanned Dockerfile (all
+#                   but deploy/backup/Dockerfile when FAKE_TRIVY_CONFIG_EMPTY is set) in a JSON
+#                   report at its --output, copies its ignore file to $FAKE_LOG.cfgignore, and gives
+#                   each path in FAKE_TRIVY_CONFIG_FINDINGS (space-separated) a DS-0002 finding
+#                   unless the ignore file drops it, as Trivy does: an entry `- id: DS-0002` with no
+#                   `paths:`, or with `paths:` listing that path. It exits FAKE_TRIVY_CONFIG_CODE
+#                   when set, else the run's --exit-code value when a finding is left, else 0
 #   zizmor-test:1   copies its --config file to $FAKE_LOG.zizmor, prints a made-up SARIF report
 #                   with --format sarif (exit 0), and otherwise exits FAKE_ZIZMOR_CODE (default 0)
 # `docker exec ... setup-link` prints a made-up setup link. The fake also copies the Trivy ignore
@@ -133,7 +133,7 @@ case "$1" in
         ignore=$(mount_of /scan "$@")/.trivyignore.yaml
         cp "$ignore" "$FAKE_LOG.cfgignore"
         # The paths DS-0002 is dropped for, one per line; "*" for an entry without paths.
-        dropped=$(awk '/^  - id: /{ if (open) print "*"; open = ($3 == "DS-0002"); paths = 0; next }
+        dropped=$(awk '/^  - id: /{ if (open && !paths) print "*"; open = ($3 == "DS-0002"); paths = 0; next }
           /^    paths:/{ next }
           /^      - /{ if (open) { p = $2; gsub(/"/, "", p); print p; paths = 1 } next }
           END{ if (open && !paths) print "*" }' "$ignore")
@@ -256,9 +256,14 @@ pins_setup() {
   cp "$REPO/.github/workflows/ci.yml" "$W/.github/workflows/"
 }
 
-# The Makefile's pins, as make check-pins passes them.
+# The pins make check-pins passes: the images from security/tools.Dockerfile (by stage name, as the
+# Makefile's tool_image reads them), the rest from the Makefile.
 make_pin() {
-  sed -n "s/^$1 := //p" "$REPO/Makefile"
+  case "$1" in
+    PG_IMAGE) awk '$1 == "FROM" && $4 == "postgres" { print $2 }' "$REPO/security/tools.Dockerfile" ;;
+    GITLEAKS_IMAGE) awk '$1 == "FROM" && $4 == "gitleaks" { print $2 }' "$REPO/security/tools.Dockerfile" ;;
+    *) sed -n "s/^$1 := //p" "$REPO/Makefile" ;;
+  esac
 }
 
 # check_pins: runs the copied check-pins.sh with the Makefile's pins (PG_PIN overrides PG_IMAGE);
@@ -604,6 +609,27 @@ test_config_clean_run() {
   has_call "rm -f oc-config-scan-trivy oc-config-scan-zizmor" || fail "the containers were not removed"
 }
 
+test_config_unlisted_dockerfile_red() {
+  local f
+  for f in web/extra.Dockerfile tools/Dockerfile; do
+    setup
+    mkdir -p "$W/$(dirname "$f")"
+    printf 'FROM scratch\n' >"$W/$f"
+    config_scan && fail "a Dockerfile config-scan does not list ($f) exited 0"
+    out_has "config-scan: $f is a Dockerfile config-scan.sh neither scans nor lists as never built"
+  done
+}
+
+test_config_tools_dockerfile_not_scanned() {
+  setup
+  mkdir -p "$W/security" "$W/web/node_modules/x"
+  printf 'FROM scratch AS made-up\n' >"$W/security/tools.Dockerfile"
+  printf 'FROM scratch\n' >"$W/web/node_modules/x/Dockerfile"
+  config_scan || fail "the tools Dockerfile or a node_modules one made the scan red: $(cat "$W/out")"
+  has_call "tools.Dockerfile" && fail "the never-built tools Dockerfile was scanned"
+  return 0
+}
+
 test_config_bad_args() {
   setup
   local rc=0
@@ -673,6 +699,18 @@ test_trivy_config_scoped_allow_other_file_red() {
   out_has "config-scan: Dockerfile: high or critical misconfigurations"
   grep -qF "config-scan: deploy/backup/Dockerfile: high" "$W/out" && fail "the scoped file is still red: $(cat "$W/out")"
   return 0
+}
+
+# A scoped entry followed by another entry: the scope still holds (the fake must not read the
+# scoped entry as a plain one when the next entry starts).
+test_trivy_config_scoped_then_plain_entry() {
+  setup
+  jq -n '[{"tool": "trivy-config", "id": "DS-0002@deploy/backup/Dockerfile", "reason": "made up", "expires": "2099-01-01"},
+    {"tool": "trivy-config", "id": "DS-9001", "reason": "made up", "expires": "2099-01-01"}]' >"$W/security/allow.json"
+  FAKE_TRIVY_CONFIG_FINDINGS='Dockerfile deploy/backup/Dockerfile' config_scan &&
+    fail "a scoped entry followed by another entry silenced the app Dockerfile"
+  out_has "config-scan: Dockerfile: high or critical misconfigurations"
+  grep -qx '  - id: DS-9001' "$LOG.cfgignore" || fail "the second entry is missing: $(cat "$LOG.cfgignore")"
 }
 
 test_trivy_config_malformed_scoped_id_refused() {
@@ -803,6 +841,8 @@ t "a scoped zap id is OUTOFSCOPE for its URL and leaves the rule FAIL" test_zap_
 t "a malformed scoped zap id is refused" test_zap_malformed_scoped_id_refused
 t "config scan: a clean run scans both Dockerfiles and the workflows offline" test_config_clean_run
 t "config scan: an argument or a missing image exits 2" test_config_bad_args
+t "config scan: a Dockerfile it does not list is red" test_config_unlisted_dockerfile_red
+t "config scan: the tools Dockerfile and node_modules are not scanned" test_config_tools_dockerfile_not_scanned
 t "zizmor medium or high findings (exit 13, 14) are red" test_zizmor_medium_and_high_red
 t "zizmor informational or low findings (exit 11, 12) are reported, not red" test_zizmor_low_and_info_reported
 t "a zizmor error (exit 1, 2, 3) or a zizmor that cannot start is red" test_zizmor_error_red
@@ -812,6 +852,7 @@ t "a Trivy config run that scanned no Dockerfile is red" test_trivy_config_nothi
 t "a scoped trivy-config id drops the finding on that file" test_trivy_config_scoped_allow_drops_that_file
 t "a scoped trivy-config id leaves the same finding on the app Dockerfile red" test_trivy_config_scoped_allow_other_file_red
 t "a malformed scoped trivy-config id is refused" test_trivy_config_malformed_scoped_id_refused
+t "a scoped trivy-config id followed by another entry keeps its scope" test_trivy_config_scoped_then_plain_entry
 t "allow-listed trivy-config and zizmor ids reach the tools" test_config_allow_reaches_tools
 t "a zizmor allow id that is not a plain token is refused" test_config_allow_bad_id_refused
 t "SARIF_DIR gets the zizmor SARIF file" test_config_sarif_written

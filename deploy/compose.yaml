@@ -4,8 +4,10 @@
 # `docker compose up -d`; upgrades, restores and manual backups go through scripts/.
 #
 # Hardening (docs/designs/devsecops.md section 3; guard TestComposeHardening in internal/guards):
-# every service drops every Linux capability, cannot gain privileges (no-new-privileges), has a
-# memory limit and a read-only root file system with a tmpfs where it writes outside its volumes.
+# every service drops all Linux capabilities and adds back only what it needs (backup:
+# DAC_OVERRIDE; restore: CHOWN, DAC_OVERRIDE, FOWNER), cannot gain privileges (no-new-privileges),
+# and has a memory limit and a read-only root file system with a tmpfs where it writes outside its
+# volumes.
 # The image pins carry their digest, so a tag moved upstream is never pulled.
 name: open-customer
 
@@ -106,7 +108,8 @@ services:
     # with "cannot open the lock file" (checked).
     cap_add: [DAC_OVERRIDE]
     mem_limit: 1g
-    # restic's cache and the snapshot-info error file.
+    # restic's cache and the snapshot-info error file. A tmpfs is memory: it counts against
+    # mem_limit.
     tmpfs: [/tmp, /root/.cache]
     environment: &backup-env
       RESTIC_PASSWORD: ${RESTIC_PASSWORD:?RESTIC_PASSWORD is required in .env}
@@ -145,6 +148,7 @@ services:
     # restic then restores the times of files it no longer owns.
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
     mem_limit: 1g
+    # As for backup; the restic cache in this tmpfs counts against mem_limit.
     tmpfs: [/tmp, /root/.cache]
     environment: *backup-env
     volumes:

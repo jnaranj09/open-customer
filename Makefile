@@ -6,26 +6,32 @@ SHELL := bash
 .DEFAULT_GOAL := build
 
 # Pins (design doc "Pins"). A bump changes every copy in one commit; check-pins keeps them equal.
-# Every image is <tag>@<digest of its multi-arch index>, so a tag moved upstream is never pulled
-# (guard TestSupplyChainPins). Dependabot does not read this file: these are bumped by hand, tag
-# and digest together.
-PG_IMAGE := postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
+# The images live in security/tools.Dockerfile, one `FROM <image> AS <name>` line each, where
+# Dependabot's docker ecosystem bumps them; tool_image reads one by its stage name, and a missing
+# one stops make here. Every image is <tag>@<digest of its multi-arch index> (guard
+# TestSupplyChainPins).
+TOOLS_DOCKERFILE := security/tools.Dockerfile
+tool_image = $(shell awk '$$1 == "FROM" && $$3 == "AS" && $$4 == "$(1)" { print $$2 }' $(TOOLS_DOCKERFILE))
+PG_IMAGE := $(call tool_image,postgres)
 GOLANGCI_LINT_VERSION := v2.15.0
-SQLC_IMAGE := sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537
+SQLC_IMAGE := $(call tool_image,sqlc)
 # Security pipeline scanners (docs/designs/devsecops.md). GITLEAKS_IMAGE's version is also the CI
 # gitleaks action's GITLEAKS_VERSION; check-pins keeps the two equal.
-TRIVY_IMAGE := aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
-GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055
+TRIVY_IMAGE := $(call tool_image,trivy)
+GITLEAKS_IMAGE := $(call tool_image,gitleaks)
 # make config-scan: zizmor on .github/workflows (Trivy config, above, reads the Dockerfiles).
-ZIZMOR_IMAGE := ghcr.io/zizmorcore/zizmor:1.31.1@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9
+ZIZMOR_IMAGE := $(call tool_image,zizmor)
 # make dast: ZAP, Nuclei and its templates release, and the curl image that drives the app.
-ZAP_IMAGE := zaproxy/zap-stable:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
-NUCLEI_IMAGE := projectdiscovery/nuclei:v3.11.1@sha256:582d5546902e67052097cb2d07296c642d50a1afc5e44623cb038845df9a32eb
+ZAP_IMAGE := $(call tool_image,zap)
+NUCLEI_IMAGE := $(call tool_image,nuclei)
 NUCLEI_TEMPLATES := v10.5.1
 # sha256 of that release's GitHub archive (refs/tags/$(NUCLEI_TEMPLATES).tar.gz); dast.sh refuses
 # any other bytes. A templates bump changes both lines.
 NUCLEI_TEMPLATES_SHA256 := 30fe1cfaced4635f886e4a2673641bba86998dceec28e468274524e789aa56eb
-CURL_IMAGE := curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+CURL_IMAGE := $(call tool_image,curl)
+$(foreach v,PG_IMAGE SQLC_IMAGE TRIVY_IMAGE GITLEAKS_IMAGE ZIZMOR_IMAGE ZAP_IMAGE NUCLEI_IMAGE CURL_IMAGE,\
+	$(if $(word 2,$($(v))x),$(error $(v): want exactly one FROM <image> AS <name> line in $(TOOLS_DOCKERFILE), got '$($(v))'),\
+	$(if $($(v)),,$(error $(v): no FROM <image> AS <name> line in $(TOOLS_DOCKERFILE)))))
 export PG_IMAGE
 
 VERSION ?= $(or $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//'),dev)

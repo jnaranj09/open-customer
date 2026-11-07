@@ -11,6 +11,9 @@
 # <id>@<repo path of a scanned Dockerfile> (ignored in that file only, through the ignore entry's
 # Trivy `paths:`); any other shape is refused.
 #
+# Every Dockerfile in the repo (Dockerfile, *.Dockerfile) must be one it scans or one it lists as
+# never built (security/tools.Dockerfile, which only holds pins); any other is red.
+#
 # Trivy runs once on /src, where each Dockerfile is mounted at its repo path, so each result's
 # Target is the repo path that `paths:` matches. A high or critical misconfiguration is red, named
 # by file. Trivy exits 1 on its own errors whatever --exit-code says, so findings use exit code 5
@@ -40,7 +43,10 @@ cd "$(dirname "$0")/../.."
 
 # Trivy's exit code for findings (--exit-code); see the header for why it is not 1.
 findings_exit=5
+# The Dockerfiles it scans, and the ones it does not because they are never built (the pin file
+# Dependabot reads). Any other Dockerfile in the repo is red until it is in one of the two lists.
 dockerfiles=(Dockerfile deploy/backup/Dockerfile)
+never_built=(security/tools.Dockerfile)
 
 sarif_dir=
 if [ -n "${SARIF_DIR:-}" ]; then
@@ -165,6 +171,15 @@ zizmor() {
     -v "$PWD/.github:/src/.github:ro" -v "$work:/cfg:ro" -w /src \
     "$ZIZMOR_IMAGE" --offline "$@" --config /cfg/zizmor.yml .github/workflows
 }
+
+# Every file named Dockerfile or *.Dockerfile outside node_modules, build output and .git.
+while IFS= read -r f; do
+  f=${f#./}
+  if ! printf '%s\n' "${dockerfiles[@]}" "${never_built[@]}" | grep -qxF -- "$f"; then
+    red "$f is a Dockerfile config-scan.sh neither scans nor lists as never built"
+  fi
+done < <(find . \( -name node_modules -o -name .git -o -path ./web/build -o -path ./bin \) -prune -o \
+  -type f \( -name Dockerfile -o -name '*.Dockerfile' \) -print | sort)
 
 trivy_config
 

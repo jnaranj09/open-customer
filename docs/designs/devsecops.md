@@ -109,10 +109,14 @@ rule names its sensor") applied to security.
   seen failing without), `USER 65532:65532` in the app image, `persist-credentials: false` on every
   checkout, no Go cache in the release workflow, and `packages: write` on the release job only.
 - Supply-chain pins: every `uses:` is a full commit SHA with its `# vX.Y.Z` and every image a
-  `<tag>@sha256:<index digest>` (Dockerfiles, compose, CI services, the Makefile, the deploy
-  scripts), checked by the guard `TestSupplyChainPins`; `make check-pins` keeps the copies of the
-  Postgres pin, digest included, equal. Dependabot bumps the SHA or digest and the version together
-  where it reads the file (not the Makefile).
+  `<tag>@sha256:<index digest>` (every Dockerfile, compose, CI services and job containers, the
+  deploy scripts), checked by the guard `TestSupplyChainPins`. The tool and Postgres images live in
+  `security/tools.Dockerfile` (never built; `make config-scan` lists it as such), which the Makefile
+  reads and Dependabot's docker ecosystem bumps; `make check-pins` keeps the copies of the Postgres
+  pin, digest included, equal. Dependabot bumps the SHA or digest and the version together; for
+  postgres, node and golang it proposes only a new digest of the same tag, and a version bump is
+  made by hand. `make config-scan` fails on a Dockerfile it neither scans nor lists as never
+  built.
 
 ### 4. Image scan and supply chain (Trivy)
 

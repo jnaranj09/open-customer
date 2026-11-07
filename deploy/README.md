@@ -7,10 +7,11 @@ folder (`deploy/`) unless it says otherwise; the scripts in `scripts/` also work
 
 The stack is five services in `compose.yaml`: `db` (PostgreSQL), `app`, `cloudflared`, `backup`,
 and `restore`, which only `scripts/restore.sh` starts. No service publishes a port. Every service
-drops its Linux capabilities and runs with a read-only root file system and a memory limit (`db`,
-`backup` and `restore` 1 GB, `app` 512 MB, `cloudflared` 256 MB; these are ceilings, not what
-each one uses). A service that goes over its limit is killed, and Compose restarts it (`restore`
-then fails, and `scripts/restore.sh` says so).
+drops all Linux capabilities and adds back only what it needs (`backup`: `DAC_OVERRIDE`;
+`restore`: `CHOWN`, `DAC_OVERRIDE`, `FOWNER`), and runs with a read-only root file system and a
+memory limit (`db`, `backup` and `restore` 1 GB, `app` 512 MB, `cloudflared` 256 MB; these are
+ceilings, not what each one uses). A service that goes over its limit is killed, and Compose
+restarts it (`restore` then fails, and `scripts/restore.sh` says so).
 
 ## 1. Requirements
 

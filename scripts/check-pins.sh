@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # make check-pins (design doc "Pins"): files that cannot read the Makefile repeat a pin; fail if any
-# copy differs from its source. Scans only the files below, each once it exists; never docs/ or *.md.
+# copy differs from its source. PG_IMAGE and GITLEAKS_IMAGE come from make, which reads them from
+# security/tools.Dockerfile. Scans only the files below, each once it exists; never docs/ or *.md.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -25,11 +26,11 @@ go_pin=$(sed -n 's/^toolchain go\(.*\)$/\1/p' go.mod)
 # PG_IMAGE is <tag>@sha256:<digest>, and every postgres: reference, digest included, equals it: a
 # copy with another digest, or none, pulls a different image under the same tag.
 [[ "$PG_IMAGE" =~ ^postgres:[0-9][A-Za-z0-9._-]*@sha256:[0-9a-f]{64}$ ]] ||
-  bad "Makefile PG_IMAGE '$PG_IMAGE' is not postgres:<tag>@sha256:<digest>"
+  bad "PG_IMAGE (security/tools.Dockerfile) '$PG_IMAGE' is not postgres:<tag>@sha256:<digest>"
 for f in deploy/compose.yaml deploy/backup/Dockerfile .github/workflows/ci.yml Dockerfile; do
   [ -f "$f" ] || continue
   while read -r ref; do
-    [ "$ref" = "$PG_IMAGE" ] || bad "$f uses $ref, Makefile PG_IMAGE is $PG_IMAGE"
+    [ "$ref" = "$PG_IMAGE" ] || bad "$f uses $ref, PG_IMAGE (security/tools.Dockerfile) is $PG_IMAGE"
   done < <(grep -oE 'postgres:[0-9][A-Za-z0-9._-]*(@sha256:[0-9a-f]*)?' "$f" || true)
 done
 
@@ -52,7 +53,7 @@ if [ -f .github/workflows/ci.yml ]; then
   ci_gitleaks=$(grep -A6 'gitleaks/gitleaks-action' .github/workflows/ci.yml | sed -n 's/^ *GITLEAKS_VERSION: *\([^ #]*\).*/\1/p' | head -1)
   gitleaks_tag=${GITLEAKS_IMAGE%@*}
   [ "$ci_gitleaks" = "${gitleaks_tag##*:v}" ] ||
-    bad "ci.yml gitleaks GITLEAKS_VERSION '$ci_gitleaks', Makefile GITLEAKS_IMAGE is $GITLEAKS_IMAGE"
+    bad "ci.yml gitleaks GITLEAKS_VERSION '$ci_gitleaks', GITLEAKS_IMAGE (security/tools.Dockerfile) is $GITLEAKS_IMAGE"
 fi
 
 [ "$fail" -eq 0 ] && echo "check-pins: ok"

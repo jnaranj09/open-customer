@@ -3,12 +3,15 @@ package guards
 // compose-hardening (docs/designs/devsecops.md section 3, decision D1): no config scanner reads
 // Compose files, so this guard reads deploy/compose.yaml (YAML merge keys resolved) and fails when
 // a service can gain privileges, keeps a Linux capability, has no memory limit, has a writable
-// root file system, publishes a port, or reaches the host. Each exemption below has its one-line
+// root file system, publishes a port, or reaches the host (a host namespace, another container's
+// network, an unconfined seccomp or AppArmor profile, a host device, the Docker socket, or a bind
+// mount of /, /proc, /sys or /etc). Each exemption below has its one-line
 // reason, and an exemption the file no longer needs fails too, so the lists only shrink.
 
 import (
 	"fmt"
 	"maps"
+	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -46,8 +49,41 @@ type composeService struct {
 	NetworkMode string   `yaml:"network_mode"`
 	Pid         string   `yaml:"pid"`
 	Ipc         string   `yaml:"ipc"`
+	UsernsMode  string   `yaml:"userns_mode"`
+	Cgroup      string   `yaml:"cgroup"`
 	Devices     []any    `yaml:"devices"`
 	Volumes     []any    `yaml:"volumes"`
+}
+
+// volumeSource is the host side of a volume entry: the part before the first ":" of the short
+// syntax, or the long syntax's source.
+func volumeSource(v any) string {
+	switch v := v.(type) {
+	case string:
+		src, _, _ := strings.Cut(v, ":")
+		return src
+	case map[string]any:
+		src, _ := v["source"].(string)
+		return src
+	}
+	return ""
+}
+
+// hostSystemPath reports whether a bind source is the host's root or under /proc, /sys or /etc.
+func hostSystemPath(src string) bool {
+	if !strings.HasPrefix(src, "/") {
+		return false
+	}
+	clean := path.Clean(src)
+	if clean == "/" {
+		return true
+	}
+	for _, dir := range []string{"/proc", "/sys", "/etc"} {
+		if clean == dir || strings.HasPrefix(clean, dir+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // checkComposeHardening returns every hardening problem in a Compose file.
@@ -69,6 +105,11 @@ func checkComposeHardening(src []byte, writableRoot map[string]string, capAdd ma
 		s := doc.Services[name]
 		if !slices.Contains(s.SecurityOpt, "no-new-privileges:true") {
 			bad(name, "security_opt has no no-new-privileges:true")
+		}
+		for _, opt := range s.SecurityOpt {
+			if o := strings.ReplaceAll(opt, "=", ":"); o == "seccomp:unconfined" || o == "apparmor:unconfined" {
+				bad(name, "security_opt %s", opt)
+			}
 		}
 		if !slices.Equal(s.CapDrop, []string{"ALL"}) {
 			bad(name, "cap_drop is %q, want [ALL]", s.CapDrop)
@@ -99,10 +140,13 @@ func checkComposeHardening(src []byte, writableRoot map[string]string, capAdd ma
 		if s.Privileged {
 			bad(name, "privileged")
 		}
-		for key, mode := range map[string]string{"network_mode": s.NetworkMode, "pid": s.Pid, "ipc": s.Ipc} {
+		for key, mode := range map[string]string{"network_mode": s.NetworkMode, "pid": s.Pid, "ipc": s.Ipc, "userns_mode": s.UsernsMode, "cgroup": s.Cgroup} {
 			if mode == "host" {
 				bad(name, "%s: host", key)
 			}
+		}
+		if strings.HasPrefix(s.NetworkMode, "container:") || strings.HasPrefix(s.NetworkMode, "service:") {
+			bad(name, "network_mode %s shares another container's network", s.NetworkMode)
 		}
 		if len(s.Devices) > 0 {
 			bad(name, "maps host devices")
@@ -110,6 +154,9 @@ func checkComposeHardening(src []byte, writableRoot map[string]string, capAdd ma
 		for _, v := range s.Volumes {
 			if strings.Contains(fmt.Sprint(v), "docker.sock") {
 				bad(name, "mounts the Docker socket")
+			}
+			if src := volumeSource(v); hostSystemPath(src) {
+				bad(name, "bind-mounts the host's %s", src)
 			}
 		}
 	}
@@ -177,6 +224,18 @@ services:
 		{"ipc host", with("ipc: host"), nil, capAdd},
 		{"devices", with(`devices: ["/dev/sda:/dev/sda"]`), nil, capAdd},
 		{"docker socket", with(`volumes: ["/var/run/docker.sock:/var/run/docker.sock"]`), nil, capAdd},
+		{"seccomp unconfined", with(`security_opt: ["no-new-privileges:true", "seccomp:unconfined"]`), nil, capAdd},
+		{"seccomp=unconfined", with(`security_opt: ["no-new-privileges:true", "seccomp=unconfined"]`), nil, capAdd},
+		{"apparmor unconfined", with(`security_opt: ["no-new-privileges:true", "apparmor:unconfined"]`), nil, capAdd},
+		{"userns_mode host", with("userns_mode: host"), nil, capAdd},
+		{"cgroup host", with("cgroup: host"), nil, capAdd},
+		{"network_mode container", with("network_mode: container:other"), nil, capAdd},
+		{"network_mode service", with("network_mode: service:job"), nil, capAdd},
+		{"bind of the host root", with(`volumes: ["/:/host:ro"]`), nil, capAdd},
+		{"bind of /proc", with(`volumes: ["/proc:/host/proc:ro"]`), nil, capAdd},
+		{"bind of /sys", with(`volumes: ["/sys/fs/cgroup:/sys/fs/cgroup"]`), nil, capAdd},
+		{"bind of /etc", with(`volumes: ["/etc/:/host/etc:ro"]`), nil, capAdd},
+		{"long-syntax bind of /etc", with("volumes:\n      - type: bind\n        source: /etc/passwd\n        target: /x"), nil, capAdd},
 	}
 	for _, c := range bad {
 		if got := checkComposeHardening([]byte(c.src), c.writableRoot, c.capAdd); len(got) == 0 {

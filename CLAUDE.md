@@ -136,9 +136,12 @@ copy in one commit, and `make check-pins` must stay green. Every image is pinned
 - Go 1.27.3: `go.mod` (`go 1.27.0` + `toolchain go1.27.3`); `golang:` in the `Dockerfile`.
 - Node 26.13.0 and pnpm 12.16.1: `web/package.json` (`engines.node`, `packageManager`); `node:` and
   `pnpm@` in the `Dockerfile`.
-- Postgres 18.6: `PG_IMAGE` in the `Makefile` (with its digest); `deploy/compose.yaml`,
+- Postgres 18.6: the `postgres` stage of `security/tools.Dockerfile` (with its digest), read into
+  `PG_IMAGE` by the `Makefile`; `deploy/compose.yaml`,
   `deploy/backup/Dockerfile` and the CI service repeat it, digest included.
 - golangci-lint v2.15.0: `GOLANGCI_LINT_VERSION` in the `Makefile`; `version:` in CI.
-- sqlc 1.31.1: `SQLC_IMAGE` in the `Makefile`.
+- sqlc 1.31.1: the `sqlc` stage of `security/tools.Dockerfile`, read into `SQLC_IMAGE`.
+- The scanner images (Trivy, gitleaks, zizmor, ZAP, Nuclei, curl): one stage each in
+  `security/tools.Dockerfile`, read into `<NAME>_IMAGE` by the `Makefile`; Dependabot bumps them.
 - Go tools (oapi-codegen, govulncheck, deadcode): `tool` lines in `go.mod`.
 - TypeScript stays on 6.0.x: typescript-eslint and SvelteKit do not accept 7 yet.

@@ -22,7 +22,7 @@ run.
 
 | Command | What it does |
 | --- | --- |
-| `make check-pins` | Pins agree across the Makefile, `go.mod`, `web/package.json`, the Dockerfiles, `deploy/compose.yaml` and CI (the Postgres image's digest included) |
+| `make check-pins` | Pins agree across the Makefile, `security/tools.Dockerfile` (where the tool and Postgres images are pinned), `go.mod`, `web/package.json`, the Dockerfiles, `deploy/compose.yaml` and CI (the Postgres image's digest included) |
 | `make lint` | `go mod tidy -diff`, golangci-lint, `go build` for darwin and windows, deadcode, shellcheck, svelte-check, eslint, prettier, knip, jscpd |
 | `make test` | Go unit tests and Vitest |
 | `make generate` | oapi-codegen, sqlc (Docker image) and openapi-typescript |

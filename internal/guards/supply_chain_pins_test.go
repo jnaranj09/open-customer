@@ -5,12 +5,17 @@ package guards
 // in a `# vX.Y.Z` comment, which Dependabot keeps in step), and every image a build, a scan or the
 // stack pulls is pinned by digest (`<tag>@sha256:<64 hex>`). The one exception is this repo's own
 // app and backup images in deploy/compose.yaml: their tag is the release a deployer picks
-// (APP_VERSION). make check-pins keeps the copies of each pin equal; this guard keeps each one
-// a pin.
+// (APP_VERSION). The tool images live in security/tools.Dockerfile, where Dependabot reads them;
+// each Makefile `*_IMAGE` must read its stage there (`$(call tool_image,<stage>)`) or be a pin
+// itself. Every Dockerfile in the repo is found by name (`Dockerfile`, `*.Dockerfile`), and every
+// workflow (`*.yml`, `*.yaml`). make check-pins keeps the copies of each pin equal; this guard keeps
+// each one a pin.
 
 import (
 	"fmt"
+	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -26,10 +31,11 @@ var (
 	usesLine   = regexp.MustCompile(`^[ \t]*(?:-[ \t]+)?uses:[ \t]*(.*)$`)
 	// An image with a tag and the digest of its index: name:tag@sha256:<64 hex>.
 	pinnedImage = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*(?::[0-9]+)?(?:/[a-z0-9._-]+)*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$`)
-	// image: <ref> in a workflow (a service or a job container).
-	workflowImage = regexp.MustCompile(`^[ \t]*image:[ \t]*(\S+)`)
+	// image: <ref> in a workflow (a service or a job container), or the short `container: <ref>`.
+	workflowImage = regexp.MustCompile(`^[ \t]*(?:image|container):[ \t]*([^ \t#]+)`)
 	fromLine      = regexp.MustCompile(`(?i)^[ \t]*FROM[ \t]+(?:--platform=\S+[ \t]+)?(\S+)(?:[ \t]+AS[ \t]+(\S+))?`)
 	makeImageVar  = regexp.MustCompile(`^([A-Z0-9_]+_IMAGE)[ \t]*:?=[ \t]*(.*)$`)
+	makeToolImage = regexp.MustCompile(`^\$\(call tool_image,([a-z0-9-]+)\)$`)
 	shellImageVar = regexp.MustCompile(`^[ \t]*(?:readonly[ \t]+|export[ \t]+)?([A-Z0-9_]+_IMAGE)=(\S*)`)
 )
 
@@ -81,6 +87,73 @@ func checkVarPins(name, src string, re *regexp.Regexp) []string {
 	return problems
 }
 
+// toolStages returns the stage name → image of the `FROM <image> AS <name>` lines of a Dockerfile,
+// and the names given more than once.
+func toolStages(src string) (map[string]string, []string) {
+	stages := map[string]string{}
+	var dups []string
+	for _, line := range strings.Split(src, "\n") {
+		if m := fromLine.FindStringSubmatch(line); m != nil && m[2] != "" {
+			if _, dup := stages[m[2]]; dup {
+				dups = append(dups, m[2])
+			}
+			stages[m[2]] = m[1]
+		}
+	}
+	return stages, dups
+}
+
+// checkMakefilePins returns the Makefile `*_IMAGE` assignments that are neither a pin nor a read of
+// one stage of the tools Dockerfile.
+func checkMakefilePins(name, src string, stages map[string]string) []string {
+	var problems []string
+	for i, line := range strings.Split(src, "\n") {
+		m := makeImageVar.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		value := strings.TrimSpace(m[2])
+		if t := makeToolImage.FindStringSubmatch(value); t != nil {
+			if _, ok := stages[t[1]]; !ok {
+				problems = append(problems, fmt.Sprintf("%s:%d: %s reads stage %q, which %s does not have", name, i+1, m[1], t[1], toolsDockerfile))
+			}
+			continue
+		}
+		if !pinnedImage.MatchString(value) {
+			problems = append(problems, fmt.Sprintf("%s:%d: %s %q has no digest", name, i+1, m[1], value))
+		}
+	}
+	return problems
+}
+
+// repoDockerfiles returns every file named Dockerfile or *.Dockerfile in the repo (skipDirs not
+// walked), repo-relative.
+func repoDockerfiles(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	err := fs.WalkDir(os.DirFS(root(t)), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if skipDirs[d.Name()] {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == "Dockerfile" || strings.HasSuffix(d.Name(), ".Dockerfile") {
+			out = append(out, p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	return out
+}
+
+const toolsDockerfile = "security/tools.Dockerfile"
+
 // checkComposePins returns the compose services whose image has no digest, other than ownImages.
 func checkComposePins(name string, src []byte) []string {
 	var doc struct {
@@ -113,10 +186,11 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 		"      - uses: actions/checkout@" + sha + " # v7.0.1\n" +
 		"        uses: github/codeql-action/upload-sarif@" + sha + " # v4.39.1\n"
 	goodDockerfile := "FROM node:26-alpine" + digest + " AS web\nFROM --platform=linux/amd64 golang:1.27-alpine" + digest + " AS go\nCOPY --from=web /a /b\nFROM web\nFROM scratch\n"
-	goodMakefile := "PG_IMAGE := postgres:18.6-alpine" + digest + "\nZAP_IMAGE := ghcr.io/zaproxy/zap-stable:2.17.0" + digest + "\nOTHER := x\n"
+	goodMakefile := "PG_IMAGE := $(call tool_image,postgres)\nZAP_IMAGE := ghcr.io/zaproxy/zap-stable:2.17.0" + digest + "\nOTHER := x\n"
+	stages := map[string]string{"postgres": "postgres:18.6-alpine" + digest}
 	goodShell := "readonly COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.4" + digest + "\nOTHER=x\n"
 	goodCompose := "services:\n  db:\n    image: postgres:18.6-alpine" + digest + "\n  app:\n    image: ghcr.io/jnaranj09/open-customer:${APP_VERSION:?x}\n  backup:\n    image: ghcr.io/jnaranj09/open-customer-backup:${APP_VERSION:?x}\n"
-	if got := slices.Concat(checkWorkflowPins("w", goodWorkflow), checkDockerfilePins("d", goodDockerfile), checkVarPins("m", goodMakefile, makeImageVar),
+	if got := slices.Concat(checkWorkflowPins("w", goodWorkflow), checkDockerfilePins("d", goodDockerfile), checkMakefilePins("m", goodMakefile, stages),
 		checkVarPins("s", goodShell, shellImageVar), checkComposePins("c", []byte(goodCompose))); len(got) != 0 {
 		t.Fatalf("pinned files are refused: %q", got)
 	}
@@ -136,7 +210,11 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 		{"FROM with a short digest", checkDockerfilePins("d", "FROM postgres:18.6-alpine@sha256:abc\n")},
 		{"FROM by digest without a tag", checkDockerfilePins("d", "FROM postgres"+digest+"\n")},
 		{"FROM a later stage name before it exists", checkDockerfilePins("d", "FROM web\nFROM node:26"+digest+" AS web\n")},
-		{"Makefile image without a digest", checkVarPins("m", "TRIVY_IMAGE := aquasec/trivy:0.76.1\n", makeImageVar)},
+		{"Makefile image without a digest", checkMakefilePins("m", "TRIVY_IMAGE := aquasec/trivy:0.76.1\n", stages)},
+		{"Makefile image reading a stage the tools file lacks", checkMakefilePins("m", "TRIVY_IMAGE := $(call tool_image,trivy)\n", stages)},
+		{"Makefile image reading a stage with another call", checkMakefilePins("m", "TRIVY_IMAGE := $(shell cat x)\n", stages)},
+		{"workflow job container short form without a digest", checkWorkflowPins("w", "    container: node:26-alpine\n")},
+		{"workflow job container short form with a comment", checkWorkflowPins("w", "    container: node:26-alpine # the build image\n")},
 		{"shell image without a digest", checkVarPins("s", "COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.4\n", shellImageVar)},
 		{"compose image without a digest", checkComposePins("c", []byte("services:\n  cf:\n    image: cloudflare/cloudflared:2026.10.7\n"))},
 		{"compose own image with a fixed tag", checkComposePins("c", []byte("services:\n  app:\n    image: ghcr.io/jnaranj09/open-customer:1.0.0\n"))},
@@ -153,19 +231,37 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 func TestSupplyChainPins(t *testing.T) {
 	t.Parallel()
 	base := root(t)
-	workflows, err := filepath.Glob(filepath.Join(base, ".github", "workflows", "*.yml"))
-	if err != nil || len(workflows) == 0 {
-		t.Fatalf("no workflows found (err %v)", err)
+	yml, err := filepath.Glob(filepath.Join(base, ".github", "workflows", "*.yml"))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	yamlFiles, err := filepath.Glob(filepath.Join(base, ".github", "workflows", "*.yaml"))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	workflows := slices.Concat(yml, yamlFiles)
+	if len(workflows) == 0 {
+		t.Fatal("no workflows found")
 	}
 	var problems []string
 	for _, w := range workflows {
 		rel := ".github/workflows/" + filepath.Base(w)
 		problems = append(problems, checkWorkflowPins(rel, readText(t, rel))...)
 	}
-	for _, rel := range []string{"Dockerfile", "deploy/backup/Dockerfile"} {
+	dockerfiles := repoDockerfiles(t)
+	for _, want := range []string{"Dockerfile", "deploy/backup/Dockerfile", toolsDockerfile} {
+		if !slices.Contains(dockerfiles, want) {
+			t.Fatalf("the Dockerfile walk found %q, not %s", dockerfiles, want)
+		}
+	}
+	for _, rel := range dockerfiles {
 		problems = append(problems, checkDockerfilePins(rel, readText(t, rel))...)
 	}
-	problems = append(problems, checkVarPins("Makefile", readText(t, "Makefile"), makeImageVar)...)
+	stages, dups := toolStages(readText(t, toolsDockerfile))
+	for _, d := range dups {
+		problems = append(problems, fmt.Sprintf("%s: stage %s is named twice", toolsDockerfile, d))
+	}
+	problems = append(problems, checkMakefilePins("Makefile", readText(t, "Makefile"), stages)...)
 	scripts, err := filepath.Glob(filepath.Join(base, "deploy", "scripts", "*.sh"))
 	if err != nil || len(scripts) == 0 {
 		t.Fatalf("no deploy scripts found (err %v)", err)
