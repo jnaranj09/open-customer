@@ -33,20 +33,10 @@ if [ "$#" -ne 0 ]; then
   echo "$usage" >&2
   exit 2
 fi
-for var in IMAGE PG_IMAGE ZAP_IMAGE NUCLEI_IMAGE NUCLEI_TEMPLATES NUCLEI_TEMPLATES_SHA256 CURL_IMAGE; do
-  if [ -z "${!var:-}" ]; then
-    echo "dast: $var is not set (run through make dast)" >&2
-    exit 2
-  fi
-done
-if ! [[ "$NUCLEI_TEMPLATES" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "dast: NUCLEI_TEMPLATES must be a release tag like v1.2.3, got '$NUCLEI_TEMPLATES'" >&2
-  exit 2
-fi
-if ! [[ "$NUCLEI_TEMPLATES_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-  echo "dast: NUCLEI_TEMPLATES_SHA256 must be 64 lower-case hex digits" >&2
-  exit 2
-fi
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib.sh" dast
+require_env IMAGE PG_IMAGE ZAP_IMAGE NUCLEI_IMAGE NUCLEI_TEMPLATES NUCLEI_TEMPLATES_SHA256 CURL_IMAGE
+check_nuclei_pins
 
 cd "$(dirname "$0")/../.."
 
@@ -74,54 +64,23 @@ trap cleanup EXIT
 # A run killed before its trap ran leaves these behind.
 cleanup
 
-red=0
-red() {
-  echo "dast: $*" >&2
-  red=$((red + 1))
-}
-die() {
-  echo "dast: $*" >&2
-  exit 1
-}
-
-# in_app <docker run args...>: a one-off container in the app's network namespace.
-in_app() {
+# scan_container <docker run args...>: a one-off container in the app's network namespace.
+scan_container() {
   docker run --rm --name "$scanner" --network "container:$app" "$@"
 }
 # app_curl <curl args...>
 app_curl() {
-  in_app "$CURL_IMAGE" -sS "$@"
+  scan_container "$CURL_IMAGE" -sS "$@"
 }
 
 docker image inspect "$IMAGE" >/dev/null 2>&1 || die "$IMAGE is not built (run make image)"
 
-# The pinned templates, downloaded once and unpacked only when the tarball's sha256 is the pinned
-# NUCLEI_TEMPLATES_SHA256. A failed download or a mismatch is red, never a scan with no or other
-# templates.
-if [ ! -d "$templates" ]; then
-  mkdir -p "$templates_cache"
-  tarball=nuclei-templates-$NUCLEI_TEMPLATES.tar.gz
-  docker run --rm -u "$(id -u):$(id -g)" -v "$(cd "$templates_cache" && pwd):/cache" "$CURL_IMAGE" \
-    -fsSL -o "/cache/$tarball" \
-    "https://github.com/projectdiscovery/nuclei-templates/archive/refs/tags/$NUCLEI_TEMPLATES.tar.gz" ||
-    die "cannot download the nuclei templates $NUCLEI_TEMPLATES"
-  got=$(sha256sum "$templates_cache/$tarball" | cut -d' ' -f1)
-  if [ "$got" != "$NUCLEI_TEMPLATES_SHA256" ]; then
-    rm -f "$templates_cache/$tarball"
-    die "the nuclei templates tarball $NUCLEI_TEMPLATES does not match NUCLEI_TEMPLATES_SHA256 (got $got)"
-  fi
-  unpack=$(mktemp -d "$templates_cache/unpack.XXXXXX")
-  tar -xzf "$templates_cache/$tarball" -C "$unpack" --strip-components=1 ||
-    die "cannot unpack the nuclei templates $NUCLEI_TEMPLATES"
-  mv "$unpack" "$templates"
-  rm -f "$templates_cache/$tarball"
-fi
+fetch_nuclei_templates "$templates_cache" "$templates"
 
 # The report folder: ZAP runs as its own user, so its work folder is writable by all.
 rm -rf "$report"
 mkdir -p "$report/zap" "$report/nuclei"
 chmod a+rwx "$report/zap" "$report/nuclei"
-report_abs=$(cd "$report" && pwd)
 # ZAP's OpenAPI import needs an absolute server URL; the spec's is relative (/api/v1).
 sed 's|^  - url: /api/v1$|  - url: http://localhost:8080/api/v1|' api/openapi.yaml >"$report/zap/openapi.yaml"
 grep -q '^  - url: http://localhost:8080/api/v1$' "$report/zap/openapi.yaml" ||
@@ -135,36 +94,15 @@ if grep -q '/auth/logout' "$report/zap/openapi-session.yaml" || ! grep -q '^  /a
   die "cannot drop /auth/logout from the spec for the signed-in scan"
 fi
 
-# The rules file ZAP gets: security/zap-rules.tsv plus the live zap ids of the allow-list. A plain
-# id (<rule number>) sets that rule to IGNORE (a rule the file does not list is added). A scoped id
-# (<rule number>@<url regex>) leaves the rule as the file sets it and adds a line
-# `<rule number>\tOUTOFSCOPE\t<url regex>`: ZAP's packaged scans then drop only that rule's alerts
-# whose URL the regex matches from its start (re.match). Any other id is refused; the guard
-# TestSecurityAllowList also checks that the regex compiles, ends in $ and is not a catch-all.
+# The rules file ZAP gets: security/zap-rules.tsv plus the live zap ids of the allow-list (see
+# zap_rules_file in lib.sh). Any other id is refused; the guard TestSecurityAllowList also checks
+# that a scoped id's regex compiles, ends in $ and is not a catch-all.
 allowed=$(scripts/security/allow.sh zap)
 while IFS= read -r id; do
-  [ -z "$id" ] || [[ "$id" =~ ^[0-9]+(@[^[:space:]]+)?$ ]] ||
+  [ -z "$id" ] || valid_zap_id "$id" ||
     die "security/allow.json has a zap id that is not <rule number> or <rule number>@<url regex>"
 done <<<"$allowed"
-# The ids reach awk through the environment: -v would turn a regex's \. into a plain dot.
-ids=$allowed awk -F '\t' -v OFS='\t' '
-  BEGIN {
-    n = split(ENVIRON["ids"], list, "\n")
-    for (i = 1; i <= n; i++) {
-      if (list[i] == "") continue
-      at = index(list[i], "@")
-      if (at == 0) allow[list[i]] = 1
-      else scoped[++s] = substr(list[i], 1, at - 1) OFS "OUTOFSCOPE" OFS substr(list[i], at + 1)
-    }
-  }
-  /^#/ || NF == 0 { print; next }
-  $1 in allow { print $1, "IGNORE", "allow-listed in security/allow.json"; seen[$1] = 1; next }
-  { print }
-  END {
-    for (id in allow) if (!(id in seen)) print id, "IGNORE", "allow-listed in security/allow.json"
-    for (i = 1; i <= s; i++) print scoped[i]
-  }
-' security/zap-rules.tsv >"$report/zap/rules.tsv"
+zap_rules_file security/zap-rules.tsv "$report/zap/rules.tsv" "$allowed" "allow-listed in security/allow.json"
 
 docker network create --internal "$net" >/dev/null
 docker run -d --name "$pg" --network "$net" \
@@ -225,78 +163,13 @@ replacer() {
 origin_opts=$(replacer 0 Origin "$origin")
 cookie_opts="$origin_opts $(replacer 1 Cookie "$cookie")"
 
-# The rule ids the rules file ZAP gets names (OUTOFSCOPE lines included).
-known_rules=$(awk -F '\t' '!/^#/ && NF { print $1 }' "$report/zap/rules.tsv" | sort -u)
-
-# zap <name> <script> <script args...>: one ZAP run; 0 and 2 (WARN rules only) pass. Then, from
-# its JSON report: ZAP's rule 100000 is one id for 4xx (Informational) and 5xx (Low) answers, so
-# the rules file cannot fail only on 5xx, and a 5xx is red here (an app that answers 500 to a bad
-# request crashed past its boundary). An alert from a rule the rules file does not list is red
-# too: ZAP would only WARN it, so a ZAP bump could add a High rule that passes silently.
-zap() {
-  local name=$1 rc=0 errors ids unknown
-  shift
-  echo "== dast: zap $name"
-  in_app -v "$report_abs/zap:/zap/wrk:rw" "$ZAP_IMAGE" "$@" -c rules.tsv \
-    -J "$name.json" -r "$name.html" || rc=$?
-  case "$rc" in
-    0 | 2) ;;
-    1)
-      red "zap $name: blocking findings (see $report/zap/$name.html)"
-      return 0
-      ;;
-    *)
-      red "zap could not scan ($name, exit $rc)"
-      return 0
-      ;;
-  esac
-  if ! errors=$(jq '[.site[]?.alerts[]? | select(.pluginid == "100000" and .riskcode != "0") | .count | tonumber] | add // 0' \
-    "$report/zap/$name.json"); then
-    red "zap $name wrote no readable JSON report"
-    return 0
-  fi
-  ids=$(jq -r '[.site[]?.alerts[]?.pluginid] | unique[]' "$report/zap/$name.json" | sort -u)
-  unknown=$(comm -23 <(printf '%s\n' "$ids" | sed '/^$/d') <(printf '%s\n' "$known_rules") | paste -sd' ' -)
-  if [ -n "$unknown" ]; then
-    red "zap $name: alerts from rules not in security/zap-rules.tsv: $unknown (add each with its level)"
-  elif [ "$errors" -gt 0 ]; then
-    red "zap $name: the app answered $errors requests with a 5xx (see $report/zap/$name.html)"
-  else
-    echo "dast: zap $name: no blocking findings"
-  fi
-}
-
-zap api-public zap-api-scan.py -t /zap/wrk/openapi.yaml -f openapi -z "$origin_opts"
-zap api-session zap-api-scan.py -t /zap/wrk/openapi-session.yaml -f openapi -z "$cookie_opts"
+run_zap "$report" api-public zap-api-scan.py -t /zap/wrk/openapi.yaml -f openapi -z "$origin_opts"
+run_zap "$report" api-session zap-api-scan.py -t /zap/wrk/openapi-session.yaml -f openapi -z "$cookie_opts"
 status=$(session_status)
 [ "$status" = 200 ] || red "the session ended during the authenticated scan (GET /api/v1/me answered $status): part of it ran signed out"
-zap baseline zap-baseline.py -t "$origin/" -z "$origin_opts"
+run_zap "$report" baseline zap-baseline.py -t "$origin/" -z "$origin_opts"
 
-echo "== dast: nuclei"
-excludes=()
 nuclei_ids=$(scripts/security/allow.sh nuclei | paste -sd, -)
-[ -z "$nuclei_ids" ] || excludes=(-exclude-id "$nuclei_ids")
-rc=0
-in_app -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$(cd "$templates" && pwd):/templates:ro" -v "$report_abs/nuclei:/out" \
-  "$NUCLEI_IMAGE" -u "$origin" -t /templates -duc -ni -etags intrusive,dos,fuzz -s low,medium,high,critical \
-  "${excludes[@]}" -jle /out/nuclei.jsonl -se /out/nuclei.sarif -nc 2>&1 | tee "$report/nuclei/nuclei.log" || rc=$?
-loaded=$(sed -n 's/.*Templates loaded for current scan: \([0-9]*\).*/\1/p' "$report/nuclei/nuclei.log" | head -n 1)
-broken=$(sed -n 's/.*Found \([0-9]*\) templates with runtime error.*/\1/p' "$report/nuclei/nuclei.log" | head -n 1)
-[ -z "$broken" ] || echo "dast: nuclei: $broken templates did not run (runtime error; nuclei -validate shows why)"
-findings=0
-[ ! -s "$report/nuclei/nuclei.jsonl" ] || findings=$(grep -c . "$report/nuclei/nuclei.jsonl")
-if [ "$rc" -ne 0 ]; then
-  red "nuclei could not scan (exit $rc)"
-elif [ "${loaded:-0}" -eq 0 ]; then
-  red "nuclei loaded no templates"
-elif [ "$findings" -gt 0 ]; then
-  red "nuclei: $findings findings (see $report/nuclei/nuclei.jsonl)"
-else
-  echo "dast: nuclei: no findings ($loaded templates)"
-fi
+run_nuclei "$report" "$templates" "$nuclei_ids" "$origin"
 
-if [ "$red" -gt 0 ]; then
-  echo "dast: $red checks red; reports in $report" >&2
-  exit 1
-fi
-echo "dast: ok"
+finish "$report"

@@ -224,7 +224,8 @@ rule names its sensor") applied to security.
   `scripts/security/dast.sh`): the app and a throwaway Postgres on a private Docker network with no
   published port (host :8080 stays free for `make e2e`). The scanners run in the app container's
   network namespace and reach it as `http://localhost:8080`, its `PUBLIC_URL` (the app takes plain
-  http only on localhost).
+  http only on localhost). The ZAP rules file, the ZAP report checks, the Nuclei templates fetch
+  and the Nuclei run are in `scripts/security/lib.sh`, which `scan-live.sh` (section 9) shares.
 - ZAP API scan driven by `api/openapi.yaml`, unauthenticated and authenticated: a made-up owner is
   created through `setup-link` and `POST /setup` and logs in, and `GET /me` must answer 200 with
   her cookie before any scan runs (and again after the signed-in pass, which leaves logout out).
@@ -264,13 +265,26 @@ rule names its sensor") applied to security.
 
 ### 9. Live scan (`make scan-live URL=…`)
 
-- Runs on the deployer's own machine against any deployment, behind any proxy. Uses no key.
-- Nuclei (safe, non-intrusive templates only), ZAP baseline (passive), and TLS and header checks.
-- Exits non-zero on a blocking finding and writes a report file. `deploy/README.md` documents the
+- Runs on the deployer's own machine against any deployment, behind any proxy, with only Docker.
+  Uses no key and never logs in. `scripts/security/scan-live.sh`, shared with `dast.sh` through
+  `scripts/security/lib.sh` (the ZAP rules file, the ZAP report checks, the pinned Nuclei templates
+  and the Nuclei run).
+- A `curl` header check (the fixed headers of section 6 with the app's exact values, plus HSTS on
+  https; a missing header or a wrong value is a finding), the ZAP baseline (passive), and Nuclei
+  without the intrusive, dos and fuzz tags (its `ssl` templates cover the TLS of an https URL).
+- Exit 0 clean, 1 on any finding or a tool that failed to run, 2 on bad arguments. The report goes
+  to `security/reports/scan-live-<UTC timestamp>/` (git-ignored). `deploy/README.md` documents the
   exit code, the report and how to schedule it with cron.
-- Never runs in GitHub.
+- Never runs in GitHub: it exits 2 when `GITHUB_ACTIONS=true`, and no workflow calls it.
 - Its allow-list is a local file the deployer owns, kept out of git (`deploy/.scan-live.allow`,
-  git-ignored), because what a proxy adds or strips differs per deployment. My call.
+  git-ignored), because what a proxy adds or strips differs per deployment. My call. Each line is
+  `<tool> <id> # <reason>` for `zap` (a rule number, or `<rule>@<url regex>`), `nuclei` (a template
+  id) or `header` (a header name); a malformed line is refused with its line number. There is no
+  expiry date: the file is the deployer's own, not the repo's.
+- The app answers plain http only on localhost, so the URL must be https. `NETWORK=` (a Docker
+  network or `container:<name>`) is a test hook: the tool containers join it and `http://localhost`
+  is accepted. It is how the scan was run once against a throwaway local stack; a real deployment
+  is scanned by its owner.
 
 ## Blocking policy
 

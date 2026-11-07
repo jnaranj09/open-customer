@@ -71,6 +71,11 @@ with fnm, `fnm use` in web/).
 - `make dast`: the running-app scan (`scripts/security/dast.sh`): the app image from `make image`
   and a throwaway Postgres on a private network (`oc-dast-*`, no host port), a made-up owner signed
   in, then ZAP (API scan signed out and signed in, baseline) and Nuclei. Reports in `dast-report/`.
+- `make scan-live URL=https://…`: a manual, passive scan of your own deployment
+  (`scripts/security/scan-live.sh`; Docker and network, no key, never in CI: exit 2 when
+  `GITHUB_ACTIONS=true`): the security headers, the ZAP baseline and Nuclei, signed out. Its
+  allow-list is the git-ignored `deploy/.scan-live.allow`, never `security/allow.json`. Reports in
+  `security/reports/scan-live-<UTC timestamp>/`. `dast.sh` and it share `scripts/security/lib.sh`.
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**

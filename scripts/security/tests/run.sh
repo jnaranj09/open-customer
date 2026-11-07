@@ -17,6 +17,11 @@
 #                   $FAKE_LOG.zaprules
 #   nuclei-test:1   prints FAKE_NUCLEI_TEMPLATES (default 5) as its loaded-templates count, writes
 #                   one finding to its JSONL output when FAKE_NUCLEI_FINDINGS is set, exits 0
+#   curl-test:1 with `-D -` (scan-live.sh's header check) prints a made-up response's headers: the
+#                   four security headers with their right values (no Strict-Transport-Security
+#                   for an http URL), except the headers named in FAKE_HEADERS_DROP
+#                   (space-separated) and with FAKE_HEADERS_WRONG's header (one name) set to
+#                   "wrong"; a Set-Cookie header with a made-up cookie is always in the answer
 #   curl-test:1 with `-o /cache/<file>` (the templates download) writes a made-up tarball there
 # and, for config-scan.sh:
 #   trivy-cfg-test:1  reports each file mounted at /src/<path> as a scanned Dockerfile (all
@@ -62,7 +67,7 @@ REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
-  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
+  FAKE_NUCLEI_FINDINGS FAKE_HEADERS_DROP FAKE_HEADERS_WRONG GITHUB_ACTIONS NETWORK FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
   FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
   FAKE_REPO_DIGEST FAKE_SBOM_EMPTY FAKE_PUSH_SECOND_DIGEST MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
@@ -96,6 +101,26 @@ fake_curl() {
   case "$out" in
     /cache/*) # the templates download: a made-up tarball in the mounted cache
       printf 'made-up templates tarball\n' >"$(mount_of /cache "$@")/${out#/cache/}"
+      return 0
+      ;;
+  esac
+  case " $* " in
+    *" -D - "*) # scan-live.sh's header check
+      local h
+      {
+        printf 'HTTP/2 200\r\n'
+        printf 'X-Content-Type-Options: nosniff\r\n'
+        printf 'Referrer-Policy: same-origin\r\n'
+        printf "Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'\r\n"
+        case "$url" in https://*) printf 'Strict-Transport-Security: max-age=31536000\r\n' ;; esac
+        printf 'Set-Cookie: oc_session=made-up-cookie; Path=/; HttpOnly\r\n'
+        printf '\r\n'
+      } | while IFS= read -r h; do
+        h=${h%$'\r'}
+        case " ${FAKE_HEADERS_DROP:-} " in *" ${h%%:*} "*) continue ;; esac
+        [ "${h%%:*}" != "${FAKE_HEADERS_WRONG:-}" ] || h="${h%%:*}: wrong"
+        printf '%s\r\n' "$h"
+      done
       return 0
       ;;
   esac
@@ -391,6 +416,254 @@ dast() {
     ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
     NUCLEI_TEMPLATES_SHA256="${TEMPLATES_SHA:-$fake_tarball_sha}" \
     REPORT_DIR="$W/report" NUCLEI_CACHE_DIR="$W/nuclei-cache" "$W/scripts/security/dast.sh" "$@") >"$W/out" 2>&1
+}
+
+# scan_live <args...>: runs scan-live.sh from another folder with the fake docker; stdout and
+# stderr go to $W/out. Same templates cache and pins as dast; the report goes to $W/report unless
+# DEFAULT_REPORT is set (the script then picks security/reports/scan-live-<UTC timestamp>).
+scan_live() {
+  mkdir -p "$W/nuclei-cache"
+  [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
+  (cd / && PATH="$ROOT/bin:$PATH" REPORT_DIR="$([ -n "${DEFAULT_REPORT:-}" ] || echo "$W/report")" \
+    ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
+    NUCLEI_TEMPLATES_SHA256="${TEMPLATES_SHA:-$fake_tarball_sha}" NUCLEI_CACHE_DIR="$W/nuclei-cache" \
+    "$W/scripts/security/scan-live.sh" "$@") >"$W/out" 2>&1
+}
+
+test_scan_live_clean_run() {
+  setup
+  scan_live https://example.com || fail "a clean scan-live run exited non-zero: $(cat "$W/out")"
+  assert_eq "header checks" 1 "$(count_calls 'curl-test:1 -sS -D -')"
+  assert_eq "zap runs" 1 "$(count_calls 'zap-test:1')"
+  assert_eq "zap script" 1 "$(count_calls 'zap-test:1 zap-baseline.py -t https://example.com')"
+  assert_eq "nuclei runs" 1 "$(count_calls 'nuclei-test:1')"
+  has_call "-ni " || fail "nuclei was not run without out-of-band templates"
+  has_call "-etags intrusive,dos,fuzz" || fail "nuclei was not run without the intrusive tags"
+  grep -qE '(^| )(-p|--publish)( |=)' "$LOG" && fail "a container published a port"
+  has_call "--network" && fail "a scanner was given a network without NETWORK"
+  has_call "rm -f -v oc-scan-live-scanner" || fail "the scanner container was not removed"
+  out_has "scan-live: ok"
+  [ -f "$W/report/zap/baseline.json" ] || fail "no zap report in the report folder"
+  [ -f "$W/report/headers.txt" ] || fail "no header report in the report folder"
+}
+
+test_scan_live_report_has_no_cookie() {
+  setup
+  scan_live https://example.com || fail "scan-live exited non-zero: $(cat "$W/out")"
+  grep -rqi 'made-up-cookie\|set-cookie' "$W/report" "$W/out" && fail "a cookie reached the report or the output"
+  grep -qi 'Content-Security-Policy' "$W/report/headers.txt" || fail "the checked headers are not in headers.txt"
+  return 0
+}
+
+test_scan_live_default_report_folder() {
+  setup
+  DEFAULT_REPORT=1 scan_live https://example.com || fail "scan-live exited non-zero: $(cat "$W/out")"
+  compgen -G "$W/security/reports/scan-live-[0-9]*Z/headers.txt" >/dev/null ||
+    fail "no report in security/reports/scan-live-<UTC timestamp>: $(ls "$W/security" 2>&1)"
+}
+
+test_scan_live_gitignore() {
+  git -C "$REPO" check-ignore -q security/reports/scan-live-20260101T000000Z/headers.txt ||
+    fail "security/reports/ is not git-ignored"
+  git -C "$REPO" check-ignore -q deploy/.scan-live.allow || fail "deploy/.scan-live.allow is not git-ignored"
+}
+
+test_scan_live_make_target() {
+  local out
+  out=$(cd "$REPO" && make -n scan-live URL=https://example.com NETWORK=oc-made-up 2>&1) || fail "make -n scan-live failed: $out"
+  grep -qF 'scripts/security/scan-live.sh "https://example.com"' <<<"$out" || fail "make does not pass URL: $out"
+  grep -qF 'NETWORK=oc-made-up' <<<"$out" || fail "make does not pass NETWORK: $out"
+  grep -q 'CURL_IMAGE=curlimages/curl:[^ ]*@sha256:' <<<"$out" || fail "make does not pass the pinned curl image: $out"
+}
+
+test_scan_live_without_url_exits_2() {
+  setup
+  local rc=0
+  scan_live || rc=$?
+  assert_eq "exit code with no URL" 2 "$rc"
+  rc=0
+  scan_live '' || rc=$?
+  assert_eq "exit code with an empty URL" 2 "$rc"
+  rc=0
+  scan_live https://example.com extra || rc=$?
+  assert_eq "exit code with two arguments" 2 "$rc"
+  assert_eq "docker calls for bad args" 0 "$(wc -l <"$LOG")"
+}
+
+test_scan_live_in_github_actions_exits_2() {
+  setup
+  local rc=0
+  GITHUB_ACTIONS=true scan_live https://example.com || rc=$?
+  assert_eq "exit code in GitHub Actions" 2 "$rc"
+  out_has "never runs in GitHub"
+  assert_eq "docker calls in GitHub Actions" 0 "$(wc -l <"$LOG")"
+}
+
+test_scan_live_refuses_non_https_url() {
+  setup
+  local url rc
+  for url in http://example.com http://example.com:8080/ http://localhost:8080 ftp://example.com example.com \
+    'https://user:pass@example.com' 'https://example.com/a b' 'https://example.com/?q=1' 'https://'; do
+    rc=0
+    scan_live "$url" || rc=$?
+    assert_eq "exit code for '$url'" 2 "$rc"
+  done
+  assert_eq "docker calls for refused URLs" 0 "$(wc -l <"$LOG")"
+}
+
+test_scan_live_http_only_on_localhost_with_network() {
+  setup
+  NETWORK=container:oc-made-up scan_live http://localhost:8080 || fail "http://localhost with NETWORK exited non-zero: $(cat "$W/out")"
+  assert_eq "scanner containers on the given network" 0 \
+    "$(grep -E 'zap-test:1|nuclei-test:1|curl-test:1 -sS' "$LOG" | grep -vc -- '--network container:oc-made-up')"
+  assert_eq "zap runs" 1 "$(count_calls 'zap-test:1 zap-baseline.py -t http://localhost:8080')"
+  local rc=0
+  NETWORK=container:oc-made-up scan_live http://example.com || rc=$?
+  assert_eq "exit code for http on another host, with NETWORK" 2 "$rc"
+}
+
+test_scan_live_missing_header_is_a_finding() {
+  local h
+  for h in X-Content-Type-Options Referrer-Policy Content-Security-Policy Strict-Transport-Security; do
+    setup
+    FAKE_HEADERS_DROP=$h scan_live https://example.com && fail "a response without $h exited 0"
+    out_has "header $h is missing"
+    assert_eq "zap runs after a missing $h" 1 "$(count_calls 'zap-test:1')"
+    assert_eq "nuclei runs after a missing $h" 1 "$(count_calls 'nuclei-test:1')"
+  done
+}
+
+test_scan_live_wrong_header_value_is_a_finding() {
+  local h
+  for h in X-Content-Type-Options Referrer-Policy Content-Security-Policy Strict-Transport-Security; do
+    setup
+    FAKE_HEADERS_WRONG=$h scan_live https://example.com && fail "a response with a wrong $h exited 0"
+    out_has "header $h is 'wrong', want"
+  done
+}
+
+test_scan_live_hsts_only_on_https() {
+  setup
+  FAKE_HEADERS_DROP=Strict-Transport-Security NETWORK=container:oc-made-up scan_live http://localhost:8080 ||
+    fail "a plain-http scan wanted HSTS: $(cat "$W/out")"
+}
+
+test_scan_live_header_fetch_fails_red() {
+  setup
+  FAKE_FAIL_ON='curl-test:1 -sS -D -' FAKE_FAIL_CODE=7 scan_live https://example.com && fail "a header check that could not fetch exited 0"
+  out_has "cannot fetch https://example.com"
+  assert_eq "zap runs after a failed header fetch" 1 "$(count_calls 'zap-test:1')"
+}
+
+test_scan_live_nuclei_findings_exit_0_red() {
+  setup
+  FAKE_NUCLEI_FINDINGS=1 scan_live https://example.com && fail "nuclei findings with exit 0 exited 0"
+  out_has "nuclei: 1 findings"
+}
+
+test_scan_live_nuclei_no_templates_red() {
+  setup
+  FAKE_NUCLEI_TEMPLATES=0 scan_live https://example.com && fail "a nuclei run with no templates exited 0"
+  out_has "nuclei loaded no templates"
+}
+
+test_scan_live_tool_cannot_start_red() {
+  setup
+  local rc=0
+  FAKE_FAIL_ON=nuclei-test:1 FAKE_FAIL_CODE=125 scan_live https://example.com || rc=$?
+  assert_eq "exit code when nuclei cannot start" 1 "$rc"
+  out_has "nuclei could not scan (exit 125)"
+  rc=0
+  FAKE_FAIL_ON=zap-test:1 FAKE_FAIL_CODE=125 scan_live https://example.com || rc=$?
+  assert_eq "exit code when zap cannot start" 1 "$rc"
+  out_has "zap could not scan (baseline, exit 125)"
+}
+
+test_scan_live_zap_exit_codes() {
+  setup
+  FAKE_ZAP_CODE=1 scan_live https://example.com && fail "zap exit 1 exited 0"
+  out_has "blocking findings"
+  FAKE_ZAP_CODE=3 scan_live https://example.com && fail "zap exit 3 exited 0"
+  out_has "zap could not scan"
+  FAKE_ZAP_CODE=2 scan_live https://example.com || fail "zap exit 2 (WARN only) exited non-zero: $(cat "$W/out")"
+}
+
+test_scan_live_zap_report_checks() {
+  setup
+  FAKE_ZAP_REPORT='not json' scan_live https://example.com && fail "an unreadable zap report exited 0"
+  out_has "wrote no readable JSON report"
+  FAKE_ZAP_REPORT='{"site":[{"alerts":[{"pluginid":"99999","riskcode":"3","count":"1"}]}]}' scan_live https://example.com &&
+    fail "an alert from a rule zap-rules.tsv does not list exited 0"
+  out_has "rules not in security/zap-rules.tsv: 99999"
+}
+
+test_scan_live_templates_checksum_mismatch_red() {
+  setup
+  TEMPLATES_SHA=$(printf 'other\n' | sha256sum | cut -d' ' -f1) EMPTY_CACHE=1 scan_live https://example.com &&
+    fail "a templates tarball with the wrong sha256 exited 0"
+  out_has "does not match NUCLEI_TEMPLATES_SHA256"
+  assert_eq "nuclei runs after a checksum mismatch" 0 "$(count_calls 'nuclei-test:1')"
+}
+
+test_scan_live_allow_file_ids_are_excluded() {
+  setup
+  cat >"$W/deploy/.scan-live.allow" <<'ALLOW'
+# The proxy adds its own CSP and HSTS.
+
+zap 10021 # made up: the proxy sets nosniff
+zap 40018@.*/api/v1/client-errors$ # made up: scoped
+nuclei made-up-template # made up
+nuclei other.template-2 # made up
+header strict-transport-security # made up: the proxy sets it
+ALLOW
+  FAKE_HEADERS_DROP=Strict-Transport-Security scan_live https://example.com ||
+    fail "scan-live with an allow-listed header exited non-zero: $(cat "$W/out")"
+  grep -qP '^10021\tIGNORE\t' "$LOG.zaprules" || fail "the zap id is not IGNORE: $(cat "$LOG.zaprules")"
+  grep -qxP '40018\tOUTOFSCOPE\t\.\*/api/v1/client-errors\$' "$LOG.zaprules" || fail "no OUTOFSCOPE line for the scoped id"
+  has_call "-exclude-id made-up-template,other.template-2 " || fail "the nuclei ids did not reach -exclude-id"
+  # Without the file the same response is red.
+  rm "$W/deploy/.scan-live.allow"
+  FAKE_HEADERS_DROP=Strict-Transport-Security scan_live https://example.com && fail "the header finding stayed allowed without the file"
+  grep -qP '^10021\tFAIL\t' "$LOG.zaprules" || fail "zap 10021 is not FAIL without the file"
+}
+
+test_scan_live_ignores_security_allow_json() {
+  setup
+  cat >"$W/security/allow.json" <<'JSON'
+[
+  {"tool": "zap", "id": "10021", "reason": "made up", "expires": "2099-01-01"},
+  {"tool": "nuclei", "id": "made-up-template", "reason": "made up", "expires": "2099-01-01"}
+]
+JSON
+  scan_live https://example.com || fail "scan-live exited non-zero: $(cat "$W/out")"
+  grep -qP '^10021\tFAIL\t' "$LOG.zaprules" || fail "security/allow.json reached the zap rules"
+  has_call "made-up-template" && fail "security/allow.json reached nuclei"
+  return 0
+}
+
+test_scan_live_malformed_allow_line_refused() {
+  local line want
+  while IFS='|' read -r line want; do
+    setup
+    printf '# a comment\n\nzap 10021 # fine\n%s\n' "$line" >"$W/deploy/.scan-live.allow"
+    local rc=0
+    scan_live https://example.com || rc=$?
+    assert_eq "exit code for '$line'" 2 "$rc"
+    out_has "deploy/.scan-live.allow line 4: $want"
+    assert_eq "docker calls for '$line'" 0 "$(wc -l <"$LOG")"
+  done <<'CASES'
+zap 10021|needs a reason
+zap 10021 #|needs a reason
+zap # reason|expected <tool> <id> # <reason>
+trivy CVE-2026-1 # reason|unknown tool 'trivy'
+zap abc # reason|'abc' is not <rule number> or <rule number>@<url regex>
+zap 40018@ # reason|'40018@' is not <rule number> or <rule number>@<url regex>
+zap 10021 10020 # reason|expected <tool> <id> # <reason>
+nuclei bad,id # reason|'bad,id' is not a template id
+nuclei -exclude # reason|'-exclude' is not a template id
+header Strict_Transport # reason|'Strict_Transport' is not a checked header
+header server # reason|'server' is not a checked header
+CASES
 }
 
 has_call() {
@@ -1220,6 +1493,28 @@ t "SARIF_DIR gets the zizmor SARIF file" test_config_sarif_written
 t "sast: a clean run tests the rules, scans offline and cleans up" test_sast_clean_run
 t "sast: an argument or a missing image exits 2" test_sast_bad_args
 t "sast: a finding is red" test_sast_findings_red
+t "scan-live: a clean run scans on the host network and cleans up" test_scan_live_clean_run
+t "scan-live: no cookie reaches the report or the output" test_scan_live_report_has_no_cookie
+t "scan-live: the report goes to security/reports/scan-live-<UTC timestamp>" test_scan_live_default_report_folder
+t "scan-live: the report folder and the local allow file are git-ignored" test_scan_live_gitignore
+t "scan-live: make passes URL, NETWORK and the pinned images" test_scan_live_make_target
+t "scan-live without URL exits 2" test_scan_live_without_url_exits_2
+t "scan-live exits 2 in GitHub Actions" test_scan_live_in_github_actions_exits_2
+t "scan-live refuses a non-https URL" test_scan_live_refuses_non_https_url
+t "scan-live: http is allowed only for localhost, and only with NETWORK" test_scan_live_http_only_on_localhost_with_network
+t "a missing header is a finding" test_scan_live_missing_header_is_a_finding
+t "scan-live: a wrong header value is a finding" test_scan_live_wrong_header_value_is_a_finding
+t "scan-live: HSTS is expected on https only" test_scan_live_hsts_only_on_https
+t "scan-live: a header check that cannot fetch is red" test_scan_live_header_fetch_fails_red
+t "scan-live: nuclei findings with exit 0 are red" test_scan_live_nuclei_findings_exit_0_red
+t "scan-live: a nuclei run with no templates is red" test_scan_live_nuclei_no_templates_red
+t "scan-live: a tool that cannot start is red" test_scan_live_tool_cannot_start_red
+t "scan-live: zap exit 1 and 3 are red, 2 passes" test_scan_live_zap_exit_codes
+t "scan-live: an unreadable zap report or an unknown zap rule is red" test_scan_live_zap_report_checks
+t "scan-live: a templates tarball with the wrong sha256 is red" test_scan_live_templates_checksum_mismatch_red
+t "ids in deploy/.scan-live.allow are excluded" test_scan_live_allow_file_ids_are_excluded
+t "scan-live: security/allow.json is not read" test_scan_live_ignores_security_allow_json
+t "scan-live: a malformed line in the allow file is refused with its line number" test_scan_live_malformed_allow_line_refused
 t "sast: a semgrep error (exit 2 and others) is red" test_sast_tool_error_red
 t "sast: a semgrep that cannot start is red" test_sast_tool_cannot_start_red
 t "sast: fixtures that do not match their rules are red" test_sast_fixtures_that_fail_red

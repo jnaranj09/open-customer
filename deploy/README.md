@@ -411,3 +411,68 @@ second factor, on the public internet. Pick a long password for her.
 
 If you do not use Cloudflare, put any reverse proxy in front of `app:8080` and set
 `TRUSTED_PROXY_CIDRS` in `.env` to that proxy's address.
+
+## 14. Scan your deployment
+
+`make scan-live` checks your own live URL from your own machine, from the repository root (not
+`deploy/`). It needs only Docker and network access to the URL: no account, key or token, and it
+never logs in. It is passive and safe to run against production: it sends ordinary page requests
+and probes known paths, and it leaves out the intrusive, denial-of-service and fuzzing checks. It
+never runs in GitHub.
+
+```sh
+make scan-live URL=https://clients.example.com
+```
+
+It runs three checks, one after another, and reports all of them:
+
+- **Headers.** The app sets `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, a
+  `Content-Security-Policy` of `frame-ancestors 'none'; base-uri 'self'; object-src 'none';
+  form-action 'self'` and, over https, `Strict-Transport-Security: max-age=31536000`. A missing
+  header, or one with another value (a proxy that rewrites it), is a finding.
+- **ZAP baseline.** A passive crawl of the URL. Rules and levels are in `security/zap-rules.tsv`.
+- **Nuclei.** Known weaknesses, exposed files and TLS (its `ssl` templates), from a pinned
+  templates release. The first run downloads it into `~/.cache/open-customer/nuclei` and checks
+  its sha256.
+
+The URL must be `https://`. Plain http is refused. The first run pulls the tool images and takes a
+few minutes.
+
+**Result.** The script exits 0 when clean and 1 on a finding, or when a tool could not run (a scan
+that did not run is never clean). It exits 2 on a bad URL or a bad allow file. `make` shows any
+failure as its own `Error 2`: read the line above it, and the scan's output, for the cause. The
+report is in `security/reports/scan-live-<UTC timestamp>/` (git-ignored): `headers.txt` (only the
+checked headers), `zap/` and `nuclei/`. The scan is signed out, so it sets and sends no session
+cookie.
+
+**Allow a finding that is yours to accept.** What a proxy adds or strips differs per deployment,
+so the allow-list is your own file `deploy/.scan-live.allow`. It is git-ignored and is not
+`security/allow.json`. One entry per line, `<tool> <id> # <reason>`; blank lines and lines
+starting with `#` are ignored. The reason is required. A malformed line stops the scan with its
+line number.
+
+```text
+# The proxy sets its own HSTS.
+header strict-transport-security # set by the proxy with a longer max-age
+zap 10049 # caching header added by the proxy
+zap 10096@https://clients\.example\.com/_app/.*$ # a build timestamp, on the app files only
+nuclei tech-detect # informational
+```
+
+`zap` takes a rule number, or `<rule number>@<url regex>` to allow the rule on matching URLs only
+(a regex that matches from the start of the URL; end it with `$`). `nuclei` takes a template id
+from the report. `header` takes `x-content-type-options`, `referrer-policy`,
+`content-security-policy` or `strict-transport-security`.
+
+**Schedule it.** A crontab line for a weekly run that logs the result (use `mail` or any alert you
+already have in place of the log):
+
+```cron
+0 6 * * 1  cd /path/to/open-customer && make scan-live URL=https://clients.example.com >>"$HOME/scan-live.log" 2>&1 || echo "scan-live failed, exit $?, see $HOME/scan-live.log" | mail -s "scan-live" you@example.com
+```
+
+Run it by hand after each upgrade as well.
+
+The scan has a test hook for the repository's own checks: `NETWORK=container:<name>` (or a Docker
+network) puts the tool containers on that network and accepts `http://localhost` as the URL, because
+the app answers plain http only on localhost. It is not a way to scan a deployment over http.
