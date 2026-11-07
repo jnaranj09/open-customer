@@ -1,0 +1,24 @@
+rules:
+  - id: ts-no-eval
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      eval, new Function and a string handed to setTimeout or setInterval compile text into code.
+      The CSP has no unsafe-eval, and one of these turns an injected string into script (threats
+      T28, T29).
+    metadata:
+      threat: T29
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: window.eval(...)
+      - pattern: globalThis.eval(...)
+      - pattern: new Function(...)
+      - pattern: Function(...)
+      - pattern: 'setTimeout("...", ...)'
+      - pattern: 'setTimeout(`...`, ...)'
+      - pattern: 'setTimeout("..." + $X, ...)'
+      - pattern: 'setTimeout($X + "...", ...)'
+      - pattern: 'setInterval("...", ...)'
+      - pattern: 'setInterval(`...`, ...)'
+      - pattern: 'setInterval("..." + $X, ...)'
+      - pattern: 'setInterval($X + "...", ...)'

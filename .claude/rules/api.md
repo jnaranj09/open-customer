@@ -19,7 +19,8 @@ paths:
   imports the generated package); contract tests.
 - **Errors are codes, not messages.** A refusal returns an RFC 9457 problem with a stable `type` from
   the one list in the problem package; the web maps copy from the code to `es.json`. Never return a
-  stack trace or a raw error message. Prose only.
+  stack trace or a raw error message. Sensor: Semgrep `no-raw-error-to-client` (`make sast`: `http.Error`
+  or a write to the response with an error value in it; the generated package is skipped).
 - **Status codes tell the truth.** A failure never returns 2xx. An unknown path or method under
   `/api/` is a 404 problem, never `index.html`. Prose only; per-route tests.
 - **Auth and input limits on every route by default** (body size, Origin check, login rate limit).
@@ -27,7 +28,9 @@ paths:
   Sensor: gosec; reviewer.
 - **Writes commit before the response.** Every non-GET handler that reads or writes the database runs its
   module call in `db.WithTx` and commits before it writes the body, so a failed commit is never
-  shown as saved. Prose only; reviewer check.
+  shown as saved. Sensor: Semgrep `non-get-handler-in-withtx` (`make sast`: a handler whose name starts
+  with a non-GET verb never uses `s.pool`; add a new verb to the rule and its fixture); reviewer check
+  for the rest.
 - **Handlers stay thin**: parse → call the module → map the result. Logic lives in the module.
   Sensor: depguard (module rules); reviewer.
 - **Security headers on every response** (`X-Content-Type-Options`, `Referrer-Policy`, the header

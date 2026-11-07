@@ -29,7 +29,9 @@ NUCLEI_TEMPLATES := v10.5.1
 # any other bytes. A templates bump changes both lines.
 NUCLEI_TEMPLATES_SHA256 := 30fe1cfaced4635f886e4a2673641bba86998dceec28e468274524e789aa56eb
 CURL_IMAGE := $(call tool_image,curl)
-$(foreach v,PG_IMAGE SQLC_IMAGE TRIVY_IMAGE GITLEAKS_IMAGE ZIZMOR_IMAGE ZAP_IMAGE NUCLEI_IMAGE CURL_IMAGE,\
+# make sast: Semgrep, with only the rules in security/semgrep.
+SEMGREP_IMAGE := $(call tool_image,semgrep)
+$(foreach v,PG_IMAGE SQLC_IMAGE TRIVY_IMAGE GITLEAKS_IMAGE ZIZMOR_IMAGE ZAP_IMAGE NUCLEI_IMAGE CURL_IMAGE SEMGREP_IMAGE,\
 	$(if $(word 2,$($(v))x),$(error $(v): want exactly one FROM <image> AS <name> line in $(TOOLS_DOCKERFILE), got '$($(v))'),\
 	$(if $($(v)),,$(error $(v): no FROM <image> AS <name> line in $(TOOLS_DOCKERFILE)))))
 export PG_IMAGE
@@ -82,7 +84,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 PNPM := cd web && pnpm
 
 .PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
-	image-scan secrets test-sec dast config-scan
+	image-scan secrets test-sec dast config-scan sast
 
 web-stub:
 	@test -f web/build/index.html || { mkdir -p web/build && echo 'Run make web' > web/build/index.html; }
@@ -224,6 +226,12 @@ dast:
 # SARIF_DIR=<dir> also writes <dir>/zizmor.sarif (CI).
 config-scan:
 	TRIVY_IMAGE=$(TRIVY_IMAGE) ZIZMOR_IMAGE=$(ZIZMOR_IMAGE) scripts/security/config-scan.sh
+
+# devsecops.md section 2: Semgrep with only the rules written in security/semgrep (never a registry
+# rule), with no network. First semgrep --test on the rules' fixtures, then the scan of the repo.
+# SARIF_DIR=<dir> also writes <dir>/semgrep.sarif (CI).
+sast:
+	SEMGREP_IMAGE=$(SEMGREP_IMAGE) scripts/security/sast.sh
 
 # gitleaks over the whole git history, offline; reviewed false positives are in .gitleaksignore.
 secrets:

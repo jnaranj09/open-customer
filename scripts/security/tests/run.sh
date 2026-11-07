@@ -28,6 +28,15 @@
 #                   when set, else the run's --exit-code value when a finding is left, else 0
 #   zizmor-test:1   copies its --config file to $FAKE_LOG.zizmor, prints a made-up SARIF report
 #                   with --format sarif (exit 0), and otherwise exits FAKE_ZIZMOR_CODE (default 0)
+# and, for sast.sh:
+#   semgrep-test:1  with --test, prints a Semgrep test report on stdout that lists every rule id of
+#                   the copied security/semgrep/*.yaml as passed with one expected line (except
+#                   FAKE_SEMGREP_UNTESTED, a rule id it leaves out), exits FAKE_SEMGREP_TEST_CODE
+#                   (default 0); otherwise writes a scan report to --json-output: one finding when
+#                   FAKE_SEMGREP_FINDINGS is set, one error when FAKE_SEMGREP_ERRORS is set, and the
+#                   scanned files FAKE_SEMGREP_SCANNED (space-separated; default one .go, .ts and
+#                   .svelte file; set but empty: none). It writes a SARIF file to --sarif-output
+#                   and exits FAKE_SEMGREP_CODE (default: 1 with a finding, else 0)
 # `docker exec ... setup-link` prints a made-up setup link. The fake also copies the Trivy ignore
 # file it was given to $FAKE_LOG.ignore. No real container runs and nothing is pulled. All data
 # here is made up.
@@ -41,7 +50,8 @@ REPO=$(cd "$(dirname "$0")/../../.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
-  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE MODE PULL SARIF_DIR \
+  FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_FINDINGS \
+  FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
 
 mkdir -p "$ROOT/bin"
@@ -172,6 +182,33 @@ case "$1" in
         esac
         exit "${FAKE_ZIZMOR_CODE:-0}"
         ;;
+      *" semgrep-test:1 "*)
+        src=$(mount_of /src "$@")
+        case " $* " in
+          *" --test "*)
+            ids=$(sed -n 's/^  - id: \([a-z0-9-]*\)$/\1/p' "$src"/security/semgrep/*.yaml | grep -vxF -- "${FAKE_SEMGREP_UNTESTED:-}")
+            jq -n --arg ids "$ids" '{config_missing_tests: [], config_with_errors: [],
+              results: {"x.yaml": {checks: ($ids | split("\n") | map({key: ., value: {passed: true,
+                matches: {"f": {expected_lines: [1], reported_lines: [1]}}, errors: []}}) | from_entries)}}}'
+            exit "${FAKE_SEMGREP_TEST_CODE:-0}"
+            ;;
+        esac
+        out=$(mount_of /out "$@")
+        results='[]' errors='[]'
+        if [ -n "${FAKE_SEMGREP_FINDINGS:-}" ]; then
+          results='[{"check_id":"security.semgrep.ts-no-eval","path":"web/src/made-up.ts","start":{"line":7},"extra":{"message":"made up finding"}}]'
+        fi
+        if [ -n "${FAKE_SEMGREP_ERRORS:-}" ]; then
+          errors='[{"type":"Syntax error","path":"web/src/made-up.ts"}]'
+        fi
+        scanned=${FAKE_SEMGREP_SCANNED-/src/a.go /src/b.ts /src/c.svelte}
+        jq -n --argjson r "$results" --argjson e "$errors" --arg s "$scanned" \
+          '{results: $r, errors: $e, paths: {scanned: ($s | split(" ") | map(select(. != "")))}}' >"$out/semgrep.json"
+        case " $* " in *" --sarif-output=/out/semgrep.sarif "*) echo '{"version":"2.1.0","runs":[]}' >"$out/semgrep.sarif" ;; esac
+        if [ -n "${FAKE_SEMGREP_CODE:-}" ]; then exit "$FAKE_SEMGREP_CODE"; fi
+        [ -z "${FAKE_SEMGREP_FINDINGS:-}" ] || exit 1
+        exit 0
+        ;;
       *" nuclei-test:1 "*)
         out=$(mount_of /out "$@")
         echo "[INF] Templates loaded for current scan: ${FAKE_NUCLEI_TEMPLATES:-5}" >&2
@@ -218,6 +255,7 @@ setup() {
   cp -r "$REPO/scripts/security" "$W/scripts/"
   cp "$REPO/deploy/compose.yaml" "$W/deploy/"
   cp "$REPO/security/zap-rules.tsv" "$W/security/"
+  cp -r "$REPO/security/semgrep" "$W/security/"
   cp "$REPO/api/openapi.yaml" "$W/api/"
   mkdir -p "$W/deploy/backup" "$W/.github/workflows"
   printf 'FROM scratch\n' >"$W/Dockerfile"
@@ -241,6 +279,11 @@ scan() {
 config_scan() {
   (cd / && PATH="$ROOT/bin:$PATH" TRIVY_IMAGE=trivy-cfg-test:1 ZIZMOR_IMAGE=zizmor-test:1 \
     "$W/scripts/security/config-scan.sh" "$@") >"$W/out" 2>&1
+}
+
+# sast: runs sast.sh from another folder with the fake docker; stdout and stderr go to $W/out.
+sast() {
+  (cd / && PATH="$ROOT/bin:$PATH" SEMGREP_IMAGE=semgrep-test:1 "$W/scripts/security/sast.sh" "$@") >"$W/out" 2>&1
 }
 
 # pins_setup: a fresh copy, in $W, of the files scripts/check-pins.sh reads. CHECK_PINS overrides
@@ -771,6 +814,129 @@ test_config_sarif_written() {
   jq -e '.version == "2.1.0"' "$W/sarif/zizmor.sarif" >/dev/null || fail "no zizmor SARIF file: $(cat "$W/out")"
 }
 
+test_sast_clean_run() {
+  setup
+  sast || fail "a clean sast run exited non-zero: $(cat "$W/out")"
+  assert_eq "semgrep test runs" 1 "$(count_calls 'semgrep-test:1 semgrep --test')"
+  assert_eq "semgrep scan runs" 1 "$(count_calls 'semgrep-test:1 semgrep scan --config security/semgrep')"
+  assert_eq "semgrep runs with a network or telemetry" 0 \
+    "$(grep 'semgrep-test:1' "$LOG" | grep -vc -e '--network none.*--metrics=off --disable-version-check')"
+  has_call "semgrep scan --config security/semgrep --error" || fail "the scan does not exit non-zero on findings"
+  has_call "rm -f oc-sast-test oc-sast-scan" || fail "the containers were not removed"
+  out_has "sast: ok"
+}
+
+test_sast_findings_red() {
+  setup
+  FAKE_SEMGREP_FINDINGS=1 sast && fail "a semgrep finding exited 0"
+  out_has "web/src/made-up.ts:7 ts-no-eval"
+  out_has "sast: 1 findings"
+}
+
+test_sast_tool_error_red() {
+  local code
+  for code in 2 3 7; do
+    setup
+    FAKE_SEMGREP_CODE=$code sast && fail "a semgrep scan exit $code exited 0"
+    out_has "semgrep could not scan the repo (exit $code)"
+  done
+}
+
+test_sast_tool_cannot_start_red() {
+  setup
+  FAKE_FAIL_ON="semgrep-test:1" FAKE_FAIL_CODE=125 sast && fail "a semgrep that cannot start exited 0"
+  out_has "semgrep --test failed"
+  out_has "semgrep could not scan the repo (exit 125)"
+}
+
+test_sast_fixtures_that_fail_red() {
+  setup
+  FAKE_SEMGREP_TEST_CODE=1 sast && fail "a failing semgrep --test exited 0"
+  out_has "semgrep --test failed or its fixtures do not match the rules"
+}
+
+test_sast_rule_without_fixture_red() {
+  setup
+  FAKE_SEMGREP_UNTESTED=ts-no-eval sast && fail "a rule without a fixture exited 0"
+  out_has "every rule in security/semgrep needs a fixture"
+}
+
+test_sast_exit_1_without_findings_red() {
+  setup
+  FAKE_SEMGREP_CODE=1 sast && fail "exit 1 with an empty report exited 0"
+  out_has "exited 1 (findings) but its report lists none"
+}
+
+test_sast_findings_with_exit_0_red() {
+  setup
+  FAKE_SEMGREP_FINDINGS=1 FAKE_SEMGREP_CODE=0 sast && fail "findings with exit 0 exited 0"
+  out_has "sast: 1 findings"
+}
+
+test_sast_scanned_nothing_red() {
+  setup
+  FAKE_SEMGREP_SCANNED='' sast && fail "a scan of 0 files exited 0"
+  out_has "semgrep scanned no .go file"
+  out_has "semgrep scanned no .ts file"
+  out_has "semgrep scanned no .svelte file"
+}
+
+test_sast_scanned_no_svelte_red() {
+  setup
+  FAKE_SEMGREP_SCANNED="/src/a.go /src/b.ts" sast && fail "a scan with no .svelte file exited 0"
+  out_has "semgrep scanned no .svelte file"
+}
+
+test_sast_report_error_red() {
+  setup
+  FAKE_SEMGREP_ERRORS=1 sast && fail "a semgrep report with an error exited 0"
+  out_has "semgrep reported 1 errors"
+}
+
+test_sast_allow_excluded() {
+  setup
+  cat >"$W/security/allow.json" <<'JSON'
+[
+  {"tool": "semgrep", "id": "ts-no-eval", "reason": "made up", "expires": "2099-01-01"},
+  {"tool": "semgrep", "id": "ts-no-inner-html", "reason": "made up, expired", "expires": "2000-01-01"},
+  {"tool": "zizmor", "id": "no-slog-of-request-body", "reason": "made up, other tool", "expires": "2099-01-01"}
+]
+JSON
+  sast || fail "sast exited non-zero: $(cat "$W/out")"
+  has_call "--exclude-rule security.semgrep.ts-no-eval" || fail "the live semgrep id did not reach --exclude-rule"
+  has_call "ts-no-inner-html" && fail "an expired id reached semgrep"
+  has_call "no-slog-of-request-body" && fail "another tool's id reached semgrep"
+  assert_eq "excluded rules" 1 "$(grep -o -e '--exclude-rule' "$LOG" | wc -l)"
+}
+
+test_sast_allow_bad_id_refused() {
+  local id
+  for id in "two words" 'ts-no-eval --config /tmp' 'security.semgrep.ts-no-eval' 'no-such-rule' '../x'; do
+    setup
+    jq -n --arg id "$id" '[{"tool": "semgrep", "id": $id, "reason": "made up", "expires": "2099-01-01"}]' >"$W/security/allow.json"
+    sast && fail "the semgrep id '$id' was accepted"
+    out_has "security/allow.json has a semgrep id that is not the id of a rule in security/semgrep"
+    assert_eq "semgrep runs with the bad id '$id'" 0 "$(count_calls 'semgrep-test:1')"
+  done
+}
+
+test_sast_bad_args() {
+  setup
+  local rc=0
+  sast extra || rc=$?
+  assert_eq "exit code with an argument" 2 "$rc"
+  rc=0
+  (cd / && PATH="$ROOT/bin:$PATH" "$W/scripts/security/sast.sh") >"$W/out" 2>&1 || rc=$?
+  assert_eq "exit code without SEMGREP_IMAGE" 2 "$rc"
+}
+
+test_sast_sarif_written() {
+  setup
+  SARIF_DIR=$W/sarif sast || fail "sast exited non-zero: $(cat "$W/out")"
+  has_call "--sarif-output=/out/semgrep.sarif" || fail "semgrep was not asked for SARIF"
+  jq -e '.version == "2.1.0"' "$W/sarif/semgrep.sarif" >/dev/null || fail "no semgrep SARIF file: $(cat "$W/out")"
+}
+
 test_pins_clean() {
   pins_setup
   check_pins || fail "check-pins on the repo's files exited non-zero: $(cat "$W/out")"
@@ -856,6 +1022,21 @@ t "a scoped trivy-config id followed by another entry keeps its scope" test_triv
 t "allow-listed trivy-config and zizmor ids reach the tools" test_config_allow_reaches_tools
 t "a zizmor allow id that is not a plain token is refused" test_config_allow_bad_id_refused
 t "SARIF_DIR gets the zizmor SARIF file" test_config_sarif_written
+t "sast: a clean run tests the rules, scans offline and cleans up" test_sast_clean_run
+t "sast: an argument or a missing image exits 2" test_sast_bad_args
+t "sast: a finding is red" test_sast_findings_red
+t "sast: a semgrep error (exit 2 and others) is red" test_sast_tool_error_red
+t "sast: a semgrep that cannot start is red" test_sast_tool_cannot_start_red
+t "sast: fixtures that do not match their rules are red" test_sast_fixtures_that_fail_red
+t "sast: a rule with no fixture is red" test_sast_rule_without_fixture_red
+t "sast: exit 1 with no finding in the report is red" test_sast_exit_1_without_findings_red
+t "sast: findings with exit 0 are red" test_sast_findings_with_exit_0_red
+t "sast: a scan of 0 files is red" test_sast_scanned_nothing_red
+t "sast: a scan with no Svelte file is red" test_sast_scanned_no_svelte_red
+t "sast: an error in the report is red" test_sast_report_error_red
+t "sast: an allow-listed rule is excluded" test_sast_allow_excluded
+t "sast: a malformed or unknown semgrep allow id is refused" test_sast_allow_bad_id_refused
+t "sast: SARIF_DIR gets the semgrep SARIF file" test_sast_sarif_written
 t "check-pins: the repo's pins agree" test_pins_clean
 t "check-pins: a postgres digest that drifts in any copy is red" test_pins_postgres_digest_drift_red
 t "check-pins: a postgres copy without its digest is red" test_pins_postgres_digest_missing_red

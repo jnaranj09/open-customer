@@ -1,7 +1,7 @@
 # Design doc item 8. Runs the CLAUDE.md gate (check-generated and test-db were added in P1, cover
-# in P2, e2e in P6, test-deploy in P7, secrets, test-sec and config-scan with the security
+# in P2, e2e in P6, test-deploy in P7, secrets, test-sec, config-scan and sast with the security
 # pipeline). The job security scans the images and the running app (docs/designs/devsecops.md
-# sections 4 and 6) and uploads the zizmor SARIF (section 3). The job names gate and security are
+# sections 4 and 6) and uploads the zizmor and Semgrep SARIF (sections 3 and 2). The job names gate and security are
 # required checks on main: never rename them. Every action is pinned by commit SHA, with its
 # version in the comment (guard TestSupplyChainPins; Dependabot bumps both).
 name: ci
@@ -72,6 +72,7 @@ jobs:
       - run: make secrets
       - run: make test-sec
       - run: make config-scan
+      - run: make sast
       # After every check above, so they ran with only the web stub (Verification Plan, "Clean checkout");
       # e2e below needs the real build.
       - run: make build
@@ -176,3 +177,13 @@ jobs:
         with:
           sarif_file: zizmor-sarif/zizmor.sarif
           category: zizmor
+      # Semgrep's findings for the Security tab, also when a scan above is red (the same make sast
+      # in gate decides; this run only adds the SARIF file).
+      - run: make sast SARIF_DIR=semgrep-sarif
+        if: ${{ !cancelled() }}
+      - name: Upload SARIF (semgrep)
+        if: ${{ !cancelled() && hashFiles('semgrep-sarif/semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: semgrep-sarif/semgrep.sarif
+          category: semgrep

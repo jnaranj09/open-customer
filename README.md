@@ -39,9 +39,10 @@ run.
 | `make secrets` | gitleaks over the whole git history (needs Docker); reviewed false positives are in `.gitleaksignore` |
 | `make test-sec` | The scan wrappers' and check-pins' tests (`scripts/security/tests/run.sh`, against a fake `docker`) |
 | `make config-scan` | Trivy config on the two Dockerfiles and zizmor on `.github/workflows`, offline (needs Docker). Fails on a high or critical Dockerfile finding or a medium or high workflow finding |
+| `make sast` | Semgrep with only the rules written in `security/semgrep`, offline (needs Docker): first the rules' fixtures (`semgrep --test`), then the scan of the repo. Any finding fails |
 | `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary: the CUJ specs and the UI probe (axe and layout checks on every route at phone and desktop size). Needs the Playwright WebKit browser and its host libraries, port 8080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
 
-The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan`.
+The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`.
 For a change to an image, a scan or what the app serves, also `make image image-scan dast`.
 The gate leaves out `make e2e`. CI runs it after `make build` (design doc item 8); locally it runs
 by hand.

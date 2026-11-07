@@ -79,7 +79,9 @@ return { kind: 'ok', value: parsed.data };
   A cast lives only inside a small, named, tested helper. Sensor: typescript-eslint `no-explicit-any`
   (web); Go type assertions are prose only.
 - **Log the error path and a code, never the value.** A schema error often contains the input (a
-  client's name or phone, a token). Log `path` + `code` only. Prose only.
+  client's name or phone, a token). Log `path` + `code` only. Sensor: Semgrep `no-slog-of-request-body` (`make sast`: a log call with
+  the request body, a value `decodeJSON` or `decodePatch` filled, or the error they return); prose only
+  for other values.
 - **Unknown extra fields from systems you don't own pass through; malformed known fields fail.**
   Our own web client is owned (unknown fields are rejected); Web Push services and Cloudflare are
   not. Don't enum-lock a field a third party may extend. Prose only.

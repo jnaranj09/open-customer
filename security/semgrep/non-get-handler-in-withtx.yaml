@@ -1,0 +1,26 @@
+rules:
+  - id: non-get-handler-in-withtx
+    languages: [go]
+    severity: ERROR
+    message: >-
+      A handler for a non-GET operation must not use s.pool: it runs its module call in
+      s.inWriteTx (db.WithTx), so a failed commit is never shown as saved (.claude/rules/api.md,
+      "Writes commit before the response"; CLAUDE.md constraint 9).
+    metadata:
+      threat: T96
+    paths:
+      include:
+        - /internal/httpapi/
+      exclude:
+        - '*_test.go'
+    patterns:
+      - pattern: s.pool
+      - pattern-inside: |
+          func (s *Server) $H(...) {
+            ...
+          }
+      - metavariable-regex:
+          # The verbs of the non-GET operationIds in api/openapi.yaml. A new verb is added here, and
+          # a test case for it in testdata/non-get-handler-in-withtx.go.
+          metavariable: $H
+          regex: ^(Complete|Login|Logout|Change|Update|Upload|Create|Set|Preview|Record|Subscribe|Log[A-Z]|Delete|Patch|Post|Put|Archive|Remove)

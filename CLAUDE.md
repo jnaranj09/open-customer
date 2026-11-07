@@ -51,6 +51,10 @@ with fnm, `fnm use` in web/).
   `--offline` on `.github/workflows` (medium or high blocks), both with no network
   (`scripts/security/config-scan.sh`). `deploy/compose.yaml` is checked by the guard
   `TestComposeHardening` instead.
+- `make sast`: Semgrep with only the rules written in `security/semgrep` (one file per rule, a
+  fixture each in `security/semgrep/testdata`; never a registry rule), no network
+  (`scripts/security/sast.sh`): `semgrep --test` on the fixtures, then the scan; any finding blocks.
+  `.semgrepignore` lists what is skipped (tests, fixtures).
 - `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
@@ -62,11 +66,11 @@ with fnm, `fnm use` in web/).
 - `make dev`: Docker Postgres + `serve` on :8080 + Vite on :5173.
 
 **Gate (run before saying "done", report the command and its output):**
-`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan`,
+`make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`,
 plus `make image image-scan dast` for a change to an image, a scan or what the app serves. CI
 (`.github/workflows/ci.yml`) also runs the gitleaks action, `pnpm audit --audit-level high` and
 `make e2e` (after `make build`) in job `gate`, and `make image image-scan MODE=push dast` (and the
-zizmor SARIF upload) in job `security`.
+zizmor and Semgrep SARIF uploads) in job `security`.
 
 A check that could not run is reported as NOT RUN, never as passing.
 
@@ -141,7 +145,7 @@ copy in one commit, and `make check-pins` must stay green. Every image is pinned
   `deploy/backup/Dockerfile` and the CI service repeat it, digest included.
 - golangci-lint v2.15.0: `GOLANGCI_LINT_VERSION` in the `Makefile`; `version:` in CI.
 - sqlc 1.31.1: the `sqlc` stage of `security/tools.Dockerfile`, read into `SQLC_IMAGE`.
-- The scanner images (Trivy, gitleaks, zizmor, ZAP, Nuclei, curl): one stage each in
+- The scanner images (Trivy, gitleaks, zizmor, ZAP, Nuclei, curl, Semgrep): one stage each in
   `security/tools.Dockerfile`, read into `<NAME>_IMAGE` by the `Makefile`; Dependabot bumps them.
 - Go tools (oapi-codegen, govulncheck, deadcode): `tool` lines in `go.mod`.
 - TypeScript stays on 6.0.x: typescript-eslint and SvelteKit do not accept 7 yet.
