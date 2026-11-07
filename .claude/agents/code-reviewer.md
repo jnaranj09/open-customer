@@ -21,7 +21,7 @@ the changed files (its item numbers and the current build phase). The precedence
 ## Step 1 — re-run the gate yourself
 
 `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec`
-(plus `make image image-scan` when the change touches an image or the scan). Report each result
+(plus `make image image-scan dast` for a change to an image, a scan or what the app serves). Report each result
 with its real output. A gate you could not run is reported as NOT RUN, never as passing.
 
 ## Step 2 — fault-inject every guard

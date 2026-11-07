@@ -90,11 +90,17 @@ func checkAllowList(data []byte, today time.Time) []string {
 // of scope: scripts/security/dast.sh writes a `<id>\tOUTOFSCOPE\t<regex>` rules line).
 var zapID = regexp.MustCompile(`^([0-9]+)(?:@(\S+))?$`)
 
-// zapScopeProbe is a route no scope may match, so a scope cannot cover every route.
-const zapScopeProbe = "http://localhost:8080/api/v1/zz-scope-probe"
+// zapScopeProbes are URLs of the scanned app (the shell, a built file, an API route) that no scope
+// may match, so a scope cannot be a catch-all. An allowed scope names some other route.
+var zapScopeProbes = []string{
+	"http://localhost:8080/",
+	"http://localhost:8080/_app/x.js",
+	"http://localhost:8080/api/v1/zz-scope-probe",
+}
 
 // checkZapID returns what is wrong with a zap id, or "". ZAP compiles the scope with Python's re;
-// Go's syntax is close enough to catch a typo, and the scope must end in $ so it names one route.
+// Go's syntax is close enough to catch a typo or a catch-all: the scope must compile, end in $
+// and match none of zapScopeProbes. It does not prove the scope names exactly one route.
 func checkZapID(id string) string {
 	m := zapID.FindStringSubmatch(id)
 	switch {
@@ -108,9 +114,12 @@ func checkZapID(id string) string {
 	case err != nil:
 		return "the url regex does not compile"
 	case !strings.HasSuffix(m[2], "$"):
-		return "the url regex must end in $, so it names one route"
-	case re.MatchString(zapScopeProbe):
-		return "the url regex matches every route"
+		return "the url regex must end in $"
+	}
+	for _, probe := range zapScopeProbes {
+		if re.MatchString(probe) {
+			return "the url regex matches " + probe + ", so it is a catch-all"
+		}
 	}
 	return ""
 }
@@ -156,6 +165,9 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"a zap scope that does not compile", "[" + entry("zap", "40018@.*/a(b$", "r", "2026-12-01") + "]"},
 		{"a zap scope not anchored with $", "[" + entry("zap", "40018@.*/api/v1/client-errors", "r", "2026-12-01") + "]"},
 		{"a zap scope that matches every route", "[" + entry("zap", "40018@.*$", "r", "2026-12-01") + "]"},
+		{"a zap scope that matches the app shell", "[" + entry("zap", "40018@http://localhost:8080/$", "r", "2026-12-01") + "]"},
+		{"a zap scope that matches every built file", "[" + entry("zap", "40018@.*\\.js$", "r", "2026-12-01") + "]"},
+		{"a zap scope that matches every API route", "[" + entry("zap", "40018@.*/api/v1/.*$", "r", "2026-12-01") + "]"},
 	}
 	for _, c := range bad {
 		if got := checkAllowList([]byte(c.data), today); len(got) == 0 {

@@ -10,11 +10,13 @@
 #   curl-test:1     answers the app's routes: /readyz ok, setup 201, login 200 with a made-up
 #                   session cookie, /api/v1/me the next status of FAKE_ME_STATUS (space-separated,
 #                   the last one repeats; default 200)
-#   zap-test:1      writes FAKE_ZAP_REPORT (default: no alerts) as its -J report, exits
+#   zap-test:1      exits 3 unless given `-c rules.tsv`; writes FAKE_ZAP_REPORT (default: no
+#                   alerts) as its -J report, exits
 #                   FAKE_ZAP_CODE (default 0) and copies the rules file it was given to
 #                   $FAKE_LOG.zaprules
 #   nuclei-test:1   prints FAKE_NUCLEI_TEMPLATES (default 5) as its loaded-templates count, writes
 #                   one finding to its JSONL output when FAKE_NUCLEI_FINDINGS is set, exits 0
+#   curl-test:1 with `-o /cache/<file>` (the templates download) writes a made-up tarball there
 # `docker exec ... setup-link` prints a made-up setup link. The fake also copies the Trivy ignore
 # file it was given to $FAKE_LOG.ignore. No real container runs and nothing is pulled. All data
 # here is made up.
@@ -50,10 +52,18 @@ mount_of() {
   done
 }
 fake_curl() {
-  local url=''
+  local url='' out='' prev=''
   for a in "$@"; do
     case "$a" in http*) url=$a ;; esac
+    [ "$prev" != -o ] || out=$a
+    prev=$a
   done
+  case "$out" in
+    /cache/*) # the templates download: a made-up tarball in the mounted cache
+      printf 'made-up templates tarball\n' >"$(mount_of /cache "$@")/${out#/cache/}"
+      return 0
+      ;;
+  esac
   case "$url" in
     */readyz) ;;
     */api/v1/setup) printf '201' ;;
@@ -82,6 +92,13 @@ case "$1" in
         exit 0
         ;;
       *" zap-test:1 "*)
+        case " $* " in
+          *" -c rules.tsv "*) ;;
+          *)
+            echo "fake zap: no -c rules.tsv" >&2
+            exit 3
+            ;;
+        esac
         wrk=$(mount_of /zap/wrk "$@")
         cp "$wrk/rules.tsv" "$FAKE_LOG.zaprules"
         prev=''
@@ -151,12 +168,18 @@ scan() {
     VERSION=1.2.3 TRIVY_CACHE_DIR="$W/cache" "$W/scripts/security/image-scan.sh" "$@") >"$W/out" 2>&1
 }
 
-# dast: runs dast.sh from another folder with the fake docker and a templates cache that already
-# holds the pinned templates; stdout and stderr go to $W/out.
+# The sha256 of the fake curl's made-up templates tarball.
+fake_tarball_sha=$(printf 'made-up templates tarball\n' | sha256sum | cut -d' ' -f1)
+
+# dast: runs dast.sh from another folder with the fake docker; stdout and stderr go to $W/out. The
+# templates cache already holds the pinned templates unless EMPTY_CACHE is set. TEMPLATES_SHA
+# overrides the pinned tarball sha256 (default: the fake tarball's).
 dast() {
-  mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
+  mkdir -p "$W/nuclei-cache"
+  [ -n "${EMPTY_CACHE:-}" ] || mkdir -p "$W/nuclei-cache/nuclei-templates-v10.5.1"
   (cd / && PATH="$ROOT/bin:$PATH" IMAGE=open-customer:1.2.3 PG_IMAGE=postgres:18.6-alpine \
     ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
+    NUCLEI_TEMPLATES_SHA256="${TEMPLATES_SHA:-$fake_tarball_sha}" \
     REPORT_DIR="$W/report" NUCLEI_CACHE_DIR="$W/nuclei-cache" "$W/scripts/security/dast.sh" "$@") >"$W/out" 2>&1
 }
 
@@ -380,13 +403,33 @@ test_nuclei_no_templates_red() {
 
 test_templates_download_fails_red() {
   setup
-  rm -rf "$W/nuclei-cache"
-  mkdir -p "$W/nuclei-cache"
-  (cd / && FAKE_FAIL_ON=nuclei-templates PATH="$ROOT/bin:$PATH" IMAGE=open-customer:1.2.3 PG_IMAGE=postgres:18.6-alpine \
-    ZAP_IMAGE=zap-test:1 NUCLEI_IMAGE=nuclei-test:1 NUCLEI_TEMPLATES=v10.5.1 CURL_IMAGE=curl-test:1 \
-    REPORT_DIR="$W/report" NUCLEI_CACHE_DIR="$W/nuclei-cache" "$W/scripts/security/dast.sh") >"$W/out" 2>&1 &&
-    fail "a failed templates download exited 0"
+  FAKE_FAIL_ON=nuclei-templates EMPTY_CACHE=1 dast && fail "a failed templates download exited 0"
   out_has "cannot download the nuclei templates"
+}
+
+test_templates_checksum_mismatch_red() {
+  setup
+  TEMPLATES_SHA=$(printf 'other\n' | sha256sum | cut -d' ' -f1) EMPTY_CACHE=1 dast &&
+    fail "a templates tarball with the wrong sha256 exited 0"
+  out_has "the nuclei templates tarball v10.5.1 does not match NUCLEI_TEMPLATES_SHA256"
+  [ ! -d "$W/nuclei-cache/nuclei-templates-v10.5.1" ] || fail "a tarball with the wrong sha256 was unpacked"
+  assert_eq "nuclei runs after a checksum mismatch" 0 "$(count_calls 'nuclei-test:1')"
+}
+
+test_zap_unknown_rule_red() {
+  setup
+  FAKE_ZAP_REPORT='{"site":[{"alerts":[{"pluginid":"10021","riskcode":"1","count":"1"},{"pluginid":"99999","riskcode":"3","count":"1"}]}]}' \
+    dast && fail "an alert from a rule zap-rules.tsv does not list exited 0"
+  out_has "rules not in security/zap-rules.tsv: 99999"
+}
+
+test_zap_scope_regex_kept_byte_for_byte() {
+  setup
+  jq -n '[{"tool": "zap", "id": "40018@.*/api/v1/client\\.errors\\?x=\\d$", "reason": "made up", "expires": "2099-01-01"}]' \
+    >"$W/security/allow.json"
+  dast || fail "dast exited non-zero: $(cat "$W/out")"
+  grep -qxF "$(printf '40018\tOUTOFSCOPE\t%s' '.*/api/v1/client\.errors\?x=\d$')" "$LOG.zaprules" ||
+    fail "the OUTOFSCOPE regex changed on its way to zap: $(grep -P '^40018\tOUTOFSCOPE' "$LOG.zaprules")"
 }
 
 test_zap_allow_is_ignore() {
@@ -471,6 +514,9 @@ t "a zap run with no readable report is red" test_zap_no_report_red
 t "nuclei findings with exit 0 are red" test_nuclei_findings_exit_0_red
 t "a nuclei run that loads no templates is red" test_nuclei_no_templates_red
 t "a failed nuclei templates download is red" test_templates_download_fails_red
+t "a nuclei templates tarball with the wrong sha256 is red" test_templates_checksum_mismatch_red
+t "an alert from a rule zap-rules.tsv does not list is red" test_zap_unknown_rule_red
+t "a scoped zap regex reaches zap byte for byte" test_zap_scope_regex_kept_byte_for_byte
 t "an allow-listed zap rule is IGNORE in the rules file" test_zap_allow_is_ignore
 t "an allow-listed nuclei template reaches -exclude-id" test_nuclei_allow_excluded
 t "a scoped zap id is OUTOFSCOPE for its URL and leaves the rule FAIL" test_zap_scoped_allow_is_out_of_scope

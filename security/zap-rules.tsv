@@ -1,8 +1,8 @@
 # ZAP rules for make dast (scripts/security/dast.sh; docs/designs/devsecops.md "Blocking policy").
 # <rule id> TAB <FAIL|WARN|IGNORE> TAB <name; risk or reason>. Every rule ZAP 2.17.0 runs in the
-# API and baseline scans is listed: High and Medium are FAIL, Low and Informational WARN, except
-# where the reason says otherwise. A rule not listed defaults to WARN, so a new rule from a ZAP bump
-# is added here. Never IGNORE a rule here: an accepted finding goes in security/allow.json, with
+# API and baseline scans is listed: High and Medium are FAIL, Low and Informational WARN (a
+# controller ruling), except where the reason says otherwise. ZAP would only WARN a rule not
+# listed, so dast.sh is red on an alert from one: a new rule from a ZAP bump is added here. Never IGNORE a rule here: an accepted finding goes in security/allow.json, with
 # its reason and expiry, and dast.sh turns its live ids into IGNORE, or a scoped id
 # (<rule>@<url regex>) into an OUTOFSCOPE line for that URL only.
 0	FAIL	Directory Browsing (Active); Medium

@@ -132,7 +132,9 @@ rule names its sensor") applied to security.
   created through `setup-link` and `POST /setup` and logs in, and `GET /me` must answer 200 with
   her cookie before any scan runs (and again after the signed-in pass, which leaves logout out).
   Plus a ZAP baseline (passive) scan of `/`.
-- Nuclei against the same app, with a pinned templates release.
+- Nuclei against the same app, with a pinned templates release (its tarball's sha256 pinned too).
+  Out-of-band checks are not covered: the network is internal, so the interactsh templates are
+  turned off (`-ni`).
 - The fix it forced: security headers on every response (`Content-Security-Policy` including
   `frame-ancestors`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, and
   `Strict-Transport-Security` only when `PUBLIC_URL` is https), set by the middleware, with the
@@ -165,9 +167,14 @@ rule names its sensor") applied to security.
 
 - **CVE scanners** (Trivy on images and dependencies): high or critical with a fixed version
   available blocks. Medium and low are reported, not blocking.
-- **Every other tool** (Semgrep, config scan, Actions scan, ZAP, Nuclei, the threat-model guard):
+- **Every other tool** (Semgrep, config scan, Actions scan, Nuclei, the threat-model guard):
   every finding blocks unless it is allow-listed. Their severity scales differ and have no "fix
   available", and a missing header or `cap_drop` must go red to be fixed. My call.
+- **ZAP** blocks on its High and Medium rules and on the header rules 10021 (`nosniff`) and 10035
+  (HSTS), all FAIL in `security/zap-rules.tsv`. Its Low and Informational rules only WARN,
+  10011 (cookie without `Secure`, the scan is plain http) and 10116 (ZAP out of date) included
+  (controller ruling, recorded in that file). `make dast` is also red on a 5xx answer in a ZAP
+  report and on an alert from a rule the file does not list. Unless allow-listed.
 - **Third-party images** (`postgres`, `cloudflared`): on push and PR they report only, so an
   upstream CVE with no new image tag yet cannot turn every unrelated push red. The release and the
   weekly run block on them. Our own images (app, backup) block on push. My call.
@@ -179,7 +186,8 @@ rule names its sensor") applied to security.
   on every other route); prefer the scoped form. The guard `TestSecurityAllowList`
   (`internal/guards`) fails on a missing field, an unknown tool, a bad date, an expired date, a date
   more than 180 days ahead, a duplicate `(tool, id)`, or a `zap` id of another shape (its regex must
-  compile, end in `$` and not match every route). `scripts/security/allow.sh <tool>` prints
+  compile, end in `$` and match none of a few probe URLs: the shell, a built file, an API route;
+  that catches a typo or a catch-all). `scripts/security/allow.sh <tool>` prints
   that tool's live ids (expiry today or later, UTC), one per line, and each scan wrapper turns them
   into the tool's own ignore form. gitleaks keeps its `.gitleaksignore` of fingerprints, which this
   guard does not cover. A new entry or a later expiry date needs the owner's agreement, written in

@@ -17,6 +17,9 @@ GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.24.3
 ZAP_IMAGE := zaproxy/zap-stable:2.17.0
 NUCLEI_IMAGE := projectdiscovery/nuclei:v3.11.1
 NUCLEI_TEMPLATES := v10.5.1
+# sha256 of that release's GitHub archive (refs/tags/$(NUCLEI_TEMPLATES).tar.gz); dast.sh refuses
+# any other bytes. A templates bump changes both lines.
+NUCLEI_TEMPLATES_SHA256 := 30fe1cfaced4635f886e4a2673641bba86998dceec28e468274524e789aa56eb
 CURL_IMAGE := curlimages/curl:8.22.0
 export PG_IMAGE
 
@@ -201,7 +204,8 @@ image-scan:
 REPORT_DIR ?= dast-report
 dast:
 	IMAGE=open-customer:$(VERSION) PG_IMAGE=$(PG_IMAGE) ZAP_IMAGE=$(ZAP_IMAGE) NUCLEI_IMAGE=$(NUCLEI_IMAGE) \
-		NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) CURL_IMAGE=$(CURL_IMAGE) REPORT_DIR=$(REPORT_DIR) \
+		NUCLEI_TEMPLATES=$(NUCLEI_TEMPLATES) NUCLEI_TEMPLATES_SHA256=$(NUCLEI_TEMPLATES_SHA256) \
+		CURL_IMAGE=$(CURL_IMAGE) REPORT_DIR=$(REPORT_DIR) \
 		scripts/security/dast.sh
 
 # gitleaks over the whole git history, offline; reviewed false positives are in .gitleaksignore.

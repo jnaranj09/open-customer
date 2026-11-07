@@ -13,7 +13,9 @@
 #     and once with the session cookie too. The signed-in pass leaves POST /auth/logout out so the
 #     session lives; GET /api/v1/me is checked again after it and a dead session is red.
 #   - ZAP baseline (passive, spider) on /.
-#   - Nuclei with the pinned templates (NUCLEI_TEMPLATES, downloaded once into NUCLEI_CACHE_DIR).
+#   - Nuclei with the pinned templates (NUCLEI_TEMPLATES, its tarball checked against
+#     NUCLEI_TEMPLATES_SHA256, downloaded once into NUCLEI_CACHE_DIR), without the out-of-band
+#     (interactsh) templates (-ni): the network is internal, so they could not call back.
 #
 # security/zap-rules.tsv sets each ZAP rule to FAIL or WARN; in the copy ZAP gets, a live plain zap
 # id of security/allow.json (allow.sh) becomes IGNORE and a scoped one (<id>@<url regex>) an
@@ -26,12 +28,12 @@
 # Exit 2 on bad arguments, 1 when the setup fails or any scan is red.
 set -euo pipefail
 
-usage="usage: dast.sh (env IMAGE, PG_IMAGE, ZAP_IMAGE, NUCLEI_IMAGE, NUCLEI_TEMPLATES, CURL_IMAGE; optional REPORT_DIR, NUCLEI_CACHE_DIR)"
+usage="usage: dast.sh (env IMAGE, PG_IMAGE, ZAP_IMAGE, NUCLEI_IMAGE, NUCLEI_TEMPLATES, NUCLEI_TEMPLATES_SHA256, CURL_IMAGE; optional REPORT_DIR, NUCLEI_CACHE_DIR)"
 if [ "$#" -ne 0 ]; then
   echo "$usage" >&2
   exit 2
 fi
-for var in IMAGE PG_IMAGE ZAP_IMAGE NUCLEI_IMAGE NUCLEI_TEMPLATES CURL_IMAGE; do
+for var in IMAGE PG_IMAGE ZAP_IMAGE NUCLEI_IMAGE NUCLEI_TEMPLATES NUCLEI_TEMPLATES_SHA256 CURL_IMAGE; do
   if [ -z "${!var:-}" ]; then
     echo "dast: $var is not set (run through make dast)" >&2
     exit 2
@@ -39,6 +41,10 @@ for var in IMAGE PG_IMAGE ZAP_IMAGE NUCLEI_IMAGE NUCLEI_TEMPLATES CURL_IMAGE; do
 done
 if ! [[ "$NUCLEI_TEMPLATES" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "dast: NUCLEI_TEMPLATES must be a release tag like v1.2.3, got '$NUCLEI_TEMPLATES'" >&2
+  exit 2
+fi
+if ! [[ "$NUCLEI_TEMPLATES_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "dast: NUCLEI_TEMPLATES_SHA256 must be 64 lower-case hex digits" >&2
   exit 2
 fi
 
@@ -89,7 +95,9 @@ app_curl() {
 
 docker image inspect "$IMAGE" >/dev/null 2>&1 || die "$IMAGE is not built (run make image)"
 
-# The pinned templates, downloaded once. A failed download is red, never a scan with no templates.
+# The pinned templates, downloaded once and unpacked only when the tarball's sha256 is the pinned
+# NUCLEI_TEMPLATES_SHA256. A failed download or a mismatch is red, never a scan with no or other
+# templates.
 if [ ! -d "$templates" ]; then
   mkdir -p "$templates_cache"
   tarball=nuclei-templates-$NUCLEI_TEMPLATES.tar.gz
@@ -97,6 +105,11 @@ if [ ! -d "$templates" ]; then
     -fsSL -o "/cache/$tarball" \
     "https://github.com/projectdiscovery/nuclei-templates/archive/refs/tags/$NUCLEI_TEMPLATES.tar.gz" ||
     die "cannot download the nuclei templates $NUCLEI_TEMPLATES"
+  got=$(sha256sum "$templates_cache/$tarball" | cut -d' ' -f1)
+  if [ "$got" != "$NUCLEI_TEMPLATES_SHA256" ]; then
+    rm -f "$templates_cache/$tarball"
+    die "the nuclei templates tarball $NUCLEI_TEMPLATES does not match NUCLEI_TEMPLATES_SHA256 (got $got)"
+  fi
   unpack=$(mktemp -d "$templates_cache/unpack.XXXXXX")
   tar -xzf "$templates_cache/$tarball" -C "$unpack" --strip-components=1 ||
     die "cannot unpack the nuclei templates $NUCLEI_TEMPLATES"
@@ -133,9 +146,10 @@ while IFS= read -r id; do
   [ -z "$id" ] || [[ "$id" =~ ^[0-9]+(@[^[:space:]]+)?$ ]] ||
     die "security/allow.json has a zap id that is not <rule number> or <rule number>@<url regex>"
 done <<<"$allowed"
-awk -F '\t' -v OFS='\t' -v ids="$allowed" '
+# The ids reach awk through the environment: -v would turn a regex's \. into a plain dot.
+ids=$allowed awk -F '\t' -v OFS='\t' '
   BEGIN {
-    n = split(ids, list, "\n")
+    n = split(ENVIRON["ids"], list, "\n")
     for (i = 1; i <= n; i++) {
       if (list[i] == "") continue
       at = index(list[i], "@")
@@ -211,12 +225,16 @@ replacer() {
 origin_opts=$(replacer 0 Origin "$origin")
 cookie_opts="$origin_opts $(replacer 1 Cookie "$cookie")"
 
-# zap <name> <script> <script args...>: one ZAP run; 0 and 2 (WARN rules only) pass. ZAP's rule
-# 100000 is one id for 4xx (Informational) and 5xx (Low) answers, so the rules file cannot fail
-# only on 5xx: a 5xx in the JSON report is red here (an app that answers 500 to a bad request
-# crashed past its boundary).
+# The rule ids the rules file ZAP gets names (OUTOFSCOPE lines included).
+known_rules=$(awk -F '\t' '!/^#/ && NF { print $1 }' "$report/zap/rules.tsv" | sort -u)
+
+# zap <name> <script> <script args...>: one ZAP run; 0 and 2 (WARN rules only) pass. Then, from
+# its JSON report: ZAP's rule 100000 is one id for 4xx (Informational) and 5xx (Low) answers, so
+# the rules file cannot fail only on 5xx, and a 5xx is red here (an app that answers 500 to a bad
+# request crashed past its boundary). An alert from a rule the rules file does not list is red
+# too: ZAP would only WARN it, so a ZAP bump could add a High rule that passes silently.
 zap() {
-  local name=$1 rc=0 errors
+  local name=$1 rc=0 errors ids unknown
   shift
   echo "== dast: zap $name"
   in_app -v "$report_abs/zap:/zap/wrk:rw" "$ZAP_IMAGE" "$@" -c rules.tsv \
@@ -235,6 +253,12 @@ zap() {
   if ! errors=$(jq '[.site[]?.alerts[]? | select(.pluginid == "100000" and .riskcode != "0") | .count | tonumber] | add // 0' \
     "$report/zap/$name.json"); then
     red "zap $name wrote no readable JSON report"
+    return 0
+  fi
+  ids=$(jq -r '[.site[]?.alerts[]?.pluginid] | unique[]' "$report/zap/$name.json" | sort -u)
+  unknown=$(comm -23 <(printf '%s\n' "$ids" | sed '/^$/d') <(printf '%s\n' "$known_rules") | paste -sd' ' -)
+  if [ -n "$unknown" ]; then
+    red "zap $name: alerts from rules not in security/zap-rules.tsv: $unknown (add each with its level)"
   elif [ "$errors" -gt 0 ]; then
     red "zap $name: the app answered $errors requests with a 5xx (see $report/zap/$name.html)"
   else
@@ -254,9 +278,11 @@ nuclei_ids=$(scripts/security/allow.sh nuclei | paste -sd, -)
 [ -z "$nuclei_ids" ] || excludes=(-exclude-id "$nuclei_ids")
 rc=0
 in_app -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$(cd "$templates" && pwd):/templates:ro" -v "$report_abs/nuclei:/out" \
-  "$NUCLEI_IMAGE" -u "$origin" -t /templates -duc -etags intrusive,dos,fuzz -s low,medium,high,critical \
+  "$NUCLEI_IMAGE" -u "$origin" -t /templates -duc -ni -etags intrusive,dos,fuzz -s low,medium,high,critical \
   "${excludes[@]}" -jle /out/nuclei.jsonl -se /out/nuclei.sarif -nc 2>&1 | tee "$report/nuclei/nuclei.log" || rc=$?
 loaded=$(sed -n 's/.*Templates loaded for current scan: \([0-9]*\).*/\1/p' "$report/nuclei/nuclei.log" | head -n 1)
+broken=$(sed -n 's/.*Found \([0-9]*\) templates with runtime error.*/\1/p' "$report/nuclei/nuclei.log" | head -n 1)
+[ -z "$broken" ] || echo "dast: nuclei: $broken templates did not run (runtime error; nuclei -validate shows why)"
 findings=0
 [ ! -s "$report/nuclei/nuclei.jsonl" ] || findings=$(grep -c . "$report/nuclei/nuclei.jsonl")
 if [ "$rc" -ne 0 ]; then
