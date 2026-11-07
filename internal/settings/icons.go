@@ -6,6 +6,7 @@ import (
 	_ "embed" // the default icons are embedded PNG files.
 	"errors"
 	"fmt"
+	"image/png"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -35,15 +36,19 @@ var defaultIcon180 []byte
 
 // SetIcons checks both PNGs, writes them under <MediaDir>/branding/ and then records the upload
 // time. The files are synced and renamed into place before the row changes, so a row never points
-// at a missing file. It is problem.UnsupportedMediaType when a part lacks the PNG signature,
-// problem.PayloadTooLarge when a part is over 1 MB, and problem.NotFound before setup.
+// at a missing file. It is problem.PayloadTooLarge when a part is over 1 MB,
+// problem.UnsupportedMediaType when a part is not a PNG of exactly its size (512 or 180 px
+// square), and problem.NotFound before setup.
 func (m *Module) SetIcons(ctx context.Context, q db.DBTX, icon512, icon180 []byte) error {
-	for _, b := range [][]byte{icon512, icon180} {
-		if !bytes.HasPrefix(b, []byte(pngSignature)) {
-			return problem.UnsupportedMediaType{}
-		}
-		if len(b) > maxIconBytes {
+	for _, part := range []struct {
+		b    []byte
+		size int
+	}{{icon512, iconLarge}, {icon180, iconSmall}} {
+		if len(part.b) > maxIconBytes {
 			return problem.PayloadTooLarge{}
+		}
+		if !isPNGOfSize(part.b, part.size) {
+			return problem.UnsupportedMediaType{}
 		}
 	}
 	if _, err := m.Get(ctx, q); err != nil {
@@ -64,6 +69,18 @@ func (m *Module) SetIcons(ctx context.Context, q db.DBTX, icon512, icon180 []byt
 		return fmt.Errorf("record icons: %w", err)
 	}
 	return nil
+}
+
+// isPNGOfSize reports whether b starts with the PNG signature and a header that png.DecodeConfig
+// reads as size by size pixels. The icons are served without a session, so a PNG signature in front
+// of other bytes is refused (threat model T31). The web app draws both icons at exactly these sizes
+// (toIconPngs in web/src/lib/photos.ts).
+func isPNGOfSize(b []byte, size int) bool {
+	if !bytes.HasPrefix(b, []byte(pngSignature)) {
+		return false
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(b))
+	return err == nil && cfg.Width == size && cfg.Height == size
 }
 
 // Icon returns the PNG for size 512 or 180 and the time it was uploaded. Without an upload, or
