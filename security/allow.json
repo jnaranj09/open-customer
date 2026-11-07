@@ -178,5 +178,17 @@
     "id": "CVE-2026-78661@usr/local/bin/cloudflared",
     "reason": "golang.org/x/net CVE in the cloudflared binary of the image deploy/compose.yaml pins (usr/local/bin/cloudflared only). cloudflare/cloudflared 2026.10.7 is the newest tag and no fixed tag exists. Remove this entry when Dependabot brings a fixed tag. Owner decision 2026-11-07.",
     "expires": "2027-02-05"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-76844@image:cloudflare/cloudflared",
+    "reason": "HIGH CVE with a fix in the Debian zlib1g package of the cloudflared image deploy/compose.yaml pins (only that image; the same CVE in our own images stays blocking). cloudflared is a Go binary and Go ships its own compress/zlib, so it most likely does not use the system zlib (not checked). No newer cloudflared tag exists. Remove this entry when Dependabot brings a rebuilt cloudflared. Owner decision 2026-11-07.",
+    "expires": "2027-02-05"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-85091@image:cloudflare/cloudflared",
+    "reason": "HIGH CVE with a fix in the Debian zlib1g package of the cloudflared image deploy/compose.yaml pins (only that image; the same CVE in our own images stays blocking). cloudflared is a Go binary and Go ships its own compress/zlib, so it most likely does not use the system zlib (not checked). No newer cloudflared tag exists. Remove this entry when Dependabot brings a rebuilt cloudflared. Owner decision 2026-11-07.",
+    "expires": "2027-02-05"
   }
 ]

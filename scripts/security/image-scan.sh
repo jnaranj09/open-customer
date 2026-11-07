@@ -11,8 +11,10 @@
 #
 # Each image is saved to a tar and scanned with `trivy image --input`, so the scanner never gets the
 # Docker socket. The live trivy ids of security/allow.json (allow.sh) go to a temp
-# .trivyignore.yaml (trivy-ignore.sh): <CVE id> ignores the CVE in every image, <CVE id>@<path in
-# the image> (usr/local/bin/gosu) only in the result whose Target is that path. Trivy exits 1 on its own errors (no database, unreadable image) whatever
+# .trivyignore.yaml (trivy-ignore.sh), rewritten for each image: <CVE id> ignores the CVE in every
+# image, <CVE id>@<path in the image> (usr/local/bin/gosu) only in the result whose Target is that
+# path, <CVE id>@image:<repository> (cloudflare/cloudflared) only in the image of that repository
+# (the ref without tag and digest). Trivy exits 1 on its own errors (no database, unreadable image) whatever
 # --exit-code says, so findings use exit code 5 and any exit other than 0 or 5 is red, for every
 # image and mode: a scan that did not run never reads as clean. Every image is scanned before the
 # script exits, so one run reports them all. Exit 2 on bad arguments, 1 when any image is red.
@@ -87,10 +89,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The ignore file: the live trivy ids of the allow-list, plain or scoped to one path
-# (trivy-ignore.sh).
+# The ignore file: the live trivy ids of the allow-list, plain or scoped to one path or one image
+# (trivy-ignore.sh). Written once with no image, so a malformed id is refused before any scan, and
+# again for each image in scan_one.
 . scripts/security/trivy-ignore.sh image-scan
 write_trivy_ignore "$work/.trivyignore.yaml"
+
+# image_repo <ref>: the repository of an image ref, without digest and tag (a colon before the last
+# slash is a registry port, not a tag).
+image_repo() {
+  local ref=${1%%@*}
+  if [[ "${ref##*/}" == *:* ]]; then
+    ref=${ref%:*}
+  fi
+  echo "$ref"
+}
 
 red=0
 red() {
@@ -125,6 +138,7 @@ scan_one() {
     red "cannot save $image for the scan"
     return 0
   fi
+  write_trivy_ignore "$work/.trivyignore.yaml" "$(image_repo "$image")"
   echo "== image-scan: $image"
   trivy "$name" --exit-code "$findings_exit" || rc=$?
   case "$rc" in

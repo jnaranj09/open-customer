@@ -153,7 +153,13 @@ func probeFileExists(rel string) bool { return rel == "deploy/backup/Dockerfile"
 // the result whose Target is that path: scripts/security/trivy-ignore.sh writes the ignore entry
 // with Trivy's `paths:`). A Go binary's result has the binary's path in the image as its Target
 // (checked on Trivy 0.76.1), so "<CVE id>@usr/local/bin/gosu" leaves the same CVE in our own binary red.
+// "@image:<repository>" (an OS package finding has no path to name) is ignored only when the scanned
+// image's repository, its ref without tag and digest, equals <repository>.
 var trivyID = regexp.MustCompile(`^([A-Za-z0-9._:-]+)(?:@([^@]+))?$`)
+
+// trivyImageScope is the "image:<repository>" scope: a repository is lowercase registry and path
+// characters only, so it holds no tag (a colon), no digest (an @) and no glob.
+var trivyImageScope = regexp.MustCompile(`^image:[a-z0-9._/-]+$`)
 
 // trivyScope is a clean relative path: segments of letters, digits, dot, underscore and dash.
 var trivyScope = regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
@@ -165,9 +171,13 @@ func checkTrivyID(id string) string {
 	m := trivyID.FindStringSubmatch(id)
 	switch {
 	case m == nil:
-		return "want <CVE id> or <CVE id>@<path in the image> (no space, one @)"
+		return "want <CVE id>, <CVE id>@<path in the image> or <CVE id>@image:<repository> (no space, one @)"
 	case !strings.Contains(id, "@"):
 		return ""
+	case strings.HasPrefix(m[2], "image:"):
+		if !trivyImageScope.MatchString(m[2]) {
+			return "the image must be a repository: lowercase [a-z0-9._/-] only, no tag, no digest"
+		}
 	case !trivyScope.MatchString(m[2]) || slices.Contains(strings.Split(m[2], "/"), ".."):
 		return "the path must be a clean relative path (no glob, no .., no leading or doubled slash)"
 	}
@@ -211,6 +221,8 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"a zap rule scoped to one route", "[" + entry("zap", "40018@.*/api/v1/client-errors$", "r", "2026-12-01") + "]"},
 		{"a trivy-config check", "[" + entry("trivy-config", "DS-0002", "r", "2026-12-01") + "]"},
 		{"a trivy CVE scoped to one binary in an image", "[" + entry("trivy", "CVE-2026-0001@usr/local/bin/gosu", "r", "2026-12-01") + "]"},
+		{"a trivy CVE scoped to one image", "[" + entry("trivy", "CVE-2026-0001@image:cloudflare/cloudflared", "r", "2026-12-01") + "]"},
+		{"a trivy CVE scoped to an image on another registry", "[" + entry("trivy", "CVE-2026-0001@image:ghcr.io/some-owner/some_image", "r", "2026-12-01") + "]"},
 		{"a trivy-config check scoped to one file", "[" + entry("trivy-config", "DS-0002@deploy/backup/Dockerfile", "r", "2026-12-01") + "]"},
 	}
 	for _, c := range valid {
@@ -269,6 +281,13 @@ func TestSecurityAllowListProbes(t *testing.T) {
 		{"a trivy scope that is empty", "[" + entry("trivy", "CVE-2026-0001@", "r", "2026-12-01") + "]"},
 		{"a trivy scope with no CVE id", "[" + entry("trivy", "@usr/local/bin/gosu", "r", "2026-12-01") + "]"},
 		{"a trivy scope with an absolute path", "[" + entry("trivy", "CVE-2026-0001@/usr/local/bin/gosu", "r", "2026-12-01") + "]"},
+		{"a trivy image scope that is empty", "[" + entry("trivy", "CVE-2026-0001@image:", "r", "2026-12-01") + "]"},
+		{"a trivy image scope with a tag", "[" + entry("trivy", "CVE-2026-0001@image:cloudflare/cloudflared:2026.10.7", "r", "2026-12-01") + "]"},
+		{"a trivy image scope with a digest", "[" + entry("trivy", "CVE-2026-0001@image:cloudflare/cloudflared@sha256:abc", "r", "2026-12-01") + "]"},
+		{"a trivy image scope with a capital", "[" + entry("trivy", "CVE-2026-0001@image:Cloudflare/cloudflared", "r", "2026-12-01") + "]"},
+		{"a trivy image scope with a glob", "[" + entry("trivy", "CVE-2026-0001@image:cloudflare/*", "r", "2026-12-01") + "]"},
+		{"a trivy image scope with a space", "[" + entry("trivy", "CVE-2026-0001@image:cloudflare /cloudflared", "r", "2026-12-01") + "]"},
+		{"a trivy image scope with a quote", "[" + entry("trivy", "CVE-2026-0001@image:cloudflare/cloud\"flared", "r", "2026-12-01") + "]"},
 		{"a trivy scope with ..", "[" + entry("trivy", "CVE-2026-0001@usr/../bin/gosu", "r", "2026-12-01") + "]"},
 		{"a trivy scope outside the image", "[" + entry("trivy", "CVE-2026-0001@../gosu", "r", "2026-12-01") + "]"},
 		{"a trivy scope that is not a clean path", "[" + entry("trivy", "CVE-2026-0001@usr//local/bin/gosu", "r", "2026-12-01") + "]"},

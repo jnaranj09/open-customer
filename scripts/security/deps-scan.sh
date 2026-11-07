@@ -6,7 +6,7 @@
 # version blocks; one with no fix is not shown, so an upstream advisory nobody can act on never
 # turns every PR red. The live trivy ids of security/allow.json (allow.sh) go to a temp
 # .trivyignore.yaml, as in make image-scan (trivy-ignore.sh); an id scoped to an image path ignores
-# nothing here.
+# nothing here, and an id scoped to an image (<CVE id>@image:<repository>) is skipped.
 #
 # Trivy downloads its vulnerability database into TRIVY_CACHE_DIR (default: the same cache dir
 # make image-scan uses), so it needs network; without the database it exits 1, which is red. Trivy
@@ -45,7 +45,7 @@ trap cleanup EXIT
 mkdir "$work/out"
 
 # The ignore file: the live trivy ids of the allow-list, plain or scoped to one path
-# (trivy-ignore.sh).
+# (trivy-ignore.sh); image-scoped ids are skipped (no repository is passed).
 . scripts/security/trivy-ignore.sh deps-scan
 write_trivy_ignore "$work/.trivyignore.yaml"
 
