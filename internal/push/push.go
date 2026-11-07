@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -45,8 +47,16 @@ type Options struct {
 	Clock clock.Clock
 	// Subject is VAPID_SUBJECT, a "mailto:" address.
 	Subject string
-	// HTTPClient sends to the push services; nil means a client with a 15 s timeout.
+	// HTTPClient sends to the push services; nil means publicOnlyClient (a 15 s timeout, public
+	// addresses only). Either way the module's copy follows no redirect.
 	HTTPClient *http.Client
+	// Resolver looks up an endpoint's host when it is subscribed; nil means net.DefaultResolver.
+	Resolver Resolver
+}
+
+// Resolver is the DNS lookup Subscribe uses; *net.Resolver has it.
+type Resolver interface {
+	LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error)
 }
 
 // Module is the push module. Every method takes ctx and a db.DBTX first.
@@ -56,15 +66,21 @@ type Module struct {
 	// that does not start with "https:", and the JWT sub must have exactly one.
 	subscriber string
 	client     *http.Client
+	resolver   Resolver
 }
 
 // New returns the push module.
 func New(opts Options) *Module {
-	client := opts.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: defaultTimeout}
+	client := publicOnlyClient()
+	if opts.HTTPClient != nil {
+		client = new(*opts.HTTPClient)
 	}
-	return &Module{clock: opts.Clock, subscriber: strings.TrimPrefix(opts.Subject, "mailto:"), client: client}
+	client.CheckRedirect = refuseRedirect
+	var resolver Resolver = net.DefaultResolver
+	if opts.Resolver != nil {
+		resolver = opts.Resolver
+	}
+	return &Module{clock: opts.Clock, subscriber: strings.TrimPrefix(opts.Subject, "mailto:"), client: client, resolver: resolver}
 }
 
 // Subscription is the browser's PushSubscription: the endpoint and its keys, base64url.
@@ -120,9 +136,9 @@ func (m *Module) PublicKey(ctx context.Context, q db.DBTX) (string, error) {
 
 // Subscribe stores s for userID, or gives a known endpoint the new keys (its row and ID stay).
 // created reports a new row. A bad field is a problem.Validation on endpoint, keys.p256dh or
-// keys.auth.
+// keys.auth. The endpoint's host is looked up here, before anything is stored.
 func (m *Module) Subscribe(ctx context.Context, q db.DBTX, userID uuid.UUID, s Subscription) (uuid.UUID, bool, error) {
-	if err := checkSubscription(s); err != nil {
+	if err := m.checkSubscription(ctx, s); err != nil {
 		return uuid.Nil, false, err
 	}
 	id, err := ids.New()
@@ -138,11 +154,11 @@ func (m *Module) Subscribe(ctx context.Context, q db.DBTX, userID uuid.UUID, s S
 	return row.ID, row.Created, nil
 }
 
-// checkSubscription reports every bad field: the endpoint must be an absolute https URL, p256dh
-// must decode to 65 bytes and auth to 16.
-func checkSubscription(s Subscription) error {
+// checkSubscription reports every bad field: the endpoint must be an absolute https URL whose host
+// is a name with a public address (publicHost), p256dh must decode to 65 bytes and auth to 16.
+func (m *Module) checkSubscription(ctx context.Context, s Subscription) error {
 	var errs []problem.FieldError
-	if u, err := url.Parse(s.Endpoint); err != nil || u.Scheme != "https" || u.Host == "" {
+	if u, err := url.Parse(s.Endpoint); err != nil || u.Scheme != "https" || u.Host == "" || !publicHost(ctx, m.resolver, u) {
 		errs = append(errs, problem.FieldError{Field: "endpoint", Message: problem.MsgPushEndpointInvalid})
 	}
 	if decodedLen(s.P256dh) != p256dhLen {

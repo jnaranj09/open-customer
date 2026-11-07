@@ -77,3 +77,15 @@ func TestSubscribePushNeedsSession(t *testing.T) {
 	app, _ := pushApp(t)
 	assertUnauthorized(t, send(app.handler, http.MethodPost, pushSubsPath, testOrigin, browserSubscription("https://push.example.com/abc"), nil))
 }
+
+func TestSubscribePushPrivateEndpointIs422(t *testing.T) {
+	app, c := pushApp(t)
+	for _, endpoint := range []string{"https://192.168.1.1/admin", "https://router.example.com/admin"} {
+		t.Run(endpoint, func(t *testing.T) {
+			got := fieldErrors(t, sendAs(app, c, http.MethodPost, pushSubsPath, browserSubscription(endpoint)))
+			if len(got) != 1 || got[0].Field != "endpoint" {
+				t.Fatalf("field errors = %+v, want one on endpoint", got)
+			}
+		})
+	}
+}

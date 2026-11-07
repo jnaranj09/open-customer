@@ -83,8 +83,8 @@ dashboard and settings (Cloudflare or any other).
 | T40 | client data | The export is downloaded without a session | GET /export | test:TestExportNeedsSession |
 | T41 | client data | A failed export looks like a complete file | GET /export | test:TestExportAbortsAfterStreamStarts; test:TestExportFailsBeforeStreamIsProblem |
 | T42 | client data | A client name or note starting with = or + runs as a formula when the CSV is opened in a spreadsheet | GET /export | gap: Task 9 |
-| T43 | the whole app | A push subscription with a bad endpoint or keys is stored | POST /push/subscriptions | test:TestSubscribePushHttpEndpointIs422; test:TestSubscribePushMissingKeysIs422; test:TestSubscribePushNeedsSession |
-| T44 | the home network | A push endpoint pointing at a private address makes the server send requests into the home network | POST /push/subscriptions | gap: Task 9 |
+| T43 | the whole app | A push subscription with a bad endpoint or keys is stored | POST /push/subscriptions | test:TestSubscribePushHttpEndpointIs422; test:TestSubscribePushPrivateEndpointIs422; test:TestSubscribeRejects; test:TestSubscribePushMissingKeysIs422; test:TestSubscribePushNeedsSession |
+| T44 | the home network | A push endpoint pointing at a private address makes the server send requests into the home network | POST /push/subscriptions, the daily push | test:TestSubscribeRejects; test:TestSubscribePushPrivateEndpointIs422; test:TestSendAllNeverDialsANonPublicAddress; test:TestSendAllFollowsNoRedirect |
 | T45 | the whole app | The VAPID key pair is lost, so every push subscription stops working | push keys | test:TestEnsureKeysCreatesOnce; make:test-deploy |
 | T46 | the whole app | An expired or deleted push subscription fails the daily push | Web Push service responses | test:TestSendAllGoneDeletesSubscription; test:TestSendAllServerErrorKeepsSubscription; test:TestSendAllNetworkErrorCountsNotDelivered |
 | T47 | the whole app | A dead push subscription shows only on the status screen | daily push | accepted: the re-subscribe check fixes most cases on the next open, otherwise she notices the missing morning notification (release-1 Accepted risks) |

@@ -115,7 +115,7 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		Media:          media.New(media.Options{Clock: fake, MediaDir: cfg.mediaDir}),
 		Templates:      templates.New(templates.Options{Clock: fake, Attributes: attrsModule}),
 		Reminders:      reminders.New(reminders.Options{Clock: fake, Attributes: attrsModule}),
-		Push:           push.New(push.Options{Clock: fake, Subject: "mailto:dev@example.com"}),
+		Push:           push.New(push.Options{Clock: fake, Subject: "mailto:dev@example.com", Resolver: testDNS}),
 		Status:         testStatus(t, fake, cfg.mediaDir),
 		Exporter:       exporter.New(exporter.Options{Clock: fake, Settings: settingsModule, Attributes: attrsModule}),
 		Clock:          fake,
@@ -126,6 +126,24 @@ func newTestApp(t *testing.T, cfg testServerConfig) testApp {
 		t.Fatalf("New: %v", err)
 	}
 	return testApp{handler: handler, auth: a, clock: fake}
+}
+
+// fakeDNS answers each host from the map; a host it does not hold is a lookup error.
+type fakeDNS map[string][]netip.Addr
+
+func (d fakeDNS) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {
+	found, ok := d[host]
+	if !ok {
+		return nil, errors.New("no such host")
+	}
+	return found, nil
+}
+
+// testDNS is the DNS the test server's push module sees, so no test makes a real lookup.
+// 203.0.113.10 is a documentation address; the push module treats it as public.
+var testDNS = fakeDNS{
+	"push.example.com":   {netip.MustParseAddr("203.0.113.10")},
+	"router.example.com": {netip.MustParseAddr("192.168.1.1")},
 }
 
 // testStatus is the status module on clk. Its backup status file does not exist, so the backup line
@@ -495,7 +513,7 @@ func TestNewRefusesAMissingModule(t *testing.T) {
 		Media:     media.New(media.Options{Clock: clock.NewFake(testStart), MediaDir: t.TempDir()}),
 		Templates: templates.New(templates.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
 		Reminders: reminders.New(reminders.Options{Clock: clock.NewFake(testStart), Attributes: attrs}),
-		Push:      push.New(push.Options{Clock: clock.NewFake(testStart), Subject: "mailto:dev@example.com"}),
+		Push:      push.New(push.Options{Clock: clock.NewFake(testStart), Subject: "mailto:dev@example.com", Resolver: testDNS}),
 		Status:    testStatus(t, clock.NewFake(testStart), t.TempDir()),
 		Exporter: exporter.New(exporter.Options{
 			Clock: clock.NewFake(testStart), Settings: settings.New(settings.Options{Clock: clock.NewFake(testStart)}), Attributes: attrs,

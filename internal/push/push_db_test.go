@@ -3,11 +3,13 @@
 package push
 
 import (
+	"context"
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/netip"
 	"slices"
 	"testing"
 	"time"
@@ -24,6 +26,50 @@ import (
 const subject = "mailto:dev@example.com"
 
 var start = time.Date(2026, 3, 2, 8, 0, 0, 0, time.UTC)
+
+// fakeResolver answers each host from the map; a host it does not hold is a lookup error.
+type fakeResolver map[string][]netip.Addr
+
+func (r fakeResolver) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {
+	addrs, ok := r[host]
+	if !ok {
+		return nil, errors.New("no such host")
+	}
+	return addrs, nil
+}
+
+func addrs(list ...string) []netip.Addr {
+	out := make([]netip.Addr, 0, len(list))
+	for _, a := range list {
+		out = append(out, netip.MustParseAddr(a))
+	}
+	return out
+}
+
+// resolver is the DNS the fixture's module sees. 203.0.113.10 is a documentation address; the
+// module treats it as public.
+var resolver = fakeResolver{
+	"push.example.test":        addrs("203.0.113.10"),
+	"mixed.example.test":       addrs("192.168.1.1", "203.0.113.10"),
+	"loopback.example.test":    addrs("127.0.0.1"),
+	"loopback6.example.test":   addrs("::1"),
+	"private10.example.test":   addrs("10.0.0.5"),
+	"private172.example.test":  addrs("172.16.0.5"),
+	"private192.example.test":  addrs("192.168.1.1"),
+	"linklocal.example.test":   addrs("169.254.169.254"),
+	"linklocal6.example.test":  addrs("fe80::1"),
+	"ula.example.test":         addrs("fd00::1"),
+	"cgnat.example.test":       addrs("100.64.0.1"),
+	"unspecified.example.test": addrs("0.0.0.0"),
+	"unspec6.example.test":     addrs("::"),
+	"multicast.example.test":   addrs("239.1.1.1"),
+	"multicast6.example.test":  addrs("ff0e::1"),
+	"mapped.example.test":      addrs("::ffff:127.0.0.1"),
+	"mapped10.example.test":    addrs("::ffff:10.0.0.5"),
+	"mappedll.example.test":    addrs("::ffff:169.254.169.254"),
+	"mappedcgnat.example.test": addrs("::ffff:100.64.0.1"),
+	"empty.example.test":       nil,
+}
 
 type fixture struct {
 	pool *pgxpool.Pool
@@ -43,7 +89,7 @@ func newFixture(t *testing.T, client *http.Client) fixture {
 	if _, err := pool.Exec(t.Context(), `INSERT INTO users (id, username, password_hash) VALUES ($1, 'ana', 'x')`, user); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
-	m := New(Options{Clock: clock.NewFake(start), Subject: subject, HTTPClient: client})
+	m := New(Options{Clock: clock.NewFake(start), Subject: subject, HTTPClient: client, Resolver: resolver})
 	if err := m.EnsureKeys(t.Context(), pool); err != nil {
 		t.Fatalf("EnsureKeys: %v", err)
 	}
@@ -65,12 +111,19 @@ func newKeys(t *testing.T) (p256dh, auth string) {
 	return base64.RawURLEncoding.EncodeToString(priv.PublicKey().Bytes()), base64.RawURLEncoding.EncodeToString(secret)
 }
 
-func (f fixture) subscribe(t *testing.T, endpoint string) uuid.UUID {
+// store writes a subscription row as it is, past Subscribe's checks: a row stored before a check
+// existed, or one whose host now resolves elsewhere.
+func (f fixture) store(t *testing.T, endpoint string) uuid.UUID {
 	t.Helper()
 	p256dh, auth := newKeys(t)
-	id, _, err := f.m.Subscribe(t.Context(), f.pool, f.user, Subscription{Endpoint: endpoint, P256dh: p256dh, Auth: auth})
+	id, err := ids.New()
 	if err != nil {
-		t.Fatalf("Subscribe: %v", err)
+		t.Fatalf("subscription id: %v", err)
+	}
+	_, err = f.pool.Exec(t.Context(), `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth) VALUES ($1, $2, $3, $4, $5)`,
+		id, f.user, endpoint, p256dh, auth)
+	if err != nil {
+		t.Fatalf("insert subscription: %v", err)
 	}
 	return id
 }
@@ -147,6 +200,15 @@ func TestSubscribeInsertThenUpdate(t *testing.T) {
 	}
 }
 
+func TestSubscribeAcceptsAHostWithAPublicAddress(t *testing.T) {
+	f := newFixture(t, nil)
+	p256dh, auth := newKeys(t)
+	_, created, err := f.m.Subscribe(t.Context(), f.pool, f.user, Subscription{Endpoint: "https://mixed.example.test/x", P256dh: p256dh, Auth: auth})
+	if err != nil || !created {
+		t.Fatalf("Subscribe = %v, created %v; want created (the send-time dial refuses the private address)", err, created)
+	}
+}
+
 func TestSubscribeRejects(t *testing.T) {
 	p256dh, auth := newKeys(t)
 	short := func(n int) string { return base64.RawURLEncoding.EncodeToString(make([]byte, n)) }
@@ -159,6 +221,30 @@ func TestSubscribeRejects(t *testing.T) {
 		{"not a url", Subscription{Endpoint: "not a url", P256dh: p256dh, Auth: auth}, "endpoint"},
 		{"p256dh of 64 bytes", Subscription{Endpoint: "https://push.example.test/x", P256dh: short(64), Auth: auth}, "keys.p256dh"},
 		{"auth of 15 bytes", Subscription{Endpoint: "https://push.example.test/x", P256dh: p256dh, Auth: short(15)}, "keys.auth"},
+	}
+	for _, endpoint := range []string{
+		"https://192.168.1.1/admin",
+		"https://169.254.169.254/latest/meta-data/",
+		"https://203.0.113.10/x",
+		"https://[::1]:8080/api/v1/x",
+		"https://[2001:db8::1]/x",
+	} {
+		cases = append(cases, struct {
+			name  string
+			sub   Subscription
+			field string
+		}{"ip literal " + endpoint, Subscription{Endpoint: endpoint, P256dh: p256dh, Auth: auth}, "endpoint"})
+	}
+	for _, host := range []string{
+		"loopback", "loopback6", "private10", "private172", "private192", "linklocal", "linklocal6", "ula",
+		"cgnat", "unspecified", "unspec6", "multicast", "multicast6", "mapped", "mapped10", "mappedll", "mappedcgnat",
+		"empty", "unknown",
+	} {
+		cases = append(cases, struct {
+			name  string
+			sub   Subscription
+			field string
+		}{"host with no public address " + host, Subscription{Endpoint: "https://" + host + ".example.test/x", P256dh: p256dh, Auth: auth}, "endpoint"})
 	}
 	f := newFixture(t, nil)
 	for _, tc := range cases {
