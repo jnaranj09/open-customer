@@ -94,8 +94,11 @@ node-check:
 	@want=$$(sed -n 's/.*"node": "\(.*\)".*/\1/p' web/package.json); have=$$(node --version | sed 's/^v//'); \
 	if [ "$$want" != "$$have" ]; then echo "node $$have, but web/package.json pins $$want (fnm use $$want)" >&2; exit 1; fi
 
+# Right after the build, the script CSP's check reads the real index.html (never the web-stub,
+# which it refuses: it has no CSP meta).
 web: node-check
 	$(PNPM) build
+	scripts/security/csp-check.sh web/build/index.html
 # vite.config.ts reads VERSION from the environment.
 web: export VERSION := $(VERSION)
 

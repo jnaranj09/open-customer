@@ -244,7 +244,14 @@ rule names its sensor") applied to security.
   `frame-ancestors`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, and
   `Strict-Transport-Security` only when `PUBLIC_URL` is https), set by the middleware, with the
   script and style sources in a `<meta>` CSP that SvelteKit writes with script hashes. Go test:
-  `TestSecurityHeadersOnEveryResponse`.
+  `TestSecurityHeadersOnEveryResponse`. The `<meta>` has its own check: `make web` (so `make build`
+  and `make e2e`) runs `scripts/security/csp-check.sh` on the built `web/build/index.html` right
+  after `pnpm build`. It is red unless the page has exactly one CSP `<meta>` with `default-src
+  'self'`, `script-src` of `'self'` and sha256 hashes only (no `'unsafe-inline'`, `'unsafe-eval'`
+  or host; no `script-src-elem` or `script-src-attr`), no `object-src` other than `'none'`, no
+  `frame-ancestors` (ignored in a `<meta>`; the header sets it), and every inline `<script>`
+  hashes to a listed source. The web-stub has no `<meta>`, so the check refuses it rather than
+  passing it. Tests: `make test-sec` (`csp-check:` cases).
 
 ### 7. Fuzz tests
 

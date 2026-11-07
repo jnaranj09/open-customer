@@ -37,5 +37,6 @@ paths:
 - **Security headers on every response** (`X-Content-Type-Options`, `Referrer-Policy`, the header
   CSP, HSTS only for an https `PUBLIC_URL`) come from the one middleware `securityHeaders`; scripts
   and styles are allowed by `kit.csp` in `web/vite.config.ts`, never by a handler. Sensor:
-  `TestSecurityHeadersOnEveryResponse`; `make dast` (ZAP, Nuclei) in CI.
+  `TestSecurityHeadersOnEveryResponse`; `scripts/security/csp-check.sh` (run by `make build` on
+  the built `index.html`'s `<meta>` CSP); `make dast` (ZAP, Nuclei) in CI.
 - **Secrets come from the environment, never from code or logs.** Sensor: gosec + gitleaks in CI.

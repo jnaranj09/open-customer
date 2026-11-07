@@ -40,14 +40,16 @@ with fnm, `fnm use` in web/).
   (testcontainers).
 - `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`,
   `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
-- `make vuln`: govulncheck. `make build`: web build, then `bin/open-customer`. `make image`: the
+- `make vuln`: govulncheck. `make build`: web build, the script CSP check on the built
+  `web/build/index.html` (`scripts/security/csp-check.sh`: one CSP `<meta>`, `script-src` only
+  `'self'` and sha256 hashes, every inline script hashed), then `bin/open-customer`. `make image`: the
   app and backup Docker images (`open-customer:$(VERSION)`, `open-customer-backup:$(VERSION)`).
 - `make image-scan [MODE=push|release]`: Trivy on the two `make image` images, `PG_IMAGE` and the
   compose cloudflared image (`scripts/security/image-scan.sh`). `push` (default) blocks on our two
   images only; `release` blocks on all four. Needs network (the Trivy database).
 - `make secrets`: gitleaks over the whole git history (`.gitleaksignore` honoured). `make test-sec`:
-  the scan wrappers', release-sign's and check-pins' tests (`scripts/security/tests/run.sh`, fake
-  `docker` and `cosign`).
+  the scan wrappers', csp-check's, release-sign's and check-pins' tests
+  (`scripts/security/tests/run.sh`, fake `docker` and `cosign`).
 - `make release-sign IMAGE=<repository>:<tag>`: release workflow only (registry login, cosign,
   OIDC token; not in the gate): push, digest from the push, CycloneDX SBOM (Trivy), then `cosign
   sign` and `cosign attest` on `<repository>@<digest>` (`scripts/security/release-sign.sh`).

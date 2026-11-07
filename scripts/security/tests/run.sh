@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), and
+# Tests for the scan wrappers in scripts/security (docs/designs/devsecops.md, decision D10), for
+# csp-check.sh (made-up built pages; no docker), and
 # for scripts/check-pins.sh's image digest and cosign version checks. Run by make test-sec on the
 # host. Each test runs a wrapper from a temp copy of the repo parts it reads (scripts/security,
 # security/allow.json, deploy/compose.yaml; made-up Dockerfiles and a workflow for config-scan.sh),
@@ -1656,6 +1657,96 @@ test_release_on_main_shallow_clone_red() {
   out_has "the clone is shallow"
 }
 
+
+# csp-check.sh: a made-up built page. csp_page <policy> writes $W/index.html with that policy in
+# its CSP <meta> and one inline script; $csp_hash is that script's sha256 source. A policy of "-"
+# writes no <meta>.
+csp_script='__app = { base: "" };'
+csp_hash="'sha256-$(printf '%s' "$csp_script" | perl -MDigest::SHA=sha256_base64 -e 'local $/; print sha256_base64(<STDIN>), "="')'"
+csp_page() {
+  setup
+  {
+    printf '<!doctype html><html><head>'
+    [ "$1" = - ] || printf '<meta http-equiv="content-security-policy" content="%s">' "$1"
+    printf '<script type="module" src="./_app/start.js"></script>'
+    printf '</head><body><script>%s</script></body></html>\n' "$csp_script"
+  } >"$W/index.html"
+}
+csp_good="default-src 'self'; script-src 'self' $csp_hash; style-src 'self'; style-src-attr 'unsafe-inline'"
+csp_check() {
+  "$W/scripts/security/csp-check.sh" "$W/index.html" >"$W/out" 2>&1
+}
+
+test_csp_good_page_passes() {
+  csp_page "$csp_good"
+  csp_check || fail "a good page was refused: $(cat "$W/out")"
+  out_has "ok (1 hash(es), 1 inline script(s))"
+}
+
+test_csp_missing_meta_red() {
+  csp_page -
+  csp_check && fail "a page with no CSP meta passed"
+  out_has "has 0 CSP <meta> tags"
+  echo 'Run make web' >"$W/index.html"
+  csp_check && fail "the web-stub passed"
+  out_has "the web-stub has none"
+  rm "$W/index.html"
+  csp_check && fail "a missing page passed"
+  out_has "does not exist"
+}
+
+test_csp_unsafe_inline_red() {
+  csp_page "default-src 'self'; script-src 'self' 'unsafe-inline' $csp_hash"
+  csp_check && fail "script-src 'unsafe-inline' passed"
+  out_has "script-src allows 'unsafe-inline'"
+  csp_page "default-src 'self'; script-src 'self' 'unsafe-eval' $csp_hash"
+  csp_check && fail "script-src 'unsafe-eval' passed"
+  out_has "script-src allows 'unsafe-eval'"
+  csp_page "default-src 'self'; script-src 'self' https://cdn.example.invalid $csp_hash"
+  csp_check && fail "a script host passed"
+  out_has "script-src allows https://cdn.example.invalid"
+}
+
+test_csp_unlisted_hash_red() {
+  csp_page "default-src 'self'; script-src 'self' 'sha256-$(printf 'x%.0s' $(seq 43))='"
+  csp_check && fail "an inline script whose hash is not listed passed"
+  out_has "which script-src does not list"
+  csp_page "default-src 'self'; script-src 'self'"
+  csp_check && fail "an inline script with no hash at all passed"
+  out_has "which script-src does not list"
+}
+
+test_csp_other_directives_red() {
+  csp_page "script-src 'self' $csp_hash"
+  csp_check && fail "a policy with no default-src passed"
+  out_has "default-src is"
+  csp_page "default-src *; script-src 'self' $csp_hash"
+  csp_check && fail "default-src * passed"
+  out_has "default-src is"
+  csp_page "default-src 'self'; style-src 'self'"
+  csp_check && fail "a policy with no script-src passed"
+  out_has "no script-src"
+  csp_page "$csp_good; script-src-elem 'unsafe-inline'"
+  csp_check && fail "a script-src-elem passed"
+  out_has "script-src-elem is set"
+  csp_page "$csp_good; object-src *"
+  csp_check && fail "object-src * passed"
+  out_has "object-src is"
+  csp_page "$csp_good; frame-ancestors *"
+  csp_check && fail "a frame-ancestors in the meta passed"
+  out_has "frame-ancestors is in the <meta>"
+  csp_page "$csp_good; script-src 'self'"
+  csp_check && fail "a script-src set twice passed"
+  out_has "directive script-src is set twice"
+}
+
+test_csp_bad_args() {
+  setup
+  local rc=0
+  "$W/scripts/security/csp-check.sh" >/dev/null 2>&1 || rc=$?
+  assert_eq "exit code with no argument" 2 "$rc"
+}
+
 t "an unknown MODE exits 2" test_unknown_mode
 t "push mode: a clean scan covers the four images" test_push_clean_scans_four_images
 t "push mode: an app image finding is red" test_push_app_finding_red
@@ -1774,4 +1865,10 @@ t "release-on-main: a commit only on a side branch is red" test_release_on_main_
 t "release-on-main: a failed fetch of main is red" test_release_on_main_fetch_fails_red
 t "release-on-main: a missing or unknown GITHUB_SHA is red" test_release_on_main_missing_sha_red
 t "release-on-main: a shallow clone is red" test_release_on_main_shallow_clone_red
+t "csp-check: a built page with a good policy passes" test_csp_good_page_passes
+t "csp-check: a page with no CSP meta (the web-stub) or no page is red" test_csp_missing_meta_red
+t "csp-check: unsafe-inline, unsafe-eval or a host in script-src is red" test_csp_unsafe_inline_red
+t "csp-check: an inline script whose hash is not listed is red" test_csp_unlisted_hash_red
+t "csp-check: a missing or wide default-src, object-src or script-src, a script-src-elem or a meta frame-ancestors is red" test_csp_other_directives_red
+t "csp-check: a bad argument exits 2" test_csp_bad_args
 finish
