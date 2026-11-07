@@ -111,6 +111,16 @@ func newKeys(t *testing.T) (p256dh, auth string) {
 	return base64.RawURLEncoding.EncodeToString(priv.PublicKey().Bytes()), base64.RawURLEncoding.EncodeToString(secret)
 }
 
+// check is Check on a subscription the test expects to pass.
+func (f fixture) check(t *testing.T, s Subscription) Checked {
+	t.Helper()
+	c, err := f.m.Check(t.Context(), s)
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	return c
+}
+
 // store writes a subscription row as it is, past Subscribe's checks: a row stored before a check
 // existed, or one whose host now resolves elsewhere.
 func (f fixture) store(t *testing.T, endpoint string) uuid.UUID {
@@ -179,12 +189,12 @@ func TestSubscribeInsertThenUpdate(t *testing.T) {
 	f := newFixture(t, nil)
 	endpoint := "https://push.example.test/send/abc"
 	p256dh, auth := newKeys(t)
-	id, created, err := f.m.Subscribe(t.Context(), f.pool, f.user, Subscription{Endpoint: endpoint, P256dh: p256dh, Auth: auth})
+	id, created, err := f.m.Subscribe(t.Context(), f.pool, f.user, f.check(t, Subscription{Endpoint: endpoint, P256dh: p256dh, Auth: auth}))
 	if err != nil || !created {
 		t.Fatalf("first Subscribe = %v, created %v; want created", err, created)
 	}
 	p256dh2, auth2 := newKeys(t)
-	id2, created2, err := f.m.Subscribe(t.Context(), f.pool, f.user, Subscription{Endpoint: endpoint, P256dh: p256dh2, Auth: auth2})
+	id2, created2, err := f.m.Subscribe(t.Context(), f.pool, f.user, f.check(t, Subscription{Endpoint: endpoint, P256dh: p256dh2, Auth: auth2}))
 	if err != nil || created2 || id2 != id {
 		t.Fatalf("second Subscribe = %v, %v, %v; want the same ID %v and created false", id2, created2, err, id)
 	}
@@ -203,12 +213,23 @@ func TestSubscribeInsertThenUpdate(t *testing.T) {
 func TestSubscribeAcceptsAHostWithAPublicAddress(t *testing.T) {
 	f := newFixture(t, nil)
 	p256dh, auth := newKeys(t)
-	_, created, err := f.m.Subscribe(t.Context(), f.pool, f.user, Subscription{Endpoint: "https://mixed.example.test/x", P256dh: p256dh, Auth: auth})
+	_, created, err := f.m.Subscribe(t.Context(), f.pool, f.user, f.check(t, Subscription{Endpoint: "https://mixed.example.test/x", P256dh: p256dh, Auth: auth}))
 	if err != nil || !created {
 		t.Fatalf("Subscribe = %v, created %v; want created (the send-time dial refuses the private address)", err, created)
 	}
 }
 
+func TestSubscribeRefusesAnUncheckedSubscription(t *testing.T) {
+	f := newFixture(t, nil)
+	if _, _, err := f.m.Subscribe(t.Context(), f.pool, f.user, Checked{}); !errors.Is(err, errUnchecked) {
+		t.Fatalf("err = %v, want errUnchecked", err)
+	}
+	if n := f.count(t); n != 0 {
+		t.Errorf("CountSubscriptions = %d, want 0", n)
+	}
+}
+
+// TestSubscribeRejects: Check, the check every subscription passes before Subscribe stores it.
 func TestSubscribeRejects(t *testing.T) {
 	p256dh, auth := newKeys(t)
 	short := func(n int) string { return base64.RawURLEncoding.EncodeToString(make([]byte, n)) }
@@ -249,7 +270,7 @@ func TestSubscribeRejects(t *testing.T) {
 	f := newFixture(t, nil)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := f.m.Subscribe(t.Context(), f.pool, f.user, tc.sub)
+			_, err := f.m.Check(t.Context(), tc.sub)
 			var v problem.Validation
 			if !errors.As(err, &v) {
 				t.Fatalf("err = %v, want problem.Validation", err)

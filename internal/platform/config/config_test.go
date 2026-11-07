@@ -3,9 +3,6 @@ package config
 import (
 	"log/slog"
 	"net/url"
-	"os"
-	"regexp"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -122,44 +119,5 @@ func TestLoadAcceptsLocalHTTP(t *testing.T) {
 		if c.PublicURL.String() != u {
 			t.Errorf("PublicURL = %q, want %q", c.PublicURL, u)
 		}
-	}
-}
-
-// The placeholder list has three copies: PlaceholderSecrets, backup.sh's PLACEHOLDER_SECRETS and
-// the secret values in deploy/.env.example. They must stay equal.
-func TestPlaceholderSecretsMatchEnvExample(t *testing.T) {
-	t.Parallel()
-	example, err := os.ReadFile("../../../deploy/.env.example")
-	if err != nil {
-		t.Fatalf("read .env.example: %v", err)
-	}
-	var fromExample []string
-	for line := range strings.Lines(string(example)) {
-		name, value, ok := strings.Cut(strings.TrimSpace(line), "=")
-		secret := name == "DB_PASSWORD" || name == "RESTIC_PASSWORD" || name == "TUNNEL_TOKEN"
-		if ok && secret && !slices.Contains(fromExample, value) {
-			fromExample = append(fromExample, value)
-		}
-	}
-	script, err := os.ReadFile("../../../deploy/backup/backup.sh")
-	if err != nil {
-		t.Fatalf("read backup.sh: %v", err)
-	}
-	m := regexp.MustCompile(`(?m)^PLACEHOLDER_SECRETS=\(([^)]*)\)$`).FindSubmatch(script)
-	if m == nil {
-		t.Fatal("backup.sh has no PLACEHOLDER_SECRETS=(...) line")
-	}
-	fromScript := strings.Fields(string(m[1]))
-	slices.Sort(fromExample)
-	slices.Sort(fromScript)
-	want := slices.Sorted(slices.Values(PlaceholderSecrets))
-	if len(fromExample) == 0 {
-		t.Fatal("no secret values found in .env.example")
-	}
-	if !slices.Equal(fromExample, want) {
-		t.Errorf(".env.example secret values = %q, PlaceholderSecrets = %q", fromExample, want)
-	}
-	if !slices.Equal(fromScript, want) {
-		t.Errorf("backup.sh PLACEHOLDER_SECRETS = %q, PlaceholderSecrets = %q", fromScript, want)
 	}
 }

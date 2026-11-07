@@ -12,8 +12,9 @@ package guards
 // each one a pin.
 //
 // Two gaps a digest does not close (security audit A9) are checked too: an `apk add` installs only
-// the packages in acceptedApk (a new tool comes from its own image by digest instead), and every Dependabot ecosystem that proposes versions waits
-// 14 days (cooldown default-days), the "at least two weeks old" rule.
+// the packages in acceptedApk, each accepted in threat model T91 with its reason (a new tool comes
+// from its own image by digest instead), and every Dependabot entry waits 14 days before a new
+// version (cooldown default-days), the "at least two weeks old" rule.
 
 import (
 	"fmt"
@@ -43,10 +44,16 @@ var (
 	shellImageVar = regexp.MustCompile(`^[ \t]*(?:readonly[ \t]+|export[ \t]+)?([A-Z0-9_]+_IMAGE)=(\S*)`)
 )
 
-// acceptedApk are the Alpine packages a Dockerfile may `apk add` unpinned. The base image pins the
-// Alpine release by digest. bash and jq are accepted (threat model T91). restic is here only until
-// the owner decides (TASKS.md "Found, not fixed"): its official images fail make image-scan.
-var acceptedApk = []string{"bash", "jq", "restic"}
+// acceptedApk are the Alpine packages a Dockerfile may `apk add` unpinned, each with the reason
+// threat model T91 accepts it. For all of them the base image pins the Alpine release by digest,
+// apk verifies each package with that image's Alpine signing keys, and the weekly rescan blocks a
+// new CVE. A package with no entry here, or an empty reason, is refused.
+var acceptedApk = map[string]string{
+	"bash": "a shell the backup scripts need; it does not touch the backups' encryption",
+	"jq":   "reads restic's JSON output; it does not touch the backups' encryption",
+	"restic": "Alpine's package passes make image-scan, while both official restic images " +
+		"(0.18.1 and 0.19.1, checked 2026-11-07) fail it",
+}
 
 // apkAdd matches an `apk add` and captures its arguments, up to the end of the shell command.
 var apkAdd = regexp.MustCompile(`apk[ \t]+add[ \t]+([^&;|\n]*)`)
@@ -57,7 +64,7 @@ func checkApkAdds(name, src string) []string {
 	for i, line := range strings.Split(src, "\n") {
 		for _, m := range apkAdd.FindAllStringSubmatch(line, -1) {
 			for _, arg := range strings.Fields(m[1]) {
-				if !strings.HasPrefix(arg, "-") && !slices.Contains(acceptedApk, arg) {
+				if !strings.HasPrefix(arg, "-") && acceptedApk[arg] == "" {
 					problems = append(problems, fmt.Sprintf("%s:%d: apk add %s is not an accepted package (copy it from a digest-pinned image)", name, i+1, arg))
 				}
 			}
@@ -66,11 +73,11 @@ func checkApkAdds(name, src string) []string {
 	return problems
 }
 
-// cooldownEcosystems are the Dependabot ecosystems that must wait 14 days before a version.
-var cooldownEcosystems = []string{"gomod", "npm", "docker", "docker-compose"}
+// dependabotEcosystems are the ecosystems this repo needs a Dependabot entry for.
+var dependabotEcosystems = []string{"gomod", "npm", "docker", "docker-compose", "github-actions"}
 
-// checkDependabotCooldown returns the dependabot.yml entries of cooldownEcosystems whose
-// cooldown default-days is under 14, and an ecosystem of that list with no entry at all.
+// checkDependabotCooldown returns every dependabot.yml entry, of any ecosystem, whose cooldown
+// default-days is under 14, and an ecosystem of dependabotEcosystems with no entry at all.
 func checkDependabotCooldown(name string, src []byte) []string {
 	var doc struct {
 		Updates []struct {
@@ -87,15 +94,12 @@ func checkDependabotCooldown(name string, src []byte) []string {
 	var problems []string
 	seen := map[string]bool{}
 	for _, u := range doc.Updates {
-		if !slices.Contains(cooldownEcosystems, u.Ecosystem) {
-			continue
-		}
 		seen[u.Ecosystem] = true
 		if u.Cooldown.DefaultDays < 14 {
 			problems = append(problems, fmt.Sprintf("%s: %s %s: cooldown default-days is %d, want at least 14", name, u.Ecosystem, u.Directory, u.Cooldown.DefaultDays))
 		}
 	}
-	for _, e := range cooldownEcosystems {
+	for _, e := range dependabotEcosystems {
 		if !seen[e] {
 			problems = append(problems, fmt.Sprintf("%s: no %s entry", name, e))
 		}
@@ -257,7 +261,7 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 	goodApk := "RUN apk add --no-cache bash jq && rm -rf /x\nRUN apk add jq; echo restic\n"
 	goodDependabot := "updates:\n  - package-ecosystem: gomod\n    cooldown:\n      default-days: 14\n  - package-ecosystem: npm\n    cooldown:\n      default-days: 21\n" +
 		"  - package-ecosystem: docker\n    cooldown:\n      default-days: 14\n  - package-ecosystem: docker-compose\n    cooldown:\n      default-days: 14\n" +
-		"  - package-ecosystem: github-actions\n"
+		"  - package-ecosystem: github-actions\n    cooldown:\n      default-days: 14\n"
 	if got := slices.Concat(checkWorkflowPins("w", goodWorkflow), checkDockerfilePins("d", goodDockerfile), checkMakefilePins("m", goodMakefile, stages),
 		checkVarPins("s", goodShell, shellImageVar), checkComposePins("c", []byte(goodCompose)), checkApkAdds("d", goodApk),
 		checkDependabotCooldown("b", []byte(goodDependabot))); len(got) != 0 {
@@ -293,6 +297,9 @@ func TestSupplyChainPinsProbes(t *testing.T) {
 		{"apk add of a package after a flag", checkApkAdds("d", "RUN apk add --virtual .x curl\n")},
 		{"gomod without a cooldown", checkDependabotCooldown("b", []byte("updates:\n  - package-ecosystem: gomod\n"))},
 		{"npm with a short cooldown", checkDependabotCooldown("b", []byte("updates:\n  - package-ecosystem: npm\n    cooldown:\n      default-days: 7\n"))},
+		{"github-actions without a cooldown", checkDependabotCooldown("b", []byte(strings.Replace(goodDependabot,
+			"github-actions\n    cooldown:\n      default-days: 14\n", "github-actions\n", 1)))},
+		{"an ecosystem missing", checkDependabotCooldown("b", []byte(strings.Replace(goodDependabot, "github-actions", "pip", 1)))},
 		{"dependabot not YAML", checkDependabotCooldown("b", []byte("updates: ["))},
 	}
 	for _, c := range bad {

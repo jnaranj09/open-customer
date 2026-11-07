@@ -3,10 +3,10 @@
 # extra package is needed (checked at P7). The pin, digest included, is PG_IMAGE in the Makefile;
 # make check-pins fails if this copy differs.
 #
-# The three packages come from the Alpine mirror unpinned; the base pins the Alpine release.
-# Threat model T91 accepts bash and jq. restic is open (TASKS.md "Found, not fixed"): its official
-# images fail make image-scan, so it is not copied from one yet (guard TestSupplyChainPins allows
-# only these three).
+# The three packages come from the Alpine mirror unpinned, accepted in threat model T91: the base
+# pins the Alpine release, apk verifies each package with that image's Alpine signing keys, and the
+# weekly rescan blocks a new CVE. restic stays the Alpine package because it passes make image-scan
+# and both official restic images fail it (guard TestSupplyChainPins allows only these three).
 FROM postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
 
 RUN apk add --no-cache bash restic jq

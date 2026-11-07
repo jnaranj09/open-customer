@@ -134,13 +134,30 @@ func (m *Module) PublicKey(ctx context.Context, q db.DBTX) (string, error) {
 	return key, nil
 }
 
-// Subscribe stores s for userID, or gives a known endpoint the new keys (its row and ID stay).
-// created reports a new row. A bad field is a problem.Validation on endpoint, keys.p256dh or
-// keys.auth. The endpoint's host is looked up here, before anything is stored.
-func (m *Module) Subscribe(ctx context.Context, q db.DBTX, userID uuid.UUID, s Subscription) (uuid.UUID, bool, error) {
+// Checked is a Subscription that Check accepted. Only Check makes a non-zero one, so Subscribe
+// never stores an unchecked endpoint.
+type Checked struct{ sub Subscription }
+
+// errUnchecked is a zero Checked passed to Subscribe: a caller bug, not bad input.
+var errUnchecked = errors.New("push subscription was not checked")
+
+// Check is the one parse site of a browser's subscription. A bad field is a problem.Validation on
+// endpoint, keys.p256dh or keys.auth. It looks the endpoint's host up in DNS, so the handler calls
+// it before it opens the write transaction; it takes no database.
+func (m *Module) Check(ctx context.Context, s Subscription) (Checked, error) {
 	if err := m.checkSubscription(ctx, s); err != nil {
-		return uuid.Nil, false, err
+		return Checked{}, err
 	}
+	return Checked{sub: s}, nil
+}
+
+// Subscribe stores c for userID, or gives a known endpoint the new keys (its row and ID stay).
+// created reports a new row.
+func (m *Module) Subscribe(ctx context.Context, q db.DBTX, userID uuid.UUID, c Checked) (uuid.UUID, bool, error) {
+	if c.sub.Endpoint == "" {
+		return uuid.Nil, false, errUnchecked
+	}
+	s := c.sub
 	id, err := ids.New()
 	if err != nil {
 		return uuid.Nil, false, fmt.Errorf("new subscription id: %w", err)
