@@ -175,15 +175,18 @@ once by breaking what they protect, then restored.
   and `make image image-scan dast`: all 16 targets (the 13 of the gate list plus those 3) exit 0.
   Every new guard and wrapper was seen red once by breaking what it protects (per task).
   `docs/threat-model.md` has no `gap:` row and its guard refuses the word (seen red on a probe).
-  NOT RUN: `release-on-main.sh` inside a real Actions checkout (tested only against throwaway
-  repos); keyless signing, and
-  `upgrade.sh`, `restore.sh` and `pull.sh` verification against a real release (all need a `v*`
-  tag); `make scan-live` against a real deployment (the deployer's own); the weekly workflow's
+  NOT RUN: `upgrade.sh`, `restore.sh` and `pull.sh` end to end against a real release on a
+  deployed PC; `make scan-live` against a real deployment (the deployer's own); the weekly workflow's
   first scheduled run, its fuzz job included; `make e2e` (CI runs it); Dependabot digest-only
   updates for base images (seen only after a push); a real Cloudflare tunnel under the hardened
   compose. After the merge (PR #4, 53fc19e), branch protection on `main` and the `v*` tag ruleset
-  were applied and read back on 2026-11-07. Left: both ghcr packages set to public after the first
-  release (steps in `docs/threat-model.md` "GitHub settings").
+  were applied and read back on 2026-11-07. First release v0.1.0 (2026-11-07, run 42402380559):
+  `release-on-main.sh` passed in a real Actions checkout, both images were pushed, keyless-signed
+  and given their CycloneDX attestation. The ghcr packages were public with no change (they follow
+  the public repo). Logged out of ghcr, both images pulled, `verify_image` from deploy/scripts/lib.sh
+  returned the signed digests, and `cosign verify-attestation --type cyclonedx` passed. The
+  first try of v0.1.0 stopped at the release scan (two new zlib CVEs in cloudflared, allow-listed
+  in PR #9) before anything was pushed; its tag was deleted and recreated on 89e0c04.
 
 ## T9 Clean-up pass (checklist written; first run before the first release tag)
 

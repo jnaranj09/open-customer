@@ -1,9 +1,9 @@
 # open-customer — Security pipeline
 
 Status: built (2026-11-07). The owner approved it on 2026-11-06. Every part exists and ran locally
-except what the TASKS.md "Security pipeline exit" entry lists as NOT RUN: the first real keyless
-signature (it needs a `v*` tag), the live scan against a real deployment, and the weekly workflow's
-first scheduled run.
+except what the TASKS.md "Security pipeline exit" entry lists as NOT RUN: the deploy scripts
+against a real release on a deployed PC, the live scan against a real deployment, and the weekly
+workflow's first scheduled run. The first release, v0.1.0, was signed for real and verified.
 
 ## Intent
 
@@ -199,7 +199,7 @@ rule names its sensor") applied to security.
   --yes --type cyclonedx` on `<repository>@<digest>`, never the tag. cosign comes from
   `sigstore/cosign-installer` with `cosign-release`, and the job has `id-token: write`. Tests:
   `make test-sec` (`release-sign:` cases, fake `docker` and `cosign`). A real keyless sign needs
-  the job's OIDC token, so the first `v*` tag is its first test.
+  the job's OIDC token: v0.1.0 (2026-11-07) was the first, and both images verified.
 - My call: `deploy/scripts/upgrade.sh` verifies the signature before it pulls, running cosign from
   its pinned image (no install on the deployer's machine). A bad or missing signature stops the
   upgrade with nothing changed; `make test-deploy` gets a test for it. Built as `verify_image` in
@@ -393,7 +393,8 @@ rule names its sensor") applied to security.
   packages. The ruleset only limits who can tag (the owner is on its bypass list); the check that
   the tagged commit is on `main` is `release-on-main.sh` (section 4). Branch protection and the
   tag ruleset were applied after the merge, on 2026-11-07 (a required check must have run first);
-  the ghcr visibility waits for the first release. The threat model lists them as
+  the ghcr packages were public at the first release with no change (they follow the public
+  repo). The threat model lists them as
   `manual:` rows, "re-checked by hand after any repo settings change". The job names in CI stay
   stable, because a renamed required check silently blocks every PR.
 
