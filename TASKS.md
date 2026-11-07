@@ -170,7 +170,7 @@ once by breaking what they protect, then restored.
   `nofail` boot (not used yet: D8); the Ley 8968 check. The owner repeats check 5 on the home PC
   before real data (deploy/README.md section 8).
 - **Security pipeline exit** (2026-11-07), branch devsecops (`docs/designs/devsecops.md`, built).
-  CI run IDs for `gate` and `security`: pending, the owner pushes. Ran locally: `make check-pins
+  CI: PR #4 run 42389556805 and push run 42389512897, `gate` (with `make e2e`) and `security` green. Ran locally: `make check-pins
   lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast`
   and `make image image-scan dast`: all 16 targets (the 13 of the gate list plus those 3) exit 0.
   Every new guard and wrapper was seen red once by breaking what it protects (per task).
