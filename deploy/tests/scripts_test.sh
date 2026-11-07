@@ -8,6 +8,12 @@
 #   FAKE_FAIL_ON        a call containing this text exits FAKE_FAIL_CODE (default 1); every other
 #                       call exits 0, so `run --rm <COSIGN_IMAGE> verify` passes unless
 #                       FAKE_FAIL_ON=verify
+#   FAKE_VERIFY_JSON    what a passing `run --rm <COSIGN_IMAGE> verify <ref>` prints on stdout
+#                       (default: cosign's JSON with the made-up digest of <ref>'s repository; it
+#                       also prints cosign's "Verification for" lines on stderr, as cosign does)
+#   FAKE_PULLED_DIGEST  the digest `image inspect --format <RepoDigests> <repo>:<tag>` prints as
+#                       <repo>@<digest> (default: the same made-up digest of <repo>)
+# The made-up digest of a repository is sha256 of "made-up <repository>".
 # Only `compose config is valid` uses the real docker, and it starts nothing. The real deploy/.env
 # is never read or copied. All data here is made up.
 set -uo pipefail
@@ -20,7 +26,8 @@ DEPLOY=$(cd "$(dirname "$0")/.." && pwd)
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 # The scripts must not see a version from the caller's shell, only from .env.
-unset APP_VERSION FAKE_APP_VERSION FAKE_SNAPSHOT_JSON FAKE_FAIL_ON FAKE_FAIL_CODE
+unset APP_VERSION FAKE_APP_VERSION FAKE_SNAPSHOT_JSON FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_VERIFY_JSON \
+  FAKE_PULLED_DIGEST
 
 mkdir -p "$ROOT/bin"
 cat >"$ROOT/bin/docker" <<'EOF'
@@ -30,9 +37,28 @@ echo "$* | APP_VERSION=${APP_VERSION-unset}" >>"$FAKE_LOG"
 if [ -n "${FAKE_FAIL_ON:-}" ]; then
   case "$*" in *"$FAKE_FAIL_ON"*) exit "${FAKE_FAIL_CODE:-1}" ;; esac
 fi
+# made_up_digest <repository>
+made_up_digest() {
+  echo "sha256:$(printf 'made-up %s\n' "$1" | sha256sum | cut -d' ' -f1)"
+}
 case "$*" in
   "compose exec app open-customer version") echo "${FAKE_APP_VERSION:-}" ;;
   "compose --profile restore run --rm restore snapshot-info "*) echo "${FAKE_SNAPSHOT_JSON:-}" ;;
+  "run --rm "*" verify "*)
+    ref=$5
+    echo "Verification for $ref --" >&2
+    echo "The following checks were performed on each of these signatures:" >&2
+    if [ -n "${FAKE_VERIFY_JSON+set}" ]; then
+      printf '%s\n' "$FAKE_VERIFY_JSON"
+    else
+      printf '[{"critical":{"identity":{"docker-reference":"%s"},"image":{"docker-manifest-digest":"%s"},"type":"https://sigstore.dev/cosign/sign/v1"},"optional":{}}]\n' \
+        "$ref" "$(made_up_digest "${ref%:*}")"
+    fi
+    ;;
+  "image inspect --format "*RepoDigests*)
+    ref=${*: -1}
+    echo "${ref%:*}@${FAKE_PULLED_DIGEST:-$(made_up_digest "${ref%:*}")}"
+    ;;
 esac
 exit 0
 EOF
@@ -121,6 +147,9 @@ cosign_image=$(sed -n 's/^COSIGN_IMAGE=//p' "$DEPLOY/scripts/lib.sh")
 verify_app="run --rm $cosign_image verify ghcr.io/jnaranj09/open-customer:1.1.0 "
 verify_backup="run --rm $cosign_image verify ghcr.io/jnaranj09/open-customer-backup:1.1.0 "
 
+# A digest no fake image has.
+other_digest=sha256:$(printf 'made-up other image\n' | sha256sum | cut -d' ' -f1)
+
 snapshot_json='{"id":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","time":"2026-11-01T03:00:00.123456789Z","app":"0.9.0"}'
 
 test_missing_args() {
@@ -169,14 +198,21 @@ test_upgrade_backup_fails() {
 
 test_upgrade_happy_path() {
   setup
-  local v p b u want
+  local v p da db b u want
   FAKE_APP_VERSION=1.0.0 run upgrade.sh 1.1.0 >/dev/null
   v=$(line_of "compose exec app open-customer version")
   p=$(line_of "compose pull")
+  da=$(line_of "RepoDigests}}{{println .}}{{end}} ghcr.io/jnaranj09/open-customer:1.1.0")
+  db=$(line_of "RepoDigests}}{{println .}}{{end}} ghcr.io/jnaranj09/open-customer-backup:1.1.0")
   b=$(line_of "compose run --rm backup once --tag pre-upgrade")
   u=$(line_of "compose up -d")
-  if [ -z "$v" ] || [ -z "$p" ] || [ -z "$b" ] || [ -z "$u" ]; then fail "missing a step: $(calls)"; fi
-  if [ "$v" -ge "$p" ] || [ "$p" -ge "$b" ] || [ "$b" -ge "$u" ]; then fail "wrong order: $(calls)"; fi
+  if [ -z "$v" ] || [ -z "$p" ] || [ -z "$da" ] || [ -z "$db" ] || [ -z "$b" ] || [ -z "$u" ]; then
+    fail "missing a step: $(calls)"
+  fi
+  if [ "$v" -ge "$p" ] || [ "$p" -ge "$da" ] || [ "$p" -ge "$db" ] || [ "$da" -ge "$b" ] ||
+    [ "$db" -ge "$b" ] || [ "$b" -ge "$u" ]; then
+    fail "wrong order: $(calls)"
+  fi
   grep -qxF "compose pull | APP_VERSION=1.1.0" "$LOG" || fail "pull did not get APP_VERSION=1.1.0"
   want=$(printf '%s\n' "$env_file" | sed 's/^APP_VERSION=.*/APP_VERSION=1.1.0/')
   assert_eq ".env" "$want" "$(cat "$W/deploy/.env")"
@@ -219,7 +255,7 @@ test_upgrade_empty_temp_never_replaces_env() {
 
 test_upgrade_verifies_before_pull() {
   setup
-  local v a b p want_id want_issuer
+  local v a b p want_id want_issuer want_repo want_trigger
   [ -n "$cosign_image" ] || fail "deploy/scripts/lib.sh has no COSIGN_IMAGE"
   FAKE_APP_VERSION=1.0.0 run upgrade.sh 1.1.0 >"$W/out" 2>&1 || fail "upgrade failed: $(cat "$W/out")"
   v=$(line_of "compose exec app open-customer version")
@@ -227,16 +263,21 @@ test_upgrade_verifies_before_pull() {
   b=$(line_of "$verify_backup")
   p=$(line_of "compose pull")
   if [ -z "$a" ] || [ -z "$b" ]; then fail "both images were not verified: $(calls)"; fi
+  if [ -z "$v" ] || [ -z "$p" ]; then fail "missing the version check or the pull: $(calls)"; fi
   if [ "$v" -ge "$a" ] || [ "$v" -ge "$b" ] || [ "$a" -ge "$p" ] || [ "$b" -ge "$p" ]; then
     fail "wrong order: $(calls)"
   fi
   # The exact signer: the release workflow of this repository on a v* tag, through GitHub OIDC.
   want_id='--certificate-identity-regexp ^https://github\.com/jnaranj09/open-customer/\.github/workflows/release\.yml@refs/tags/v'
   want_issuer='--certificate-oidc-issuer https://token.actions.githubusercontent.com'
-  [ "$(calls | grep -cF -- "$want_id $want_issuer")" -eq 2 ] ||
+  want_repo='--certificate-github-workflow-repository jnaranj09/open-customer'
+  want_trigger='--certificate-github-workflow-trigger push'
+  [ "$(calls | grep -cF -- "$want_id $want_issuer $want_repo $want_trigger")" -eq 2 ] ||
     fail "a verify call does not pin the signer: $(calls)"
-  # Quiet on success.
-  if grep -q "signature" "$W/out"; then fail "verify printed on success: $(cat "$W/out")"; fi
+  # Quiet on success: neither cosign's stderr nor its JSON reaches the operator.
+  if grep -q -e "signature" -e "Verification for" -e "docker-manifest-digest" "$W/out"; then
+    fail "verify printed on success: $(cat "$W/out")"
+  fi
 }
 
 test_upgrade_signature_check_fails() {
@@ -274,6 +315,45 @@ test_upgrade_compose_without_backup_image() {
   no_call pull
   grep -q "compose.yaml must name the app image and its -backup image" "$W/err" ||
     fail "the message does not name compose.yaml: $(cat "$W/err")"
+}
+
+# The digest cosign verified for each image, as upgrade.sh must see it after the pull.
+test_upgrade_pulled_digest_differs() {
+  setup
+  local before rc=0
+  before=$(cat "$W/deploy/.env")
+  FAKE_APP_VERSION=1.0.0 FAKE_PULLED_DIGEST=$other_digest run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  has_call "compose pull" || fail "the pull did not run: $(calls)"
+  no_call "backup once"
+  no_call "up -d"
+  assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+  grep -qF "ghcr.io/jnaranj09/open-customer:1.1.0" "$W/err" || fail "the message does not name the image: $(cat "$W/err")"
+  grep -q "not the digest whose signature was verified" "$W/err" || fail "the message does not say why: $(cat "$W/err")"
+}
+
+test_upgrade_verify_output_without_digest() {
+  setup
+  local before rc=0
+  before=$(cat "$W/deploy/.env")
+  FAKE_APP_VERSION=1.0.0 FAKE_VERIFY_JSON='[]' run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call pull
+  no_call "backup once"
+  no_call "up -d"
+  assert_eq ".env" "$before" "$(cat "$W/deploy/.env")"
+  grep -q "no verified digest" "$W/err" || fail "the message does not say the digest is missing: $(cat "$W/err")"
+}
+
+test_upgrade_verify_output_two_digests() {
+  setup
+  local rc=0 json
+  json="[{\"critical\":{\"image\":{\"docker-manifest-digest\":\"$other_digest\"}}},{\"critical\":{\"image\":{\"docker-manifest-digest\":\"sha256:$(printf '%064d' 0)\"}}}]"
+  FAKE_APP_VERSION=1.0.0 FAKE_VERIFY_JSON=$json run upgrade.sh 1.1.0 >/dev/null 2>"$W/err" || rc=$?
+  assert_ne "exit code" 0 "$rc"
+  no_call pull
+  no_call "backup once"
+  grep -q "more than one digest" "$W/err" || fail "the message does not name two digests: $(cat "$W/err")"
 }
 
 test_restore_stops_on_no() {
@@ -317,11 +397,14 @@ test_restore_env_not_writable() {
 
 test_restore_happy_path() {
   setup
-  local want
+  local want s r
   printf 'y\n' | FAKE_SNAPSHOT_JSON=$snapshot_json run restore.sh latest >/dev/null
   has_call "compose --profile restore run --rm restore restore 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" ||
     fail "restore did not get the snapshot's id: $(calls)"
-  [ "$(line_of "compose stop app backup")" -lt "$(line_of "restore restore")" ] || fail "restore ran before stop"
+  s=$(line_of "compose stop app backup")
+  r=$(line_of "restore restore")
+  if [ -z "$s" ] || [ -z "$r" ]; then fail "missing the stop or the restore: $(calls)"; fi
+  [ "$s" -lt "$r" ] || fail "restore ran before stop"
   assert_eq "last call" "compose up -d" "$(calls | tail -n1)"
   want=$(printf '%s\n' "$env_file" | sed 's/^APP_VERSION=.*/APP_VERSION=0.9.0/')
   assert_eq ".env" "$want" "$(cat "$W/deploy/.env")"
@@ -367,6 +450,9 @@ t "upgrade verifies before it pulls" test_upgrade_verifies_before_pull
 t "upgrade stops when the signature check fails" test_upgrade_signature_check_fails
 t "upgrade stops when the backup image's signature check fails" test_upgrade_backup_image_signature_fails
 t "upgrade stops when compose.yaml does not name the two release images" test_upgrade_compose_without_backup_image
+t "upgrade stops when a pulled image is not the digest that was verified" test_upgrade_pulled_digest_differs
+t "upgrade stops when cosign's output has no digest" test_upgrade_verify_output_without_digest
+t "upgrade stops when cosign's output has two digests" test_upgrade_verify_output_two_digests
 t "upgrade stops when .env cannot be written" test_upgrade_env_not_writable
 t "a TERM during the .env edit leaves no temp copy" test_upgrade_term_leaves_no_temp
 t "an empty temp copy never replaces .env" test_upgrade_empty_temp_never_replaces_env

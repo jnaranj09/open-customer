@@ -250,7 +250,8 @@ Do it outside her working hours. A rollback drops everything she entered after t
    ```
 
    It first checks the signature of both new images (the app and the backup image), then pulls
-   them, takes a backup tagged `pre-upgrade`, sets `APP_VERSION` in `.env`, and runs
+   them and checks that each pulled image is the exact digest whose signature it checked, takes a
+   backup tagged `pre-upgrade`, sets `APP_VERSION` in `.env`, and runs
    `docker compose up -d`. The new `app` runs the migrations. If the backup fails (for example the
    target folder or disk is missing), the script stops and `.env` stays on the old version.
 3. Check `docker compose ps` and open the app.
@@ -265,24 +266,30 @@ Each release's images are signed by this repository's release workflow (keyless,
 through GitHub's OIDC; no key is stored anywhere), and each carries a CycloneDX SBOM attestation.
 `scripts/upgrade.sh` runs cosign from its pinned image (`COSIGN_IMAGE` in `scripts/lib.sh`; you
 install nothing) and accepts only a signature whose identity matches `SIGNER_IDENTITY_REGEXP`
-(this repository's `release.yml` on a `v*` tag) from `SIGNER_ISSUER` (GitHub Actions). If the
-check fails, the script stops before it pulls anything or takes a backup, `.env` stays as it was,
-and the message names the image. Check, in this order: the PC can reach `ghcr.io` and Sigstore's
+(this repository's `release.yml` on a `v*` tag) from `SIGNER_ISSUER` (GitHub Actions), made in
+`SIGNER_REPOSITORY` on a `SIGNER_TRIGGER` (tag push) event. If the check fails, the script stops
+before it pulls anything or takes a backup, `.env` stays as it was, and the message names the
+image. cosign reports the digest it verified; after the pull, each pulled image must carry exactly
+that digest, or the script stops before the backup with `.env` unchanged (the tag changed in the
+registry between the check and the pull: run the upgrade again, and look into the registry if it
+repeats). `compose.yaml` sets no `pull_policy`, so `docker compose up -d` runs those checked local
+images. Check, in this order: the PC can reach `ghcr.io` and Sigstore's
 public services (`sigstore.dev`); the version exists; for a fork, the lines below. There is no
 option to skip the check.
 
 To check one image by hand, from this folder, with the same pin and identity the script uses (it
-prints `signed` when the signature is good):
+prints the verified `<image>@<digest>` when the signature is good):
 
 ```sh
-bash -c '. scripts/lib.sh && verify_image ghcr.io/jnaranj09/open-customer:1.2.3 && echo signed'
+bash -c '. scripts/lib.sh && verify_image ghcr.io/jnaranj09/open-customer:1.2.3'
 ```
 
-**A fork** that builds and publishes its own images changes `SIGNER_IDENTITY_REGEXP` in
-`scripts/lib.sh` to its own repository
-(`^https://github\.com/<owner>/<repo>/\.github/workflows/release\.yml@refs/tags/v`), next to the
-image names in `compose.yaml`. `SIGNER_ISSUER` stays as it is while the fork releases
-from GitHub Actions.
+**A fork** that builds and publishes its own images changes, in `scripts/lib.sh`,
+`SIGNER_IDENTITY_REGEXP` to its own repository
+(`^https://github\.com/<owner>/<repo>/\.github/workflows/release\.yml@refs/tags/v`) and
+`SIGNER_REPOSITORY` to `<owner>/<repo>`, next to the image names in `compose.yaml`.
+`SIGNER_ISSUER` and `SIGNER_TRIGGER` stay as they are while the fork releases from GitHub Actions
+on a tag push.
 
 **The cosign pin** (`COSIGN_IMAGE` in `scripts/lib.sh`) is bumped by hand: Dependabot cannot read
 `lib.sh`. Its version must equal `cosign-release` in `.github/workflows/release.yml`; change both

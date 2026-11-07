@@ -41,7 +41,8 @@
 #                   and exits FAKE_SEMGREP_CODE (default: 1 with a finding, else 0)
 # and, for release-sign.sh:
 #   push            prints `<tag>: digest: <FAKE_PUSH_DIGEST> size: 1234` (default: a made-up
-#                   digest; none when FAKE_PUSH_NO_DIGEST is set), as docker push does
+#                   digest; none when FAKE_PUSH_NO_DIGEST is set), as docker push does, and a
+#                   second such line with FAKE_PUSH_SECOND_DIGEST when that is set
 #   image inspect   with RepoDigests in its --format, prints <repository>@FAKE_REPO_DIGEST
 #                   (default: the push digest)
 #   sbom-test:1     writes a made-up CycloneDX SBOM to sbom.json in the dir mounted at /scan
@@ -63,7 +64,7 @@ trap 'rm -rf "$ROOT"' EXIT
 unset FAKE_FINDINGS FAKE_FAIL_ON FAKE_FAIL_CODE FAKE_ME_STATUS FAKE_ZAP_CODE FAKE_ZAP_REPORT FAKE_NUCLEI_TEMPLATES \
   FAKE_NUCLEI_FINDINGS FAKE_TRIVY_CONFIG_CODE FAKE_TRIVY_CONFIG_EMPTY FAKE_TRIVY_CONFIG_FINDINGS FAKE_ZIZMOR_CODE FAKE_SEMGREP_TEST_CODE FAKE_SEMGREP_UNTESTED FAKE_SEMGREP_MISSING_TESTS FAKE_SEMGREP_TEST_ERRORS FAKE_SEMGREP_TEST_JSON FAKE_SEMGREP_FINDINGS \
   FAKE_SEMGREP_ERRORS FAKE_SEMGREP_SCANNED FAKE_SEMGREP_CODE FAKE_PUSH_DIGEST FAKE_PUSH_NO_DIGEST \
-  FAKE_REPO_DIGEST FAKE_SBOM_EMPTY MODE PULL SARIF_DIR \
+  FAKE_REPO_DIGEST FAKE_SBOM_EMPTY FAKE_PUSH_SECOND_DIGEST MODE PULL SARIF_DIR \
   REPORT_DIR NUCLEI_CACHE_DIR
 
 mkdir -p "$ROOT/bin"
@@ -122,6 +123,7 @@ case "$1" in
     echo "The push refers to repository [${2%:*}]"
     echo "0123456789ab: Pushed"
     [ -n "${FAKE_PUSH_NO_DIGEST:-}" ] || echo "${2##*:}: digest: $push_digest size: 1234"
+    [ -z "${FAKE_PUSH_SECOND_DIGEST:-}" ] || echo "${2##*:}: digest: $FAKE_PUSH_SECOND_DIGEST size: 1234"
     ;;
   image)
     case "$*" in
@@ -1085,6 +1087,15 @@ test_release_sign_no_digest_red() {
   if grep -q '^cosign ' "$LOG"; then fail "cosign ran without a digest: $(cat "$LOG")"; fi
 }
 
+test_release_sign_two_digests_red() {
+  setup
+  local rc=0
+  FAKE_PUSH_SECOND_DIGEST=$other_digest release_sign "$release_ref" || rc=$?
+  assert_eq "exit code" 1 "$rc"
+  out_has "printed two digests"
+  if grep -q '^cosign ' "$LOG"; then fail "cosign ran with two digests: $(cat "$LOG")"; fi
+}
+
 test_release_sign_digest_mismatch_red() {
   setup
   local rc=0
@@ -1226,6 +1237,7 @@ t "sast: a malformed or unknown semgrep allow id is refused" test_sast_allow_bad
 t "sast: SARIF_DIR gets the semgrep SARIF file" test_sast_sarif_written
 t "release-sign: signs and attests the pushed digest, never the tag" test_release_sign_signs_the_pushed_digest
 t "release-sign: a push with no digest is red and signs nothing" test_release_sign_no_digest_red
+t "release-sign: a push that prints two digests is red and signs nothing" test_release_sign_two_digests_red
 t "release-sign: a push digest the local image does not record is red" test_release_sign_digest_mismatch_red
 t "release-sign: a failed push is red and signs nothing" test_release_sign_push_fails_red
 t "release-sign: a missing SBOM is red and attests nothing" test_release_sign_sbom_missing_red

@@ -41,11 +41,14 @@ set_app_version() {
 # Signature check (docs/designs/devsecops.md section 4, decision D11). cosign runs from its pinned
 # image, so a deployer installs nothing. Its version is also `cosign-release` in
 # .github/workflows/release.yml (make check-pins); Dependabot cannot read this file, so a bump is
-# made by hand, both copies in one commit. A fork that publishes its own images changes the two
-# SIGNER_ lines to its own repository (deploy/README.md section 9).
+# made by hand, both copies in one commit. A fork that publishes its own images changes
+# SIGNER_IDENTITY_REGEXP and SIGNER_REPOSITORY to its own repository (deploy/README.md section 9).
 COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d
 SIGNER_IDENTITY_REGEXP='^https://github\.com/jnaranj09/open-customer/\.github/workflows/release\.yml@refs/tags/v'
 SIGNER_ISSUER=https://token.actions.githubusercontent.com
+# The certificate's GitHub claims: the repository the workflow ran in, and the event (a tag push).
+SIGNER_REPOSITORY=jnaranj09/open-customer
+SIGNER_TRIGGER=push
 
 # release_images <version>: the app and backup images compose.yaml runs at <version>, one per line
 # (the `image: <repository>:${APP_VERSION...}` lines). Returns non-zero unless there are exactly
@@ -59,18 +62,45 @@ release_images() {
   done
 }
 
-# verify_image <image:tag>: exit 0 only when cosign finds a signature on <image:tag> made by this
-# repository's release workflow on a v* tag. Quiet on success; on failure cosign's output and one
-# line naming the image go to stderr. Needs network to the registry and to Sigstore.
+# verify_image <repository:tag>: exit 0 only when cosign finds a signature on <repository:tag> made
+# by this repository's release workflow on a v* tag push, and prints <repository>@<digest>: the one
+# digest cosign verified (`critical.image.docker-manifest-digest` in its JSON on stdout). The caller
+# checks the pulled image against that digest and never resolves the tag again. Nothing else is
+# printed on success; on failure cosign's stderr and one line naming the image go to stderr. No
+# digest, or more than one distinct digest, in cosign's output is a failure. Needs network to the
+# registry and to Sigstore.
 verify_image() {
-  local out
+  local repo=${1%:*} out err digests
+  err=$(mktemp) || return 1
   if ! out=$(docker run --rm "$COSIGN_IMAGE" verify "$1" \
     --certificate-identity-regexp "$SIGNER_IDENTITY_REGEXP" \
-    --certificate-oidc-issuer "$SIGNER_ISSUER" 2>&1); then
-    printf '%s\n' "$out" >&2
+    --certificate-oidc-issuer "$SIGNER_ISSUER" \
+    --certificate-github-workflow-repository "$SIGNER_REPOSITORY" \
+    --certificate-github-workflow-trigger "$SIGNER_TRIGGER" 2>"$err"); then
+    cat "$err" >&2
+    rm -f "$err"
     echo "the signature check of $1 failed: it is not signed by the release workflow of" \
-      "$SIGNER_IDENTITY_REGEXP. Check the network to the registry and to Sigstore, that the" \
-      "version exists, and, for a fork, the SIGNER_ lines in scripts/lib.sh" >&2
+      "$SIGNER_REPOSITORY. Check the network to the registry and to Sigstore, that the version" \
+      "exists, and, for a fork, the SIGNER_ lines in scripts/lib.sh" >&2
     return 1
   fi
+  rm -f "$err"
+  digests=$(grep -oE '"docker-manifest-digest": *"sha256:[0-9a-f]{64}"' <<<"$out" |
+    grep -oE 'sha256:[0-9a-f]{64}' | sort -u || true)
+  if [ -z "$digests" ]; then
+    echo "the signature check of $1 gave no verified digest; nothing was pulled" >&2
+    return 1
+  fi
+  if [ "$(wc -l <<<"$digests")" -ne 1 ]; then
+    echo "the signature check of $1 gave more than one digest; nothing was pulled" >&2
+    return 1
+  fi
+  echo "$repo@$digests"
+}
+
+# pulled_is_verified <repository:tag> <repository@digest>: exit 0 when the local <repository:tag>
+# (just pulled) records <repository@digest> among its RepoDigests, so what `up -d` runs is the
+# image whose signature verify_image checked.
+pulled_is_verified() {
+  docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$1" | grep -qxF "$2"
 }

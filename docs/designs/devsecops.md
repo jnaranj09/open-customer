@@ -186,11 +186,18 @@ rule names its sensor") applied to security.
   its pinned image (no install on the deployer's machine). A bad or missing signature stops the
   upgrade with nothing changed; `make test-deploy` gets a test for it. Built as `verify_image` in
   `deploy/scripts/lib.sh`: `cosign verify <image>:<version> --certificate-identity-regexp
-  "$SIGNER_IDENTITY_REGEXP" --certificate-oidc-issuer "$SIGNER_ISSUER"` (decision D11: this
-  repository's `release.yml` on a `refs/tags/v` ref, issued by
-  `https://token.actions.githubusercontent.com`), for the app and the backup image, after the
-  version check and before the pull and the pre-upgrade backup. There is no flag to skip it. A fork
-  changes `SIGNER_IDENTITY_REGEXP` (`deploy/README.md` section 9). `COSIGN_IMAGE` lives in
+  "$SIGNER_IDENTITY_REGEXP" --certificate-oidc-issuer "$SIGNER_ISSUER"
+  --certificate-github-workflow-repository "$SIGNER_REPOSITORY"
+  --certificate-github-workflow-trigger "$SIGNER_TRIGGER"` (decision D11: this repository's
+  `release.yml` on a `refs/tags/v` ref, issued by `https://token.actions.githubusercontent.com`,
+  run in this repository on a push), for the app and the backup image, after the version check and
+  before the pull and the pre-upgrade backup. There is no flag to skip it. It keeps the one digest
+  cosign verified (`critical.image.docker-manifest-digest`; none or two distinct ones is red), and
+  after `compose pull` each pulled image's `RepoDigests` must hold `<image>@<that digest>`, or the
+  upgrade stops before the backup with `.env` unchanged: a tag moved between the check and the pull
+  cannot be run. The tag is never resolved again, and `compose.yaml` sets no `pull_policy` that
+  pulls by itself (guard `TestComposeHardening`), so `up -d` runs the checked local images. A fork
+  changes `SIGNER_IDENTITY_REGEXP` and `SIGNER_REPOSITORY` (`deploy/README.md` section 9). `COSIGN_IMAGE` lives in
   `lib.sh`, because deployers have `deploy/` and not the Makefile; `make check-pins` keeps its
   version equal to `cosign-release` in the release workflow, and Dependabot reads neither, so a
   cosign bump is made by hand, both copies in one commit.

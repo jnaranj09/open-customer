@@ -108,7 +108,7 @@ dashboard and settings (Cloudflare or any other).
 | T65 | client data | An upgrade breaks the schema with no way back | upgrade.sh, serve | test:TestMigrateBlocksWithOldCopy; test:TestMigrateBlocksOnMissingStatusFile; test:TestAdminCommandsRefusePendingMigrations; file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T66 | client data | A restore runs without confirmation or leaves the app on the wrong version | restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
 | T67 | deploy/.env | A killed upgrade or restore leaves a copy of .env (every secret) behind | upgrade.sh, restore.sh | file:deploy/tests/scripts_test.sh; make:test-deploy |
-| T68 | the images | An upgrade pulls an image that was not built by this repo's release workflow | upgrade.sh | file:deploy/scripts/lib.sh; file:deploy/tests/scripts_test.sh; make:test-deploy; make:check-pins |
+| T68 | the images | An upgrade pulls an image that was not built by this repo's release workflow, or one the tag was moved to after its signature was checked | upgrade.sh, deploy/compose.yaml | file:deploy/scripts/lib.sh; file:deploy/tests/scripts_test.sh; make:test-deploy; make:check-pins; test:TestComposeHardening |
 | T69 | the images | A known high or critical CVE ships in the app or backup image | Dockerfile, deploy/backup/Dockerfile | make:image-scan; ci:ci.yml/security; ci:release.yml/images; file:scripts/security/tests/run.sh; make:test-sec |
 | T70 | the images | A known CVE in the pinned Postgres or cloudflared image | deploy/compose.yaml | make:image-scan; ci:release.yml/images; ci:security-weekly.yml/rescan; ci:ci.yml/security |
 | T71 | the images | A CVE found after an image shipped goes unnoticed | released images | ci:security-weekly.yml/rescan; make:image-scan |

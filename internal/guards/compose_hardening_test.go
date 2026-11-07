@@ -5,7 +5,10 @@ package guards
 // a service can gain privileges, keeps a Linux capability, has no memory limit, has a writable
 // root file system, publishes a port, or reaches the host (a host namespace, another container's
 // network, an unconfined seccomp or AppArmor profile, a host device, the Docker socket, or a bind
-// mount of /, /proc, /sys or /etc). Each exemption below has its one-line
+// mount of /, /proc, /sys or /etc), or sets a pull_policy that pulls by itself (anything but
+// missing, if_not_present or never: upgrade.sh pulls and checks each pulled image against the
+// digest cosign verified, so `up -d` must run that local image and never pull a tag again;
+// docs/threat-model.md T68). Each exemption below has its one-line
 // reason, and an exemption the file no longer needs fails too, so the lists only shrink.
 
 import (
@@ -53,7 +56,12 @@ type composeService struct {
 	Cgroup      string   `yaml:"cgroup"`
 	Devices     []any    `yaml:"devices"`
 	Volumes     []any    `yaml:"volumes"`
+	PullPolicy  string   `yaml:"pull_policy"`
 }
+
+// composeLocalPullPolicies are the pull_policy values under which compose never pulls an image
+// that is already local ("" is the default, missing).
+var composeLocalPullPolicies = []string{"", "missing", "if_not_present", "never"}
 
 // volumeSource is the host side of a volume entry: the part before the first ":" of the short
 // syntax, or the long syntax's source.
@@ -151,6 +159,9 @@ func checkComposeHardening(src []byte, writableRoot map[string]string, capAdd ma
 		if len(s.Devices) > 0 {
 			bad(name, "maps host devices")
 		}
+		if !slices.Contains(composeLocalPullPolicies, s.PullPolicy) {
+			bad(name, "pull_policy %s pulls by itself; upgrade.sh's verified-digest check would not cover what up -d runs", s.PullPolicy)
+		}
 		for _, v := range s.Volumes {
 			if strings.Contains(fmt.Sprint(v), "docker.sock") {
 				bad(name, "mounts the Docker socket")
@@ -236,6 +247,9 @@ services:
 		{"bind of /sys", with(`volumes: ["/sys/fs/cgroup:/sys/fs/cgroup"]`), nil, capAdd},
 		{"bind of /etc", with(`volumes: ["/etc/:/host/etc:ro"]`), nil, capAdd},
 		{"long-syntax bind of /etc", with("volumes:\n      - type: bind\n        source: /etc/passwd\n        target: /x"), nil, capAdd},
+		{"pull_policy always", with("pull_policy: always"), nil, capAdd},
+		{"pull_policy build", with("pull_policy: build"), nil, capAdd},
+		{"pull_policy daily", with("pull_policy: daily"), nil, capAdd},
 	}
 	for _, c := range bad {
 		if got := checkComposeHardening([]byte(c.src), c.writableRoot, c.capAdd); len(got) == 0 {
