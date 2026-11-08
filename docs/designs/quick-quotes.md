@@ -1136,8 +1136,9 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 ##### 31. `web/tests/e2e/quote.spec.ts` (Modify)
 
 *   **Proposed Changes**: CUJ Q2 (a client inserted with `insertClient` from `seed.ts`; convert into
-    an empty Nueva cita: same services in order, today; pick that client, fill 10:00, save; lands
-    on Hoy, Cotizar empty after); CUJ Q3 (an unsaved Nueva cita draft: "Cancelar" keeps
+    an empty Nueva cita: the stored `cita:new` lines equal the `cotizacion:new` lines, counts and
+    pick order included (the chips follow the catalog, so the test reads the drafts), today; pick
+    that client, fill 10:00, save; lands on Hoy, Cotizar empty after); CUJ Q3 (an unsaved Nueva cita draft: "Cancelar" keeps
     both; "Reemplazar" replaces it); a failed write to `cita:new` (the page's `IDBObjectStore.put`
     throws for that key) shows `quote_convert_failed`, keeps the quote and logs only
     `code=quote_convert_failed`; `convert works offline` (`serverOff`).
