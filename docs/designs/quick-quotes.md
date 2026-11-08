@@ -1035,13 +1035,14 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     *   Copiar: `navigator.clipboard.writeText(text)` called first, no await before it; missing
         API, synchronous throw and rejection → slot `copy_failed` and
         `console.warn('code=clipboard_failed')`; success → the button's label becomes the `check`
-        icon and `quote_copied` for about 2 seconds (no toast).
+        icon and `quote_copied` for about 2 seconds (no toast); a screen-reader-only `aria-live="polite"`
+        region holds `quote_copied` for the same time, so the change is announced.
 
 ##### 23. `web/src/routes/servicios/+page.svelte` (Create)
 
 *   **Proposed Changes**: `<p role="status">` with `services_loading` while `cache.snapshot` is
     null (as Nueva cita does; the probe finds it by role); then `QuoteForm` with
-    the active services, the settings and `today = clock.today(settings.timezone)`.
+    the active services and the settings (`today = clock.today(settings.timezone)` arrives with convert in S4, item 29).
 
 ##### 24. `web/src/routes/servicios/+layout.svelte`, `navItems.ts`, `nav.test.ts`, `titles.ts` (Modify)
 
@@ -1066,7 +1067,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     te preguntaron para armar la cotización."), `quote_copy` ("Copiar"), `quote_copied`
     ("Copiado", the button's label after a copy), `quote_copy_failed` ("No se pudo copiar. Mantén
     presionado el texto de abajo para copiarlo."), `quote_new` ("Nueva cotización"),
-    `quote_service_add` ("Agregar una copia de {name}", the wide stepper's "+"), and
+    `quote_service_add` ("Agregar una copia de {name}", the wide stepper's "+"),
+    `quote_col_count` ("Cantidad", the screen-reader-only header of the stepper column), and
     `quote_hold_hint` ("Para copiar, mantén presionado el texto de abajo y toca Copiar.") only if
     the S0 clipboard test failed (no guard flags an unused key).
 

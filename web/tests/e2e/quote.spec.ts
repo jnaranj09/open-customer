@@ -49,6 +49,10 @@ const chip = (page: Page, name: string) =>
 
 const copyButton = (page: Page) => page.getByRole('button', { name: es.quote_copy, exact: true });
 
+// As in offline.spec.ts: with the service worker blocked, Playwright's routing sees every request,
+// so `serverOff` really cuts the API.
+test.use({ serviceWorkers: 'block' });
+
 test.beforeEach(resetData);
 
 test.afterAll(closePool);
@@ -155,6 +159,8 @@ test('offline the quote builds and copies', async ({ page }) => {
 	await expect(chip(page, 'Acrílico')).toBeVisible();
 	await serverOff(page);
 	await page.reload();
+	// The offline banner always carries why nothing saves, whatever it says about the last sync.
+	await expect(page.getByRole('status').getByText(es.offline_cannot_save)).toBeVisible();
 	await chip(page, 'Acrílico').click();
 
 	await copyButton(page).click();

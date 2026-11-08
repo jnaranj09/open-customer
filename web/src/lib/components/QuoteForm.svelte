@@ -127,13 +127,15 @@
 <!-- The wide catalog table: a stepper per row, "+" alone for a service not picked yet. -->
 {#snippet table()}
 	<Card pad="list">
-		<table class="w-full border-collapse text-left">
+		<table class="w-full table-fixed border-collapse text-left">
 			<thead>
 				<tr class="border-b border-glass-edge text-xs font-bold text-ink-muted">
 					<th scope="col" class="px-4 py-3">{t('services_col_name')}</th>
-					<th scope="col" class="px-4 py-3">{t('services_col_duration')}</th>
-					<th scope="col" class="px-4 py-3">{t('services_col_price')}</th>
-					<th scope="col" class="px-4 py-3"><span class="sr-only">{t('quote_col_count')}</span></th>
+					<th scope="col" class="w-28 px-4 py-3">{t('services_col_duration')}</th>
+					<th scope="col" class="w-32 px-4 py-3 text-right">{t('services_col_price')}</th>
+					<th scope="col" class="w-40 px-4 py-3"
+						><span class="sr-only">{t('quote_col_count')}</span></th
+					>
 				</tr>
 			</thead>
 			<tbody>
@@ -144,7 +146,7 @@
 						<td class="px-4 py-2 text-sm text-ink-muted"
 							>{t('service_minutes', { n: service.duration_min })}</td
 						>
-						<td class="px-4 py-2 text-sm text-ink-muted">
+						<td class="px-4 py-2 text-right text-sm text-ink-muted">
 							{service.price_cents === null
 								? t('services_price_unset')
 								: formatMoney(service.price_cents, settings.currency, settings.locale)}
@@ -179,7 +181,7 @@
 	</Card>
 {/snippet}
 
-{#if services.length === 0 && !wide}
+{#snippet noServices()}
 	<Card>
 		<EmptyState
 			title={t('appointment_services_empty_title')}
@@ -188,23 +190,24 @@
 			href={resolve('/servicios/catalogo')}
 		/>
 	</Card>
+{/snippet}
+
+<!-- A message for screen readers only: the copy needs no toast and no change on screen. -->
+<span class="sr-only" aria-live="polite">{copied ? t('quote_copied') : ''}</span>
+
+{#if services.length === 0 && !wide}
+	{@render noServices()}
 {:else if wide}
 	<div class="flex items-start gap-8">
 		<div class="min-w-0 flex-1">
 			{#if services.length === 0}
-				<Card>
-					<EmptyState
-						title={t('appointment_services_empty_title')}
-						body={t('appointment_services_empty_body')}
-						actionLabel={t('appointment_services_empty_action')}
-						href={resolve('/servicios/catalogo')}
-					/>
-				</Card>
+				{@render noServices()}
 			{:else}
 				{@render table()}
 			{/if}
 		</div>
 		<Card variant="strong" radius="xl" pad="md" class="flex w-100 shrink-0 flex-col gap-4">
+			<h2 class="text-xl font-bold text-ink">{t('quote_heading')}</h2>
 			{@render notice()}
 			{#if visible.length === 0}
 				<p class="text-base text-ink-muted">{t('quote_empty')}</p>
