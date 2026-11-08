@@ -373,15 +373,16 @@ shows its usual "Recuperamos lo que habías escrito." note (see Risks).
     ("Servicios", `services_title`), an action slot, and the tab links. Each tab page owns only its
     content; a page that has a primary action registers it in the slot through a context the layout
     sets (`routes/servicios/header.svelte.ts`: the layout calls `provideHeaderAction()`, a page
-    calls `useHeaderAction(snippet, show)`, which fills the slot while `show()` is true and clears it
-    again when the page is destroyed). Mis
-    servicios registers "Nuevo servicio" on wide only (`show` is "wide and the data loaded"); Cotizar registers none. On wide the slot sits at the right of the
-    `h1` row, with the tab bar under it. On the phone (owner, 2026-11-08) the slot is empty, so no
-    action row is drawn: "Nuevo servicio" is the floating "+" of Hoy there (item 17). The moved
-    catalog page drops its own `h1`. This is a top-level place, so there is no back bar: the "Volver a Ajustes" bar and the Ajustes
-    two-column layout come from `routes/ajustes/+layout.svelte` and stop applying once the page
-    leaves `/ajustes`. The wide layout of each tab comes from its `.pen` frame; it is never the
-    phone layout stretched (`.claude/rules/ui.md`).
+    calls `useHeaderAction(snippet, show)`, which fills the slot while `show()` is true and
+    clears it again when the page is destroyed). Mis servicios registers "Nuevo servicio" on wide
+    only (`show` is "wide and the data loaded"); Cotizar registers none. On wide the slot sits at
+    the right of the `h1` row, with the tab bar under it. On the phone (owner, 2026-11-08) the slot
+    is empty, so no action row is drawn: "Nuevo servicio" is the floating "+" of Hoy there (item
+    17). The moved catalog page drops its own `h1`. This is a top-level place, so there is no back
+    bar: the "Volver a Ajustes" bar and the Ajustes two-column layout come from
+    `routes/ajustes/+layout.svelte` and stop applying once the page leaves `/ajustes`. The wide
+    layout of each tab comes from its `.pen` frame; it is never the phone layout stretched
+    (`.claude/rules/ui.md`).
 *   **The tab links.** Two links in a `<nav>` labelled `services_tabs_label`. On the phone (owner,
     S0) each is a pill `Card`: `as="a"`, `href={resolve(path)}`, `pad="note"`, `radius="pill"`,
     `selected={current}`, `aria-current={current ? 'page' : undefined}`, layout classes

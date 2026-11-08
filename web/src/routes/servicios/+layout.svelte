@@ -5,8 +5,8 @@
 
 	// Servicios (quick-quotes design, section 5), a top-level place: the heading and, at its right
 	// on wide, the action its page registered through `useHeaderAction`. On the phone the slot is
-	// empty (no row is drawn): the page uses the floating "+". The tab links arrive with the Cotizar tab; until then the catalog
-	// is the only page.
+	// empty (no row is drawn): the page uses the floating "+". The tab links arrive with the
+	// Cotizar tab; until then the catalog is the only page.
 	let { children }: { children: Snippet } = $props();
 
 	const action = provideHeaderAction();
