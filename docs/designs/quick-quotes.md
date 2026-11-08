@@ -70,10 +70,12 @@ Each goal has a check, and the stage that proves it (S0 to S4, Technical Plan se
     before it is replaced.
     Check (S4): e2e tests for convert into an empty Nueva cita and over an unsaved one; unit tests
     of `convertQuote` for all three results, including a failed write.
-6.  **Every tap ends in something she can see.** "Copiado" after a copy. A message on the page and
-    a manual way to copy if the phone refuses. A message on the page if convert fails.
-    Check (S3, S4): e2e tests with a stubbed clipboard (missing API, synchronous throw, rejection);
-    the convert failure through the `convertQuote` unit test.
+6.  **Every tap ends in something she can see.** After a copy the Copiar button itself shows
+    "✓ Copiado" for about 2 seconds (no toast). A message on the page and a manual way to copy if
+    the phone refuses. A message on the page if convert fails.
+    Check (S3, S4): e2e tests with a stubbed clipboard (success shows "Copiado" on the button;
+    missing API, synchronous throw, rejection show `quote_copy_failed`); the convert failure
+    through the `convertQuote` unit test.
 7.  **Servicios is one tap from every screen and opens on Cotizar.**
     Check (S3): e2e test: tap Servicios, land on Cotizar; the Mis servicios tab reaches the catalog.
 8.  **Five places fit on her phone.**
@@ -106,18 +108,19 @@ Each goal has a check, and the stage that proves it (S0 to S4, Technical Plan se
 *   **Keeping the quote after convert.** Its services live on in the Nueva cita draft.
 *   **A cap on quote lines.** The existing 20-service limit still applies when the appointment saves.
 *   **A redirect from the old path** `/ajustes/servicios`.
-*   **New UI primitives.** The tab links and the text block are built from the existing `Card`.
+*   **New UI primitives.** The tab links, the text block, the Cotización panel and the wide tables
+    with their steppers are built from the existing `Card`, `IconButton` and `TextButton` and from
+    layout, border and text classes.
 *   **Any other change** to Ajustes (it only loses its Servicios row) or to how the catalog screen
     behaves (only its place, heading and links change).
 
 ## Open Questions
 
-*   **Five tabs at 393 px.** A rough count gives about 42 px for each label with today's padding,
-    and "Servicios" is probably wider. Stage S0 designs it with smaller tab padding and measures it.
-    Only if it still does not fit: which shorter tab label does the owner want? The sidebar keeps
-    "Servicios" either way.
+*   **Five tabs at 393 px.** Settled in S0 (section 10): with 4 px side padding every label fits,
+    "Servicios" included, so no shorter label is needed.
 *   **The iOS clipboard.** Copying inside the tap should work in the installed PWA, but it is not
-    tested on her iPhone yet. Stage S0 tests it; section 3 says what is built for each result.
+    tested on her iPhone yet. The owner's S0 test is still pending (section 10); section 3 says
+    what is built for each result.
 
 ## Critical User Journeys (CUJs)
 
@@ -137,7 +140,7 @@ All data below is made up.
     *   "Diseño sencillo" shows as one line with ×2 and the price of one copy.
     *   "Cejas" says "precio a consultar", and the total says it leaves something out.
     *   The duration line says "2 h 30 min".
-    *   The app shows "Copiado".
+    *   The Copiar button shows "✓ Copiado" for about 2 seconds.
     *   The quote stays on the page. If she leaves and comes back, it is still there.
 
 ### CUJ Q2: The client books from the quote
@@ -262,9 +265,10 @@ minutes, and the page shows no text when there are no lines.
     ("Cargando servicios…") while `cache.snapshot` is null, then mounts `QuoteForm.svelte`, the way
     Nueva cita mounts `AppointmentForm` only once the snapshot exists. The form's draft therefore
     always restores against a loaded catalog.
-*   **Picking services.** `QuoteForm` gets only active services (`archived` false). It uses
-    `ServicePicker`, unchanged, with the same `Line[]` (`service_id`, `count`) and
-    `tapService` / `removeService` that Nueva cita uses.
+*   **Picking services.** `QuoteForm` gets only active services (`archived` false). On the phone it
+    uses `ServicePicker`, unchanged; on wide it uses the catalog table (Layout, below). Both work on
+    the same `Line[]` (`service_id`, `count`) with the `tapService` / `removeService` that Nueva
+    cita uses.
 *   **The draft.** The open quote is a Dexie draft under `draftKey('cotizacion', 'new')`, through
     the same `formDraft` lifecycle the two existing forms use. Its schema is
     `QuoteDraftSchema = z.object({ lines: z.array(LineSchema) })`, in `quote.ts`; `LineSchema` is
@@ -276,16 +280,29 @@ minutes, and the page shows no text when there are no lines.
     other forms.
 *   **The text block.** The quote text in a `Card` rendered as a paragraph (`as="p"`, `pad="md"`)
     with the layout classes `whitespace-pre-line select-text`. It can be selected with the normal
-    iOS press-and-hold, so it is both the preview and the manual way to copy.
+    iOS press-and-hold, so it is both the preview and the manual way to copy. On wide the
+    Cotización panel is the `Card` and the text is a plain paragraph inside it.
 *   **The message slot.** One `Callout` above the text block shows at most one message, from a
     tagged union `none | confirm_replace | copy_failed | convert_failed`. The two failures use
     `role="alert"`. The slot goes back to `none` on her next pick, copy or convert.
 *   **States.**
     *   No active service: only `ServicePicker`'s own empty state ("Aún no tienes servicios",
-        "Configurar servicios"), whose link now goes to the Mis servicios tab.
+        "Configurar servicios"), whose link now goes to the Mis servicios tab. On wide the same
+        empty state sits inside the table and the panel shows `quote_empty`.
     *   Services but nothing picked: the text `quote_empty`; Copiar, Convertir and Nueva cotización
         are not shown.
     *   Offline: everything works. Copy needs no network; convert writes only to Dexie.
+*   **Layout** (S0 frames `Servicios · Cotizar · <state> · 393` and `· 1440` in `soft-glass.pen`).
+    *   Phone: `ServicePicker`, the message slot, the text block, then Copiar and Convertir en cita
+        side by side, then Nueva cotización (a `TextButton`) under them.
+    *   Wide: two columns, top-aligned in one grid. Left, the catalog as a table in a `Card` with
+        the columns Servicio, Duración and Precio ("precio a consultar" when there is none) and a
+        stepper per row: "−", the count and "+" (`IconButton` variant `accent`; a row not picked
+        shows only "+"). "+" calls `tapService` and "−" calls `removeService`, as the chips do.
+        Right, a fixed-width (400 px) Cotización panel (a `Card`): the message slot at its top, the
+        text, Copiar and Convertir en cita at full width, and Nueva cotización at the bottom.
+    *   The empty, nothing-picked and busy states keep the same wide frame: the panel shows
+        `quote_empty`, and the table shows the empty state or the busy line.
 
 ### 3. Copiar
 
@@ -296,12 +313,13 @@ a clipboard write only while it is handling the tap.
 One failure path covers three cases: `navigator.clipboard` missing (not a secure context), the call
 throwing at once, and the promise rejecting. On failure the message slot shows `copy_failed`
 (`quote_copy_failed`: press and hold the text to copy it), and the app logs
-`console.warn('code=clipboard_failed')`, never the text. On success the toast says "Copiado"
-(`toaster.say('quote_copied')`; `say` takes a message key).
+`console.warn('code=clipboard_failed')`, never the text. On success there is no toast (owner, S0):
+the Copiar button's own label changes to a check icon and "Copiado" (`quote_copied`) for about 2
+seconds, then goes back to "Copiar".
 
 **If the S0 iPhone test fails:** Copiar still ships and still tries, and a permanent hint
 (`quote_hold_hint`) sits above the text block telling her to press and hold to copy. The frame for
-that case is drawn in S0 either way. The test result is recorded in this document.
+that case is drawn in S0 either way. The test result is recorded in section 10.
 
 ### 4. Convertir en cita
 
@@ -348,21 +366,30 @@ shows its usual "Recuperamos lo que habías escrito." note (see Risks).
 *   **Layout.** A new `routes/servicios/+layout.svelte` owns the page heading ("Servicios",
     `services_title`) and the tab links, at both widths. Each tab page owns only its content and
     actions; the moved catalog page drops its own `h1` and keeps "Nuevo servicio" in its header
-    row. This is a top-level place, so there is no back bar: the "Volver a Ajustes" bar and the
-    Ajustes two-column layout come from `routes/ajustes/+layout.svelte` and stop applying once the
-    page leaves `/ajustes`. The wide layout of each tab comes from its `.pen` frame; it is never the
+    row. On wide the shared header is one row, the `h1` on the left and the tab's primary action on
+    the right (Mis servicios: "Nuevo servicio"; Cotizar: none), with the tab bar under it. This is
+    a top-level place, so there is no back bar: the "Volver a Ajustes" bar and the Ajustes
+    two-column layout come from `routes/ajustes/+layout.svelte` and stop applying once the page
+    leaves `/ajustes`. The wide layout of each tab comes from its `.pen` frame; it is never the
     phone layout stretched (`.claude/rules/ui.md`).
-*   **The tab links.** Two links in a `<nav>` labelled `services_tabs_label`, each a `Card`:
-    `as="a"`, `href={resolve(path)}`, `pad="note"`, `radius="pill"`, `selected={current}`,
-    `aria-current={current ? 'page' : undefined}`, layout classes
+*   **The tab links.** Two links in a `<nav>` labelled `services_tabs_label`. On the phone (owner,
+    S0) each is a pill `Card`: `as="a"`, `href={resolve(path)}`, `pad="note"`, `radius="pill"`,
+    `selected={current}`, `aria-current={current ? 'page' : undefined}`, layout classes
     `flex min-h-tap flex-1 items-center justify-center text-sm font-bold`. `current` is an exact
     match of `page.url.pathname` against the link's path (not the prefix match the places use,
     because `/servicios` is a prefix of `/servicios/catalogo`). No new primitive and no `.pen`
-    component; S0 draws them in the frames. Order: Cotizar, then Mis servicios (an agent call:
-    the default tab comes first). This is not an ARIA `tablist`: the tabs are two URLs.
+    component; S0 draws them in the frames. On wide (owner, S0) the same two links are a plain text
+    tab bar across the content width, with an edge line under it: the current link is bold accent
+    text with a 2 px accent underline, the other is muted. It is built from layout, border and text
+    classes only, which ui.md allows outside `ui/`. Order: Cotizar, then Mis servicios (an agent
+    call: the default tab comes first). This is not an ARIA `tablist`: the tabs are two URLs.
+*   **Mis servicios on wide** (S0 frame `Servicios · Mis servicios · 1440`): a table in a `Card`
+    with the columns Servicio, Duración, Precio and Color (a dot); a row opens the edit sheet, as
+    today. Archived services sit under the table in a collapsed "Archivados (n)" section that she
+    opens with a disclosure button. The phone keeps today's list.
 *   **Navigation items.** `NAV_ITEMS` (`lib/components/navItems.ts`) gets a fifth entry between
     Clientas and Ajustes, with a new key `nav_services` ("Servicios") as label and tab label and a
-    neutral icon chosen in S0 (proposal: Lucide `tag`), added to `.pen` and to `PATHS` in
+    neutral icon chosen in S0 (Lucide `tag`), added to `.pen` and to `PATHS` in
     `icons/paths.ts`. The place stays current on both tabs through the existing prefix match
     (`lib/nav.ts`).
 *   **Ajustes.** It loses its Servicios row (`SettingsList.svelte`) and the `settings_services`
@@ -428,6 +455,28 @@ stage after S0 changes what the app serves, so each also runs `make image image-
 In S2 the Servicios place holds only the catalog, with a heading and no tab links; S3 adds Cotizar
 and the links. The catalog page moves once.
 
+### 10. S0 results
+
+*   **Frames** (owner-approved, 2026-11-07), in `design/soft-glass.pen`: `Servicios · Cotizar ·
+    <state> · 393` and `· 1440` for con líneas, copiado, confirmar reemplazo, no se pudo copiar, no
+    se pudo convertir, aviso mantener presionado, nada elegido, catálogo vacío and cargando;
+    `Servicios · Mis servicios · 393` and `· 1440`; `Ajustes` (no Servicios row) and
+    `Ajustes · 1440`. Wide frames show the five-row sidebar. No new component and no new variable.
+    Owner decisions: pill tab links on the phone and an underline tab bar on wide (section 5); no
+    toast on Cotizar (section 3); every amount keeps its digits together, with the no-break spaces
+    `formatMoney` prints (`₡6 000,00`, U+00A0 between the groups, checked in Node's ICU).
+*   **Five tabs.** In the `.pen`, `NavItem/Tab` side padding goes from 12 px to **4 px**
+    (Tailwind `px-1`). At 393 px each tab is 65.8 px wide: 393 − 32 (bar `px-4`) − 16 (pill `p-2`)
+    − 4 × 4 (gaps), divided by 5. The labels are 12 px bold, measured in Pencil: Hoy 23 px, Enviar
+    35 px, Clientas 46 px, Servicios 51 px, Ajustes 42 px. At 12 px padding there is 41.8 px for a
+    label, so Clientas and Servicios do not fit; at 4 px there is 57.8 px. At 375 px (62.2 px tabs)
+    4 px still fits, but 6 px would not. Each tab stays 65.8 × 56 px, above the 44 px target. The
+    browser's font can differ by a pixel or two; the S2 `tab-fit` probe is the real check.
+*   **iPhone clipboard test:** pending (owner). When it is done, record here: pass or fail, the iOS
+    version, and that it ran in the installed PWA.
+*   **Wording** taken from the frames: `quote_empty`, `quote_copy_failed`, `quote_hold_hint` (item
+    25), `quote_replace_prompt` and `quote_convert_failed` (item 30).
+
 ## Risks
 
 **Accepted:**
@@ -444,6 +493,9 @@ and the links. The catalog page moves once.
 *   **Some Cotizar states are not in the layout probe** (agent). The probe table can open a page and
     its sheets, not a page with lines or a message showing. The probe covers the `base` state and the
     services feed; the e2e tests cover the text block, the buttons and the message slot.
+*   **Two ways to pick on Cotizar** (agent): chips on the phone, a table with a "− n +" stepper on
+    wide (owner's S0 frames). Both call the same `tapService` / `removeService`, so the lines and
+    the text cannot differ; the e2e tests run at both widths.
 *   **"Servicios" three times on Cotizar** (agent): the place, the `h1` and `ServicePicker`'s group
     label. Settled visually in S0; e2e locators use `exact: true` or a role scope.
 
@@ -625,7 +677,8 @@ Through a marker field in the Nueva cita draft, a `?de=cotizacion` flag, or on e
 
 *   **Cons**: A sheet needs its own frame, focus handling and probe states. The toast has one tone
     and hides itself, so a press-and-hold instruction would vanish while she needs it.
-*   **Reason for Rejection**: One inline message slot (section 2); the toast only says "Copiado".
+*   **Reason for Rejection**: One inline message slot (section 2). Cotizar shows no toast at all:
+    success shows on the Copiar button (section 3, owner).
 
 ### D. The quote text and its rules
 
@@ -734,8 +787,8 @@ Detailed Implementation Plan.
 
 ##### 2. `docs/designs/quick-quotes.md` (Modify)
 
-*   **Proposed Changes**: Record the S0 results: the iPhone clipboard test (pass or fail, iOS
-    version, installed PWA) and the measured tab label widths.
+*   **Proposed Changes**: Record the S0 results (Technical Plan section 10): the iPhone clipboard
+    test (pass or fail, iOS version, installed PWA) and the measured tab label widths.
 
 ##### 3. History files (Move)
 
@@ -866,7 +919,10 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
     removed (the layout owns the heading); the header row keeps "Nuevo servicio". The back bar and
     the Ajustes two-column layout came from `routes/ajustes/+layout.svelte` and no longer apply, so
     its 1440 px layout is rebuilt to match the S0 Mis servicios wide frame (ui.md: wide is never the
-    phone layout stretched). Its top comment says the page is the Mis servicios tab of Servicios.
+    phone layout stretched): a table in a `Card` with the columns Servicio, Duración, Precio and
+    Color, then a collapsed "Archivados (n)" section with a disclosure button; "Nuevo servicio"
+    sits at the right of the heading row (Technical Plan section 5). The phone keeps today's list.
+    Its top comment says the page is the Mis servicios tab of Servicios.
 
 ##### 18. Links and text that named the old place (Modify)
 
@@ -881,8 +937,10 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
 
 ##### 19. `web/src/lib/i18n/es.json` (Modify)
 
-*   **Proposed Changes**: Add `nav_services` ("Servicios"). Delete `settings_services` by hand: no
-    guard flags an unused key.
+*   **Proposed Changes**: Add `nav_services` ("Servicios"), the wide table headers
+    `services_col_name` ("Servicio"), `services_col_duration` ("Duración"), `services_col_price`
+    ("Precio") and `services_col_color` ("Color"), and `services_archived_toggle` ("Archivados
+    ({count})"). Delete `settings_services` by hand: no guard flags an unused key.
 
 ##### 20. Tests and lint for the move (Modify)
 
@@ -922,14 +980,18 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
     *   Props: `services` (active only), `settings`, `today`.
     *   `formDraft(draftKey('cotizacion', 'new'), QuoteDraftSchema, { lines: [] }, …)`; the restore
         keeps lines in `activeServiceIds(services)`.
-    *   `ServicePicker`; the text block (`Card as="p" pad="md"`, `whitespace-pre-line select-text`);
+    *   On the phone, `ServicePicker`; on wide, the catalog table with its "− n +" stepper
+        (`IconButton` variant `accent`, labels `appointment_service_remove` and `quote_service_add`)
+        beside the Cotización panel (Technical Plan section 2, Layout). The text block
+        (`Card as="p" pad="md"`, `whitespace-pre-line select-text`; inside the panel on wide);
         the message slot (`Callout`, the tagged union of Technical Plan section 2); when there are
         lines, Copiar (`quote_copy`) and Nueva cotización (`quote_new`, calls `startOver()`);
         Convertir en cita is added in S4 (item 29), not before; `quote_empty` when there are none;
         the hold hint (`quote_hold_hint`) only if the S0 clipboard test failed.
     *   Copiar: `navigator.clipboard.writeText(text)` called first, no await before it; missing
         API, synchronous throw and rejection → slot `copy_failed` and
-        `console.warn('code=clipboard_failed')`; success → `toaster.say('quote_copied')`.
+        `console.warn('code=clipboard_failed')`; success → the button's label becomes the `check`
+        icon and `quote_copied` for about 2 seconds (no toast).
 
 ##### 23. `web/src/routes/servicios/+page.svelte` (Create)
 
@@ -939,13 +1001,13 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
 
 ##### 24. `web/src/routes/servicios/+layout.svelte`, `navItems.ts`, `nav.test.ts`, `titles.ts` (Modify)
 
-*   **Proposed Changes**: The layout renders the two tab links (Technical Plan section 5: `Card`
-    props, exact-match `current`, `<nav>` labelled `services_tabs_label`), Cotizar first. The nav
-    item's `href` and union become `'/servicios'`. `titles.ts` gains `/servicios` →
-    `quote_title`. `web/tests/e2e/setup.spec.ts`: CUJ 2 now taps the nav link `es.nav_services`
-    (exact), then the `services_tab_catalog` tab, then asserts
-    `expect(page).toHaveURL(/\/servicios\/catalogo$/)` before its empty-state check (Cotizar's
-    empty state shows the same `appointment_services_empty_title`).
+*   **Proposed Changes**: The layout renders the two tab links (Technical Plan section 5: pill
+    `Card` links on the phone, the underline text tab bar on wide, exact-match `current`, `<nav>`
+    labelled `services_tabs_label`), Cotizar first. The nav item's `href` and union become
+    `'/servicios'`. `titles.ts` gains `/servicios` → `quote_title`. `web/tests/e2e/setup.spec.ts`:
+    CUJ 2 now taps the nav link `es.nav_services` (exact), then the `services_tab_catalog` tab,
+    then asserts `expect(page).toHaveURL(/\/servicios\/catalogo$/)` before its empty-state check
+    (Cotizar's empty state shows the same `appointment_services_empty_title`).
 
 ##### 25. `web/src/lib/i18n/es.json` (Modify)
 
@@ -956,10 +1018,13 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
     ("• {name}: precio a consultar"), `quote_line_unpriced_repeat` ("• {name} ×{count}: precio a
     consultar"), `quote_total` ("Total: {amount}"), `quote_total_partial` ("Total: {amount} + lo que
     está a consultar"), `quote_duration` ("Duración aproximada: {duration}"), `duration_hours`
-    ("{h} h"), `duration_hours_minutes` ("{h} h {m} min"), `quote_empty`, `quote_copy` ("Copiar"),
-    `quote_copied` ("Copiado"), `quote_copy_failed`, `quote_new` ("Nueva cotización"), and
-    `quote_hold_hint` only if the S0 clipboard test failed (no guard flags an unused key). Keys
-    without wording here take it word for word from the S0 frames.
+    ("{h} h"), `duration_hours_minutes` ("{h} h {m} min"), `quote_empty` ("Toca los servicios que
+    te preguntaron para armar la cotización."), `quote_copy` ("Copiar"), `quote_copied`
+    ("Copiado", the button's label after a copy), `quote_copy_failed` ("No se pudo copiar. Mantén
+    presionado el texto de abajo para copiarlo."), `quote_new` ("Nueva cotización"),
+    `quote_service_add` ("Agregar una copia de {name}", the wide stepper's "+"), and
+    `quote_hold_hint` ("Para copiar, mantén presionado el texto de abajo y toca Copiar.") only if
+    the S0 clipboard test failed (no guard flags an unused key).
 
 ##### 26. `web/tests/e2e/ui-probe.spec.ts`, `web/src/lib/components/ServicePicker.svelte` (Modify)
 
@@ -981,10 +1046,10 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
     *   Tests: CUJ Q1 on Acrílico once and Relleno twice: the recorded clipboard text equals the
         text block's `textContent`, and contains "Acrílico", "Relleno ×2" and "c/u" (the exact
         format is proven by `quote.test.ts`; the spec cannot import `quoteText`, because
-        `lib/i18n` imports `es.json` in a way Playwright's loader rejects, see `steps.ts`); "Copiado"
-        shown; each failing variant shows `quote_copy_failed`; "tap Servicios lands on Cotizar";
-        "empty the quote, switch tabs, come back: still empty"; offline (`serverOff`): the quote
-        builds and copies; "Nueva cotización" empties the quote.
+        `lib/i18n` imports `es.json` in a way Playwright's loader rejects, see `steps.ts`); the
+        Copiar button shows "Copiado"; each failing variant shows `quote_copy_failed`; "tap
+        Servicios lands on Cotizar"; "empty the quote, switch tabs, come back: still empty";
+        offline (`serverOff`): the quote builds and copies; "Nueva cotización" empties the quote.
 
 #### Stage S4: Convert
 
@@ -1013,7 +1078,9 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
 ##### 30. `web/src/lib/i18n/es.json` (Modify)
 
 *   **Proposed Changes**: `quote_convert` ("Convertir en cita"), `quote_replace` ("Reemplazar"),
-    `quote_replace_prompt`, `quote_convert_failed`, wording from the S0 frames.
+    `quote_replace_prompt` ("Ya tienes una cita nueva sin guardar. ¿La reemplazamos con estos
+    servicios?"), `quote_convert_failed` ("No se pudo pasar a una cita nueva. Tu cotización sigue
+    aquí; inténtalo de nuevo."), wording from the S0 frames.
 
 ##### 31. `web/tests/e2e/quote.spec.ts` (Modify)
 
