@@ -192,9 +192,9 @@ Tab bar / sidebar:  Hoy · Enviar · Clientas · Servicios · Ajustes
                    {#if cache.snapshot}
                         QuoteForm.svelte
                           ServicePicker ──▶ lines (quote draft, 'cotizacion:new')
-                          quoteText(lines, services, settings) ──▶ text on screen
+                          quoteText(visible, services, settings) ──▶ text on screen
                           Copiar ──▶ navigator.clipboard.writeText(text)
-                          Convertir ──▶ convertQuote(lines, today, replace)
+                          Convertir ──▶ convertQuote(visible, today, replace)
                                           │ reads / writes 'cita:new' in Dexie
                                           ▼
                                  'ok' → clear quote draft → goto /citas/nueva
@@ -276,6 +276,11 @@ minutes, and the page shows no text when there are no lines.
     exported from `booking.ts` and also used by Nueva cita's `FormSchema`. On restore, lines whose
     service is not in `activeServiceIds(services)` are dropped, so an archived service never shows
     as picked. Cotizar shows no restored-draft note.
+*   **Visible lines.** The draft can hold a line whose service was archived after she picked it (for
+    example from another device, then a cache refresh). `QuoteForm` derives `visible`, the lines
+    whose service is in `activeServiceIds(services)`. The quote text, the empty check
+    (`quote_empty`, no Copiar, no Convertir) and convert use only `visible`; a service archived
+    while the quote is open drops out of all three at once. The stored draft is not rewritten.
 *   **Starting over.** While there are lines, a "Nueva cotización" button (`quote_new`) calls the
     draft's `startOver()`, which empties the quote without asking, as "Empezar de nuevo" does on the
     other forms.
@@ -302,7 +307,7 @@ minutes, and the page shows no text when there are no lines.
 *   **Layout** (S0 frames `Servicios · Cotizar · <state> · 393` and `· 1440` in `soft-glass.pen`).
     *   Phone: `ServicePicker`, the message slot, the text block, then Copiar and Convertir en cita
         side by side, then Nueva cotización (a `TextButton`) under them.
-    *   Wide: two columns, top-aligned in one grid. Left, the catalog as a table in a `Card` with
+    *   Wide: two columns, top-aligned in one flex row. Left, the catalog as a table in a `Card` with
         the columns Servicio, Duración and Precio ("precio a consultar" when there is none) and a
         stepper per row: "−", the count and "+" (`IconButton` variant `accent`; a row not picked
         shows only "+"). "+" calls `tapService` and "−" calls `removeService`, as the chips do.
@@ -333,6 +338,8 @@ that case is drawn in S0 either way. The test result is recorded in section 10.
 The hand-off is one function in `web/src/lib/cache/quoteHandoff.ts` (new):
 
 `convertQuote(lines, today, replace): Promise<'needs_confirm' | 'ok' | 'failed'>`
+
+The page passes the visible lines (section 2, "Visible lines"), not the raw draft.
 
 1.  Read the current Nueva cita draft (`cita:new`) with `getDraft(key, FormSchema)`. A draft that
     fails to parse counts as none.
@@ -430,7 +437,7 @@ labels, and the bar's pill (outer box 16.0 to 377.0 px, content box 25.0 to 368.
     be seen red on the fifth item alone. Its failure was proven by forcing an overflow (`px-6` on
     the tab: 17 compact routes failed, a tab ending at 475.5 px against a bar ending at 377.0 px).
     The first version compared against the pill's outer box and so missed up to 8 px of overrun;
-    the content-box version is the one that ships (S2 fix round, results in the S2 report).
+    the content-box version is the one that ships (S2 fix round).
 *   The value is settled in S0: 4 px on each side (`px-1`), the value drawn in the `.pen`
     (`NavItem/Tab` padding `[8, 4]`), which keeps parity with the design and leaves margin for a
     wider font (section 10). No shorter tab label is needed.
@@ -1151,7 +1158,7 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     `drafts.test.ts`, `nav.test.ts`, `titles.test.ts`, `settingsPage.test.ts`; the Go guards.
 *   **Static Analysis & Linting** (`make lint`): svelte-check, eslint with the re-keyed suppression,
     knip, jscpd.
-*   **Test Coverage Requirement**: `make cover` is Go only and unchanged (no Go change). The web
+*   **Test Coverage Requirement**: `make cover` is Go only. The one Go change is the `LISTEN_PORT` range check in `internal/platform/config`, covered by its own tests. The web
     tests are judged by the cases above, not a percentage.
 *   **E2E** (`make e2e`, Playwright WebKit): `setup.spec.ts`, `navigation.spec.ts`,
     `quote.spec.ts`, `offline.spec.ts`, `ui-probe.spec.ts` at 393 and 1440 px.

@@ -1,7 +1,7 @@
 # open-customer — Release 1
 
 *   **Author:** jnaranj09
-*   **Status:** Accepted. The Servicios place and quotes (`quick-quotes.md`) are being built in stages S1-S4. P0–P7 are built; the P7 exit is pending: CI on the pushed branch, the release workflow and upgrade.sh end to end (both need a v* tag), and the on-PC and iPhone checks in the Verification Plan. No owner interview is needed: the app ships empty and she sets up everything herself.
+*   **Status:** Accepted. The Servicios place and quotes (`quick-quotes.md`) are built (S0-S4); the owner's iPhone clipboard test and 15-second check are pending. P0–P7 are built; the P7 exit is pending: CI on the pushed branch, the release workflow and upgrade.sh end to end (both need a v* tag), and the on-PC and iPhone checks in the Verification Plan. No owner interview is needed: the app ships empty and she sets up everything herself.
 *   **Date:** 2026-10-30
 *   **Predecessors:** [concepts_brief.md](history/concepts_brief.md), [PRD](../prd.md), [SAD](history/sad-original.md)
 
