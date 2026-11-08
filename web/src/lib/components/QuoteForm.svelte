@@ -1,14 +1,17 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { Service } from '../api/schemas';
 	import { activeServiceIds, removeService, tapService, type Line } from '../booking';
 	import { draftKey } from '../cache/drafts';
 	import { formDraft } from '../cache/formDraft.svelte';
+	import { convertQuote } from '../cache/quoteHandoff';
 	import { t } from '../i18n';
 	import { layout } from '../layout';
 	import { formatMoney } from '../money';
 	import { QuoteDraftSchema, quoteText } from '../quote';
+	import { submitOnce } from '../submit';
 	import Icon from './icons/Icon.svelte';
 	import ServicePicker from './ServicePicker.svelte';
 	import Button from './ui/Button.svelte';
@@ -20,14 +23,18 @@
 
 	// The Cotizar tab (quick-quotes design, items 22 and 2-3): she picks the services somebody asked
 	// about, reads the quote and taps Copiar to paste it into WhatsApp. The open quote is a draft, so
-	// it is still there when she comes back. The text on screen is the text Copiar copies.
+	// it is still there when she comes back. The text on screen is the text Copiar copies, and the
+	// text Convertir en cita hands to Nueva cita (item 29).
 	let {
 		services,
-		settings
+		settings,
+		today
 	}: {
 		/** The active services only. */
 		services: Service[];
 		settings: { name: string; currency: string; locale: string };
+		/** The business day (`clock.today(timezone)`): the day Nueva cita opens on after a convert. */
+		today: string;
 	} = $props();
 
 	/** How long the Copiar button says "Copiado". */
@@ -37,8 +44,9 @@
 	const wide = $derived(layout.current === 'wide');
 
 	let lines = $state<Line[]>([]);
-	// The message above the text: none, or the phone refused the copy.
-	let message = $state<'none' | 'copy_failed'>('none');
+	// The message above the text: at most one, and it goes with her next pick, copy or convert.
+	let message = $state<'none' | 'confirm_replace' | 'copy_failed' | 'convert_failed'>('none');
+	let converting = $state(false);
 	let copied = $state(false);
 	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -93,6 +101,26 @@
 		}
 	}
 
+	// Inside `submitOnce`, so a second tap while it runs does nothing. The quote is cleared only once
+	// Nueva cita's draft is written; with no `volver`, Save and Back there go to Hoy.
+	const convert = submitOnce(
+		async (replace: boolean): Promise<void> => {
+			message = 'none';
+			const result = await convertQuote(visible, today, replace);
+			if (result === 'needs_confirm') {
+				message = 'confirm_replace';
+			} else if (result === 'failed') {
+				message = 'convert_failed';
+			} else {
+				await draft.clear();
+				await goto(resolve('/citas/nueva'));
+			}
+		},
+		(pending) => {
+			converting = pending;
+		}
+	);
+
 	function startOver(): void {
 		message = 'none';
 		void draft.startOver();
@@ -104,8 +132,29 @@
 </script>
 
 {#snippet notice()}
-	{#if message === 'copy_failed'}
+	{#if message === 'confirm_replace'}
+		<Callout role="status" class="flex flex-col gap-3 text-sm">
+			<p>{t('quote_replace_prompt')}</p>
+			<div class="grid grid-cols-2 gap-3">
+				<Button
+					variant="strong"
+					busy={converting}
+					onclick={() => {
+						void convert.run(true);
+					}}>{t('quote_replace')}</Button
+				>
+				<Button
+					variant="glass"
+					onclick={() => {
+						message = 'none';
+					}}>{t('cancel')}</Button
+				>
+			</div>
+		</Callout>
+	{:else if message === 'copy_failed'}
 		<Callout role="alert" class="text-sm">{t('quote_copy_failed')}</Callout>
+	{:else if message === 'convert_failed'}
+		<Callout role="alert" class="text-sm">{t('quote_convert_failed')}</Callout>
 	{/if}
 {/snippet}
 
@@ -118,6 +167,16 @@
 			{t('quote_copy')}
 		{/if}
 	</Button>
+{/snippet}
+
+{#snippet convertButton()}
+	<Button
+		variant="glass"
+		busy={converting}
+		onclick={() => {
+			void convert.run(false);
+		}}>{t('quote_convert')}</Button
+	>
 {/snippet}
 
 {#snippet startOverButton()}
@@ -213,7 +272,10 @@
 				<p class="text-base text-ink-muted">{t('quote_empty')}</p>
 			{:else}
 				<p class="text-base whitespace-pre-line text-ink select-text">{text}</p>
-				{@render copyButton()}
+				<div class="flex flex-col gap-3">
+					{@render copyButton()}
+					{@render convertButton()}
+				</div>
 				{@render startOverButton()}
 			{/if}
 		</Card>
@@ -226,7 +288,10 @@
 			<p class="px-2 text-base text-ink-muted">{t('quote_empty')}</p>
 		{:else}
 			<Card as="p" pad="md" class="text-base whitespace-pre-line text-ink select-text">{text}</Card>
-			{@render copyButton()}
+			<div class="grid grid-cols-2 gap-3">
+				{@render copyButton()}
+				{@render convertButton()}
+			</div>
 			{@render startOverButton()}
 		{/if}
 	</div>

@@ -1,10 +1,10 @@
-// Stage S3 of quick quotes (docs/designs/quick-quotes.md, items 22-27): the Cotizar tab of Servicios.
-// She picks services, reads the quote and taps Copiar. It builds on the services `setup.spec.ts`
+// Stages S3 and S4 of quick quotes (docs/designs/quick-quotes.md, items 22-31): the Cotizar tab of
+// Servicios. She picks services, reads the quote, taps Copiar, or turns it into a Nueva cita. It builds on the services `setup.spec.ts`
 // creates (Acrílico, Relleno, Pedicure, all priced); `resetData` leaves no client. The clipboard is
 // stubbed: the spec reads what was written, and three variants refuse the write.
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
-import { closePool, resetData } from './seed';
+import { businessDate, closePool, insertClient, resetData } from './seed';
 import { draftStored, fill, serverOff } from './steps';
 
 /** The business name `setup.spec.ts` gives the app. */
@@ -197,4 +197,140 @@ test.describe('wide', () => {
 		await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
 		expect(await copied(page)).toBe(text);
 	});
+});
+
+const convertButton = (page: Page) =>
+	page.getByRole('button', { name: es.quote_convert, exact: true });
+
+/** The services chips of Nueva cita (the same group as Cotizar's phone picker). */
+const picked = (page: Page, name: string) =>
+	page
+		.getByRole('group', { name: es.appointment_services })
+		.getByRole('button', { name: new RegExp(`^${name}`) });
+
+const removeButton = (page: Page, name: string) =>
+	page.getByRole('button', { name: fill(es.appointment_service_remove, { name }) });
+
+test('CUJ Q2: convert opens Nueva cita with the services and today, and saving lands on Hoy', async ({
+	page
+}) => {
+	await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
+	await page.goto('/servicios');
+	await chip(page, 'Acrílico').click();
+	await chip(page, 'Relleno').click();
+	await chip(page, 'Relleno').click();
+	await expect.poll(() => draftStored(page, 'cotizacion')).toBe(true);
+
+	await convertButton(page).click();
+
+	await expect(page).toHaveURL(/\/citas\/nueva$/);
+	await expect(page.getByRole('heading', { name: es.appointment_new, level: 1 })).toBeVisible();
+	await expect(picked(page, 'Relleno')).toContainText('×2');
+	await expect(removeButton(page, 'Acrílico')).toBeVisible();
+	await expect(removeButton(page, 'Pedicure')).toHaveCount(0);
+	await expect(page.getByLabel(es.appointment_day, { exact: true })).toHaveValue(businessDate(0));
+	await expect(page.getByText(es.draft_restored)).toBeVisible();
+	// The quote went with the hand-off.
+	await expect.poll(() => draftStored(page, 'cotizacion')).toBe(false);
+
+	await page.getByLabel(es.appointment_client, { exact: true }).fill('ana');
+	await page.getByRole('button', { name: 'Ana Rojas', exact: true }).click();
+	await page.getByLabel(es.appointment_time, { exact: true }).fill('10:00');
+	await page.getByRole('button', { name: es.appointment_save }).click();
+
+	await expect(page.getByRole('heading', { name: es.today_title, level: 1 })).toBeVisible();
+	await expect(page.getByRole('link', { name: /Ana Rojas/ })).toBeVisible();
+	await expect.poll(() => draftStored(page, 'cita')).toBe(false);
+	await page.goto('/servicios');
+	await expect(page.getByText(es.quote_empty)).toBeVisible();
+});
+
+test.describe('with an unsaved Nueva cita', () => {
+	test.beforeEach(async ({ page }) => {
+		await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
+		await page.goto('/citas/nueva');
+		await page.getByLabel(es.appointment_client, { exact: true }).fill('ana');
+		await page.getByRole('button', { name: 'Ana Rojas', exact: true }).click();
+		await page.getByRole('button', { name: 'Pedicure', exact: true }).click();
+		await expect.poll(() => draftStored(page, 'cita')).toBe(true);
+		await page.goto('/servicios');
+		await chip(page, 'Acrílico').click();
+		await convertButton(page).click();
+		await expect(page.getByText(es.quote_replace_prompt)).toBeVisible();
+	});
+
+	test('CUJ Q3: Cancelar keeps the quote and the unsaved booking', async ({ page }) => {
+		await page.getByRole('button', { name: es.cancel, exact: true }).click();
+
+		await expect(page.getByText(es.quote_replace_prompt)).toHaveCount(0);
+		await expect(quoteBlock(page)).toContainText('Acrílico');
+		await expect(page).toHaveURL(/\/servicios$/);
+		await page.goto('/citas/nueva');
+		await expect(removeButton(page, 'Pedicure')).toBeVisible();
+		await expect(removeButton(page, 'Acrílico')).toHaveCount(0);
+		await expect(page.getByText('Ana Rojas')).toBeVisible();
+	});
+
+	test('CUJ Q3: Reemplazar puts the quote into Nueva cita', async ({ page }) => {
+		await page.getByRole('button', { name: es.quote_replace, exact: true }).click();
+
+		await expect(page).toHaveURL(/\/citas\/nueva$/);
+		await expect(removeButton(page, 'Acrílico')).toBeVisible();
+		await expect(removeButton(page, 'Pedicure')).toHaveCount(0);
+		await expect(page.getByText('Ana Rojas')).toHaveCount(0);
+		await expect.poll(() => draftStored(page, 'cotizacion')).toBe(false);
+	});
+});
+
+test('a failed write says so and keeps the quote', async ({ page }) => {
+	const logs: string[] = [];
+	page.on('console', (message) => {
+		if (message.type() === 'warning') {
+			logs.push(message.text());
+		}
+	});
+	// Only the hand-off writes `cita:new` from this page; the quote's own draft is untouched.
+	await page.addInitScript(() => {
+		const put = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')?.value as (
+			this: IDBObjectStore,
+			value: unknown,
+			key?: IDBValidKey
+		) => IDBRequest<IDBValidKey>;
+		IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+			if ((value as { key?: string }).key === 'cita:new') {
+				throw new DOMException('full', 'QuotaExceededError');
+			}
+			return put.call(this, value, key);
+		};
+	});
+	await page.goto('/servicios');
+	await chip(page, 'Acrílico').click();
+
+	await convertButton(page).click();
+
+	await expect(page.getByRole('alert').filter({ hasText: es.quote_convert_failed })).toBeVisible();
+	await expect(page).toHaveURL(/\/servicios$/);
+	await expect(quoteBlock(page)).toContainText('Acrílico');
+	expect(logs).toContain('code=quote_convert_failed');
+	expect(logs.join('\n')).not.toContain('Acrílico');
+	await expect.poll(() => draftStored(page, 'cotizacion')).toBe(true);
+
+	// The message goes with her next pick.
+	await chip(page, 'Relleno').click();
+	await expect(page.getByRole('alert').filter({ hasText: es.quote_convert_failed })).toHaveCount(0);
+});
+
+test('convert works offline', async ({ page }) => {
+	await page.goto('/servicios');
+	await expect(chip(page, 'Acrílico')).toBeVisible();
+	await serverOff(page);
+	await page.reload();
+	await expect(page.getByRole('status').getByText(es.offline_cannot_save)).toBeVisible();
+	await chip(page, 'Acrílico').click();
+
+	await convertButton(page).click();
+
+	await expect(page).toHaveURL(/\/citas\/nueva$/);
+	await expect(removeButton(page, 'Acrílico')).toBeVisible();
+	await expect(page.getByLabel(es.appointment_day, { exact: true })).toHaveValue(businessDate(0));
 });

@@ -1,7 +1,7 @@
 # Servicios place and quick quotes
 
 *   **Author:** jnaranj09
-*   **Status:** Proposed
+*   **Status:** Built (S0-S4)
 *   **Date:** 2026-11-07
 *   **Predecessor:** [quick-quotes-brief.md](history/quick-quotes-brief.md) (three brainstorm rounds;
     moved there in stage S0)
@@ -1016,8 +1016,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 
 *   **Type / Scope**: Feature component (composes `ui/` primitives; no surface or radius classes).
 *   **Proposed Changes**:
-    *   Props: `services` (active only) and `settings`; S4 (item 29) adds `today`, which only convert
-        reads.
+    *   Props: `services` (active only), `settings` and `today` (the business day, which only
+        convert reads; added in S4, item 29).
     *   `formDraft(draftKey('cotizacion', 'new'), QuoteDraftSchema, { lines: [] }, …)`; the restore
         keeps lines in `activeServiceIds(services)`.
     *   On the phone, `ServicePicker`; on wide, the catalog table with its "− n +" stepper
@@ -1025,8 +1025,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
         beside the Cotización panel (Technical Plan section 2, Layout). The text block
         (`Card as="p" pad="md"`, `whitespace-pre-line select-text`; inside the panel on wide);
         the message slot (`Callout`, the tagged union of Technical Plan section 2); when there are
-        lines, Copiar (`quote_copy`) and Nueva cotización (`quote_new`, calls `startOver()`);
-        Convertir en cita is added in S4 (item 29), not before; `quote_empty` when there are none;
+        lines, Copiar (`quote_copy`), Convertir en cita (`quote_convert`, S4, item 29) and Nueva
+        cotización (`quote_new`, calls `startOver()`); `quote_empty` when there are none;
         the hold hint (`quote_hold_hint`) only if the S0 clipboard test failed.
     *   No active service: `EmptyState` rendered by `QuoteForm` itself at both widths
         (`appointment_services_empty_title`, `appointment_services_empty_body`,
@@ -1042,7 +1042,7 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 
 *   **Proposed Changes**: `<p role="status">` with `services_loading` while `cache.snapshot` is
     null (as Nueva cita does; the probe finds it by role); then `QuoteForm` with
-    the active services and the settings (`today = clock.today(settings.timezone)` arrives with convert in S4, item 29).
+    the active services, the settings and `today = clock.today(settings.timezone)` (S4, item 29).
 
 ##### 24. `web/src/routes/servicios/+layout.svelte`, `navItems.ts`, `nav.test.ts`, `titles.ts` (Modify)
 
@@ -1122,7 +1122,9 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 *   **Proposed Changes**: Convertir en cita runs `convertQuote` inside `submitOnce`: `'needs_confirm'`
     → slot `confirm_replace` with `quote_replace` ("Reemplazar", runs again with `replace` true) and
     the existing `cancel`; `'ok'` → the draft's `clear()`, then `goto(resolve('/citas/nueva'))`;
-    `'failed'` → slot `convert_failed`.
+    `'failed'` → slot `convert_failed`. The slot's `confirm_replace` shows `quote_replace_prompt`
+    above the two buttons side by side, as in the S0 frame; the two buttons of the text block sit side
+    by side on the phone and stacked on wide, and show the busy spinner while the hand-off runs.
 
 ##### 30. `web/src/lib/i18n/es.json` (Modify)
 
@@ -1136,7 +1138,9 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 *   **Proposed Changes**: CUJ Q2 (a client inserted with `insertClient` from `seed.ts`; convert into
     an empty Nueva cita: same services in order, today; pick that client, fill 10:00, save; lands
     on Hoy, Cotizar empty after); CUJ Q3 (an unsaved Nueva cita draft: "Cancelar" keeps
-    both; "Reemplazar" replaces it).
+    both; "Reemplazar" replaces it); a failed write to `cita:new` (the page's `IDBObjectStore.put`
+    throws for that key) shows `quote_convert_failed`, keeps the quote and logs only
+    `code=quote_convert_failed`; `convert works offline` (`serverOff`).
 
 ### Verification Plan
 

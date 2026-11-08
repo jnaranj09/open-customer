@@ -202,6 +202,14 @@ choice), at `~/.agents/skills/security-audit`, symlinked into `~/.claude/skills`
 validator scripts were read first: file reads only, no network or shell calls. Run the full audit
 only on an explicit request; it starts many agents.
 
+## Quick quotes S4 (convert; owner's check NOT RUN)
+
+Stage S4 of `docs/designs/quick-quotes.md`: "Convertir en cita" turns the open quote into the Nueva
+cita draft. Ran: the unit tests for `convertQuote`, `make e2e-docker` with CUJ Q2, CUJ Q3, the
+failed write and `convert works offline`, the CLAUDE.md gate, and `make image image-scan dast`.
+NOT RUN: the owner's 15-second check on the phone (quote a price, Copiar, paste, then Convertir en
+cita and finish the booking); CI on the branch.
+
 ## Found, not fixed (owner decides)
 
 App bugs and rule breaks seen during setup. Setup tasks never fix app code; each line becomes its
