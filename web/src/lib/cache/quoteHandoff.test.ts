@@ -56,6 +56,9 @@ describe('convertQuote', () => {
 			throw new DOMException('full', 'QuotaExceededError');
 		});
 
+		// Dexie surfaces the throw as a rejection, which is what convertQuote catches.
+		await expect(putDraft(KEY, ana)).rejects.toThrow();
+
 		const result = await convertQuote(lines, TODAY, true);
 
 		vi.restoreAllMocks();

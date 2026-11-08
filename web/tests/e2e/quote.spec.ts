@@ -1,8 +1,10 @@
 // Stages S3 and S4 of quick quotes (docs/designs/quick-quotes.md, items 22-31): the Cotizar tab of
-// Servicios. She picks services, reads the quote, taps Copiar, or turns it into a Nueva cita. It builds on the services `setup.spec.ts`
-// creates (Acrílico, Relleno, Pedicure, all priced); `resetData` leaves no client. The clipboard is
-// stubbed: the spec reads what was written, and three variants refuse the write.
+// Servicios. She picks services, reads the quote, taps Copiar, or turns it into a Nueva cita. It
+// builds on the services `setup.spec.ts` creates (Acrílico, Relleno, Pedicure, all priced);
+// `resetData` leaves no client. The clipboard is stubbed: the spec reads what was written, and
+// three variants refuse the write.
 import { expect, test, type Page } from '@playwright/test';
+import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
 import { draftStored, fill, serverOff } from './steps';
@@ -208,6 +210,31 @@ const picked = (page: Page, name: string) =>
 		.getByRole('group', { name: es.appointment_services })
 		.getByRole('button', { name: new RegExp(`^${name}`) });
 
+/** The `lines` of a stored draft (`cotizacion:new` or `cita:new`), in stored order. The chips of
+ *  Nueva cita follow the catalog, so only the draft shows the order she picked in. */
+const draftLines = (page: Page, key: string) =>
+	page.evaluate(
+		([name, k]) =>
+			new Promise<{ service_id: string; count: number }[]>((resolve, reject) => {
+				const open = indexedDB.open(name);
+				open.onerror = () => {
+					reject(new Error('indexedDB.open failed'));
+				};
+				open.onsuccess = () => {
+					const req = open.result.transaction('drafts').objectStore('drafts').get(k);
+					req.onerror = () => {
+						reject(new Error('drafts read failed'));
+					};
+					req.onsuccess = () => {
+						open.result.close();
+						const row = req.result as { value: { lines: { service_id: string; count: number }[] } };
+						resolve(row.value.lines);
+					};
+				};
+			}),
+		[DB_NAME, key] as const
+	);
+
 const removeButton = (page: Page, name: string) =>
 	page.getByRole('button', { name: fill(es.appointment_service_remove, { name }) });
 
@@ -216,14 +243,20 @@ test('CUJ Q2: convert opens Nueva cita with the services and today, and saving l
 }) => {
 	await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
 	await page.goto('/servicios');
+	// Picked against the catalog order (Acrílico, Relleno, Pedicure): Relleno twice, then Acrílico.
+	await chip(page, 'Relleno').click();
+	await chip(page, 'Relleno').click();
 	await chip(page, 'Acrílico').click();
-	await chip(page, 'Relleno').click();
-	await chip(page, 'Relleno').click();
 	await expect.poll(() => draftStored(page, 'cotizacion')).toBe(true);
+	await expect.poll(async () => (await draftLines(page, 'cotizacion:new')).length).toBe(2);
+	const quoteLines = await draftLines(page, 'cotizacion:new');
 
 	await convertButton(page).click();
 
 	await expect(page).toHaveURL(/\/citas\/nueva$/);
+	// Same services, in the order she picked them (the counts tell the two apart).
+	expect(await draftLines(page, 'cita:new')).toEqual(quoteLines);
+	expect(quoteLines.map((l) => l.count)).toEqual([2, 1]);
 	await expect(page.getByRole('heading', { name: es.appointment_new, level: 1 })).toBeVisible();
 	await expect(picked(page, 'Relleno')).toContainText('×2');
 	await expect(removeButton(page, 'Acrílico')).toBeVisible();

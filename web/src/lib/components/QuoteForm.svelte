@@ -145,6 +145,7 @@
 				>
 				<Button
 					variant="glass"
+					busy={converting}
 					onclick={() => {
 						message = 'none';
 					}}>{t('cancel')}</Button
