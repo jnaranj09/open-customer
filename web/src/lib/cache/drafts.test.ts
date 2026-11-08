@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { clearCache, putDraft } from './db';
-import { autosave, draftKey } from './drafts';
+import { autosave, draftKey, draftStep } from './drafts';
 
 const Form = z.object({ name: z.string() });
 
@@ -23,6 +23,21 @@ describe('draftKey', () => {
 
 	it('keeps the record id for an edit', () => {
 		expect(draftKey('clienta', '3f2b8c1e')).toBe('clienta:3f2b8c1e');
+	});
+});
+
+describe('draftStep', () => {
+	it('waits until loaded', () => {
+		expect(draftStep(false, { a: 1 }, { a: 1 })).toBe('wait');
+		expect(draftStep(false, { a: 2 }, { a: 1 })).toBe('wait');
+	});
+
+	it('clears when equal to initial', () => {
+		expect(draftStep(true, { a: [1] }, { a: [1] })).toBe('clear');
+	});
+
+	it('saves when different', () => {
+		expect(draftStep(true, { a: 2 }, { a: 1 })).toBe('save');
 	});
 });
 

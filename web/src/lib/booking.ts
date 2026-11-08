@@ -10,7 +10,8 @@ import { clockText, formatDayLong, formatTime, todayIn, zonedToUtc } from './tim
 type Schemas = components['schemas'];
 
 /** A service on the form and how many copies of it she picked ("×2"). */
-export type Line = { service_id: string; count: number };
+export const LineSchema = z.object({ service_id: z.string(), count: z.number().int().positive() });
+export type Line = z.infer<typeof LineSchema>;
 
 /** A tap on a service: the first adds it, a second adds a copy. New lines go last. */
 export function tapService(lines: Line[], id: string): Line[] {
@@ -52,11 +53,21 @@ export function endFor(startLocal: string, lines: Line[], services: Service[]): 
 	if (!validTime(startLocal)) {
 		return '';
 	}
-	const total = lines.reduce(
+	return timeOf(minutesOf(startLocal) + durationOf(lines, services));
+}
+
+/** The minutes the lines take: each service's duration once per copy. A service not in the list
+ *  adds 0. */
+export function durationOf(lines: Line[], services: Service[]): number {
+	return lines.reduce(
 		(sum, l) => sum + l.count * (services.find((s) => s.id === l.service_id)?.duration_min ?? 0),
 		0
 	);
-	return timeOf(minutesOf(startLocal) + total);
+}
+
+/** The ids of the services that are not archived. */
+export function activeServiceIds(services: Service[]): Set<string> {
+	return new Set(services.filter((s) => !s.archived).map((s) => s.id));
 }
 
 /** The sum of the prices; a service with no price counts zero. */
@@ -136,7 +147,7 @@ export type AttrValue = z.infer<typeof AttrValueSchema>;
  *  services. A number is kept as the text she typed. The draft stores this shape. */
 export const FormSchema = z.object({
 	clientId: z.nullable(z.string()),
-	lines: z.array(z.object({ service_id: z.string(), count: z.number().int().positive() })),
+	lines: z.array(LineSchema),
 	day: z.string(),
 	time: z.string(),
 	end: z.nullable(z.string()),
@@ -144,6 +155,11 @@ export const FormSchema = z.object({
 	attrs: z.record(z.string(), AttrValueSchema)
 });
 export type Form = z.infer<typeof FormSchema>;
+
+/** The form of a new appointment on `day`: nothing picked yet. */
+export function blankForm(day: string): Form {
+	return { clientId: null, lines: [], day, time: '', end: null, notes: '', attrs: {} };
+}
 
 export type FormErrors = Partial<Record<'client' | 'day' | 'time' | 'end', MessageKey>>;
 

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Appointment, AttrOption, Attribute, Service } from './api/schemas';
 import {
+	activeServiceIds,
+	blankForm,
 	createBody,
 	dayParam,
 	attrDisplay,
+	durationOf,
 	endFor,
 	endShown,
 	formErrors,
@@ -124,6 +127,45 @@ describe('serviceIds', () => {
 			{ service_id: PEDICURE, count: 1 }
 		];
 		expect(serviceIds(lines)).toEqual([ACRILICO, ACRILICO, PEDICURE]);
+	});
+});
+
+describe('durationOf', () => {
+	it('is 0 with no lines', () => {
+		expect(durationOf([], SERVICES)).toBe(0);
+	});
+
+	it('is the length of one line', () => {
+		expect(durationOf([{ service_id: ACRILICO, count: 1 }], SERVICES)).toBe(90);
+	});
+
+	it('counts a repeated line once per copy', () => {
+		expect(durationOf([{ service_id: PEDICURE, count: 3 }], SERVICES)).toBe(180);
+	});
+
+	it('adds 0 for a service that is missing', () => {
+		expect(durationOf([{ service_id: ID, count: 2 }], SERVICES)).toBe(0);
+	});
+});
+
+describe('blankForm', () => {
+	it('has no client, no lines, the given day', () => {
+		expect(blankForm('2026-11-07')).toEqual({
+			clientId: null,
+			lines: [],
+			day: '2026-11-07',
+			time: '',
+			end: null,
+			notes: '',
+			attrs: {}
+		});
+	});
+});
+
+describe('activeServiceIds', () => {
+	it('leaves out archived', () => {
+		const archived = { ...service(RELLENO, 'Relleno', 45, null), archived: true };
+		expect(activeServiceIds([SERVICES[0]!, archived])).toEqual(new Set([ACRILICO]));
 	});
 });
 
