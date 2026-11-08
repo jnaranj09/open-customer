@@ -23,6 +23,14 @@ describe('isActivePath', () => {
 describe('the Servicios place', () => {
 	const place = NAV_ITEMS.find((item) => item.label === 'nav_services');
 
+	it('opens on Cotizar', () => {
+		expect(place?.href).toBe('/servicios');
+	});
+
+	it('is active on /servicios', () => {
+		expect(place !== undefined && isActivePath(place.href, '/servicios')).toBe(true);
+	});
+
 	it('is active on /servicios/catalogo', () => {
 		expect(place !== undefined && isActivePath(place.href, '/servicios/catalogo')).toBe(true);
 	});

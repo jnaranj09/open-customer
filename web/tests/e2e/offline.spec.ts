@@ -3,10 +3,10 @@
 // page without `X-App-Version`, which the app reads as "offline". Pages still load from the
 // server: only `/api/` is cut. A cold open with the server off (the service worker's job) stays
 // the manual check in the Verification Plan.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { at, closePool, insertAppointment, insertClient, resetData } from './seed';
-import { draftStored, dueItem } from './steps';
+import { draftStored, dueItem, serverOff } from './steps';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -38,13 +38,6 @@ const BANNER = new RegExp(
 		escape(es.synced_today).replace('\\{time\\}', '\\d{2}:\\d{2}')
 	)}$`
 );
-
-/** Every API call answers like Cloudflare when the PC is off. */
-async function serverOff(page: Page): Promise<void> {
-	await page.route('**/api/**', (route) =>
-		route.fulfill({ status: 530, contentType: 'text/html', body: '<html><body>530</body></html>' })
-	);
-}
 
 test('offline shows the cached day with the banner', async ({ page }) => {
 	await serverOff(page);

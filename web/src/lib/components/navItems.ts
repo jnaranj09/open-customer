@@ -2,7 +2,7 @@ import type { MessageKey } from '../i18n';
 import type { IconName } from './icons/paths';
 
 export type NavItem = {
-	href: '/' | '/enviar' | '/clientas' | '/servicios/catalogo' | '/ajustes';
+	href: '/' | '/enviar' | '/clientas' | '/servicios' | '/ajustes';
 	icon: IconName;
 	/** The sidebar label. */
 	label: MessageKey;
@@ -16,7 +16,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
 	{ href: '/enviar', icon: 'send', label: 'nav_to_send', tabLabel: 'tab_send' },
 	{ href: '/clientas', icon: 'users', label: 'nav_clients', tabLabel: 'nav_clients' },
 	{
-		href: '/servicios/catalogo',
+		href: '/servicios',
 		icon: 'tag',
 		label: 'nav_services',
 		tabLabel: 'nav_services'

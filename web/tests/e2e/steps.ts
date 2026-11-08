@@ -23,9 +23,9 @@ export function dueItem(page: Page, name: string): Locator {
 		.filter({ has: page.getByRole('heading', { name, exact: true, level: 2 }) });
 }
 
-/** Whether the new-record draft of `form` is stored on the phone (a form saves it 500 ms after
- *  input). */
-export function draftStored(page: Page, form: 'cita' | 'clienta'): Promise<boolean> {
+/** Whether the new-record draft of `form` (`cita`, `clienta` or `cotizacion`) is stored on the phone
+ *  (a form saves it 500 ms after input). */
+export function draftStored(page: Page, form: Parameters<typeof draftKey>[0]): Promise<boolean> {
 	return page.evaluate(
 		([name, key]) =>
 			new Promise<boolean>((resolve, reject) => {
@@ -45,5 +45,12 @@ export function draftStored(page: Page, form: 'cita' | 'clienta'): Promise<boole
 				};
 			}),
 		[DB_NAME, draftKey(form, 'new')] as const
+	);
+}
+
+/** Every API call answers like Cloudflare when the PC is off. */
+export async function serverOff(page: Page): Promise<void> {
+	await page.route('**/api/**', (route) =>
+		route.fulfill({ status: 530, contentType: 'text/html', body: '<html><body>530</body></html>' })
 	);
 }

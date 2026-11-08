@@ -22,6 +22,10 @@ describe('pageTitle', () => {
 		expect(pageTitle('/clientas/[id]')).toBe('Clienta');
 	});
 
+	it('gives Cotizar its own title', () => {
+		expect(pageTitle('/servicios')).toBe('Cotizar');
+	});
+
 	it('gives the moved catalog the Servicios title', () => {
 		expect(pageTitle('/servicios/catalogo')).toBe('Servicios');
 	});

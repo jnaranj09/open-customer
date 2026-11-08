@@ -183,6 +183,13 @@ const PROBES: Record<string, Probe> = {
 		ready: es.business_save,
 		feeds: [bootFeed('business', { none: 'one record' })]
 	},
+	'/servicios': {
+		open: fixed('/servicios'),
+		ready: 'Acrílico',
+		feeds: [
+			bootFeed('services', { bootstrap: ['services'], text: es.appointment_services_empty_title })
+		]
+	},
 	'/servicios/catalogo': {
 		open: fixed('/servicios/catalogo'),
 		ready: 'Acrílico',

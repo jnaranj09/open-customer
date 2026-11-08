@@ -71,7 +71,7 @@ Each goal has a check, and the stage that proves it (S0 to S4, Technical Plan se
     Check (S4): e2e tests for convert into an empty Nueva cita and over an unsaved one; unit tests
     of `convertQuote` for all three results, including a failed write.
 6.  **Every tap ends in something she can see.** After a copy the Copiar button itself shows
-    "✓ Copiado" for about 2 seconds (no toast). A message on the page and a manual way to copy if
+    a check icon and "Copiado" for about 2 seconds (no toast). A message on the page and a manual way to copy if
     the phone refuses. A message on the page if convert fails.
     Check (S3, S4): e2e tests with a stubbed clipboard (success shows "Copiado" on the button;
     missing API, synchronous throw, rejection show `quote_copy_failed`); the convert failure
@@ -140,7 +140,7 @@ All data below is made up.
     *   "Diseño sencillo" shows as one line with ×2 and the price of one copy.
     *   "Cejas" says "precio a consultar", and the total says it leaves something out.
     *   The duration line says "2 h 30 min".
-    *   The Copiar button shows "✓ Copiado" for about 2 seconds.
+    *   The Copiar button shows a check icon and "Copiado" for about 2 seconds.
     *   The quote stays on the page. If she leaves and comes back, it is still there.
 
 ### CUJ Q2: The client books from the quote
@@ -1016,7 +1016,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 
 *   **Type / Scope**: Feature component (composes `ui/` primitives; no surface or radius classes).
 *   **Proposed Changes**:
-    *   Props: `services` (active only), `settings`, `today`.
+    *   Props: `services` (active only) and `settings`; S4 (item 29) adds `today`, which only convert
+        reads.
     *   `formDraft(draftKey('cotizacion', 'new'), QuoteDraftSchema, { lines: [] }, …)`; the restore
         keeps lines in `activeServiceIds(services)`.
     *   On the phone, `ServicePicker`; on wide, the catalog table with its "− n +" stepper
@@ -1081,8 +1082,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     *   Data: the services the setup spec creates (Acrílico, Relleno, Pedicure; all priced); the
         unpriced cases are covered by `quote.test.ts`. `resetData()` in `beforeEach`, so no client
         exists.
-    *   `serverOff` and `draftStored` move from `offline.spec.ts` to `steps.ts` (two callers now);
-        `draftStored` gains a key argument (today it is fixed to the client draft), so the quote
+    *   `serverOff` moves from `offline.spec.ts` to `steps.ts` (two callers now). `draftStored`
+        is already there and takes any draft form (`cita`, `clienta`, `cotizacion`), so the quote
         tests can read `cotizacion:new` and `cita:new`.
     *   Clipboard stub through `addInitScript`: records the written text on `window`, with three
         failing variants (no `navigator.clipboard`, `writeText` throwing, `writeText` rejecting).
@@ -1095,7 +1096,7 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
         offline (`serverOff`): the quote builds and copies; "Nueva cotización" empties the quote.
     *   Wide (1440 px viewport): pick with the table's stepper (Acrílico "+" twice, then "−" once),
         the panel's text equals the recorded clipboard text after Copiar and contains "Acrílico"
-        but not "×2", and the Copiar button shows "✓ Copiado".
+        but not "×2", and the Copiar button's accessible name is "Copiado".
 
 #### Stage S4: Convert
 

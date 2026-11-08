@@ -22,6 +22,7 @@ const TITLES: Record<PageRouteId, MessageKey> = {
 	'/clientas/nueva': 'client_new_title',
 	'/enviar': 'due_today_heading',
 	'/login': 'page_title_login',
+	'/servicios': 'quote_title',
 	'/servicios/catalogo': 'services_title',
 	'/setup': 'setup_title'
 };

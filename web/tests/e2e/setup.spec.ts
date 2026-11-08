@@ -108,6 +108,10 @@ test.describe('logged in', () => {
 			.getByRole('navigation', { name: es.nav_label })
 			.getByRole('link', { name: es.nav_services, exact: true })
 			.click();
+		await page
+			.getByRole('navigation', { name: es.services_tabs_label })
+			.getByRole('link', { name: es.services_tab_catalog })
+			.click();
 		await expect(page).toHaveURL(/\/servicios\/catalogo$/);
 		await expect(page.getByText(es.appointment_services_empty_title)).toBeVisible();
 		for (const service of SERVICES) {
