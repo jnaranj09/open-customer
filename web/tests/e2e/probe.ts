@@ -205,12 +205,12 @@ export function behindSheet(page: Page): Promise<Finding[]> {
 	return page.evaluate(behindInPage);
 }
 
-/** Tolerance for a tab's box against the pill's box, in px. */
+/** Tolerance for a tab's box against the pill's content box, in px. */
 const TAB_FIT_PX = 0.5;
 
-/** Each tab of the bottom bar whose box is not inside the bar's pill. Runs in the browser: no
- *  outside names, so the bar's `aria-label` comes in as `navLabel`. Nothing when no bar is drawn
- *  (the wide layout shows the sidebar instead). */
+/** Each tab of the bottom bar whose box is not inside the pill's content box (the pill's box less
+ *  its border and padding). Runs in the browser: no outside names, so the bar's `aria-label` comes
+ *  in as `navLabel`. Nothing when no bar is drawn (the wide layout shows the sidebar instead). */
 function tabFitInPage(args: { navLabel: string; tolerance: number }): Finding[] {
 	const out: Finding[] = [];
 	for (const nav of document.querySelectorAll('nav')) {
@@ -218,19 +218,27 @@ function tabFitInPage(args: { navLabel: string; tolerance: number }): Finding[] 
 		for (const pill of nav.querySelectorAll(':scope > div')) {
 			const p = pill.getBoundingClientRect();
 			if (p.width <= 1 || p.height <= 1) continue;
+			const s = getComputedStyle(pill);
+			const px = (v: string): number => parseFloat(v);
+			const box = {
+				left: p.left + px(s.borderLeftWidth) + px(s.paddingLeft),
+				right: p.right - px(s.borderRightWidth) - px(s.paddingRight),
+				top: p.top + px(s.borderTopWidth) + px(s.paddingTop),
+				bottom: p.bottom - px(s.borderBottomWidth) - px(s.paddingBottom)
+			};
 			for (const tab of pill.querySelectorAll(':scope > a')) {
 				const r = tab.getBoundingClientRect();
 				const outside =
-					r.left < p.left - args.tolerance ||
-					r.right > p.right + args.tolerance ||
-					r.top < p.top - args.tolerance ||
-					r.bottom > p.bottom + args.tolerance;
+					r.left < box.left - args.tolerance ||
+					r.right > box.right + args.tolerance ||
+					r.top < box.top - args.tolerance ||
+					r.bottom > box.bottom + args.tolerance;
 				if (outside) {
 					const label = tab.textContent.replace(/\s+/g, ' ').trim();
 					out.push({
 						check: 'tab-fit',
 						target: `a "${label}"`,
-						detail: `tab ${r.left.toFixed(1)}..${r.right.toFixed(1)} outside bar ${p.left.toFixed(1)}..${p.right.toFixed(1)}`
+						detail: `tab ${r.left.toFixed(1)}..${r.right.toFixed(1)} outside bar content ${box.left.toFixed(1)}..${box.right.toFixed(1)}`
 					});
 				}
 			}
@@ -239,7 +247,7 @@ function tabFitInPage(args: { navLabel: string; tolerance: number }): Finding[] 
 	return out;
 }
 
-/** Every tab of the bottom bar (found by its `nav_label`) inside the bar's pill. */
+/** Every tab of the bottom bar (found by its `nav_label`) inside the bar's pill content box. */
 export function tabFit(page: Page, navLabel: string): Promise<Finding[]> {
 	return page.evaluate(tabFitInPage, { navLabel, tolerance: TAB_FIT_PX });
 }

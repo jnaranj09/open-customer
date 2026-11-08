@@ -75,6 +75,8 @@ type Probe = {
 	/** A text that shows once the screen has its data. */
 	ready: string;
 	loggedOut?: true;
+	/** A signed-in screen outside the app shell (`hasShell`): no bottom bar on the phone. */
+	noShell?: true;
 	sheets?: { name: string; open: (page: Page) => Promise<void> }[];
 	/** The screen's data feeds, or why it has none. */
 	feeds: Feed[] | { none: string };
@@ -237,6 +239,7 @@ const PROBES: Record<string, Probe> = {
 	'/cambiar-clave': {
 		open: fixed('/cambiar-clave'),
 		ready: es.password_save,
+		noShell: true,
 		feeds: { none: 'a form with no server data' }
 	},
 	'/login': {
@@ -295,9 +298,15 @@ async function screenFindings(page: Page): Promise<Finding[]> {
 	return [...(await axe(page)), ...(await layout(page))];
 }
 
-/** The bottom bar's checks, at the compact width only (the wide layout has the sidebar instead). */
-async function barFindings(page: Page, project: string): Promise<Finding[]> {
-	return widthOf(project) === 'compact' ? tabFit(page, es.nav_label) : [];
+/** The bottom bar's checks, at the compact width only (the wide layout has the sidebar instead).
+ *  A signed-in screen with no bar drawn is a finding there: `tabFit` alone would pass it. */
+async function barFindings(page: Page, project: string, signedIn: boolean): Promise<Finding[]> {
+	if (widthOf(project) !== 'compact') return [];
+	const bar = page.getByRole('navigation', { name: es.nav_label }).filter({ visible: true });
+	if (signedIn && (await bar.count()) === 0) {
+		return [{ check: 'tab-fit', target: 'nav', detail: 'no bottom bar drawn' }];
+	}
+	return tabFit(page, es.nav_label);
 }
 
 /** No finding when the state showed, else `missing`. */
@@ -479,7 +488,11 @@ for (const [route, probe] of Object.entries(PROBES)) {
 
 			const found = [
 				...(await screenFindings(page)),
-				...(await barFindings(page, info.project.name))
+				...(await barFindings(
+					page,
+					info.project.name,
+					probe.loggedOut !== true && probe.noShell !== true
+				))
 			];
 			expect(verdict(found, route, info.project.name, 'base')).toEqual(CLEAN);
 		});

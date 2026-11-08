@@ -79,9 +79,9 @@ Each goal has a check, and the stage that proves it (S0 to S4, Technical Plan se
 7.  **Servicios is one tap from every screen and opens on Cotizar.**
     Check (S3): e2e test: tap Servicios, land on Cotizar; the Mis servicios tab reaches the catalog.
 8.  **Five places fit on her phone.**
-    Check (S2): at 393 px the new probe check `tab-fit` finds every tab inside the tab bar (seen red
-    before the padding fix, the fault-injection step of technical-taste.md canon item 2), and each
-    tab keeps a 44 px tap target; at 1440 px the sidebar shows five rows.
+    Check (S2): at 393 px the new probe check `tab-fit` finds every tab inside the tab bar's content
+    box, and each tab keeps a 44 px tap target; at 1440 px the sidebar shows five rows. The check
+    was proven able to fail by forcing an overflow (section 6).
 9.  **The catalog works exactly as before after the move.**
     Check (S2): the setup journey (release-1 CUJ 2) passes through the new place.
 10. **A removed quote line stays removed.** Today an emptied draft comes back when the form opens
@@ -408,20 +408,29 @@ shows its usual "Recuperamos lo que habías escrito." note (see Risks).
 
 ### 6. Five tabs on a 393 px screen
 
-With today's padding each tab gets about 66 px at 393 px, and about 42 px for a bold 12 px label
-(`BottomNav.svelte`, the `tab` variant of `NavItem.svelte`; arithmetic, not measured).
+With today's padding (12 px a side) each tab gets about 66 px at 393 px, and about 42 px for a bold
+12 px label (`BottomNav.svelte`, the `tab` variant of `NavItem.svelte`; arithmetic). Measured in
+WebKit at 393 px in S2, with 12 px padding the five tabs were 58.8, 58.9, 69.6, 74.0 and 65.7 px
+wide (Hoy, Enviar, Clientas, Servicios, Ajustes): the tabs grow past their share to fit their
+labels, and the bar's pill (outer box 16.0 to 377.0 px, content box 24.0 to 369.0 px) held them.
 
 *   The fix goes in the primitive: S0 draws five tabs in `.pen`, then S2 reduces the `tab` variant's
     side padding in `NavItem` to the measured value (4 px, `px-1`; section 10), in one change.
 *   A new probe check, `tab-fit`, in `web/tests/e2e/probe.ts`. It finds the tab bar by its
     `nav_label` (passed as an argument, since probe checks use no outside names), and reports a
-    finding for each `a` inside the bar's pill `div` whose box is not inside the pill's box (0.5 px
-    tolerance). With no tab bar (wide) it reports nothing. It runs in the compact probe project,
-    `base` state, on every route, through the same `sift` as the other checks. Order in S2: the
-    commit that adds the fifth item adds the check and is seen red; the next commit reduces the
-    padding and turns it green.
-*   The value is settled in S0: 4 px on each side, with every label fitting (section 10). No shorter
-    tab label is needed.
+    finding for each `a` inside the bar's pill `div` whose box is not inside the pill's content box
+    (the pill's box less its border and padding; 0.5 px tolerance). With no tab bar (wide) it
+    reports nothing. It runs in the compact probe project, `base` state, on every signed-in route,
+    through the same `sift` as the other checks; there the spec also reports a finding when no bar
+    is drawn, so a missing bar cannot pass.
+*   How it was proven: with today's padding the five tabs did fit at 393 px, so the check could not
+    be seen red on the fifth item alone. Its failure was proven by forcing an overflow (`px-6` on
+    the tab: 17 compact routes failed, a tab ending at 475.5 px against a bar ending at 377.0 px).
+    The first version compared against the pill's outer box and so missed up to 8 px of overrun;
+    the content-box version is the one that ships (S2 fix round, results in the S2 report).
+*   The value is settled in S0: 4 px on each side (`px-1`), the value drawn in the `.pen`
+    (`NavItem/Tab` padding `[8, 4]`), which keeps parity with the design and leaves margin for a
+    wider font (section 10). No shorter tab label is needed.
 
 ### 7. Draft fixes found on the way
 
@@ -480,9 +489,12 @@ and the links. The catalog page moves once.
     (Tailwind `px-1`). At 393 px each tab is 65.8 px wide: 393 − 32 (bar `px-4`) − 16 (pill `p-2`)
     − 4 × 4 (gaps), divided by 5. The labels are 12 px bold, measured in Pencil: Hoy 23 px, Enviar
     35 px, Clientas 46 px, Servicios 51 px, Ajustes 42 px. At 12 px padding there is 41.8 px for a
-    label, so Clientas and Servicios do not fit; at 4 px there is 57.8 px. At 375 px (62.2 px tabs)
-    4 px still fits, but 6 px would not. Each tab stays 65.8 × 56 px, above the 44 px target. The
-    browser's font can differ by a pixel or two; the S2 `tab-fit` probe is the real check.
+    label, so by this arithmetic Clientas and Servicios would not fit; at 4 px there is 57.8 px. At
+    375 px (62.2 px tabs) 4 px still fits, but 6 px would not. Each tab stays 65.8 × 56 px, above
+    the 44 px target. The browser's font differs by a pixel or two, and S2 measured WebKit at 393 px
+    with 12 px padding: the tabs were 58.8, 58.9, 69.6, 74.0 and 65.7 px, so the arithmetic's
+    "does not fit" was too strict there (tabs grow with their labels). 4 px is kept: it is the
+    frame's value and gives the most room; the S2 `tab-fit` probe is the real check.
 *   **iPhone clipboard test:** pending (owner). When it is done, record here: pass or fail, the iOS
     version, and that it ran in the installed PWA.
 *   **Wording** taken from the frames: `quote_empty`, `quote_copy_failed`, `quote_hold_hint` (item
@@ -892,9 +904,9 @@ Detailed Implementation Plan.
 #### Stage S2: Servicios place, catalog moved
 
 Commit order: (1) the move, the layout and the fifth nav item, so the route exists before
-`resolve(item.href)` type-checks; (2) the `tab-fit` check, seen red at 393 px; (3) the padding fix,
-green. The gate applies to the stage as a whole; only commit 2 is expected red, and only on
-`tab-fit`.
+`resolve(item.href)` type-checks; (2) the `tab-fit` check; (3) the padding fix. With 12 px padding
+the five tabs already fit at 393 px, so commit 2 is green; the check's failure is proven by a forced
+overflow (section 6), not by a red commit. The gate applies to every commit.
 
 ##### 11. `web/src/lib/components/navItems.ts` (Modify)
 
