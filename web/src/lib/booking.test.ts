@@ -11,6 +11,7 @@ import {
 	endShown,
 	formErrors,
 	formFrom,
+	LineSchema,
 	optionPath,
 	patchBody,
 	removeService,
@@ -130,6 +131,14 @@ describe('serviceIds', () => {
 	});
 });
 
+describe('LineSchema', () => {
+	it('takes a whole positive count only', () => {
+		expect(LineSchema.safeParse({ service_id: ACRILICO, count: 2 }).success).toBe(true);
+		expect(LineSchema.safeParse({ service_id: ACRILICO, count: 0 }).success).toBe(false);
+		expect(LineSchema.safeParse({ service_id: ACRILICO, count: 1.5 }).success).toBe(false);
+	});
+});
+
 describe('durationOf', () => {
 	it('is 0 with no lines', () => {
 		expect(durationOf([], SERVICES)).toBe(0);
@@ -165,7 +174,8 @@ describe('blankForm', () => {
 describe('activeServiceIds', () => {
 	it('leaves out archived', () => {
 		const archived = { ...service(RELLENO, 'Relleno', 45, null), archived: true };
-		expect(activeServiceIds([SERVICES[0]!, archived])).toEqual(new Set([ACRILICO]));
+		const active = service(ACRILICO, 'Acrílico', 90, null);
+		expect(activeServiceIds([active, archived])).toEqual(new Set([ACRILICO]));
 	});
 });
 
