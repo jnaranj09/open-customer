@@ -1,7 +1,9 @@
 // CUJ 8 (design doc item 79): Ajustes → "Descargar mis datos" downloads the export ZIP. The file
 // names and columns are the design doc's "Export" section; the services, attributes, templates and
 // rules are the ones `setup.spec.ts` creates in CUJ 2.
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { at, closePool, insertAppointment, insertClient, resetData } from './seed';
@@ -44,7 +46,16 @@ test('Descargar mis datos downloads the data as CSV and JSON', async ({ page }) 
 	await page.getByRole('link', { name: es.settings_export, exact: true }).click();
 	const download = page.waitForEvent('download');
 	await page.getByRole('link', { name: es.export_button, exact: true }).click();
-	const files = readZip(await readFile(await (await download).path()));
+	// saveAs, not path(): path() throws when the browser is a remote server (make e2e-docker).
+	const dir = await mkdtemp(join(tmpdir(), 'oc-export-'));
+	let files: ReturnType<typeof readZip>;
+	try {
+		const zipPath = join(dir, 'export.zip');
+		await (await download).saveAs(zipPath);
+		files = readZip(await readFile(zipPath));
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
 
 	expect([...files.keys()]).toEqual(['clientas.csv', 'citas.csv', 'servicios.csv', 'datos.json']);
 	const clients = files.get('clientas.csv') ?? '';

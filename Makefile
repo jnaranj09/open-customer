@@ -29,9 +29,12 @@ NUCLEI_TEMPLATES := v10.5.1
 # any other bytes. A templates bump changes both lines.
 NUCLEI_TEMPLATES_SHA256 := 30fe1cfaced4635f886e4a2673641bba86998dceec28e468274524e789aa56eb
 CURL_IMAGE := $(call tool_image,curl)
+# make e2e-docker: the Playwright image whose WebKit the e2e run uses; check-pins keeps its version
+# equal to @playwright/test in web/package.json.
+PLAYWRIGHT_IMAGE := $(call tool_image,playwright)
 # make sast: Semgrep, with only the rules in security/semgrep.
 SEMGREP_IMAGE := $(call tool_image,semgrep)
-$(foreach v,PG_IMAGE SQLC_IMAGE TRIVY_IMAGE GITLEAKS_IMAGE ZIZMOR_IMAGE ZAP_IMAGE NUCLEI_IMAGE CURL_IMAGE SEMGREP_IMAGE,\
+$(foreach v,PG_IMAGE SQLC_IMAGE TRIVY_IMAGE GITLEAKS_IMAGE ZIZMOR_IMAGE ZAP_IMAGE NUCLEI_IMAGE CURL_IMAGE SEMGREP_IMAGE PLAYWRIGHT_IMAGE,\
 	$(if $(word 2,$($(v))x),$(error $(v): want exactly one FROM <image> AS <name> line in $(TOOLS_DOCKERFILE), got '$($(v))'),\
 	$(if $($(v)),,$(error $(v): no FROM <image> AS <name> line in $(TOOLS_DOCKERFILE)))))
 export PG_IMAGE
@@ -83,7 +86,7 @@ SHELL_FILES := $(shell find . -name '*.sh' -not -path './web/node_modules/*' -no
 
 PNPM := cd web && pnpm
 
-.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e test-deploy \
+.PHONY: web-stub web build test vuln lint check-pins image node-check generate check-generated test-db cover dev e2e e2e-db e2e-docker test-deploy \
 	image-scan deps-scan secrets test-sec dast scan-live config-scan sast fuzz release-sign
 
 web-stub:
@@ -166,7 +169,7 @@ test-deploy:
 	PG_IMAGE=$(PG_IMAGE) scripts/test-deploy.sh
 
 check-pins:
-	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) GITLEAKS_IMAGE=$(GITLEAKS_IMAGE) scripts/check-pins.sh
+	PG_IMAGE=$(PG_IMAGE) GOLANGCI_LINT_VERSION=$(GOLANGCI_LINT_VERSION) GITLEAKS_IMAGE=$(GITLEAKS_IMAGE) PLAYWRIGHT_IMAGE=$(PLAYWRIGHT_IMAGE) scripts/check-pins.sh
 
 # Postgres in Docker (started or reused), serve on :8080 in the background, and Vite on :5173 in
 # the foreground; the trap stops serve when Vite exits. serve runs as a built binary, not through
@@ -185,7 +188,7 @@ dev: web-stub node-check
 # E2E_DATABASE_URL to its service container: that database is dropped and created again through the
 # same server's postgres database, and no container is started. Otherwise the dev container is
 # started or reused and $(E2E_DB_NAME) on it is created again.
-e2e: build
+e2e-db: build
 ifeq ($(E2E_GIVEN),)
 	$(dev_pg_up)
 	docker exec $(DEV_PG_CONTAINER) dropdb -U open_customer --if-exists --force $(E2E_DB_NAME)
@@ -196,8 +199,18 @@ else
 	case "$$name" in *_e2e) ;; *) echo "make e2e: E2E_DATABASE_URL must name a *_e2e database" >&2; exit 1;; esac; \
 	psql -q -v ON_ERROR_STOP=1 "$$admin" -c "DROP DATABASE IF EXISTS \"$$name\" WITH (FORCE)" -c "CREATE DATABASE \"$$name\""
 endif
+
+e2e: e2e-db
 	$(PNPM) e2e
-e2e: export E2E_DATABASE_URL := $(or $(E2E_GIVEN),postgres://open_customer:$(DEV_PG_PASSWORD)@localhost:$(DEV_PG_PORT)/$(E2E_DB_NAME))
+
+# make e2e with WebKit in the pinned Playwright image, for a host that cannot run it (Arch): the
+# tests run on the host and connect to a Playwright server in the container oc-e2e-browser, which
+# shares the host network, so the browser reaches the app on :18080. The container is always
+# removed. Local use only; CI runs make e2e.
+e2e-docker: e2e-db
+	PLAYWRIGHT_IMAGE=$(PLAYWRIGHT_IMAGE) scripts/e2e-docker.sh
+
+e2e e2e-db e2e-docker: export E2E_DATABASE_URL := $(or $(E2E_GIVEN),postgres://open_customer:$(DEV_PG_PASSWORD)@localhost:$(DEV_PG_PORT)/$(E2E_DB_NAME))
 
 # The app image and the backup image, both tagged $(VERSION) (make image-scan scans them).
 image:

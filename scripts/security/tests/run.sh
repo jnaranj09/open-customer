@@ -457,6 +457,7 @@ pins_setup() {
 make_pin() {
   case "$1" in
     PG_IMAGE) awk '$1 == "FROM" && $4 == "postgres" { print $2 }' "$REPO/security/tools.Dockerfile" ;;
+    PLAYWRIGHT_IMAGE) awk '$1 == "FROM" && $4 == "playwright" { print $2 }' "$REPO/security/tools.Dockerfile" ;;
     GITLEAKS_IMAGE) awk '$1 == "FROM" && $4 == "gitleaks" { print $2 }' "$REPO/security/tools.Dockerfile" ;;
     *) sed -n "s/^$1 := //p" "$REPO/Makefile" ;;
   esac
@@ -466,7 +467,8 @@ make_pin() {
 # stdout and stderr go to $W/out.
 check_pins() {
   (cd / && PG_IMAGE="${PG_PIN:-$(make_pin PG_IMAGE)}" GOLANGCI_LINT_VERSION="$(make_pin GOLANGCI_LINT_VERSION)" \
-    GITLEAKS_IMAGE="$(make_pin GITLEAKS_IMAGE)" "$W/scripts/check-pins.sh") >"$W/out" 2>&1
+    GITLEAKS_IMAGE="$(make_pin GITLEAKS_IMAGE)" PLAYWRIGHT_IMAGE="${PW_PIN:-$(make_pin PLAYWRIGHT_IMAGE)}" \
+    "$W/scripts/check-pins.sh") >"$W/out" 2>&1
 }
 
 # A digest that is not the pinned one.
@@ -1672,6 +1674,23 @@ test_pins_cosign_missing_red() {
   out_has "deploy/scripts/lib.sh has no COSIGN_IMAGE"
 }
 
+# The Playwright image's version must equal @playwright/test in web/package.json: a bump of either
+# alone is red, and a malformed image is red.
+test_pins_playwright_drift_red() {
+  pins_setup
+  grep -q '"@playwright/test": "' "$W/web/package.json" || fail "web/package.json has no @playwright/test"
+  sed -i 's|"@playwright/test": "[^"]*"|"@playwright/test": "0.0.1"|' "$W/web/package.json"
+  check_pins && fail "a Playwright version drift exited 0"
+  out_has "PLAYWRIGHT_IMAGE (security/tools.Dockerfile) is mcr.microsoft.com/playwright:v"
+  out_has "@playwright/test is 0.0.1"
+}
+
+test_pins_playwright_image_malformed_red() {
+  pins_setup
+  PW_PIN=mcr.microsoft.com/playwright:v1.64.1-noble check_pins && fail "a Playwright image without a digest exited 0"
+  out_has "is not mcr.microsoft.com/playwright:v<version>-<distro>@sha256:<digest>"
+}
+
 # release-on-main.sh: a throwaway repo with a bare "origin" and a main branch. $W/repo is the
 # checkout the script runs in. git_q runs git with no user config. The commit ids are in $c_main
 # (on main) and $c_side (only on a side branch).
@@ -2199,6 +2218,8 @@ t "check-pins: a postgres copy without its digest is red" test_pins_postgres_dig
 t "check-pins: a PG_IMAGE without a digest is red" test_pins_pg_image_without_digest_red
 t "check-pins: a cosign version that drifts between release.yml and lib.sh is red" test_pins_cosign_drift_red
 t "check-pins: a lib.sh without COSIGN_IMAGE is red" test_pins_cosign_missing_red
+t "check-pins: a Playwright image that drifts from @playwright/test is red" test_pins_playwright_drift_red
+t "check-pins: a Playwright image without a digest is red" test_pins_playwright_image_malformed_red
 t "release-on-main: a commit on main passes" test_release_on_main_commit_on_main_passes
 t "release-on-main: a commit only on a side branch is red" test_release_on_main_side_branch_red
 t "release-on-main: a failed fetch of main is red" test_release_on_main_fetch_fails_red

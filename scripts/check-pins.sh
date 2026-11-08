@@ -10,6 +10,7 @@ cd "$(dirname "$0")/.."
 : "${PG_IMAGE:?set by make}"
 : "${GOLANGCI_LINT_VERSION:?set by make}"
 : "${GITLEAKS_IMAGE:?set by make}"
+: "${PLAYWRIGHT_IMAGE:?set by make}"
 
 fail=0
 bad() {
@@ -34,6 +35,15 @@ for f in deploy/compose.yaml deploy/backup/Dockerfile .github/workflows/ci.yml D
     [ "$ref" = "$PG_IMAGE" ] || bad "$f uses $ref, PG_IMAGE (security/tools.Dockerfile) is $PG_IMAGE"
   done < <(grep -oE 'postgres:[0-9][A-Za-z0-9._-]*(@sha256:[0-9a-f]*)?' "$f" || true)
 done
+
+# The Playwright image make e2e-docker runs WebKit in carries the same version as @playwright/test
+# (the tests and the browser server must speak one protocol version).
+pw_pin=$(sed -n 's/.*"@playwright\/test": "\(.*\)".*/\1/p' web/package.json)
+[ -n "$pw_pin" ] || bad "web/package.json has no @playwright/test"
+[[ "$PLAYWRIGHT_IMAGE" =~ ^mcr\.microsoft\.com/playwright:v([0-9][0-9.]*)-[a-z]+@sha256:[0-9a-f]{64}$ ]] ||
+  bad "PLAYWRIGHT_IMAGE (security/tools.Dockerfile) '$PLAYWRIGHT_IMAGE' is not mcr.microsoft.com/playwright:v<version>-<distro>@sha256:<digest>"
+[ "${BASH_REMATCH[1]:-}" = "$pw_pin" ] ||
+  bad "PLAYWRIGHT_IMAGE (security/tools.Dockerfile) is $PLAYWRIGHT_IMAGE, web/package.json @playwright/test is $pw_pin"
 
 if [ -f Dockerfile ]; then
   node_tag=$(grep -oE 'FROM node:[^ ]+' Dockerfile | sed 's/FROM node:\(.*\)-alpine.*/\1/' || true)
