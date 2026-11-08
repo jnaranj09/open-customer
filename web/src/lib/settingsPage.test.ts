@@ -23,7 +23,7 @@ describe('showSettingsBack', () => {
 	});
 
 	it('is on for a section', () => {
-		expect(showSettingsBack('/ajustes/servicios')).toBe(true);
+		expect(showSettingsBack('/ajustes/atributos')).toBe(true);
 	});
 
 	it('is on for the template list', () => {

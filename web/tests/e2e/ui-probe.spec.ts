@@ -180,8 +180,8 @@ const PROBES: Record<string, Probe> = {
 		ready: es.business_save,
 		feeds: [bootFeed('business', { none: 'one record' })]
 	},
-	'/ajustes/servicios': {
-		open: fixed('/ajustes/servicios'),
+	'/servicios/catalogo': {
+		open: fixed('/servicios/catalogo'),
 		ready: 'Acrílico',
 		sheets: [{ name: 'new service', open: button(es.services_new) }],
 		feeds: [

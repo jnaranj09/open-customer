@@ -26,7 +26,7 @@
 			title={t('appointment_services_empty_title')}
 			body={t('appointment_services_empty_body')}
 			actionLabel={t('appointment_services_empty_action')}
-			href={resolve('/ajustes/servicios')}
+			href={resolve('/servicios/catalogo')}
 		/>
 	{:else}
 		<div role="group" aria-labelledby={labelId} class="flex flex-wrap gap-2">

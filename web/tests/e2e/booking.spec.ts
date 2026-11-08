@@ -149,10 +149,10 @@ test('a phone shows grouped by its country on the client page and in the list', 
 	await expect(page.getByRole('link', { name: /\+506 8888 7777/ })).toBeVisible();
 });
 
-/** Ajustes → Servicios: archives the service called `name`, or restores it. The services outlive
+/** Servicios → Mis servicios: archives the service called `name`, or restores it. The services outlive
  *  `resetData`, so a test that archives one restores it in a `finally`. */
 async function setArchived(page: Page, name: string, archive: boolean): Promise<void> {
-	await page.goto('/ajustes/servicios');
+	await page.goto('/servicios/catalogo');
 	await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
 	const sheet = page.getByRole('dialog', { name: es.service_edit_title });
 	await sheet

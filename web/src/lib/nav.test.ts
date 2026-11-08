@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NAV_ITEMS } from './components/navItems';
 import { isActivePath, syncLine } from './nav';
 
 describe('isActivePath', () => {
@@ -16,6 +17,18 @@ describe('isActivePath', () => {
 
 	it('does not match a path that only shares a prefix', () => {
 		expect(isActivePath('/ajustes', '/ajustes-viejos')).toBe(false);
+	});
+});
+
+describe('the Servicios place', () => {
+	const place = NAV_ITEMS.find((item) => item.label === 'nav_services');
+
+	it('is active on /servicios/catalogo', () => {
+		expect(place !== undefined && isActivePath(place.href, '/servicios/catalogo')).toBe(true);
+	});
+
+	it('is not active on Ajustes', () => {
+		expect(place !== undefined && isActivePath(place.href, '/ajustes/negocio')).toBe(false);
 	});
 });
 
