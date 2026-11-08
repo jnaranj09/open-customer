@@ -13,13 +13,22 @@ export function provideHeaderAction(): HeaderAction {
 	return setContext(KEY, holder);
 }
 
-/** Called by a page: shows `snippet` in the slot until the page is destroyed. */
-export function useHeaderAction(snippet: Snippet): void {
+/**
+ * Called by a page: shows `snippet` in the slot while `show()` is true and until the page is
+ * destroyed; while it is false the slot stays empty, so the layout draws no row for it.
+ */
+export function useHeaderAction(snippet: Snippet, show: () => boolean = () => true): void {
 	const holder = getContext<HeaderAction | undefined>(KEY);
 	if (holder === undefined) {
 		throw new Error('useHeaderAction needs the Servicios layout');
 	}
-	holder.snippet = snippet;
+	$effect.pre(() => {
+		if (show()) {
+			holder.snippet = snippet;
+		} else if (holder.snippet === snippet) {
+			holder.snippet = null;
+		}
+	});
 	onDestroy(() => {
 		// A page that replaced this one has already registered its own: leave that alone.
 		if (holder.snippet === snippet) {

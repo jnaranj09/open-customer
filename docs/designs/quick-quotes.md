@@ -374,9 +374,10 @@ shows its usual "Recuperamos lo que habías escrito." note (see Risks).
     content; a page that has a primary action registers it in the slot through a context the layout
     sets (`routes/servicios/header.svelte.ts`: the layout calls `provideHeaderAction()`, a page
     calls `useHeaderAction(snippet)`, which clears it again when the page is destroyed). Mis
-    servicios registers "Nuevo servicio"; Cotizar registers none. On wide the slot sits at the
-    right of the `h1` row, with the tab bar under it; on the phone it is a right-aligned row under
-    the tab links (the S0 393 frame). The moved catalog page drops its own `h1`. This is
+    servicios registers "Nuevo servicio" on wide only (`useHeaderAction(snippet, show)`, `show` is
+    "wide and the data loaded"); Cotizar registers none. On wide the slot sits at the right of the
+    `h1` row, with the tab bar under it. On the phone (owner, 2026-11-08) the slot is empty, so no
+    action row is drawn: "Nuevo servicio" is the floating "+" of Hoy there (item 17). The moved catalog page drops its own `h1`. This is
     a top-level place, so there is no back bar: the "Volver a Ajustes" bar and the Ajustes
     two-column layout come from `routes/ajustes/+layout.svelte` and stop applying once the page
     leaves `/ajustes`. The wide layout of each tab comes from its `.pen` frame; it is never the
@@ -412,7 +413,7 @@ With today's padding (12 px a side) each tab gets about 66 px at 393 px, and abo
 12 px label (`BottomNav.svelte`, the `tab` variant of `NavItem.svelte`; arithmetic). Measured in
 WebKit at 393 px in S2, with 12 px padding the five tabs were 58.8, 58.9, 69.6, 74.0 and 65.7 px
 wide (Hoy, Enviar, Clientas, Servicios, Ajustes): the tabs grow past their share to fit their
-labels, and the bar's pill (outer box 16.0 to 377.0 px, content box 24.0 to 369.0 px) held them.
+labels, and the bar's pill (outer box 16.0 to 377.0 px, content box 25.0 to 368.0 px) held them.
 
 *   The fix goes in the primitive: S0 draws five tabs in `.pen`, then S2 reduces the `tab` variant's
     side padding in `NavItem` to the measured value (4 px, `px-1`; section 10), in one change.
@@ -948,7 +949,9 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 
 *   **Proposed Changes**: Moved with `git mv`; what the page does is unchanged. Its own `h1` is
     removed (the layout owns the heading); "Nuevo servicio" moves into the layout's action slot
-    through `useHeaderAction` (item 16), opening the same sheet as today. The back bar and
+    through `useHeaderAction` (item 16) on wide and is the floating "+" (`IconButton` `add`, the
+    wrapper and `bottom-fab` of Hoy; inert offline, the main area's `pb-32` keeps the last row
+    clear) on the phone, opening the same sheet as today. The back bar and
     the Ajustes two-column layout came from `routes/ajustes/+layout.svelte` and no longer apply, so
     its 1440 px layout is rebuilt to match the S0 Mis servicios wide frame (ui.md: wide is never the
     phone layout stretched): a table in a `Card` with the columns Servicio, Duración, Precio and

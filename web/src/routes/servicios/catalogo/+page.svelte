@@ -4,6 +4,7 @@
 	import { cache } from '../../../lib/cache/store.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
 	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import ServiceSheet from '../../../lib/components/ServiceSheet.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
@@ -16,8 +17,8 @@
 
 	// The Mis servicios tab of Servicios (CUJ 2 step 1, quick-quotes design section 5): the list on
 	// the phone and a table on wide, with a sheet to add a service or edit the one she taps. Archived
-	// services are listed apart, so she can restore one; "Nuevo servicio" sits in the layout's
-	// header slot.
+	// services are listed apart, so she can restore one. "Nuevo servicio" sits in the layout's
+	// header slot on wide and is the floating "+" of Hoy on the phone.
 
 	const data = $derived(cache.snapshot);
 	const active = $derived(data?.services.filter((s) => !s.archived) ?? []);
@@ -34,18 +35,16 @@
 		toaster.say(message);
 	}
 
-	useHeaderAction(newService);
+	useHeaderAction(newService, () => wide && data !== null);
 </script>
 
 {#snippet newService()}
-	{#if data !== null}
-		<WriteButton
-			variant="strong"
-			onclick={() => {
-				editing = 'new';
-			}}>{t('services_new')}</WriteButton
-		>
-	{/if}
+	<WriteButton
+		variant="strong"
+		onclick={() => {
+			editing = 'new';
+		}}>{t('services_new')}</WriteButton
+	>
 {/snippet}
 
 {#snippet dot(color: string)}
@@ -154,6 +153,20 @@
 			<h2 class="px-2 text-sm font-bold text-ink-muted">{t('archived_heading_masculine')}</h2>
 			{@render rows(archived, data.settings.currency, data.settings.locale)}
 		{/if}
+	{/if}
+	{#if !wide}
+		<!-- The floating "+", as on Hoy; offline it fades, the offline banner says why. -->
+		<div class="fixed right-4 bottom-fab z-20">
+			<IconButton
+				variant="add"
+				icon="plus"
+				label={t('services_new')}
+				inert={cache.offline}
+				onclick={() => {
+					editing = 'new';
+				}}
+			/>
+		</div>
 	{/if}
 	{#if editing !== null}
 		<ServiceSheet
