@@ -1,8 +1,9 @@
 // Steps and helpers more than one e2e spec uses. jscpd scans tests/ with threshold 0, so a step two
 // specs need lives here, not in both.
-import type { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import { draftKey } from '../../src/lib/cache/drafts';
+import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 
 /** An es.json text with its `{name}` placeholders filled; a missing value throws. Copies `t()` of src/lib/i18n, whose
  *  es.json import (no `type: json`) Playwright's loader rejects. */
@@ -53,4 +54,16 @@ export async function serverOff(page: Page): Promise<void> {
 	await page.route('**/api/**', (route) =>
 		route.fulfill({ status: 530, contentType: 'text/html', body: '<html><body>530</body></html>' })
 	);
+}
+
+/** Servicios → Mis servicios: archives the service called `name`, or restores it. The
+ *  services outlive `resetData`, so a test that archives one restores it in a `finally`. */
+export async function setArchived(page: Page, name: string, archive: boolean): Promise<void> {
+	await page.goto('/servicios/catalogo');
+	await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+	const sheet = page.getByRole('dialog', { name: es.service_edit_title });
+	await sheet
+		.getByRole('button', { name: archive ? es.service_archive : es.service_restore })
+		.click();
+	await expect(page.getByText(archive ? es.service_archived : es.service_restored)).toBeVisible();
 }

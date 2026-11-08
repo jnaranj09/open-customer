@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { at, businessDate, closePool, insertAppointment, insertClient, resetData } from './seed';
-import { draftStored } from './steps';
+import { draftStored, setArchived } from './steps';
 
 const PHOTO = 'tests/e2e/fixtures/photo-gps.jpg';
 /** The Exif APP1 identifier: the fixture carries it, the stored photo must not. */
@@ -148,18 +148,6 @@ test('a phone shows grouped by its country on the client page and in the list', 
 	await page.goto('/clientas');
 	await expect(page.getByRole('link', { name: /\+506 8888 7777/ })).toBeVisible();
 });
-
-/** Servicios → Mis servicios: archives the service called `name`, or restores it. The services outlive
- *  `resetData`, so a test that archives one restores it in a `finally`. */
-async function setArchived(page: Page, name: string, archive: boolean): Promise<void> {
-	await page.goto('/servicios/catalogo');
-	await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
-	const sheet = page.getByRole('dialog', { name: es.service_edit_title });
-	await sheet
-		.getByRole('button', { name: archive ? es.service_archive : es.service_restore })
-		.click();
-	await expect(page.getByText(archive ? es.service_archived : es.service_restored)).toBeVisible();
-}
 
 test('an emptied Nueva cita draft stays empty', async ({ page }) => {
 	await page.goto('/citas/nueva');

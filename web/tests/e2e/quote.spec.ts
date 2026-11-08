@@ -7,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
-import { draftStored, fill, serverOff } from './steps';
+import { draftStored, fill, serverOff, setArchived } from './steps';
 
 /** The business name `setup.spec.ts` gives the app. */
 const HEADING = fill(es.quote_heading_named, { name: 'Estudio Prueba' });
@@ -203,6 +203,33 @@ test.describe('wide', () => {
 
 const convertButton = (page: Page) =>
 	page.getByRole('button', { name: es.quote_convert, exact: true });
+
+test('a quoted service archived while Cotizar is open drops out: the quote is empty', async ({
+	page,
+	context
+}) => {
+	await page.clock.install();
+	await page.goto('/servicios');
+	await chip(page, 'Acrílico').click();
+	await expect(copyButton(page)).toBeVisible();
+	const other = await context.newPage();
+
+	try {
+		await setArchived(other, 'Acrílico', true);
+		// The open page learns of it on its next focus refresh, which waits for the last one to be
+		// 30 s old.
+		await page.clock.fastForward(60_000);
+		await page.evaluate(() => {
+			window.dispatchEvent(new Event('focus'));
+		});
+
+		await expect(page.getByText(es.quote_empty)).toBeVisible();
+		await expect(copyButton(page)).toHaveCount(0);
+		await expect(convertButton(page)).toHaveCount(0);
+	} finally {
+		await setArchived(other, 'Acrílico', false);
+	}
+});
 
 /** The services chips of Nueva cita (the same group as Cotizar's phone picker). */
 const picked = (page: Page, name: string) =>

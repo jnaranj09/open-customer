@@ -61,7 +61,7 @@
 	);
 
 	// Only the lines she can see: a service archived while the quote is open drops out of the text
-	// (design doc D4).
+	// (quick-quotes design, section 2, "Visible lines").
 	const visible = $derived(lines.filter((l) => activeIds.has(l.service_id)));
 	const text = $derived(quoteText(visible, services, settings));
 	const countOf = (id: string): number => lines.find((l) => l.service_id === id)?.count ?? 0;
