@@ -227,8 +227,9 @@ paste cannot disagree.
 2.  One line per picked service, in the order she first picked each one:
     *   once: `quote_line` "• {name}: {price}"
     *   repeated: `quote_line_repeat` "• {name} ×{count} ({unit} c/u): {total}"
-    *   no price, once or repeated: `quote_line_unpriced` "• {name}: precio a consultar", or
-        `quote_line_unpriced_repeat` "• {name} ×{count}: precio a consultar"
+    *   no price, once: `quote_line` with `{price}` = `services_price_unset` ("precio a
+        consultar", the key the catalog already uses); repeated: `quote_line_unpriced_repeat`
+        "• {name} ×{count}: {price}", the same `{price}`
 3.  A total line, from the table below. It is left out when no line has a price.
 4.  A duration line: `quote_duration` "Duración aproximada: {duration}".
 
@@ -976,7 +977,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 
 *   **Proposed Changes**: Add `nav_services` ("Servicios"), the wide table headers
     `services_col_name` ("Servicio"), `services_col_duration` ("Duración"), `services_col_price`
-    ("Precio") and `services_col_color` ("Color"), and `services_archived_toggle` ("Archivados
+    ("Precio") and `services_col_color` ("Color"), `services_price_unset` ("precio a consultar",
+    used by the wide table and the quote text), and `services_archived_toggle` ("Archivados
     ({count})"). Delete `settings_services` by hand: no guard flags an unused key.
 
 ##### 20. Tests and lint for the move (Modify)
@@ -1055,9 +1057,9 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 *   **Proposed Changes**: `services_tab_quote` ("Cotizar"), `services_tab_catalog` ("Mis
     servicios"), `services_tabs_label` ("Secciones de Servicios", an `aria-label`), `quote_title` ("Cotizar"), `quote_heading` ("Cotización"),
     `quote_heading_named` ("Cotización · {name}"), `quote_line` ("• {name}: {price}"),
-    `quote_line_repeat` ("• {name} ×{count} ({unit} c/u): {total}"), `quote_line_unpriced`
-    ("• {name}: precio a consultar"), `quote_line_unpriced_repeat` ("• {name} ×{count}: precio a
-    consultar"), `quote_total` ("Total: {amount}"), `quote_total_partial` ("Total: {amount} + lo que
+    `quote_line_repeat` ("• {name} ×{count} ({unit} c/u): {total}"), `quote_line_unpriced_repeat`
+    ("• {name} ×{count}: {price}", `{price}` is `services_price_unset`; a single unpriced line uses
+    `quote_line`), `quote_total` ("Total: {amount}"), `quote_total_partial` ("Total: {amount} + lo que
     está a consultar"), `quote_duration` ("Duración aproximada: {duration}"), `duration_hours`
     ("{h} h"), `duration_hours_minutes` ("{h} h {m} min"), `quote_empty` ("Toca los servicios que
     te preguntaron para armar la cotización."), `quote_copy` ("Copiar"), `quote_copied`
