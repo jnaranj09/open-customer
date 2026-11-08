@@ -17,7 +17,7 @@ export function provideHeaderAction(): HeaderAction {
  * Called by a page: shows `snippet` in the slot while `show()` is true and until the page is
  * destroyed; while it is false the slot stays empty, so the layout draws no row for it.
  */
-export function useHeaderAction(snippet: Snippet, show: () => boolean = () => true): void {
+export function useHeaderAction(snippet: Snippet, show: () => boolean): void {
 	const holder = getContext<HeaderAction | undefined>(KEY);
 	if (holder === undefined) {
 		throw new Error('useHeaderAction needs the Servicios layout');

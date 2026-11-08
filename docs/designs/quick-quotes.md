@@ -373,12 +373,12 @@ shows its usual "Recuperamos lo que habías escrito." note (see Risks).
     ("Servicios", `services_title`), an action slot, and the tab links. Each tab page owns only its
     content; a page that has a primary action registers it in the slot through a context the layout
     sets (`routes/servicios/header.svelte.ts`: the layout calls `provideHeaderAction()`, a page
-    calls `useHeaderAction(snippet)`, which clears it again when the page is destroyed). Mis
-    servicios registers "Nuevo servicio" on wide only (`useHeaderAction(snippet, show)`, `show` is
-    "wide and the data loaded"); Cotizar registers none. On wide the slot sits at the right of the
+    calls `useHeaderAction(snippet, show)`, which fills the slot while `show()` is true and clears it
+    again when the page is destroyed). Mis
+    servicios registers "Nuevo servicio" on wide only (`show` is "wide and the data loaded"); Cotizar registers none. On wide the slot sits at the right of the
     `h1` row, with the tab bar under it. On the phone (owner, 2026-11-08) the slot is empty, so no
-    action row is drawn: "Nuevo servicio" is the floating "+" of Hoy there (item 17). The moved catalog page drops its own `h1`. This is
-    a top-level place, so there is no back bar: the "Volver a Ajustes" bar and the Ajustes
+    action row is drawn: "Nuevo servicio" is the floating "+" of Hoy there (item 17). The moved
+    catalog page drops its own `h1`. This is a top-level place, so there is no back bar: the "Volver a Ajustes" bar and the Ajustes
     two-column layout come from `routes/ajustes/+layout.svelte` and stop applying once the page
     leaves `/ajustes`. The wide layout of each tab comes from its `.pen` frame; it is never the
     phone layout stretched (`.claude/rules/ui.md`).
@@ -943,7 +943,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     links.
 *   **`web/src/routes/servicios/header.svelte.ts` (Create)**: `provideHeaderAction()` (called by
     the layout: sets the context, returns the holder whose `$state` snippet the layout renders) and
-    `useHeaderAction(snippet)` (called by a page: sets the snippet, clears it on destroy).
+    `useHeaderAction(snippet, show)` (called by a page: fills the slot while `show()` is true,
+    clears it on destroy).
 
 ##### 17. `web/src/routes/ajustes/servicios/+page.svelte` → `web/src/routes/servicios/catalogo/+page.svelte` (Move)
 

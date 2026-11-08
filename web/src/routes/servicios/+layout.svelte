@@ -4,8 +4,8 @@
 	import { provideHeaderAction } from './header.svelte';
 
 	// Servicios (quick-quotes design, section 5), a top-level place: the heading and, at its right
-	// on wide and in a right-aligned row under it on the phone, the action its page registered
-	// through `useHeaderAction`. The tab links arrive with the Cotizar tab; until then the catalog
+	// on wide, the action its page registered through `useHeaderAction`. On the phone the slot is
+	// empty (no row is drawn): the page uses the floating "+". The tab links arrive with the Cotizar tab; until then the catalog
 	// is the only page.
 	let { children }: { children: Snippet } = $props();
 
@@ -18,7 +18,7 @@
 			{t('services_title')}
 		</h1>
 		{#if action.snippet !== null}
-			<div class="w-44 shrink-0 self-end lg:self-auto">{@render action.snippet()}</div>
+			<div class="w-44 shrink-0">{@render action.snippet()}</div>
 		{/if}
 	</header>
 	{@render children()}
