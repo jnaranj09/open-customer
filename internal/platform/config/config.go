@@ -23,6 +23,7 @@ type Config struct {
 	BackupStatusFile          string
 	AllowMigrateWithoutBackup bool
 	LogLevel                  slog.Level
+	ListenPort                int // 1-65535; DefaultListenPort when LISTEN_PORT is empty
 }
 
 // PlaceholderSecrets are the secret values deploy/.env.example publishes. A secret that still holds
@@ -31,6 +32,9 @@ type Config struct {
 // keeps the two lists and .env.example equal, and checks that each placeholder variable's consumer
 // in deploy/compose.yaml refuses it.
 var PlaceholderSecrets = []string{"change-me"}
+
+// DefaultListenPort is the port `serve` listens on, and `healthcheck` probes, when LISTEN_PORT is empty.
+const DefaultListenPort = 8080
 
 const (
 	defaultTrustedProxyCIDRs = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -76,6 +80,16 @@ func Load(getenv func(string) string) (Config, error) {
 	c.VAPIDSubject = required("VAPID_SUBJECT")
 	if c.VAPIDSubject != "" && !strings.HasPrefix(c.VAPIDSubject, "mailto:") {
 		bad = append(bad, "VAPID_SUBJECT (must start with mailto:)")
+	}
+
+	c.ListenPort = DefaultListenPort
+	if raw := get("LISTEN_PORT", ""); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 65535 {
+			bad = append(bad, "LISTEN_PORT (must be a port number)")
+		} else {
+			c.ListenPort = n
+		}
 	}
 
 	port := get("DB_PORT", "5432")

@@ -70,7 +70,7 @@ with fnm, `fnm use` in web/).
   fails. Not in the gate; CI runs it weekly (`security-weekly.yml` job `fuzz`, `FUZZTIME=30s`), and
   `make test` runs their seeds. A crash input lands in the package's `testdata/fuzz/<Name>/`: keep
   it as a seed and fix the code with its own test.
-- `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
+- `make e2e`: build, fresh e2e database, the app on :18080, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
   layout, empty, error and busy states on every route at 393 and 1440 px).
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
   a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit), then

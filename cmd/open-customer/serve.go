@@ -36,8 +36,6 @@ import (
 )
 
 const (
-	// listenAddr is the app's port inside the Compose network (design doc item 18, step 7).
-	listenAddr = ":8080"
 	// shutdownTimeout is how long in-flight requests get after SIGTERM.
 	shutdownTimeout = 10 * time.Second
 	// readHeaderTimeout bounds a client that never finishes its request headers.
@@ -60,7 +58,7 @@ const (
 //  4. print the setup link while no user exists;
 //  5. build the modules and the HTTP server;
 //  6. start the daily timer (scheduler.Run, one tick a minute);
-//  7. serve on :8080;
+//  7. serve on LISTEN_PORT (default 8080);
 //  8. shut down gracefully on SIGTERM.
 //
 // The timer stops with ctx, and serve waits for it before it returns.
@@ -73,7 +71,7 @@ func serve(ctx context.Context, getenv func(string) string, stdout, stderr io.Wr
 		printf(stderr, "%v\n", err)
 		return 1
 	}
-	ln, err := new(net.ListenConfig).Listen(ctx, "tcp", listenAddr)
+	ln, err := new(net.ListenConfig).Listen(ctx, "tcp", fmt.Sprintf(":%d", cfg.ListenPort))
 	if err != nil {
 		printf(stderr, "serve: listen: %v\n", err)
 		return 1
