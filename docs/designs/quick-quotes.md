@@ -286,9 +286,15 @@ minutes, and the page shows no text when there are no lines.
     tagged union `none | confirm_replace | copy_failed | convert_failed`. The two failures use
     `role="alert"`. The slot goes back to `none` on her next pick, copy or convert.
 *   **States.**
-    *   No active service: only `ServicePicker`'s own empty state ("Aún no tienes servicios",
-        "Configurar servicios"), whose link now goes to the Mis servicios tab. On wide the same
-        empty state sits inside the table and the panel shows `quote_empty`.
+    *   Loading: while `cache.snapshot` is null, only the page's `services_loading` status line,
+        at both widths (Mounting, above). `QuoteForm` is not mounted yet. The `cargando · 1440`
+        frame draws the line inside the table; the build shows the page line instead.
+    *   No active service: `QuoteForm` renders the empty state itself, at both widths, with the
+        existing `EmptyState` and the keys `ServicePicker` uses (`appointment_services_empty_title`,
+        `appointment_services_empty_body`, `appointment_services_empty_action` "Configurar
+        servicios"), linking to the Mis servicios tab (`/servicios/catalogo`). Neither
+        `ServicePicker` nor the table is rendered. On wide the empty state sits where the table
+        would be, and the panel shows `quote_empty`.
     *   Services but nothing picked: the text `quote_empty`; Copiar, Convertir and Nueva cotización
         are not shown.
     *   Offline: everything works. Copy needs no network; convert writes only to Dexie.
@@ -301,8 +307,8 @@ minutes, and the page shows no text when there are no lines.
         shows only "+"). "+" calls `tapService` and "−" calls `removeService`, as the chips do.
         Right, a fixed-width (400 px) Cotización panel (a `Card`): the message slot at its top, the
         text, Copiar and Convertir en cita at full width, and Nueva cotización at the bottom.
-    *   The empty, nothing-picked and busy states keep the same wide frame: the panel shows
-        `quote_empty`, and the table shows the empty state or the busy line.
+    *   The empty and nothing-picked states keep the same wide frame: the panel shows
+        `quote_empty`, and the table's place shows the empty state or the rows with "+" only.
 
 ### 3. Copiar
 
@@ -363,11 +369,14 @@ shows its usual "Recuperamos lo que habías escrito." note (see Risks).
         all of them change.
     *   There is no rule that picks the tab from the data. First setup goes Servicios → Cotizar's
         empty state → "Configurar servicios" → the catalog.
-*   **Layout.** A new `routes/servicios/+layout.svelte` owns the page heading ("Servicios",
-    `services_title`) and the tab links, at both widths. Each tab page owns only its content and
-    actions; the moved catalog page drops its own `h1` and keeps "Nuevo servicio" in its header
-    row. On wide the shared header is one row, the `h1` on the left and the tab's primary action on
-    the right (Mis servicios: "Nuevo servicio"; Cotizar: none), with the tab bar under it. This is
+*   **Layout.** A new `routes/servicios/+layout.svelte` owns the header at both widths: the `h1`
+    ("Servicios", `services_title`), an action slot, and the tab links. Each tab page owns only its
+    content; a page that has a primary action registers it in the slot through a context the layout
+    sets (`routes/servicios/header.svelte.ts`: the layout calls `provideHeaderAction()`, a page
+    calls `useHeaderAction(snippet)`, which clears it again when the page is destroyed). Mis
+    servicios registers "Nuevo servicio"; Cotizar registers none. On wide the slot sits at the
+    right of the `h1` row, with the tab bar under it; on the phone it is a right-aligned row under
+    the tab links (the S0 393 frame). The moved catalog page drops its own `h1`. This is
     a top-level place, so there is no back bar: the "Volver a Ajustes" bar and the Ajustes
     two-column layout come from `routes/ajustes/+layout.svelte` and stop applying once the page
     leaves `/ajustes`. The wide layout of each tab comes from its `.pen` frame; it is never the
@@ -403,7 +412,7 @@ With today's padding each tab gets about 66 px at 393 px, and about 42 px for a 
 (`BottomNav.svelte`, the `tab` variant of `NavItem.svelte`; arithmetic, not measured).
 
 *   The fix goes in the primitive: S0 draws five tabs in `.pen`, then S2 reduces the `tab` variant's
-    side padding in `NavItem` to the measured value, in one change.
+    side padding in `NavItem` to the measured value (4 px, `px-1`; section 10), in one change.
 *   A new probe check, `tab-fit`, in `web/tests/e2e/probe.ts`. It finds the tab bar by its
     `nav_label` (passed as an argument, since probe checks use no outside names), and reports a
     finding for each `a` inside the bar's pill `div` whose box is not inside the pill's box (0.5 px
@@ -411,7 +420,8 @@ With today's padding each tab gets about 66 px at 393 px, and about 42 px for a 
     `base` state, on every route, through the same `sift` as the other checks. Order in S2: the
     commit that adds the fifth item adds the check and is seen red; the next commit reduces the
     padding and turns it green.
-*   Only if it still does not fit: a shorter tab label, chosen by the owner (Open Questions).
+*   The value is settled in S0: 4 px on each side, with every label fitting (section 10). No shorter
+    tab label is needed.
 
 ### 7. Draft fixes found on the way
 
@@ -448,7 +458,7 @@ stage after S0 changes what the app serves, so each also runs `make image image-
 | --- | --- | --- |
 | **S0. Design and device check** | iPhone clipboard test in the installed PWA, result and iOS version recorded here. `.pen` frames (no new components): five-tab `BottomNav` measured at 393, five-row sidebar, Ajustes without Servicios, both Servicios tabs at 393 and 1440, the Cotizar page with its text block, empty, busy, message-slot and hold-hint states. Move the brief and the review reports to `docs/designs/history/`. Fix the release-1 and PRD statements this design makes false. | Frames reviewed by the owner. Clipboard result recorded. |
 | **S1. Draft fixes and refactors** | Rename the local `quote` in `AppointmentForm`. Export `LineSchema`. Extract `durationOf` and `blankForm`. Add `'cotizacion'` to `draftKey`. Then the two fixes in section 7, each with an e2e test that fails first. | The gate, `make e2e`. |
-| **S2. Servicios place, catalog moved** | Fifth nav item (pointing at `/servicios/catalogo` until S3), icon, `tab-fit` check then the padding fix, `servicios/+layout.svelte` with the `h1`, catalog moved to `/servicios/catalogo`, Ajustes row and key removed, every link, title, probe row, e2e step and lint-suppression key re-pointed once. | The gate, `make e2e`, ui-probe at both widths, screenshots of the tab bar on every place. |
+| **S2. Servicios place, catalog moved** | Fifth nav item (pointing at `/servicios/catalogo` until S3), icon, `tab-fit` check then the padding fix, `servicios/+layout.svelte` with the `h1` and the header action slot (`header.svelte.ts`), catalog moved to `/servicios/catalogo`, Ajustes row and key removed, every link, title, probe row, e2e step and lint-suppression key re-pointed once. | The gate, `make e2e`, ui-probe at both widths, screenshots of the tab bar on every place. |
 | **S3. Cotizar and Copiar** | The nav item's `href` becomes `/servicios`; the tab links. `quote.ts`, `QuoteForm`, the text block, the message slot, Copiar with success and failure, Nueva cotización, the empty and busy states, the probe row, the CUJ Q1 e2e test with a clipboard stub. | The gate, `make e2e`, screenshots at 393 and 1440. |
 | **S4. Convert** | `convertQuote`, the inline confirm, its failure, clearing the quote, opening Nueva cita with no `volver`. | The gate, `make e2e`, e2e tests for CUJ Q2 and Q3, the owner's 15-second check. |
 
@@ -462,6 +472,7 @@ and the links. The catalog page moves once.
     se pudo convertir, aviso mantener presionado, nada elegido, catálogo vacío and cargando;
     `Servicios · Mis servicios · 393` and `· 1440`; `Ajustes` (no Servicios row) and
     `Ajustes · 1440`. Wide frames show the five-row sidebar. No new component and no new variable.
+    The `cargando` frames stand for the page-level `services_loading` line (section 2, States).
     Owner decisions: pill tab links on the phone and an underline tab bar on wide (section 5); no
     toast on Cotizar (section 3); every amount keeps its digits together, with the no-break spaces
     `formatMoney` prints (`₡6 000,00`, U+00A0 between the groups, checked in Node's ICU).
@@ -775,12 +786,16 @@ Detailed Implementation Plan.
 *   **Type / Scope**: Design source (ui.md pipeline steps 1-3).
 *   **Proposed Changes**: Frames only; no new components.
     *   `BottomNav` with five `NavItem/Tab` refs and the new icon; `NavItem/Tab` with reduced side
-        padding. Measure at 393 px; record the label widths in this document.
+        padding. Measure at 393 px; record the label widths in this document (done: 4 px, Technical
+        Plan section 10).
     *   The sidebar with five rows.
     *   Frames at 393 and 1440: Servicios → Cotizar (empty catalog, nothing picked, with lines,
         busy, each message-slot state, the hold-hint variant), Servicios → Mis servicios (the moved
-        catalog, wide layout of its own), Ajustes without its Servicios row. The tab links and the
-        text block are drawn from the existing `GlassCard` and `Callout` components.
+        catalog, wide layout of its own), Ajustes without its Servicios row. On wide: the shared
+        header row, the underline tab bar, the Cotizar catalog table with its steppers, the
+        Cotización panel, and the Mis servicios table with its collapsed "Archivados (n)". The
+        phone tab links and the text block are drawn from the existing `GlassCard` and `Callout`
+        components; the wide pieces are plain frames from existing components and tokens.
     *   The final Spanish wording of every new `quote_*` key is taken word for word from these
         frames.
 *   **Why**: Every frame is designed before code (guards `design-tokens`, `design-parity`).
@@ -894,8 +909,8 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
 
 ##### 13. `web/src/lib/components/ui/NavItem.svelte` (Modify)
 
-*   **Proposed Changes**: The `tab` variant's side padding reduced to the S0-measured value. Nothing
-    else.
+*   **Proposed Changes**: The `tab` variant's side padding reduced to the S0-measured value, 4 px
+    (`px-1`; Technical Plan section 10). Nothing else.
 
 ##### 14. `web/src/lib/components/ui/BottomNav.svelte`, `web/src/lib/components/Sidebar.svelte` (Modify only if needed)
 
@@ -910,18 +925,23 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
 
 ##### 16. `web/src/routes/servicios/+layout.svelte` (Create)
 
-*   **Proposed Changes**: The `h1` "Servicios" (`services_title`) at both widths, then the page. In
-    S3 it also renders the tab links.
+*   **Proposed Changes**: The header row at both widths: the `h1` "Servicios" (`services_title`)
+    and the action slot (Technical Plan section 5), then the page. In S3 it also renders the tab
+    links.
+*   **`web/src/routes/servicios/header.svelte.ts` (Create)**: `provideHeaderAction()` (called by
+    the layout: sets the context, returns the holder whose `$state` snippet the layout renders) and
+    `useHeaderAction(snippet)` (called by a page: sets the snippet, clears it on destroy).
 
 ##### 17. `web/src/routes/ajustes/servicios/+page.svelte` → `web/src/routes/servicios/catalogo/+page.svelte` (Move)
 
 *   **Proposed Changes**: Moved with `git mv`; what the page does is unchanged. Its own `h1` is
-    removed (the layout owns the heading); the header row keeps "Nuevo servicio". The back bar and
+    removed (the layout owns the heading); "Nuevo servicio" moves into the layout's action slot
+    through `useHeaderAction` (item 16), opening the same sheet as today. The back bar and
     the Ajustes two-column layout came from `routes/ajustes/+layout.svelte` and no longer apply, so
     its 1440 px layout is rebuilt to match the S0 Mis servicios wide frame (ui.md: wide is never the
     phone layout stretched): a table in a `Card` with the columns Servicio, Duración, Precio and
-    Color, then a collapsed "Archivados (n)" section with a disclosure button; "Nuevo servicio"
-    sits at the right of the heading row (Technical Plan section 5). The phone keeps today's list.
+    Color, then a collapsed "Archivados (n)" section with a disclosure button. The phone keeps
+    today's list.
     Its top comment says the page is the Mis servicios tab of Servicios.
 
 ##### 18. Links and text that named the old place (Modify)
@@ -988,6 +1008,10 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
         lines, Copiar (`quote_copy`) and Nueva cotización (`quote_new`, calls `startOver()`);
         Convertir en cita is added in S4 (item 29), not before; `quote_empty` when there are none;
         the hold hint (`quote_hold_hint`) only if the S0 clipboard test failed.
+    *   No active service: `EmptyState` rendered by `QuoteForm` itself at both widths
+        (`appointment_services_empty_title`, `appointment_services_empty_body`,
+        `appointment_services_empty_action`, `href={resolve('/servicios/catalogo')}`), instead of
+        the picker or the table; on wide the panel shows `quote_empty`.
     *   Copiar: `navigator.clipboard.writeText(text)` called first, no await before it; missing
         API, synchronous throw and rejection → slot `copy_failed` and
         `console.warn('code=clipboard_failed')`; success → the button's label becomes the `check`
@@ -1050,6 +1074,9 @@ green. The gate applies to the stage as a whole; only commit 2 is expected red, 
         Copiar button shows "Copiado"; each failing variant shows `quote_copy_failed`; "tap
         Servicios lands on Cotizar"; "empty the quote, switch tabs, come back: still empty";
         offline (`serverOff`): the quote builds and copies; "Nueva cotización" empties the quote.
+    *   Wide (1440 px viewport): pick with the table's stepper (Acrílico "+" twice, then "−" once),
+        the panel's text equals the recorded clipboard text after Copiar and contains "Acrílico"
+        but not "×2", and the Copiar button shows "✓ Copiado".
 
 #### Stage S4: Convert
 
