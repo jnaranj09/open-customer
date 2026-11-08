@@ -45,12 +45,13 @@ run.
 | `make config-scan` | Trivy config on the two Dockerfiles and zizmor on `.github/workflows`, offline (needs Docker). Fails on a high or critical Dockerfile finding or a medium or high workflow finding |
 | `make sast` | Semgrep with only the rules written in `security/semgrep`, offline (needs Docker): first the rules' fixtures (`semgrep --test`), then the scan of the repo. Any finding fails |
 | `make fuzz` | The four Go fuzz targets (JSON body decoding, multipart uploads, template parsing, the backup status file), one after another, each for `FUZZTIME` (default `60s`). Any crash fails. Not in the gate; CI runs it weekly with `FUZZTIME=30s`; `make test` runs their seeds |
-| `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary: the CUJ specs and the UI probe (axe and layout checks on every route at phone and desktop size). Needs the Playwright WebKit browser and its host libraries, port 8080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
+| `make e2e` | `make build`, a fresh e2e database (`open_customer_e2e` on the `make dev` container, or the database `E2E_DATABASE_URL` names, which must end in `_e2e`), then Playwright WebKit against the binary: the CUJ specs and the UI probe (axe and layout checks on every route at phone and desktop size). Needs the Playwright WebKit browser and its host libraries, port 18080 free, and Docker (local) or `psql` and `node` (when `E2E_DATABASE_URL` is set) |
+| `make e2e-docker` | `make e2e` with WebKit in the pinned Playwright image (`PLAYWRIGHT_IMAGE`, container `oc-e2e-browser` on the host network, port 13100, removed on exit), for a host without WebKit's libraries. The tests still run on the host. Needs Docker, port 18080 and 13100 free, and network for the `playwright` npm package |
 
 The gate before any change is done: `make check-pins lint test vuln build check-generated test-db cover test-deploy secrets test-sec config-scan sast deps-scan`.
 For a change to an image, a scan or what the app serves, also `make image image-scan dast`.
 The gate leaves out `make e2e`. CI runs it after `make build` (design doc item 8); locally it runs
-by hand.
+by hand, with `make e2e-docker` on a host that cannot run WebKit.
 
 The binary's own subcommands (`serve`, `reset-password <username>`, `setup-link`, `healthcheck`,
 `version`) are described in the design doc's "Process model" and item 19.

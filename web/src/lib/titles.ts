@@ -14,7 +14,6 @@ const TITLES: Record<PageRouteId, MessageKey> = {
 	'/ajustes/plantillas/[id]': 'page_title_template',
 	'/ajustes/plantillas/nueva': 'templates_new_title',
 	'/ajustes/recordatorios': 'rules_title',
-	'/ajustes/servicios': 'services_title',
 	'/cambiar-clave': 'password_title',
 	'/citas/[id]': 'appointment_title',
 	'/citas/nueva': 'appointment_new',
@@ -23,6 +22,8 @@ const TITLES: Record<PageRouteId, MessageKey> = {
 	'/clientas/nueva': 'client_new_title',
 	'/enviar': 'due_today_heading',
 	'/login': 'page_title_login',
+	'/servicios': 'quote_title',
+	'/servicios/catalogo': 'services_title',
 	'/setup': 'setup_title'
 };
 

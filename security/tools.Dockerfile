@@ -28,6 +28,10 @@ FROM zaproxy/zap-stable:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61
 # make dast (its templates release is NUCLEI_TEMPLATES in the Makefile).
 FROM projectdiscovery/nuclei:v3.11.1@sha256:582d5546902e67052097cb2d07296c642d50a1afc5e44623cb038845df9a32eb AS nuclei
 
+# make e2e-docker: WebKit for the e2e run on a host without its libraries. Its version must equal
+# @playwright/test in web/package.json (make check-pins).
+FROM mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f AS playwright
+
 # make dast: drives the app (setup, login, the session check).
 FROM curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777 AS curl
 

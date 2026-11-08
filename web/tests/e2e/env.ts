@@ -2,7 +2,10 @@
 // (webServer) and the setup spec (`setup-link`) both build the app's env here, so the two
 // processes see the same database.
 
-export const BASE_URL = 'http://localhost:8080';
+/** Not 8080: that host port is the owner's, and production keeps it. `appEnv` passes the same port
+ *  to the app as `LISTEN_PORT`. */
+const PORT = 18080;
+export const BASE_URL = `http://localhost:${String(PORT)}`;
 /** The business zone and the browser's: no DST, so "today" is one day for the test, the browser
  *  and the server. */
 export const ZONE = 'America/Costa_Rica';
@@ -32,6 +35,7 @@ export function appEnv(mediaDir: string): Record<string, string> {
 		DB_NAME: db.pathname.slice(1),
 		DB_SSLMODE: 'disable',
 		PUBLIC_URL: BASE_URL,
+		LISTEN_PORT: String(PORT),
 		VAPID_SUBJECT: 'mailto:e2e@localhost',
 		MEDIA_DIR: mediaDir
 	};

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { at, businessDate, closePool, insertAppointment, insertClient, resetData } from './seed';
+import { draftStored, setArchived } from './steps';
 
 const PHOTO = 'tests/e2e/fixtures/photo-gps.jpg';
 /** The Exif APP1 identifier: the fixture carries it, the stored photo must not. */
@@ -146,4 +147,46 @@ test('a phone shows grouped by its country on the client page and in the list', 
 	await expect(page.getByRole('definition').filter({ hasText: /^\+506 8888 7777$/ })).toBeVisible();
 	await page.goto('/clientas');
 	await expect(page.getByRole('link', { name: /\+506 8888 7777/ })).toBeVisible();
+});
+
+test('an emptied Nueva cita draft stays empty', async ({ page }) => {
+	await page.goto('/citas/nueva');
+	await page.getByRole('button', { name: 'Acrílico', exact: true }).click();
+	await expect.poll(() => draftStored(page, 'cita')).toBe(true);
+
+	await page
+		.getByRole('button', { name: es.appointment_service_remove.replace('{name}', 'Acrílico') })
+		.click();
+	await expect.poll(() => draftStored(page, 'cita')).toBe(false);
+
+	await page.goto('/citas/nueva');
+	await expect(page.getByLabel(es.appointment_client, { exact: true })).toBeVisible();
+	await expect(page.getByText(es.draft_restored, { exact: true })).toHaveCount(0);
+	await expect(
+		page.getByRole('button', {
+			name: es.appointment_service_remove.replace('{name}', 'Acrílico')
+		})
+	).toHaveCount(0);
+});
+
+test('a draft line with an archived service is dropped', async ({ page }) => {
+	await page.goto('/citas/nueva');
+	await page.getByRole('button', { name: 'Acrílico', exact: true }).click();
+	await page.getByRole('button', { name: 'Pedicure', exact: true }).click();
+	await expect.poll(() => draftStored(page, 'cita')).toBe(true);
+
+	await setArchived(page, 'Pedicure', true);
+	try {
+		await page.goto('/citas/nueva');
+
+		await expect(page.getByText(es.draft_restored, { exact: true })).toBeVisible();
+		await expect(
+			page.getByRole('button', {
+				name: es.appointment_service_remove.replace('{name}', 'Acrílico')
+			})
+		).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Pedicure', exact: true })).toHaveCount(0);
+	} finally {
+		await setArchived(page, 'Pedicure', false);
+	}
 });

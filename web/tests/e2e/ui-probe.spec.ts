@@ -27,6 +27,7 @@ import {
 	layout,
 	LONG_NAME,
 	sift,
+	tabFit,
 	type Allow,
 	type Finding,
 	type Width
@@ -74,6 +75,8 @@ type Probe = {
 	/** A text that shows once the screen has its data. */
 	ready: string;
 	loggedOut?: true;
+	/** A signed-in screen outside the app shell (`hasShell`): no bottom bar on the phone. */
+	noShell?: true;
 	sheets?: { name: string; open: (page: Page) => Promise<void> }[];
 	/** The screen's data feeds, or why it has none. */
 	feeds: Feed[] | { none: string };
@@ -180,8 +183,15 @@ const PROBES: Record<string, Probe> = {
 		ready: es.business_save,
 		feeds: [bootFeed('business', { none: 'one record' })]
 	},
-	'/ajustes/servicios': {
-		open: fixed('/ajustes/servicios'),
+	'/servicios': {
+		open: fixed('/servicios'),
+		ready: 'Acrílico',
+		feeds: [
+			bootFeed('services', { bootstrap: ['services'], text: es.appointment_services_empty_title })
+		]
+	},
+	'/servicios/catalogo': {
+		open: fixed('/servicios/catalogo'),
 		ready: 'Acrílico',
 		sheets: [{ name: 'new service', open: button(es.services_new) }],
 		feeds: [
@@ -236,6 +246,7 @@ const PROBES: Record<string, Probe> = {
 	'/cambiar-clave': {
 		open: fixed('/cambiar-clave'),
 		ready: es.password_save,
+		noShell: true,
 		feeds: { none: 'a form with no server data' }
 	},
 	'/login': {
@@ -292,6 +303,17 @@ function verdict(findings: Finding[], route: string, project: string, state: str
 
 async function screenFindings(page: Page): Promise<Finding[]> {
 	return [...(await axe(page)), ...(await layout(page))];
+}
+
+/** The bottom bar's checks, at the compact width only (the wide layout has the sidebar instead).
+ *  A signed-in screen with no bar drawn is a finding there: `tabFit` alone would pass it. */
+async function barFindings(page: Page, project: string, signedIn: boolean): Promise<Finding[]> {
+	if (widthOf(project) !== 'compact') return [];
+	const bar = page.getByRole('navigation', { name: es.nav_label }).filter({ visible: true });
+	if (signedIn && (await bar.count()) === 0) {
+		return [{ check: 'tab-fit', target: 'nav', detail: 'no bottom bar drawn' }];
+	}
+	return tabFit(page, es.nav_label);
 }
 
 /** No finding when the state showed, else `missing`. */
@@ -471,7 +493,15 @@ for (const [route, probe] of Object.entries(PROBES)) {
 			await page.goto(await probe.open(page, ids));
 			await expect(readyText(page, probe)).toBeVisible();
 
-			expect(verdict(await screenFindings(page), route, info.project.name, 'base')).toEqual(CLEAN);
+			const found = [
+				...(await screenFindings(page)),
+				...(await barFindings(
+					page,
+					info.project.name,
+					probe.loggedOut !== true && probe.noShell !== true
+				))
+			];
+			expect(verdict(found, route, info.project.name, 'base')).toEqual(CLEAN);
 		});
 
 		for (const sheet of probe.sheets ?? []) {

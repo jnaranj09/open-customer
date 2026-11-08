@@ -53,6 +53,42 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestListenPortDefault(t *testing.T) {
+	t.Parallel()
+	c, err := Load(env(minimal()))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if c.ListenPort != 8080 {
+		t.Errorf("ListenPort = %d, want 8080", c.ListenPort)
+	}
+}
+
+func TestListenPortSet(t *testing.T) {
+	t.Parallel()
+	m := minimal()
+	m["LISTEN_PORT"] = "18080"
+	c, err := Load(env(m))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if c.ListenPort != 18080 {
+		t.Errorf("ListenPort = %d, want 18080", c.ListenPort)
+	}
+}
+
+func TestListenPortInvalid(t *testing.T) {
+	t.Parallel()
+	for _, v := range []string{"0", "65536", "abc"} {
+		m := minimal()
+		m["LISTEN_PORT"] = v
+		_, err := Load(env(m))
+		if err == nil || !strings.Contains(err.Error(), "LISTEN_PORT") {
+			t.Errorf("Load() with LISTEN_PORT=%q error = %v, want one naming LISTEN_PORT", v, err)
+		}
+	}
+}
+
 func TestLoadListsEveryMissingVariable(t *testing.T) {
 	t.Parallel()
 	_, err := Load(env(nil))
@@ -79,6 +115,9 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"a bad CIDR", "TRUSTED_PROXY_CIDRS", "10.0.0.0/8,nope"},
 		{"a bad bool", "ALLOW_MIGRATE_WITHOUT_BACKUP", "maybe"},
 		{"a bad log level", "LOG_LEVEL", "loud"},
+		{"a LISTEN_PORT of zero", "LISTEN_PORT", "0"},
+		{"a LISTEN_PORT above 65535", "LISTEN_PORT", "65536"},
+		{"a LISTEN_PORT that is not a number", "LISTEN_PORT", "abc"},
 		{"the .env.example placeholder password", "DB_PASSWORD", "change-me"},
 	}
 	for _, tc := range tests {

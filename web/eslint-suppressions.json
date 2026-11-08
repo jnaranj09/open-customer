@@ -64,14 +64,14 @@
 			"count": 5
 		}
 	},
-	"src/routes/ajustes/servicios/+page.svelte": {
-		"better-tailwindcss/no-restricted-classes": {
-			"count": 1
-		}
-	},
 	"src/routes/citas/[id]/+page.svelte": {
 		"better-tailwindcss/no-restricted-classes": {
 			"count": 2
+		}
+	},
+	"src/routes/servicios/catalogo/+page.svelte": {
+		"better-tailwindcss/no-restricted-classes": {
+			"count": 1
 		}
 	}
 }

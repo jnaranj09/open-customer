@@ -92,6 +92,8 @@ Seis grupos: arranque y ajustes, clientas, atributos, servicios, citas y recorda
 - **FR-S1** Catálogo de servicios con nombre, duración, precio y color en el calendario.
 - **FR-S2** Cada servicio puede tener sus reglas de vuelta (`come_back`, ver Recordatorios).
 - **FR-S3** Una cita puede incluir varios servicios; la duración total se suma.
+- **FR-S4** Cotización rápida: elegir servicios, ver el total y la duración, copiar el texto y convertirlo en cita (ver [docs/designs/quick-quotes.md](designs/quick-quotes.md)).
+- **FR-S5** Servicios como lugar propio de la app, con dos pestañas: Cotizar y Mis servicios (ver [docs/designs/quick-quotes.md](designs/quick-quotes.md)).
 
 ### Citas (appointments)
 
@@ -166,6 +168,8 @@ Cada requerimiento, dentro (In) o fuera (Out) del release 1. El detalle de cada 
 | FR-S1 | In | |
 | FR-S2 | In | Solo reglas de vuelta; las reglas "antes" son del negocio |
 | FR-S3 | In | |
+| FR-S4 | In | Cotización rápida |
+| FR-S5 | In | Servicios como lugar propio |
 | FR-P1 | In | |
 | FR-P2 | In | |
 | FR-P3 | In | "Realizada" se calcula, no se guarda |

@@ -12,7 +12,8 @@ clients, appointments and hand-sent WhatsApp reminders.
 through `TASKS.md` in order.
 
 **Architecture source:** `docs/designs/release-1.md` for the app; build it phase by phase (its
-"Build order"). `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
+"Build order"). `docs/designs/quick-quotes.md` for the Servicios place and quotes, built in its
+stages S1-S4. `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
 every threat and its check. A change that makes a doc false fixes the doc in the same change.
 
 ## Never commit
@@ -70,8 +71,13 @@ with fnm, `fnm use` in web/).
   fails. Not in the gate; CI runs it weekly (`security-weekly.yml` job `fuzz`, `FUZZTIME=30s`), and
   `make test` runs their seeds. A crash input lands in the package's `testdata/fuzz/<Name>/`: keep
   it as a seed and fix the code with its own test.
-- `make e2e`: build, fresh e2e database, Playwright WebKit: the CUJ specs and `ui-probe` (axe +
-  layout, empty, error and busy states on every route at 393 and 1440 px).
+- `make e2e`: build, fresh e2e database, the app on :18080, Playwright WebKit: the CUJ specs and
+  `ui-probe` (axe + layout, empty, error and busy states on every route at 393 and 1440 px). CI runs
+  this.
+- `make e2e-docker`: `make e2e` with WebKit in the pinned Playwright image (`PLAYWRIGHT_IMAGE`,
+  container `oc-e2e-browser`, removed on exit; needs the image's npm fetch), for a host without
+  WebKit's libraries (Arch). Run this locally; `make check-pins` keeps the image version equal to
+  `@playwright/test`.
 - `make test-deploy`: builds the backup image and runs `deploy/tests/backup_test.sh` in it against
   a throwaway Postgres (Docker; no host port; `oc-deploy-*` containers removed on exit), then
   `deploy/tests/scripts_test.sh` (the operator scripts, with a fake `docker`) on the host.

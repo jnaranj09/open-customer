@@ -2,7 +2,7 @@ import type { MessageKey } from '../i18n';
 import type { IconName } from './icons/paths';
 
 export type NavItem = {
-	href: '/' | '/enviar' | '/clientas' | '/ajustes';
+	href: '/' | '/enviar' | '/clientas' | '/servicios' | '/ajustes';
 	icon: IconName;
 	/** The sidebar label. */
 	label: MessageKey;
@@ -10,10 +10,16 @@ export type NavItem = {
 	tabLabel: MessageKey;
 };
 
-/** The four places, in the order the sidebar and the tab bar show them. */
+/** The five places, in the order the sidebar and the tab bar show them. */
 export const NAV_ITEMS: readonly NavItem[] = [
 	{ href: '/', icon: 'calendar-days', label: 'nav_today', tabLabel: 'nav_today' },
 	{ href: '/enviar', icon: 'send', label: 'nav_to_send', tabLabel: 'tab_send' },
 	{ href: '/clientas', icon: 'users', label: 'nav_clients', tabLabel: 'nav_clients' },
+	{
+		href: '/servicios',
+		icon: 'tag',
+		label: 'nav_services',
+		tabLabel: 'nav_services'
+	},
 	{ href: '/ajustes', icon: 'settings', label: 'nav_settings', tabLabel: 'nav_settings' }
 ];

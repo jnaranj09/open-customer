@@ -14,6 +14,40 @@ test.beforeEach(async () => {
 
 test.afterAll(closePool);
 
+/** The five places, in order, as the nav shows them: the tab bar names Enviar by its short label. */
+const PLACES = [
+	{ tab: es.nav_today, row: es.nav_today },
+	{ tab: es.tab_send, row: es.nav_to_send },
+	{ tab: es.nav_clients, row: es.nav_clients },
+	{ tab: es.nav_services, row: es.nav_services },
+	{ tab: es.nav_settings, row: es.nav_settings }
+];
+
+async function placeNames(page: Page): Promise<string[]> {
+	await page.goto('/clientas');
+	const links = page.getByRole('navigation', { name: es.nav_label }).getByRole('link');
+	await expect(links).toHaveCount(PLACES.length);
+	// The due count of Enviar is a badge inside its link: drop it.
+	const texts = await links.allTextContents();
+	return texts.map((text) => text.trim().replace(/\s*\d+$/, ''));
+}
+
+test('the five places, in order', async ({ page }) => {
+	const names = await placeNames(page);
+
+	expect(names).toEqual(PLACES.map((place) => place.tab));
+});
+
+test.describe('five places wide', () => {
+	test.use({ viewport: { width: 1440, height: 900 } });
+
+	test('the five places, in order', async ({ page }) => {
+		const names = await placeNames(page);
+
+		expect(names).toEqual(PLACES.map((place) => place.row));
+	});
+});
+
 test('Back after saving a new client does not open the empty form again', async ({ page }) => {
 	await page.goto('/clientas');
 	await page.getByRole('link', { name: es.clients_new }).first().click();

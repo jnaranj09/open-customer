@@ -5,6 +5,8 @@
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Appointment, Attribute } from '../api/schemas';
 	import {
+		activeServiceIds,
+		blankForm,
 		createBody,
 		endShown,
 		formErrors,
@@ -53,11 +55,11 @@
 	const creating = untrack(() => appointment === undefined);
 	const zone = $derived(data.settings.timezone);
 	const defs = $derived(data.attributes.filter((a) => a.scope === 'appointment' && !a.archived));
-	const quote = $derived(withSavedLines(data.services, appointment?.services ?? []));
+	const catalog = $derived(withSavedLines(data.services, appointment?.services ?? []));
 
 	const initial: Form = untrack(() =>
 		appointment === undefined
-			? { clientId: null, lines: [], day: day ?? '', time: '', end: null, notes: '', attrs: {} }
+			? blankForm(day ?? '')
 			: formFrom(appointment, data.settings.timezone, defs)
 	);
 	let form = $state<Form>(structuredClone(initial));
@@ -71,15 +73,15 @@
 		(saved) => {
 			form = restoreForm(saved, {
 				clients: new Set(data.clients.map((c) => c.id)),
-				services: new Set(data.services.map((s) => s.id)),
+				services: activeServiceIds(data.services),
 				attrKeys: new Set(defs.map((a) => a.key))
 			});
 		}
 	);
 
-	const end = $derived(endShown(form, appointment ?? null, zone, quote));
+	const end = $derived(endShown(form, appointment ?? null, zone, catalog));
 	const total = $derived(
-		formatMoney(totalOf(form.lines, quote), data.settings.currency, data.settings.locale)
+		formatMoney(totalOf(form.lines, catalog), data.settings.currency, data.settings.locale)
 	);
 
 	let attempted = $state(false);
@@ -165,7 +167,7 @@
 
 	<div class="grid gap-4 lg:grid-cols-2 lg:gap-8">
 		<div class="flex flex-col gap-4">
-			<ServicePicker services={quote} bind:lines={form.lines} />
+			<ServicePicker services={catalog} bind:lines={form.lines} />
 			{#if fieldError('service_ids') !== undefined}
 				<p role="alert" class="text-sm text-error">{fieldError('service_ids')}</p>
 			{/if}

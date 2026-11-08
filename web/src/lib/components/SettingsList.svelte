@@ -20,11 +20,6 @@
 	const config: Section[] = [
 		{ label: 'settings_business', href: resolve('/ajustes/negocio'), prefix: '/ajustes/negocio' },
 		{
-			label: 'settings_services',
-			href: resolve('/ajustes/servicios'),
-			prefix: '/ajustes/servicios'
-		},
-		{
 			label: 'settings_attributes',
 			href: resolve('/ajustes/atributos'),
 			prefix: '/ajustes/atributos'

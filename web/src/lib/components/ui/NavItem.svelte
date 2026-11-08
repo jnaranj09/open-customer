@@ -31,7 +31,7 @@
 	<a
 		{href}
 		aria-current={active ? 'page' : undefined}
-		class="flex min-h-tap flex-1 flex-col items-center justify-center gap-0.5 rounded-pill px-3 py-2 text-xs font-bold {active
+		class="flex min-h-tap flex-1 flex-col items-center justify-center gap-0.5 rounded-pill px-1 py-2 text-xs font-bold {active
 			? 'bg-glass-tint text-accent-text'
 			: 'text-ink-muted'}"
 	>

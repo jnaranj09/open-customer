@@ -1,4 +1,4 @@
-// The pure parts of Ajustes → Servicios (design doc item 77): the form to a request, the patch of
+// The pure parts of Servicios → Mis servicios (design doc item 77): the form to a request, the patch of
 // what changed, and the row's second line.
 import type { Service } from './api/schemas';
 import type { components } from './api/schema';

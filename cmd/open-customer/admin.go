@@ -19,12 +19,13 @@ import (
 )
 
 const (
-	// healthzURL is serve's own port on loopback: the Compose healthcheck runs inside the app
-	// container (design doc item 19).
-	healthzURL = "http://127.0.0.1" + listenAddr + "/healthz"
 	// healthcheckTimeout bounds a server that accepts the connection but never answers.
 	healthcheckTimeout = 3 * time.Second
 )
+
+// healthzURL is serve's default port on loopback: the Compose healthcheck runs inside the app
+// container (design doc item 19), where LISTEN_PORT is never set. The command reads no config.
+var healthzURL = fmt.Sprintf("http://127.0.0.1:%d/healthz", config.DefaultListenPort)
 
 // The admin subcommands (design doc item 19) print only their result, the temporary password or
 // the setup link, to stdout, so a script can read it; every error goes to stderr. They never print

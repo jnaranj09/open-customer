@@ -240,7 +240,7 @@ rule names its sensor") applied to security.
 
 - Against the app image `make image` builds, in CI job `security` (`make dast`,
   `scripts/security/dast.sh`): the app and a throwaway Postgres on a private Docker network with no
-  published port (host :8080 stays free for `make e2e`). The scanners run in the app container's
+  published port (no host port is bound). The scanners run in the app container's
   network namespace and reach it as `http://localhost:8080`, its `PUBLIC_URL` (the app takes plain
   http only on localhost). The ZAP rules file, the ZAP report checks, the Nuclei templates fetch
   and the Nuclei run are in `scripts/security/lib.sh`, which `scan-live.sh` (section 9) shares.
