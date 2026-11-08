@@ -5,6 +5,7 @@
 	import { errorText, type ApiError } from '../api/errors';
 	import type { Appointment, Attribute } from '../api/schemas';
 	import {
+		activeServiceIds,
 		blankForm,
 		createBody,
 		endShown,
@@ -72,7 +73,7 @@
 		(saved) => {
 			form = restoreForm(saved, {
 				clients: new Set(data.clients.map((c) => c.id)),
-				services: new Set(data.services.map((s) => s.id)),
+				services: activeServiceIds(data.services),
 				attrKeys: new Set(defs.map((a) => a.key))
 			});
 		}

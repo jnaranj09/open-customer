@@ -5,10 +5,8 @@
 // the manual check in the Verification Plan.
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
-import { DB_NAME } from '../../src/lib/cache/db';
-import { draftKey } from '../../src/lib/cache/drafts';
 import { at, closePool, insertAppointment, insertClient, resetData } from './seed';
-import { dueItem } from './steps';
+import { draftStored, dueItem } from './steps';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -45,30 +43,6 @@ const BANNER = new RegExp(
 async function serverOff(page: Page): Promise<void> {
 	await page.route('**/api/**', (route) =>
 		route.fulfill({ status: 530, contentType: 'text/html', body: '<html><body>530</body></html>' })
-	);
-}
-
-/** Whether the new-client draft is stored on the phone (the form saves it 500 ms after typing). */
-function draftStored(page: Page): Promise<boolean> {
-	return page.evaluate(
-		([name, key]) =>
-			new Promise<boolean>((resolve, reject) => {
-				const open = indexedDB.open(name);
-				open.onerror = () => {
-					reject(new Error('indexedDB.open failed'));
-				};
-				open.onsuccess = () => {
-					const req = open.result.transaction('drafts').objectStore('drafts').get(key);
-					req.onerror = () => {
-						reject(new Error('drafts read failed'));
-					};
-					req.onsuccess = () => {
-						open.result.close();
-						resolve(req.result !== undefined);
-					};
-				};
-			}),
-		[DB_NAME, draftKey('clienta', 'new')] as const
 	);
 }
 
@@ -155,7 +129,7 @@ test('a started form is kept as a draft', async ({ page }) => {
 	await expect(page.getByRole('status').getByText(BANNER)).toBeVisible();
 
 	await page.getByLabel(es.client_name, { exact: true }).fill('Lucía Rojas');
-	await expect.poll(() => draftStored(page)).toBe(true);
+	await expect.poll(() => draftStored(page, 'clienta')).toBe(true);
 	await page.reload();
 
 	await expect(page.getByText(es.draft_restored, { exact: true })).toBeVisible();
