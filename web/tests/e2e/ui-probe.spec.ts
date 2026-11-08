@@ -27,6 +27,7 @@ import {
 	layout,
 	LONG_NAME,
 	sift,
+	tabFit,
 	type Allow,
 	type Finding,
 	type Width
@@ -294,6 +295,11 @@ async function screenFindings(page: Page): Promise<Finding[]> {
 	return [...(await axe(page)), ...(await layout(page))];
 }
 
+/** The bottom bar's checks, at the compact width only (the wide layout has the sidebar instead). */
+async function barFindings(page: Page, project: string): Promise<Finding[]> {
+	return widthOf(project) === 'compact' ? tabFit(page, es.nav_label) : [];
+}
+
 /** No finding when the state showed, else `missing`. */
 function unless(shown: boolean, missing: Finding): Finding[] {
 	return shown ? [] : [missing];
@@ -471,7 +477,11 @@ for (const [route, probe] of Object.entries(PROBES)) {
 			await page.goto(await probe.open(page, ids));
 			await expect(readyText(page, probe)).toBeVisible();
 
-			expect(verdict(await screenFindings(page), route, info.project.name, 'base')).toEqual(CLEAN);
+			const found = [
+				...(await screenFindings(page)),
+				...(await barFindings(page, info.project.name))
+			];
+			expect(verdict(found, route, info.project.name, 'base')).toEqual(CLEAN);
 		});
 
 		for (const sheet of probe.sheets ?? []) {
