@@ -161,6 +161,26 @@ async function setArchived(page: Page, name: string, archive: boolean): Promise<
 	await expect(page.getByText(archive ? es.service_archived : es.service_restored)).toBeVisible();
 }
 
+test('an emptied Nueva cita draft stays empty', async ({ page }) => {
+	await page.goto('/citas/nueva');
+	await page.getByRole('button', { name: 'Acrílico', exact: true }).click();
+	await expect.poll(() => draftStored(page, 'cita')).toBe(true);
+
+	await page
+		.getByRole('button', { name: es.appointment_service_remove.replace('{name}', 'Acrílico') })
+		.click();
+	await expect.poll(() => draftStored(page, 'cita')).toBe(false);
+
+	await page.goto('/citas/nueva');
+	await expect(page.getByLabel(es.appointment_client, { exact: true })).toBeVisible();
+	await expect(page.getByText(es.draft_restored, { exact: true })).toHaveCount(0);
+	await expect(
+		page.getByRole('button', {
+			name: es.appointment_service_remove.replace('{name}', 'Acrílico')
+		})
+	).toHaveCount(0);
+});
+
 test('a draft line with an archived service is dropped', async ({ page }) => {
 	await page.goto('/citas/nueva');
 	await page.getByRole('button', { name: 'Acrílico', exact: true }).click();
