@@ -12,7 +12,8 @@ clients, appointments and hand-sent WhatsApp reminders.
 through `TASKS.md` in order.
 
 **Architecture source:** `docs/designs/release-1.md` for the app; build it phase by phase (its
-"Build order"). `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
+"Build order"). `docs/designs/quick-quotes.md` for the Servicios place and quotes, built in its
+stages S1-S4. `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
 every threat and its check. A change that makes a doc false fixes the doc in the same change.
 
 ## Never commit
