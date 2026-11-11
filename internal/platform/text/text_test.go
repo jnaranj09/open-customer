@@ -3,6 +3,8 @@ package text
 import (
 	"strings"
 	"testing"
+
+	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
 func TestTrim(t *testing.T) {
@@ -46,5 +48,34 @@ func TestNotes(t *testing.T) {
 	}
 	if got, ok := Notes(s(strings.Repeat("a", MaxNotes+1))); got != nil || ok {
 		t.Errorf("MaxNotes+1 runes: got %v, %v; want nil, false", got, ok)
+	}
+}
+
+func TestLine(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    string // "" means nil
+		wantMsg string
+	}{
+		{"surrounding spaces trimmed", "  Incluye retiro ", "Incluye retiro", ""},
+		{"blank is nil", "   ", "", ""},
+		{"200 runes of two bytes", strings.Repeat("ñ", 200), strings.Repeat("ñ", 200), ""},
+		{"201 runes", strings.Repeat("a", 201), "", problem.MsgTextTooLong},
+		{"a line break", "Incluye\nretiro", "", problem.MsgTextOneLine},
+		{"a carriage return", "Incluye\rretiro", "", problem.MsgTextOneLine},
+		{"a trailing line break is trimmed", "Incluye retiro\n", "Incluye retiro", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, msg := Line(tt.in, 200)
+			gotS := ""
+			if got != nil {
+				gotS = *got
+			}
+			if gotS != tt.want || msg != tt.wantMsg {
+				t.Errorf("Line(%q) = %q, %q; want %q, %q", tt.in, gotS, msg, tt.want, tt.wantMsg)
+			}
+		})
 	}
 }

@@ -30,7 +30,7 @@ var spanish = Locale{
 		ServicesFile:     "servicios.csv",
 		ClientCols:       []string{"nombre", "telefono", "notas", "creada", "archivada"},
 		AppointmentCols:  []string{"fecha", "hora", "clienta", "servicios", "total", "pagado", "estado", "notas"},
-		ServiceCols:      []string{"nombre", "duracion_min", "precio", "archivado"},
+		ServiceCols:      []string{"nombre", "descripcion", "duracion_min", "precio", "archivado"},
 		Status: map[string]string{
 			"scheduled": "agendada",
 			"confirmed": "confirmada",

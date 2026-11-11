@@ -58,6 +58,7 @@ type Option struct {
 type Service struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
+	Description *string   `json:"description"`
 	DurationMin int       `json:"duration_min"`
 	PriceCents  *int64    `json:"price_cents"`
 	Color       string    `json:"color"`
@@ -142,8 +143,8 @@ type LogItem struct {
 // jsonFile is the name of the JSON entry. It is not Spanish, so it is not in locale.
 const jsonFile = "datos.json"
 
-// jsonVersion is the datos.json format version.
-const jsonVersion = 1
+// jsonVersion is the datos.json format version. 2: services gained description.
+const jsonVersion = 2
 
 // jsonStream writes datos.json piece by piece, so each array is written one page at a time.
 type jsonStream struct{ w io.Writer }
@@ -295,8 +296,8 @@ func attributeJSON(a attributes.Attribute) Attribute {
 
 func serviceJSON(r sqlc.Service) Service {
 	return Service{
-		ID: r.ID, Name: r.Name, DurationMin: int(r.DurationMin), PriceCents: r.PriceCents,
-		Color: r.Color, Position: int(r.Position), Archived: r.ArchivedAt != nil,
+		ID: r.ID, Name: r.Name, Description: r.Description, DurationMin: int(r.DurationMin),
+		PriceCents: r.PriceCents, Color: r.Color, Position: int(r.Position), Archived: r.ArchivedAt != nil,
 	}
 }
 

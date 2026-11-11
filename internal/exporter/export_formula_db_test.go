@@ -7,6 +7,7 @@ import (
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
 	"github.com/jnaranj09/open-customer/internal/platform/ids"
+	"github.com/jnaranj09/open-customer/internal/services"
 )
 
 // A spreadsheet runs a cell that starts with = + - @, a tab or a carriage return as a formula
@@ -25,6 +26,11 @@ func TestExportNeutralizesFormulaCells(t *testing.T) {
 		t.Fatalf("insert client: %v", err)
 	}
 	e.service(t, "-Servicio", 30, nil)
+	if _, err := e.services.Create(t.Context(), e.pool, services.ServiceInput{
+		Name: "Uñas", Description: ptr("=1+1"), DurationMin: 30, Color: "#aa3366",
+	}); err != nil {
+		t.Fatalf("create service: %v", err)
+	}
 
 	rows := e.csvFile(t, "clientas.csv")
 	if got := rows[0][len(rows[0])-1]; got != "'=Etiqueta" {
@@ -46,7 +52,11 @@ func TestExportNeutralizesFormulaCells(t *testing.T) {
 	if got := column(t, rows, 1, "telefono"); len(got) < 2 || got[:2] != "'+" {
 		t.Errorf("telefono = %q, want it to start with '+", got)
 	}
-	if got := column(t, e.csvFile(t, "servicios.csv"), 1, "nombre"); got != "'-Servicio" {
+	serviceRows := e.csvFile(t, "servicios.csv")
+	if got := column(t, serviceRows, 1, "nombre"); got != "'-Servicio" {
 		t.Errorf("service nombre = %q, want '-Servicio", got)
+	}
+	if got := column(t, serviceRows, 2, "descripcion"); got != "'=1+1" {
+		t.Errorf("service descripcion = %q, want '=1+1", got)
 	}
 }

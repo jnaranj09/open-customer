@@ -12,13 +12,17 @@ import (
 	"github.com/jnaranj09/open-customer/internal/services"
 )
 
-// CreateService adds a service. A missing or null price_cents means no price.
+// CreateService adds a service. A missing or null price_cents means no price; the same for
+// description.
 func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 	var body gen.ServiceInput
 	if decodeJSON(w, r, &body) != nil {
 		return
 	}
-	in := services.ServiceInput{Name: body.Name, DurationMin: body.DurationMin, Color: body.Color}
+	in := services.ServiceInput{
+		Name: body.Name, Description: nullval.Ptr(body.Description), DurationMin: body.DurationMin,
+		Color: body.Color,
+	}
 	if price, err := body.PriceCents.Get(); err == nil {
 		in.PriceCents = &price
 	}
@@ -35,15 +39,16 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toGenService(out))
 }
 
-// UpdateService changes the fields sent. Only price_cents may be null (it clears the price).
+// UpdateService changes the fields sent. Only price_cents and description may be null (it clears
+// the price or the description).
 func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var body gen.ServicePatch
-	if decodePatch(w, r, &body, "price_cents") != nil {
+	if decodePatch(w, r, &body, "price_cents", "description") != nil {
 		return
 	}
 	patch := services.ServicePatch{
-		Name: body.Name, DurationMin: body.DurationMin, PriceCents: body.PriceCents,
-		Color: body.Color, Position: body.Position, Archived: body.Archived,
+		Name: body.Name, Description: body.Description, DurationMin: body.DurationMin,
+		PriceCents: body.PriceCents, Color: body.Color, Position: body.Position, Archived: body.Archived,
 	}
 	var out services.Service
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
@@ -60,7 +65,8 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id openap
 
 func toGenService(v services.Service) gen.Service {
 	return gen.Service{
-		Id: v.ID, Name: v.Name, DurationMin: v.DurationMin, PriceCents: nullval.Of(v.PriceCents),
-		Color: v.Color, Position: v.Position, Archived: v.Archived,
+		Id: v.ID, Name: v.Name, Description: nullval.Of(v.Description), DurationMin: v.DurationMin,
+		PriceCents: nullval.Of(v.PriceCents),
+		Color:      v.Color, Position: v.Position, Archived: v.Archived,
 	}
 }

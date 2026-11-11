@@ -46,6 +46,7 @@ export const AttributeSchema = z.object({
 export const ServiceSchema = z.object({
 	id,
 	name: z.string(),
+	description: z.nullable(z.string()),
 	duration_min: z.number().int(),
 	price_cents: z.nullable(z.number().int()),
 	color: z.string(),

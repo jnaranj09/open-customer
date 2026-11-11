@@ -24,7 +24,7 @@ WHERE appointment_id = ANY(@ids::uuid[])
 ORDER BY appointment_id, position;
 
 -- name: ExportServices :many
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 WHERE id > @after
 ORDER BY id

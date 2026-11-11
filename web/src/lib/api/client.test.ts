@@ -723,6 +723,7 @@ describe('the settings calls', () => {
 	const service = {
 		id: USER_ID,
 		name: 'Acrílico',
+		description: null,
 		duration_min: 90,
 		price_cents: null,
 		color: PINK,

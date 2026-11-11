@@ -232,6 +232,10 @@ paste cannot disagree.
         "• {name} ×{count}: {price}", the same `{price}`
 3.  A total line, from the table below. It is left out when no line has a price.
 4.  A duration line: `quote_duration` "Duración aproximada: {duration}".
+5.  The detail block (added by `reminders-and-replies.md`, "Service description"): when a picked
+    service has a description, a blank line, then one `quote_detail_line` "{name}: {description}"
+    per described service, once per service, in the order of the price lines. Without one, the
+    text ends at the duration line.
 
 Illustrative only (the real amounts are whatever `formatMoney` prints; for CRC that likely
 includes decimals and non-breaking spaces):

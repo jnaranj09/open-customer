@@ -877,8 +877,8 @@ And the handover and rule texts (D17):
 
 #### 10. `internal/platform/text/text.go`, `text_test.go` (Modify)
 
-*   `Line(raw string, max int) (value *string, problem string)`: trim; empty → nil; longer than
-    `max` → `MsgTextTooLong`; a line break → `MsgTextOneLine`. Tests for each case.
+*   `Line(raw string, maxRunes int) (value *string, msg string)`: trim; empty → nil; longer than
+    `maxRunes` → `MsgTextTooLong`; a line break → `MsgTextOneLine`. Tests for each case.
 
 #### 11. `internal/platform/problem/messages.go` (Modify)
 
@@ -910,11 +910,13 @@ And the handover and rule texts (D17):
 *   `servicios.csv` column; `datos.json` `description`; `jsonVersion` 2; a formula-looking
     description is neutralized; `TestExportJSONMatchesSchemas` covers it.
 
-#### 16. `web/src/lib/api/schemas.ts`, `web/src/lib/cache/db.ts`, `db.upgrade.test.ts` (Modify)
+#### 16. `web/src/lib/api/schemas.ts`, `web/src/lib/cache/db.ts` (Modify), `db.upgrade-v2.test.ts` (Create)
 
 *   `ServiceSchema.description: z.nullable(z.string())`. `SCHEMA_VERSION` 2 → 3; the upgrade drops
-    cached services (refilled by the next bootstrap) so a row without the field never reaches
-    `clearCache()`, and drafts and pending confirmations survive. Test that case.
+    the cached server data, services included (refilled by the next bootstrap), so a row without
+    the field never reaches `clearCache()`, and drafts and pending confirmations survive. The test
+    is its own file: the cache module opens its database on import, so each starting version
+    needs a fresh module.
 
 #### 17. `web/src/lib/components/ServiceSheet.svelte` (Modify)
 

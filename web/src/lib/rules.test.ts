@@ -35,6 +35,7 @@ function rule(over: Partial<Rule> = {}): Rule {
 const service = (id: string, name: string, archived = false): Service => ({
 	id,
 	name,
+	description: null,
 	duration_min: 60,
 	price_cents: null,
 	color: ['#', 'c76b85'].join(''),

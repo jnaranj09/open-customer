@@ -156,6 +156,7 @@ type Service struct {
 	Color       string
 	Position    int32
 	ArchivedAt  *time.Time
+	Description *string
 }
 
 type Session struct {

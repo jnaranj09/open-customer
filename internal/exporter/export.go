@@ -383,7 +383,8 @@ func (x *run) writeServices(w io.Writer) error {
 			records := make([][]string, 0, len(page))
 			for _, r := range page {
 				records = append(records, []string{
-					r.Name, strconv.Itoa(int(r.DurationMin)), x.money(r.PriceCents), x.yes(r.ArchivedAt != nil),
+					r.Name, deref(r.Description), strconv.Itoa(int(r.DurationMin)), x.money(r.PriceCents),
+					x.yes(r.ArchivedAt != nil),
 				})
 			}
 			return writePage(cw, records)

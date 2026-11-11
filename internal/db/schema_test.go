@@ -79,6 +79,18 @@ func TestSchemaRejectsInvalidRows(t *testing.T) {
 			code: checkViolation,
 		},
 		{
+			name: "service description of 201 characters",
+			stmt: `INSERT INTO services (id, name, duration_min, color, position, description)
+				VALUES ('` + serviceID + `', 'Cut', 30, 'blue', 1, repeat('a', 201))`,
+			code: checkViolation,
+		},
+		{
+			name: "service empty description",
+			stmt: `INSERT INTO services (id, name, duration_min, color, position, description)
+				VALUES ('` + serviceID + `', 'Cut', 30, 'blue', 1, '')`,
+			code: checkViolation,
+		},
+		{
 			name:  "come_back rule with offset_days 0",
 			setup: []string{insertService, insertTemplate},
 			stmt: `INSERT INTO reminder_rules (id, kind, service_id, offset_days, template_id)

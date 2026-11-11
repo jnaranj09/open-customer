@@ -8,15 +8,25 @@ import { parseAmount } from './money';
 type Schemas = components['schemas'];
 
 /** What the form holds, as typed. */
-export type ServiceForm = { name: string; duration: string; price: string; color: string };
+export type ServiceForm = {
+	name: string;
+	description: string;
+	duration: string;
+	price: string;
+	color: string;
+};
 
-export type ServiceField = 'name' | 'duration' | 'price';
+/** A field that can show an error. The description is checked by the server only (one line of up
+ *  to 200 characters; a text field cannot hold a line break). */
+export type ServiceField = 'name' | 'description' | 'duration' | 'price';
 
-/** The request body of a create; `price_cents` is null for no price. */
+/** The request body of a create; `price_cents` is null for no price. A blank description is left
+ *  out. */
 export type ServiceBody = Required<
 	Pick<Schemas['ServiceInput'], 'name' | 'duration_min' | 'color'>
 > & {
 	price_cents: number | null;
+	description?: string;
 };
 
 const MAX_MINUTES = 1440;
@@ -48,13 +58,26 @@ export function serviceRequest(
 	if (Object.keys(errors).length > 0) {
 		return { ok: false, errors };
 	}
-	return { ok: true, body: { name, duration_min: minutes, price_cents: price, color: form.color } };
+	const description = form.description.trim();
+	return {
+		ok: true,
+		body: {
+			name,
+			...(description === '' ? {} : { description }),
+			duration_min: minutes,
+			price_cents: price,
+			color: form.color
+		}
+	};
 }
 
-/** The fields of `body` that differ from the saved service. */
+/** The fields of `body` that differ from the saved service. A description emptied on edit is sent as
+ *  null, which clears it. */
 export function servicePatch(saved: Service, body: ServiceBody): Schemas['ServicePatch'] {
+	const description = body.description ?? null;
 	return {
 		...(body.name === saved.name ? {} : { name: body.name }),
+		...(description === saved.description ? {} : { description }),
 		...(body.duration_min === saved.duration_min ? {} : { duration_min: body.duration_min }),
 		...(body.price_cents === saved.price_cents ? {} : { price_cents: body.price_cents }),
 		...(body.color === saved.color ? {} : { color: body.color })

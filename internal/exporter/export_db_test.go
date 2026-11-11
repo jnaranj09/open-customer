@@ -327,11 +327,11 @@ func TestExportZeroDecimalCurrency(t *testing.T) {
 	e := newEnv(t, "JPY")
 	e.service(t, "Pedicure", 30, ptr(int64(12500)))
 	rows := e.csvFile(t, "servicios.csv")
-	if want := []string{"nombre", "duracion_min", "precio", "archivado"}; !slices.Equal(rows[0], want) {
+	if want := []string{"nombre", "descripcion", "duracion_min", "precio", "archivado"}; !slices.Equal(rows[0], want) {
 		t.Errorf("header = %q, want %q", rows[0], want)
 	}
-	if got := rows[1]; !slices.Equal(got, []string{"Pedicure", "30", "12500", ""}) {
-		t.Fatalf("service row = %q, want [Pedicure 30 12500 \"\"]", got)
+	if got := rows[1]; !slices.Equal(got, []string{"Pedicure", "", "30", "12500", ""}) {
+		t.Fatalf("service row = %q, want [Pedicure \"\" 30 12500 \"\"]", got)
 	}
 }
 

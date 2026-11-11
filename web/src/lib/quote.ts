@@ -1,4 +1,5 @@
-// The text she copies into WhatsApp to quote services (design doc "The quote text"). Pure: no Svelte,
+// The text she copies into WhatsApp to quote services (design doc "The quote text"; the detail block
+// of service descriptions: reminders-and-replies design, "Service description"). Pure: no Svelte,
 // no Dexie, no network. The screen shows `quoteText` and Copiar copies the same string.
 import { z } from 'zod';
 import type { Service } from './api/schemas';
@@ -81,5 +82,25 @@ export function quoteText(lines: Line[], services: Service[], settings: Settings
 			duration: durationText(durationOf(lines, services))
 		})
 	);
+	const details = detailLines(lines, services);
+	if (details.length > 0) {
+		out.push('', ...details);
+	}
 	return out.join('\n');
+}
+
+/** "Acrílico: Incluye retiro": one line per picked service that has a description, once per
+ *  service, in the order of the price lines. */
+function detailLines(lines: Line[], services: Service[]): string[] {
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const line of lines) {
+		const service = services.find((s) => s.id === line.service_id);
+		if (service?.description == null || seen.has(service.id)) {
+			continue;
+		}
+		seen.add(service.id);
+		out.push(t('quote_detail_line', { name: service.name, description: service.description }));
+	}
+	return out;
 }

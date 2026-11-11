@@ -36,6 +36,7 @@ const service = (id: string, name: string, duration_min: number, price_cents: nu
 	({
 		id,
 		name,
+		description: null,
 		duration_min,
 		price_cents,
 		color: 'rose',

@@ -299,7 +299,7 @@ export interface paths {
         head?: never;
         /**
          * Change a service
-         * @description Changes only the fields sent. Only price_cents may be null, which clears the price. archived true archives the service and false restores it. Past appointments keep the values they copied.
+         * @description Changes only the fields sent. Only price_cents and description may be null, which clears the price or the description. archived true archives the service and false restores it. Past appointments keep the values they copied.
          */
         patch: operations["updateService"];
         trace?: never;
@@ -917,6 +917,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            /** @description One line added to quotes after the service name; null when the service has none. */
+            description: string | null;
             duration_min: number;
             /**
              * Format: int64
@@ -929,14 +931,18 @@ export interface components {
         };
         ServiceInput: {
             name: string;
+            /** @description One line, up to 200 characters; blank or null means none. */
+            description?: string | null;
             duration_min: number;
             /** Format: int64 */
             price_cents?: number | null;
             color: string;
         };
-        /** @description Every field is optional; a field left out is not changed. Only price_cents may be null. */
+        /** @description Every field is optional; a field left out is not changed. Only price_cents and description may be null. */
         ServicePatch: {
             name?: string;
+            /** @description One line, up to 200 characters; blank or null clears it. */
+            description?: string | null;
             duration_min?: number;
             /** Format: int64 */
             price_cents?: number | null;

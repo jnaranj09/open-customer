@@ -220,7 +220,7 @@ func TestExportText(t *testing.T) {
 	if want := []string{"fecha", "hora", "clienta", "servicios", "total", "pagado", "estado", "notas"}; !slices.Equal(got.AppointmentCols, want) {
 		t.Errorf("AppointmentCols = %q, want %q", got.AppointmentCols, want)
 	}
-	if want := []string{"nombre", "duracion_min", "precio", "archivado"}; !slices.Equal(got.ServiceCols, want) {
+	if want := []string{"nombre", "descripcion", "duracion_min", "precio", "archivado"}; !slices.Equal(got.ServiceCols, want) {
 		t.Errorf("ServiceCols = %q, want %q", got.ServiceCols, want)
 	}
 	wantStatus := map[string]string{

@@ -63,6 +63,12 @@ const (
 	MsgPriceInvalid    = "El precio no puede ser negativo"
 )
 
+// Field messages for a one-line text (text.Line; reminders-and-replies design, item 11).
+const (
+	MsgTextTooLong = "Es muy largo"
+	MsgTextOneLine = "Escríbelo en una sola línea"
+)
+
 // Field messages for clients (design doc item 48).
 const (
 	MsgClientNameInvalid = "Escribe un nombre de 1 a 120 caracteres"

@@ -5,12 +5,13 @@ import { servicePatch, serviceRequest, serviceSubtitle } from './services';
 const ID = '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f';
 const PINK = ['#', 'c76b85'].join('');
 
-const form = { name: ' Acrílico ', duration: '90', price: '15000', color: PINK };
+const form = { name: ' Acrílico ', description: '', duration: '90', price: '15000', color: PINK };
 
 function saved(over: Partial<Service> = {}): Service {
 	return {
 		id: ID,
 		name: 'Acrílico',
+		description: null,
 		duration_min: 90,
 		price_cents: 1500000,
 		color: PINK,
@@ -36,6 +37,17 @@ describe('serviceRequest', () => {
 		expect(serviceRequest({ ...form, price: ' ' }, 2)).toEqual({
 			ok: true,
 			body: { name: 'Acrílico', duration_min: 90, price_cents: null, color: PINK }
+		});
+	});
+
+	it('sends the trimmed description, and none when blank', () => {
+		expect(serviceRequest({ ...form, description: ' Incluye retiro ' }, 2)).toMatchObject({
+			ok: true,
+			body: { description: 'Incluye retiro' }
+		});
+		expect(serviceRequest({ ...form, description: '  ' }, 2)).toEqual({
+			ok: true,
+			body: { name: 'Acrílico', duration_min: 90, price_cents: 1500000, color: PINK }
 		});
 	});
 
@@ -75,6 +87,26 @@ describe('servicePatch', () => {
 	it('clears the price with null', () => {
 		const body = { name: 'Acrílico', duration_min: 90, price_cents: null, color: PINK };
 		expect(servicePatch(saved(), body)).toEqual({ price_cents: null });
+	});
+
+	it('sends a changed description', () => {
+		const body = {
+			name: 'Acrílico',
+			description: 'Con diseño',
+			duration_min: 90,
+			price_cents: 1500000,
+			color: PINK
+		};
+		expect(servicePatch(saved({ description: 'Incluye retiro' }), body)).toEqual({
+			description: 'Con diseño'
+		});
+	});
+
+	it('clears an emptied description with null', () => {
+		const body = { name: 'Acrílico', duration_min: 90, price_cents: 1500000, color: PINK };
+		expect(servicePatch(saved({ description: 'Incluye retiro' }), body)).toEqual({
+			description: null
+		});
 	});
 
 	it('is empty when nothing changed', () => {

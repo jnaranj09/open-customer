@@ -1,10 +1,10 @@
 -- name: ListServices :many
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 ORDER BY position, id;
 
 -- name: GetServicesByIDs :many
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 WHERE id = ANY(@ids::uuid[]);
 
@@ -13,11 +13,11 @@ SELECT COALESCE(MAX(position), -1)::int AS max_position
 FROM services;
 
 -- name: InsertService :exec
-INSERT INTO services (id, name, duration_min, price_cents, color, position)
-VALUES (@id, @name, @duration_min, sqlc.narg('price_cents')::bigint, @color, @position);
+INSERT INTO services (id, name, duration_min, price_cents, color, position, description)
+VALUES (@id, @name, @duration_min, sqlc.narg('price_cents')::bigint, @color, @position, sqlc.narg('description')::text);
 
 -- name: GetService :one
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 WHERE id = @id;
 
@@ -28,5 +28,6 @@ UPDATE services SET
     price_cents  = sqlc.narg('price_cents')::bigint,
     color        = @color,
     position     = @position,
-    archived_at  = sqlc.narg('archived_at')::timestamptz
+    archived_at  = sqlc.narg('archived_at')::timestamptz,
+    description  = sqlc.narg('description')::text
 WHERE id = @id;

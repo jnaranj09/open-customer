@@ -39,6 +39,7 @@
 
 	const exponent = $derived(exponentOf(currency, locale));
 	let name = $state(untrack(() => service?.name ?? ''));
+	let description = $state(untrack(() => service?.description ?? ''));
 	let duration = $state(untrack(() => (service === undefined ? '' : String(service.duration_min))));
 	let price = $state(
 		untrack(() => {
@@ -69,7 +70,7 @@
 	const save = submitOnce(
 		async () => {
 			failure = null;
-			const request = serviceRequest({ name, duration, price, color }, exponent);
+			const request = serviceRequest({ name, description, duration, price, color }, exponent);
 			if (!request.ok) {
 				errors = request.errors;
 				return;
@@ -138,6 +139,13 @@
 			bind:value={name}
 			autocomplete="off"
 			error={fieldError('name', 'name')}
+		/>
+		<TextField
+			label={t('service_description')}
+			bind:value={description}
+			autocomplete="off"
+			hint={t('service_description_hint')}
+			error={fieldError('description', 'description')}
 		/>
 		<div class="grid grid-cols-2 gap-3">
 			<TextField

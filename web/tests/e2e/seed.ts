@@ -15,11 +15,13 @@ function db(): pg.Pool {
 }
 
 /** Empties the per-spec tables. The user, sessions, settings, attributes, services, templates and
- *  rules stay, so the saved login and the setup data keep working. */
+ *  rules stay, so the saved login and the setup data keep working; a service description a spec
+ *  wrote is cleared, so every spec quotes the setup services as they were. */
 export async function resetData(): Promise<void> {
 	await db().query(
 		'TRUNCATE clients, appointments, appointment_services, media, reminder_log CASCADE'
 	);
+	await db().query('UPDATE services SET description = NULL');
 }
 
 /** Ends the worker's pool; `afterAll` of each spec that seeds. */

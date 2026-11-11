@@ -5,6 +5,7 @@ package services
 import (
 	"errors"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,8 @@ func TestCreateServiceRejectsBadFields(t *testing.T) {
 		{"price -1", func(in *ServiceInput) { in.PriceCents = ptr(int64(-1)) }, "price_cents", problem.MsgPriceInvalid},
 		{"color #xyz", func(in *ServiceInput) { in.Color = "#xyz" }, "color", problem.MsgColorInvalid},
 		{"empty name", func(in *ServiceInput) { in.Name = "" }, "name", problem.MsgNameInvalid},
+		{"description of 201", func(in *ServiceInput) { in.Description = ptr(strings.Repeat("a", 201)) }, "description", problem.MsgTextTooLong},
+		{"description with a line break", func(in *ServiceInput) { in.Description = ptr("Incluye\nretiro") }, "description", problem.MsgTextOneLine},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
@@ -380,4 +383,69 @@ func TestUpdateServiceUnknownWithBadFieldIsNotFound(t *testing.T) {
 	if !errors.As(err, &problem.NotFound{}) {
 		t.Fatalf("err = %v, want problem.NotFound", err)
 	}
+}
+
+func TestCreateServiceStoresDescription(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  *string
+		want *string
+	}{
+		{"200 characters kept", ptr(strings.Repeat("ñ", 200)), ptr(strings.Repeat("ñ", 200))},
+		{"surrounding spaces trimmed", ptr("  Incluye retiro "), ptr("Incluye retiro")},
+		{"blank stored as none", ptr("   "), nil},
+		{"absent stored as none", nil, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			in := validInput()
+			in.Description = tc.raw
+			s := f.create(t, in)
+			stored, err := f.m.GetMany(t.Context(), f.pool, []uuid.UUID{s.ID})
+			if err != nil {
+				t.Fatalf("GetMany: %v", err)
+			}
+			if !samePtr(s.Description, tc.want) || !samePtr(stored[s.ID].Description, tc.want) {
+				t.Fatalf("description returned %v, stored %v, want %v", s.Description, stored[s.ID].Description, tc.want)
+			}
+		})
+	}
+}
+
+func TestUpdateServiceSetsAndClearsDescription(t *testing.T) {
+	f := newFixture(t)
+	in := validInput()
+	in.Description = ptr("Incluye retiro")
+	s := f.create(t, in)
+	untouched, err := f.m.Update(t.Context(), f.pool, s.ID, ServicePatch{Name: ptr("Otro")})
+	if err != nil || !samePtr(untouched.Description, ptr("Incluye retiro")) {
+		t.Fatalf("description after an unrelated patch = %v, %v, want kept", untouched.Description, err)
+	}
+	set, err := f.m.Update(t.Context(), f.pool, s.ID, ServicePatch{Description: nullable.NewNullableWithValue(" Con diseño ")})
+	if err != nil || !samePtr(set.Description, ptr("Con diseño")) {
+		t.Fatalf("description after a value = %v, %v, want trimmed", set.Description, err)
+	}
+	cleared, err := f.m.Update(t.Context(), f.pool, s.ID, ServicePatch{Description: nullable.NewNullNullable[string]()})
+	if err != nil || cleared.Description != nil {
+		t.Fatalf("description after null = %v, %v, want nil", cleared.Description, err)
+	}
+	stored, err := f.m.GetMany(t.Context(), f.pool, []uuid.UUID{s.ID})
+	if err != nil || stored[s.ID].Description != nil {
+		t.Fatalf("stored description = %v, %v, want nil", stored[s.ID].Description, err)
+	}
+}
+
+func TestUpdateServiceRejectsBadDescription(t *testing.T) {
+	f := newFixture(t)
+	s := f.create(t, validInput())
+	_, err := f.m.Update(t.Context(), f.pool, s.ID, ServicePatch{Description: nullable.NewNullableWithValue(strings.Repeat("a", 201))})
+	got := fieldsOf(t, err)
+	if len(got) != 1 || got[0].Field != "description" || got[0].Message != problem.MsgTextTooLong {
+		t.Fatalf("errors = %+v, want one on description with %q", got, problem.MsgTextTooLong)
+	}
+}
+
+// samePtr reports whether a and b are both nil or point to equal strings.
+func samePtr(a, b *string) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }

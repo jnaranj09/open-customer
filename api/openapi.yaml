@@ -412,7 +412,8 @@ paths:
       operationId: updateService
       summary: Change a service
       description: >-
-        Changes only the fields sent. Only price_cents may be null, which clears the price. archived
+        Changes only the fields sent. Only price_cents and description may be null, which clears
+        the price or the description. archived
         true archives the service and false restores it. Past appointments keep the values they
         copied.
       parameters:
@@ -1591,13 +1592,18 @@ components:
             theme_color: the login screen uses it on a device with no cached settings.
     Service:
       type: object
-      required: [id, name, duration_min, price_cents, color, position, archived]
+      required: [id, name, description, duration_min, price_cents, color, position, archived]
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
+        description:
+          type: string
+          nullable: true
+          description: >-
+            One line added to quotes after the service name; null when the service has none.
         duration_min:
           type: integer
         price_cents:
@@ -1617,6 +1623,10 @@ components:
       properties:
         name:
           type: string
+        description:
+          type: string
+          nullable: true
+          description: One line, up to 200 characters; blank or null means none.
         duration_min:
           type: integer
         price_cents:
@@ -1628,10 +1638,15 @@ components:
     ServicePatch:
       type: object
       description: >-
-        Every field is optional; a field left out is not changed. Only price_cents may be null.
+        Every field is optional; a field left out is not changed. Only price_cents and description
+        may be null.
       properties:
         name:
           type: string
+        description:
+          type: string
+          nullable: true
+          description: One line, up to 200 characters; blank or null clears it.
         duration_min:
           type: integer
         price_cents:

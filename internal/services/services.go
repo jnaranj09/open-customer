@@ -23,14 +23,17 @@ import (
 )
 
 const (
-	maxNameLen     = 80
-	maxDurationMin = 1440
+	maxNameLen        = 80
+	maxDurationMin    = 1440
+	maxDescriptionLen = 200
 )
 
-// Service is one catalog entry. PriceCents is nil when the service has no price.
+// Service is one catalog entry. PriceCents is nil when the service has no price, Description
+// when it has none (quotes add it after the name).
 type Service struct {
 	ID          uuid.UUID
 	Name        string
+	Description *string
 	DurationMin int
 	PriceCents  *int64
 	Color       string
@@ -41,15 +44,18 @@ type Service struct {
 // ServiceInput is everything Create needs.
 type ServiceInput struct {
 	Name        string
+	Description *string
 	DurationMin int
 	PriceCents  *int64
 	Color       string
 }
 
 // ServicePatch holds the fields Update changes; a nil or unspecified field is left as it is.
-// PriceCents distinguishes three cases: unspecified (kept), null (cleared) and a value (set).
+// PriceCents and Description distinguish three cases: unspecified (kept), null (cleared) and a
+// value (set; a blank description clears it too).
 type ServicePatch struct {
 	Name        *string
+	Description nullable.Nullable[string]
 	DurationMin *int
 	PriceCents  nullable.Nullable[int64]
 	Color       *string
@@ -101,6 +107,13 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in ServiceInput) (Servic
 	if !ok {
 		errs = append(errs, problem.FieldError{Field: "name", Message: problem.MsgNameInvalid})
 	}
+	var description *string
+	if in.Description != nil {
+		var msg string
+		if description, msg = text.Line(*in.Description, maxDescriptionLen); msg != "" {
+			errs = append(errs, problem.FieldError{Field: "description", Message: msg})
+		}
+	}
 	duration, ok := durationMin(in.DurationMin)
 	if !ok {
 		errs = append(errs, problem.FieldError{Field: "duration_min", Message: problem.MsgDurationInvalid})
@@ -130,11 +143,13 @@ func (m *Module) Create(ctx context.Context, q db.DBTX, in ServiceInput) (Servic
 	}
 	if err := queries.InsertService(ctx, sqlc.InsertServiceParams{
 		ID: id, Name: name, DurationMin: duration, PriceCents: in.PriceCents, Color: hex, Position: next,
+		Description: description,
 	}); err != nil {
 		return Service{}, fmt.Errorf("insert service: %w", err)
 	}
 	return Service{
-		ID: id, Name: name, DurationMin: in.DurationMin, PriceCents: in.PriceCents, Color: hex, Position: int(next),
+		ID: id, Name: name, Description: description, DurationMin: in.DurationMin, PriceCents: in.PriceCents,
+		Color: hex, Position: int(next),
 	}, nil
 }
 
@@ -155,6 +170,13 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ServiceP
 		var ok bool
 		if name, ok = text.Trim(*p.Name, 1, maxNameLen); !ok {
 			errs = append(errs, problem.FieldError{Field: "name", Message: problem.MsgNameInvalid})
+		}
+	}
+	var description *string
+	if v, err := p.Description.Get(); err == nil {
+		var msg string
+		if description, msg = text.Line(v, maxDescriptionLen); msg != "" {
+			errs = append(errs, problem.FieldError{Field: "description", Message: msg})
 		}
 	}
 	var duration int32
@@ -186,10 +208,13 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ServiceP
 	}
 	params := sqlc.UpdateServiceParams{
 		ID: id, Name: row.Name, DurationMin: row.DurationMin, PriceCents: row.PriceCents,
-		Color: row.Color, Position: row.Position, ArchivedAt: row.ArchivedAt,
+		Color: row.Color, Position: row.Position, ArchivedAt: row.ArchivedAt, Description: row.Description,
 	}
 	if p.Name != nil {
 		params.Name = name
+	}
+	if p.Description.IsSpecified() {
+		params.Description = description
 	}
 	if p.DurationMin != nil {
 		params.DurationMin = duration
@@ -213,6 +238,7 @@ func (m *Module) Update(ctx context.Context, q db.DBTX, id uuid.UUID, p ServiceP
 	return serviceFrom(sqlc.Service{
 		ID: id, Name: params.Name, DurationMin: params.DurationMin, PriceCents: params.PriceCents,
 		Color: params.Color, Position: params.Position, ArchivedAt: params.ArchivedAt,
+		Description: params.Description,
 	}), nil
 }
 
@@ -226,7 +252,7 @@ func durationMin(n int) (int32, bool) {
 
 func serviceFrom(r sqlc.Service) Service {
 	return Service{
-		ID: r.ID, Name: r.Name, DurationMin: int(r.DurationMin), PriceCents: r.PriceCents,
+		ID: r.ID, Name: r.Name, Description: r.Description, DurationMin: int(r.DurationMin), PriceCents: r.PriceCents,
 		Color: r.Color, Position: int(r.Position), Archived: r.ArchivedAt != nil,
 	}
 }

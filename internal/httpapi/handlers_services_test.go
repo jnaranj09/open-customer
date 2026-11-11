@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
+	"github.com/jnaranj09/open-customer/internal/platform/problem"
 )
 
 const servicesPath = "/api/v1/services"
@@ -25,12 +26,44 @@ func TestCreateServiceOK(t *testing.T) {
 	app, _, c := signedInOwner(t)
 	rec := sendAs(app, c, http.MethodPost, servicesPath, serviceBody)
 	s := decodeInto[gen.Service](t, rec, http.StatusCreated)
-	assertKeys(t, rec.Body.Bytes(), "archived", "color", "duration_min", "id", "name", "position", "price_cents")
+	assertKeys(t, rec.Body.Bytes(), "archived", "color", "description", "duration_min", "id", "name", "position", "price_cents")
 	if s.Name != "Acrílico" || s.DurationMin != 90 || s.Color != "#aa3366" || s.Position != 0 || s.Archived {
 		t.Fatalf("service = %+v, want Acrílico, 90, #aa3366, position 0, active", s)
 	}
-	if !strings.Contains(rec.Body.String(), `"price_cents":null`) {
-		t.Fatalf("body %q lacks \"price_cents\":null", rec.Body.String())
+	for _, k := range []string{`"price_cents":null`, `"description":null`} {
+		if !strings.Contains(rec.Body.String(), k) {
+			t.Fatalf("body %q lacks %s", rec.Body.String(), k)
+		}
+	}
+}
+
+func TestServiceDescriptionSetAndCleared(t *testing.T) {
+	app, _, c := signedInOwner(t)
+	s := createService(t, app, c, `{"name":"Acrílico","description":" Incluye retiro ","duration_min":90,"color":"#aa3366"}`)
+	if got, err := s.Description.Get(); err != nil || got != "Incluye retiro" {
+		t.Fatalf("description = %q, %v, want Incluye retiro", got, err)
+	}
+	rec := sendAs(app, c, http.MethodPatch, servicesPath+"/"+s.Id.String(), `{"description":null}`)
+	cleared := decodeInto[gen.Service](t, rec, http.StatusOK)
+	if !cleared.Description.IsNull() {
+		t.Fatalf("description after null = %+v, want null", cleared.Description)
+	}
+}
+
+func TestServiceDescriptionBadIs422(t *testing.T) {
+	app, _, c := signedInOwner(t)
+	for _, tc := range []struct {
+		name, body, msg string
+	}{
+		{"201 characters", `{"name":"A","description":"` + strings.Repeat("a", 201) + `","duration_min":10,"color":"#000000"}`, problem.MsgTextTooLong},
+		{"a line break", `{"name":"A","description":"a\nb","duration_min":10,"color":"#000000"}`, problem.MsgTextOneLine},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := fieldErrors(t, sendAs(app, c, http.MethodPost, servicesPath, tc.body))
+			if len(errs) != 1 || errs[0].Field != "description" || errs[0].Message != tc.msg {
+				t.Fatalf("errors = %+v, want one on description with %q", errs, tc.msg)
+			}
+		})
 	}
 }
 

@@ -106,6 +106,35 @@ test('CUJ Q1: she picks services, copies the quote and the button says Copiado',
 	await expect(copyButton(page)).toBeVisible();
 });
 
+test('CUJ R8: a service description is added at the end of the quote', async ({ page }) => {
+	await stubClipboard(page, 'ok');
+	await page.goto('/servicios');
+	await chip(page, 'Acrílico').click();
+	await chip(page, 'Relleno').click();
+	await copyButton(page).click();
+	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	// No described service: the text is as before, with no blank line.
+	expect(await copied(page)).not.toContain('\n\n');
+
+	await page.goto('/servicios/catalogo');
+	await page.getByRole('button', { name: /^Acrílico/ }).click();
+	const sheet = page.getByRole('dialog', { name: es.service_edit_title });
+	await sheet.getByLabel(es.service_description).fill('Incluye limado y esmalte');
+	await sheet.getByRole('button', { name: es.service_save }).click();
+	await expect(page.getByText(es.service_saved)).toBeVisible();
+
+	await page.goto('/servicios');
+	await chip(page, 'Acrílico').click();
+	await chip(page, 'Relleno').click();
+	await copyButton(page).click();
+	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	expect(await copied(page)).toMatch(
+		new RegExp(
+			`\\n\\n${fill(es.quote_detail_line, { name: 'Acrílico', description: 'Incluye limado y esmalte' })}$`
+		)
+	);
+});
+
 for (const mode of ['missing', 'throws', 'rejects'] as const) {
 	test(`the phone refuses the copy (${mode}): a message says to press and hold`, async ({
 		page

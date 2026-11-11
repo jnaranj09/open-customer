@@ -129,6 +129,7 @@ export function withSavedLines(services: Service[], saved: Appointment['services
 			out.push({
 				id: line.service_id,
 				name: line.name,
+				description: null,
 				duration_min: line.duration_min,
 				price_cents: line.price_cents,
 				color: '',

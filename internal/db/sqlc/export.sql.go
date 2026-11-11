@@ -260,7 +260,7 @@ func (q *Queries) ExportRules(ctx context.Context, after uuid.UUID) ([]ExportRul
 }
 
 const exportServices = `-- name: ExportServices :many
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 WHERE id > $1
 ORDER BY id
@@ -284,6 +284,7 @@ func (q *Queries) ExportServices(ctx context.Context, after uuid.UUID) ([]Servic
 			&i.Color,
 			&i.Position,
 			&i.ArchivedAt,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}

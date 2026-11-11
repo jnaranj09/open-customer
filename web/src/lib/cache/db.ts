@@ -4,7 +4,7 @@
 // a bad cached row never reaches a screen (rules/boundaries.md). A bad snapshot or meta row clears
 // the whole cache and reads as empty; a bad draft is deleted alone, because it is the app's own
 // local value, not a copy of the server.
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
 import { z } from 'zod';
 import { byPosition } from '../order';
 import {
@@ -26,8 +26,8 @@ import {
  *  copied server data in its upgrade (and sets `lastSyncAt` to null), so the next start refreshes
  *  from `/bootstrap`; drafts and the rest of meta (the pending send confirmation, the logged ids,
  *  the last `Me`) are the phone's own and stay. A row that still fails its schema on read clears the whole cache (see `guarded`).
- *  2: due rows became `{id, position, item}`. */
-export const SCHEMA_VERSION = 2;
+ *  2: due rows became `{id, position, item}`. 3: services gained `description`. */
+export const SCHEMA_VERSION = 3;
 export const DB_NAME = 'open-customer';
 
 const PendingSendSchema = z.object({
@@ -101,24 +101,26 @@ const STORES = {
 	meta: 'key'
 };
 
+/** The upgrade of a version whose cached rows change shape: drop the copied server data. */
+async function dropServerData(tx: Transaction): Promise<void> {
+	for (const name of DATA_TABLES) {
+		await tx.table(name).clear();
+	}
+	// The data is gone, so the sync line must not claim a time for it.
+	await tx
+		.table<Keyed, string>('meta')
+		.toCollection()
+		.modify((row) => {
+			if (typeof row.value === 'object' && row.value !== null) {
+				Reflect.set(row.value, 'lastSyncAt', null);
+			}
+		});
+}
+
 const db = new Dexie(DB_NAME);
 db.version(1).stores(STORES);
-db.version(SCHEMA_VERSION)
-	.stores(STORES)
-	.upgrade(async (tx) => {
-		for (const name of DATA_TABLES) {
-			await tx.table(name).clear();
-		}
-		// The data is gone, so the sync line must not claim a time for it.
-		await tx
-			.table<Keyed, string>('meta')
-			.toCollection()
-			.modify((row) => {
-				if (typeof row.value === 'object' && row.value !== null) {
-					Reflect.set(row.value, 'lastSyncAt', null);
-				}
-			});
-	});
+db.version(2).stores(STORES).upgrade(dropServerData);
+db.version(SCHEMA_VERSION).stores(STORES).upgrade(dropServerData);
 
 const t = {
 	settings: db.table<Keyed, string>('settings'),
