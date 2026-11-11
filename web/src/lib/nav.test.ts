@@ -68,8 +68,6 @@ describe('syncLine', () => {
 	});
 
 	it('says the system is off when offline', () => {
-		expect(syncLine('2026-11-04T18:42:00Z', 'UTC', true, '2026-11-04')).toBe(
-			'Sin conexión con el sistema'
-		);
+		expect(syncLine('2026-11-04T18:42:00Z', 'UTC', true, '2026-11-04')).toBe('Sin conexión');
 	});
 });

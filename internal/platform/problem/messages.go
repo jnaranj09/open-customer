@@ -104,11 +104,11 @@ const (
 
 // Field messages for reminder rules (design doc item 55).
 const (
-	MsgRuleKindInvalid       = "Elige un tipo de recordatorio"
+	MsgRuleKindInvalid       = "Elige un tipo de regla"
 	MsgOffsetInvalid         = "Escribe un número de días de 0 a 365"
 	MsgComeBackOffsetInvalid = "Escribe un número de días de 1 a 365"
 	MsgServiceRequired       = "Elige un servicio"
-	MsgServiceNotAllowed     = "Este recordatorio no lleva servicio"
+	MsgServiceNotAllowed     = "Esta regla no lleva servicio"
 	MsgTemplateUnavailable   = "Esa plantilla no existe o está archivada"
 )
 
@@ -116,7 +116,7 @@ const (
 // /reminders/log with neither or both of its filters.
 const (
 	MsgActionInvalid      = "Acción no válida"
-	MsgRuleUnknown        = "Ese recordatorio no existe"
+	MsgRuleUnknown        = "Esa regla no existe"
 	MsgAnchorInvalid      = "La hora de la cita no corresponde al recordatorio"
 	MsgPhoneDigitsInvalid = "Número no válido"
 	MsgLogFilterInvalid   = "Elige una clienta o una fecha"

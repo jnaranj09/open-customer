@@ -3533,7 +3533,12 @@
               "type": "ref",
               "ref": "ZUGlX",
               "name": "Offline Banner",
-              "width": "fill_container"
+              "width": "fill_container",
+              "descendants": {
+                "sLKkd": {
+                  "content": "Sin conexión · datos de las 18:42"
+                }
+              }
             },
             {
               "type": "frame",
@@ -5915,7 +5920,7 @@
                           "fill": "$ink",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Ya tienes una cita nueva sin guardar. ¿La reemplazamos con estos servicios?",
+                          "content": "Ya tienes una cita sin guardar. ¿Reemplazarla?",
                           "fontFamily": "$font-sans",
                           "fontSize": 14,
                           "fontWeight": "normal"
@@ -6967,7 +6972,7 @@
                   "width": "fill_container",
                   "descendants": {
                     "Y6BzU": {
-                      "content": "No se pudo pasar a una cita nueva. Tu cotización sigue aquí; inténtalo de nuevo."
+                      "content": "No se pudo crear la cita. Intenta de nuevo"
                     }
                   }
                 }
@@ -8406,7 +8411,7 @@
                   "fill": "$ink-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Toca los servicios que te preguntaron para armar la cotización.",
+                  "content": "Toca los servicios para cotizar",
                   "fontFamily": "$font-sans",
                   "fontSize": 16,
                   "fontWeight": "normal"
@@ -13182,7 +13187,7 @@
                                       "fill": "$ink",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
-                                      "content": "Ya tienes una cita nueva sin guardar. ¿La reemplazamos con estos servicios?",
+                                      "content": "Ya tienes una cita sin guardar. ¿Reemplazarla?",
                                       "fontFamily": "$font-sans",
                                       "fontSize": 14,
                                       "fontWeight": "normal"
@@ -15320,7 +15325,7 @@
                               "width": "fill_container",
                               "descendants": {
                                 "Y6BzU": {
-                                  "content": "No se pudo pasar a una cita nueva. Tu cotización sigue aquí; inténtalo de nuevo."
+                                  "content": "No se pudo crear la cita. Intenta de nuevo"
                                 }
                               }
                             }
@@ -17366,7 +17371,7 @@
                           "fill": "$ink-muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Toca los servicios que te preguntaron para armar la cotización.",
+                          "content": "Toca los servicios para cotizar",
                           "fontFamily": "$font-sans",
                           "fontSize": 16,
                           "fontWeight": "normal"
@@ -17867,7 +17872,7 @@
                           "fill": "$ink-muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Toca los servicios que te preguntaron para armar la cotización.",
+                          "content": "Toca los servicios para cotizar",
                           "fontFamily": "$font-sans",
                           "fontSize": 16,
                           "fontWeight": "normal"
@@ -18372,7 +18377,7 @@
                           "fill": "$ink-muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Toca los servicios que te preguntaron para armar la cotización.",
+                          "content": "Toca los servicios para cotizar",
                           "fontFamily": "$font-sans",
                           "fontSize": 16,
                           "fontWeight": "normal"

@@ -187,7 +187,7 @@ describe('errorText', () => {
 	});
 
 	it('maps offline to its text', () => {
-		expect(errorText({ kind: 'offline' })).toBe('Sin conexión con el sistema');
+		expect(errorText({ kind: 'offline' })).toBe('Sin conexión');
 	});
 });
 

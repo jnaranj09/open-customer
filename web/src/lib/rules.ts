@@ -1,5 +1,5 @@
 // The pure parts of Ajustes → Recordatorios (design doc item 77, "Reminder rules and the 'done'
-// rule"): how a rule reads as a sentence, when a change asks "¿Incluir recordatorios atrasados?",
+// rule"): how a rule reads as a sentence, when a change asks "¿Incluir atrasados?",
 // the form to a request, the patch of what changed, and the warnings for archived parts.
 import type { Rule, Service, Template } from './api/schemas';
 import type { components } from './api/schema';
@@ -57,9 +57,9 @@ function addsItems(
 }
 
 /** What saving `after` does about overdue items. `ask`: a come-back change that can add items asks
- *  "¿Incluir recordatorios atrasados?" first. `include`: the same change on a "before" rule asks
+ *  "¿Incluir atrasados?" first. `include`: the same change on a "before" rule asks
  *  nothing and sends `include_overdue: true`, because its items hide at the appointment's start, so
- *  the only ones "Incluir atrasadas" adds are for appointments still ahead whose due day just
+ *  the only ones "Incluir atrasados" adds are for appointments still ahead whose due day just
  *  passed (a new 2-day rule and tomorrow's visit); "Solo de hoy en adelante" would drop those.
  *  `none`: nothing new can appear; the server ignores the flag. */
 export function overdueChoice(

@@ -1070,10 +1070,10 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     ("• {name} ×{count}: {price}", `{price}` is `services_price_unset`; a single unpriced line uses
     `quote_line`), `quote_total` ("Total: {amount}"), `quote_total_partial` ("Total: {amount} + lo que
     está a consultar"), `quote_duration` ("Duración aproximada: {duration}"), `duration_hours`
-    ("{h} h"), `duration_hours_minutes` ("{h} h {m} min"), `quote_empty` ("Toca los servicios que
-    te preguntaron para armar la cotización."), `quote_copy` ("Copiar"), `quote_copied`
+    ("{h} h"), `duration_hours_minutes` ("{h} h {m} min"), `quote_empty` ("Toca los servicios para
+    cotizar"), `quote_copy` ("Copiar"), `quote_copied`
     ("Copiado", the button's label after a copy), `quote_copy_failed` ("No se pudo copiar. Mantén
-    presionado el texto de abajo para copiarlo."), `quote_new` ("Nueva cotización"),
+    presionado el texto"), `quote_new` ("Nueva cotización"),
     `quote_service_add` ("Agregar una copia de {name}", the wide stepper's "+"),
     `quote_col_count` ("Cantidad", the screen-reader-only header of the stepper column), and
     `quote_hold_hint` ("Para copiar, mantén presionado el texto de abajo y toca Copiar.") only if
@@ -1136,9 +1136,9 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 ##### 30. `web/src/lib/i18n/es.json` (Modify)
 
 *   **Proposed Changes**: `quote_convert` ("Convertir en cita"), `quote_replace` ("Reemplazar"),
-    `quote_replace_prompt` ("Ya tienes una cita nueva sin guardar. ¿La reemplazamos con estos
-    servicios?"), `quote_convert_failed` ("No se pudo pasar a una cita nueva. Tu cotización sigue
-    aquí; inténtalo de nuevo."), wording from the S0 frames.
+    `quote_replace_prompt` ("Ya tienes una cita sin guardar. ¿Reemplazarla?"),
+    `quote_convert_failed` ("No se pudo crear la cita. Intenta de nuevo"), wording from the S0
+    frames (both shortened later by the reminders-and-replies wording pass).
 
 ##### 31. `web/tests/e2e/quote.spec.ts` (Modify)
 

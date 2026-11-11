@@ -26,7 +26,7 @@
 	import WriteButton from './WriteButton.svelte';
 
 	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A
-	// come-back change that can add items first asks "¿Incluir recordatorios atrasados?": the
+	// come-back change that can add items first asks "¿Incluir atrasados?": the
 	// question replaces the form in the same sheet, and "Cancelar" or Escape on it goes back to the
 	// form. A rule never changes kind or service, so an open rule shows those as text.
 	let {

@@ -145,7 +145,7 @@ func (e dueEnv) due(t *testing.T, q db.DBTX) []DueItem {
 }
 
 // comeBackSetup is Ana Rojas's "Acrílico" visit on 2026-10-01 15:00 (booked 2026-09-30) and a
-// 21-day come-back rule on "Acrílico" with return service "Relleno", made with "Incluir atrasadas".
+// 21-day come-back rule on "Acrílico" with return service "Relleno", made with "Incluir atrasados".
 type comeBackSetup struct {
 	acrilico, relleno, pedicure uuid.UUID
 	ana                         clients.Client

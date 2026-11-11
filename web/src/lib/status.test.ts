@@ -64,7 +64,7 @@ describe('statusLines', () => {
 	});
 	it('says the timer has not ticked yet', () => {
 		expect(value(statusLines(status({ heartbeat_age_s: null }), ZONE, NOW), 'status_timer')).toBe(
-			'Aún sin latido'
+			'Aún no ha corrido'
 		);
 	});
 	it('writes the last backup copy in the business zone', () => {
