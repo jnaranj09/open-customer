@@ -437,6 +437,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/clients/{id}/next-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The client's next planned message
+         * @description Read in one snapshot: the client's earliest reminder due today or late, or else the earliest one after today (come_back from her done visits, before_appointment from her bookings in the next 365 days); ties by due day, then rule id. 204 when there is none. An archived client is allowed (she has no reminders).
+         */
+        get: operations["getClientNextReminder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clients/{id}/media": {
         parameters: {
             query?: never;
@@ -531,6 +551,26 @@ export interface paths {
          * @description A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule takes an offset_days of 1 to 365 and either a service_id with an optional return_service_id (the service to book again; the rule's own service when left out), or no service_id: a general rule for every service, which takes no return_service_id. The template and the services must exist and be active. include_overdue true counts items already past their moment; false or left out counts only items from now on.
          */
         post: operations["createReminderRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reminder-rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a come_back rule draft
+         * @description Only reads. The body is a come_back rule as the form holds it, with rule_id when it edits a saved rule; the fields get the same checks as on create (422). An unknown rule_id is 404 and a before_appointment one is 422 on rule_id. The draft takes the saved rule's place (or is added) in one snapshot of the due data. today_count is the clients with a reminder of the draft due exactly today (late ones are not counted); next is the earliest reminder of the draft after today, or null.
+         */
+        post: operations["previewRule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1015,6 +1055,37 @@ export interface components {
             /** Format: uuid */
             template_id: string;
             include_overdue?: boolean;
+        };
+        /** @description A come_back rule draft; no service_id makes a general rule. */
+        RulePreviewInput: {
+            /**
+             * Format: uuid
+             * @description The saved rule the draft edits; left out for a new rule.
+             */
+            rule_id?: string;
+            /** Format: uuid */
+            service_id?: string | null;
+            /** Format: uuid */
+            return_service_id?: string | null;
+            offset_days: number;
+            /** Format: uuid */
+            template_id: string;
+        };
+        RulePreviewResult: {
+            today_count: number;
+            next: components["schemas"]["RulePreviewNext"] | null;
+        };
+        RulePreviewNext: {
+            client_name: string;
+            /** Format: date */
+            due_date: string;
+        };
+        NextReminder: {
+            /** Format: date */
+            due_date: string;
+            /** @description The service names of the appointment the reminder comes from, in line order. */
+            source_services: string[];
+            general: boolean;
         };
         /** @description Every field is optional; a field left out is not changed. Only return_service_id may be null. */
         RulePatch: {
@@ -2088,6 +2159,39 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getClientNextReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The next reminder. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextReminder"];
+                };
+            };
+            /** @description No reminder is planned. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     listClientMedia: {
         parameters: {
             query?: never;
@@ -2224,6 +2328,35 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    previewRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePreviewInput"];
+            };
+        };
+        responses: {
+            /** @description What the draft does. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulePreviewResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

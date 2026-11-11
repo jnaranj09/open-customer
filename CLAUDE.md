@@ -126,7 +126,8 @@ A check that could not run is reported as NOT RUN, never as passing.
    two in-memory limit checks `auth.BeginLogin` and `auth.BeginPasswordChange`, which run before
    the handler opens its transaction. Every non-GET handler that reads or writes the database runs
    in `db.WithTx` and commits before writing the response. The snapshot readers
-   (bootstrap, due list, daily timer, export) use a read-only REPEATABLE READ transaction.
+   (bootstrap, due list, daily timer, export, rule preview, next message) use a read-only
+   REPEATABLE READ transaction.
 10. **Time is injected.** Modules take the clock from the platform clock package and the business
     time zone from settings; no direct `time.Now()` in a module.
 11. **Language.** Code, comments and docs are English. Every UI string is Spanish and lives in the

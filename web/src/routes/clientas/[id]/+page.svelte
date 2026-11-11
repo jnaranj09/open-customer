@@ -5,7 +5,7 @@
 	import { untrack } from 'svelte';
 	import { api } from '../../../lib/api/app';
 	import { errorText, type ApiError } from '../../../lib/api/errors';
-	import type { Appointment, Client, LogItem } from '../../../lib/api/schemas';
+	import type { Appointment, Client, LogItem, NextReminder } from '../../../lib/api/schemas';
 	import { clock } from '../../../lib/clock.svelte';
 	import { business } from '../../../lib/business.svelte';
 	import { showThenFetch } from '../../../lib/cachedLoad';
@@ -23,6 +23,7 @@
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
 	import { historySplit, sharingNames } from '../../../lib/clients';
+	import { nextReminderText } from '../../../lib/due';
 	import { t } from '../../../lib/i18n';
 	import { formatMoney } from '../../../lib/money';
 	import { formatPhone } from '../../../lib/phone';
@@ -67,9 +68,11 @@
 			historyError = null;
 			reminders = null;
 			remindersError = null;
+			next = undefined;
 			actionError = null;
 			void load(want);
 			void loadReminders(want);
+			void loadNext(want);
 		});
 	});
 
@@ -138,6 +141,18 @@
 		} else {
 			remindersError =
 				result.error.kind === 'offline' ? t('client_reminders_offline') : errorText(result.error);
+		}
+	}
+
+	// Her next planned message (reminders-and-replies design, CUJ R10), computed by the server.
+	// `undefined` while loading, offline or after an error: the line is hidden then.
+	let next = $state<NextReminder | null | undefined>(undefined);
+	const nextLine = $derived(next === undefined ? null : nextReminderText(next, clock.today(zone)));
+
+	async function loadNext(want: string): Promise<void> {
+		const result = await api.nextReminder(want);
+		if (want === id && result.ok) {
+			next = result.data;
 		}
 	}
 
@@ -345,6 +360,9 @@
 
 			<Card as="section" radius="xl" pad="section" class="flex flex-col gap-3">
 				<h2 class="text-xl font-bold text-ink">{t('client_reminders')}</h2>
+				{#if nextLine !== null}
+					<p class="text-base font-bold text-ink">{nextLine}</p>
+				{/if}
 				{#if remindersError !== null}
 					<p role="alert" class="text-sm text-error">{remindersError}</p>
 				{:else if reminders === null}

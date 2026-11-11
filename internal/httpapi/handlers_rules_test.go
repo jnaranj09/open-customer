@@ -127,6 +127,7 @@ func TestRuleRoutesNeedSession(t *testing.T) {
 	for _, rt := range []struct{ method, target, body string }{
 		{http.MethodPost, rulesPath, `{"kind":"before_appointment","offset_days":1,"template_id":"` + uuid.NewString() + `"}`},
 		{http.MethodPatch, rulesPath + "/" + uuid.NewString(), `{"archived":true}`},
+		{http.MethodPost, rulesPath + "/preview", `{"offset_days":30,"template_id":"` + uuid.NewString() + `"}`},
 	} {
 		t.Run(rt.method+" "+rt.target, func(t *testing.T) {
 			assertUnauthorized(t, send(app.handler, rt.method, rt.target, testOrigin, rt.body, nil))

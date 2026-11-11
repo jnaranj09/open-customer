@@ -11,9 +11,12 @@
 		handoverAsks,
 		isGeneral,
 		overdueChoice,
+		previewInput,
 		rulePatch,
+		rulePreviewText,
 		ruleRequest,
 		type RuleField,
+		type RuleForm,
 		type RuleInput,
 		type RulePatch,
 		type RuleKind
@@ -27,6 +30,7 @@
 	import SaveButton from './SaveButton.svelte';
 	import SelectField from './ui/SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
+	import { PREVIEW_DEBOUNCE_MS } from '../preview';
 
 	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A
 	// come-back change that can add items first asks "¿Incluir atrasados?", and so does the archive
@@ -97,6 +101,47 @@
 	);
 	// A general rule (new with "Todos los servicios", or open) has no service to book.
 	const general = $derived(rule === undefined ? serviceId === ALL_SERVICES : isGeneral(rule));
+
+	/** The form as `ruleRequest` reads it. */
+	function form(): RuleForm {
+		return {
+			kind,
+			templateId,
+			days,
+			serviceId: rule === undefined ? serviceId : (rule.service_id ?? ALL_SERVICES),
+			returnId: general ? '' : returnId
+		};
+	}
+
+	// The preview of a come-back rule (reminders-and-replies design, CUJ R7): asked for while the
+	// form is valid, after the template preview's pause. An archived rule sends nothing, so it has
+	// none. On an error or offline the line is hidden.
+	const previewBody = $derived.by(() => {
+		const request = ruleRequest(form());
+		return request.ok && rule?.archived !== true ? previewInput(request.body, rule?.id) : null;
+	});
+	let previewLine = $state<string | null>(null);
+	// Timers and the server are outside systems, so this is an effect. A change before the answer
+	// comes marks that answer stale: it is dropped, never shown after a newer one.
+	$effect(() => {
+		const body = previewBody;
+		if (body === null) {
+			previewLine = null;
+			return;
+		}
+		let stale = false;
+		const timer = setTimeout(() => {
+			void api.previewRule(body).then((result) => {
+				if (!stale) {
+					previewLine = result.ok ? rulePreviewText(result.data) : null;
+				}
+			});
+		}, PREVIEW_DEBOUNCE_MS);
+		return () => {
+			stale = true;
+			clearTimeout(timer);
+		};
+	});
 
 	const fieldError = (field: RuleField, key: string): string | undefined => {
 		const own = errors[field];
@@ -171,13 +216,7 @@
 
 	function save(): void {
 		failure = null;
-		const request = ruleRequest({
-			kind,
-			templateId,
-			days,
-			serviceId: rule === undefined ? serviceId : (rule.service_id ?? ALL_SERVICES),
-			returnId: general ? '' : returnId
-		});
+		const request = ruleRequest(form());
 		if (!request.ok) {
 			errors = request.errors;
 			return;
@@ -262,6 +301,9 @@
 							error={failure?.kind === 'problem' ? failure.fields['return_service_id'] : undefined}
 						/>
 					{/if}
+				{/if}
+				{#if previewLine !== null}
+					<p role="status" class="text-sm text-ink-muted">{previewLine}</p>
 				{/if}
 				{#if otherError !== null}
 					<p role="alert" class="text-sm text-error">{otherError}</p>

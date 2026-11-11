@@ -66,6 +66,18 @@ export const TemplatePreviewSchema = z.object({
 	unknown_vars: z.array(z.string())
 }) satisfies z.ZodType<Schemas['TemplatePreview']>;
 
+export const RulePreviewResultSchema = z.object({
+	today_count: z.number().int(),
+	next: z.nullable(z.object({ client_name: z.string(), due_date: day }))
+}) satisfies z.ZodType<Schemas['RulePreviewResult']>;
+
+export const NextReminderSchema = z.object({
+	due_date: day,
+	source_services: z.array(z.string()),
+	general: z.boolean()
+}) satisfies z.ZodType<Schemas['NextReminder']>;
+export type NextReminder = z.infer<typeof NextReminderSchema>;
+
 const RuleKindSchema = z.enum(['before_appointment', 'come_back']);
 
 export const RuleSchema = z.object({

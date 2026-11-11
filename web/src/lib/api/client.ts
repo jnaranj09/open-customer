@@ -16,11 +16,13 @@ import {
 	MediaListSchema,
 	MediaSchema,
 	MeSchema,
+	NextReminderSchema,
 	OptionSchema,
 	PROBLEM_PREFIX,
 	ProblemSchema,
 	PushKeySchema,
 	PushSubscriptionIdSchema,
+	RulePreviewResultSchema,
 	RuleSchema,
 	ServiceSchema,
 	SettingsSchema,
@@ -32,7 +34,8 @@ import {
 	type Appointment,
 	type Client,
 	type LogItem,
-	type Media
+	type Media,
+	type NextReminder
 } from './schemas';
 
 export type ApiOptions = {
@@ -204,6 +207,19 @@ export function createApi(opts: ApiOptions) {
 			);
 			return got.ok ? { ok: true, data: got.data.items } : got;
 		},
+		/** The client's next planned message; null when none is planned (a 204). */
+		nextReminder: async (id: string): Promise<Result<NextReminder | null>> => {
+			const path = '/clients/{id}/next-reminder';
+			const got = await exchange(path, () => client.GET(path, { params: { path: { id } } }));
+			if ('kind' in got) {
+				return { ok: false, error: got };
+			}
+			if (got.response.status === 204) {
+				return { ok: true, data: null };
+			}
+			const parsed = NextReminderSchema.safeParse(got.data);
+			return parsed.success ? { ok: true, data: parsed.data } : { ok: false, error: invalid(path) };
+		},
 		/** Uploads a photo (the full JPEG and its thumbnail) for an appointment, or for a client. */
 		uploadMedia: (
 			photo: { full: Blob; thumb: Blob } & ({ appointment_id: string } | { client_id: string })
@@ -260,6 +276,11 @@ export function createApi(opts: ApiOptions) {
 		/** Adds a reminder rule. `include_overdue` says whether items already past their moment count. */
 		createRule: (body: Schemas['RuleInput']) =>
 			read('/reminder-rules', RuleSchema, () => client.POST('/reminder-rules', { body })),
+		/** What a come-back rule draft does: the clients due today and the next one. Only reads. */
+		previewRule: (body: Schemas['RulePreviewInput']) =>
+			read('/reminder-rules/preview', RulePreviewResultSchema, () =>
+				client.POST('/reminder-rules/preview', { body })
+			),
 		/** Changes only the fields sent; `archived` archives or restores. */
 		updateRule: (id: string, body: Schemas['RulePatch']) =>
 			read('/reminder-rules/{id}', RuleSchema, () =>

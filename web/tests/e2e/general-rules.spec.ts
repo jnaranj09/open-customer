@@ -1,10 +1,12 @@
 // General rules, the row label and the handover question (reminders-and-replies design, CUJ R1, R4
-// and R6; item 37). Each test adds its own template, service and rules on top of the setup data
+// and R6; item 37), the rule preview and the client's next message (CUJ R7 and R10; item 48). Each test adds its own template, service and rules on top of the setup data
 // and removes them after, so the other specs see the setup rules only.
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
+import { shortDay } from '../../src/lib/time';
 import {
 	at,
+	businessDate,
 	closePool,
 	deleteSpecRows,
 	handoverOf,
@@ -167,4 +169,57 @@ test('archiving and restoring its service ask the handover question', async ({ p
 	await answerHandover(page, true);
 	await expect(page.getByText(es.service_restored)).toBeVisible();
 	expect(await handoverOf(rule)).toBeNull();
+});
+
+/** The general rule "30 días" on its own template. */
+async function generalRule(): Promise<void> {
+	const template = await insertTemplate('Te extrañamos', 'Hola {{client.first_name}}, ¿vuelves?');
+	added.templates.push(template);
+	await insertComeBackRule({ serviceId: null, offsetDays: 30, templateId: template });
+}
+
+/** A client's Pedicure visit `days` ago (Pedicure has no rule of its own). */
+async function visit(clientId: string, days: number): Promise<void> {
+	await insertAppointment({
+		clientId,
+		services: ['Pedicure'],
+		startsAt: at(-days, '08:00'),
+		createdAt: at(-90, '08:00')
+	});
+}
+
+test('CUJ R7: editing the days previews the clients due today and the next one', async ({
+	page
+}) => {
+	await generalRule();
+	for (const name of ['Bea Solís', 'Dora Mena', 'Eva Lara', 'Fina Ríos']) {
+		await visit(await insertClient({ name }), 21);
+	}
+	await visit(await insertClient({ name: 'Carla Vega' }), 13);
+	await visit(anaId, 30); // due 9 days ago with 21 days: late, not counted
+
+	await page.goto('/ajustes/recordatorios');
+	await page.getByRole('button', { name: /Te extrañamos/ }).click();
+	const sheet = page.getByRole('dialog');
+	await sheet.getByLabel(es.rule_days_after, { exact: true }).fill('21');
+	await expect(
+		sheet.getByText(
+			fill(es.rule_preview, { count: '4', name: 'Carla Vega', date: shortDay(businessDate(8)) }),
+			{ exact: true }
+		)
+	).toBeVisible();
+});
+
+test('CUJ R10: the client page shows her next message, and not offline', async ({ page }) => {
+	await generalRule();
+	await visit(anaId, 10);
+
+	await page.goto(`/clientas/${anaId}`);
+	const line = `${fill(es.client_next_reminder, { date: shortDay(businessDate(20)) })} (Pedicure)`;
+	await expect(page.getByText(line, { exact: true })).toBeVisible();
+
+	await serverOff(page);
+	await page.reload();
+	await expect(page.getByRole('heading', { name: 'Ana Rojas' })).toBeVisible();
+	await expect(page.getByText(line, { exact: true })).toHaveCount(0);
 });

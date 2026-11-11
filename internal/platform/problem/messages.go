@@ -116,6 +116,8 @@ const (
 	MsgServiceNotAllowed     = "Esta regla no lleva servicio"
 	MsgGeneralNoReturn       = "Una regla para todos los servicios no lleva servicio para agendar"
 	MsgTemplateUnavailable   = "Esa plantilla no existe o está archivada"
+	// MsgRuleNotComeBack is a rule preview of a "before" rule (reminders-and-replies design).
+	MsgRuleNotComeBack = "Esta regla no es de después de un servicio"
 )
 
 // Field messages for the reminder log (design doc item 55). MsgLogFilterInvalid is GET

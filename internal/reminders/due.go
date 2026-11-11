@@ -170,18 +170,27 @@ type dueData struct {
 // transaction, so every query sees one snapshot. Before setup (no settings row) it is
 // problem.NotFound.
 func (m *Module) DueList(ctx context.Context, q db.DBTX, now time.Time) ([]DueItem, error) {
-	d, err := m.loadDue(ctx, q, now)
+	d, err := m.loadDue(ctx, q, now, loadOpts{})
 	if err != nil {
 		return nil, err
 	}
 	return compute(d, now), nil
 }
 
-// loadDue reads the settings, the attributes and the active rules, then the candidate
-// appointments those rules can pair with, the later bookings of the come-back clients and the log
-// rows of the candidates (design doc "Due-list computation", steps 1-2). It only narrows the rows;
-// compute checks every rule.
-func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData, error) {
+// loadOpts widens what loadDue reads. extraComeBack is a come-back offset not saved yet (the rule
+// preview's draft), counted before the windows are sized. With client set, the "before" candidates
+// are that client's bookings in the next 365 days (the client page's look-ahead) instead of the
+// ones the saved "before" rules reach today.
+type loadOpts struct {
+	extraComeBack int
+	client        uuid.NullUUID
+}
+
+// loadDue reads the settings, the attributes and the rules, then the candidate appointments those
+// rules can pair with, the later bookings of the come-back clients and the log rows of the
+// candidates (design doc "Due-list computation", steps 1-2). It only narrows the rows; compute and
+// upcoming check every rule.
+func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time, opts loadOpts) (dueData, error) {
 	queries := sqlc.New(q)
 	b, err := loadBusiness(ctx, queries)
 	if err != nil {
@@ -198,7 +207,7 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 	if err != nil {
 		return dueData{}, fmt.Errorf("list due rules: %w", err)
 	}
-	maxBefore, maxComeBack := 0, 0
+	maxBefore, maxComeBack := 0, opts.extraComeBack
 	for _, r := range rules {
 		row := ruleRowFrom(r)
 		d.Rules = append(d.Rules, row)
@@ -214,11 +223,9 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 	}
 	tz := b.TZ
 	today := locale.LocalDay(now, tz)
-	before, err := queries.ListBeforeCandidates(ctx, sqlc.ListBeforeCandidatesParams{
-		Now: now, Until: locale.AddDays(today, maxBefore+1, tz),
-	})
+	before, err := beforeCandidates(ctx, queries, now, locale.AddDays(today, maxBefore+1, tz), opts.client)
 	if err != nil {
-		return dueData{}, fmt.Errorf("list before candidates: %w", err)
+		return dueData{}, err
 	}
 	comeBack, err := queries.ListComeBackCandidates(ctx, sqlc.ListComeBackCandidatesParams{
 		Since: locale.AddDays(today, -(maxComeBack + lookBackDays), tz), Now: now,
@@ -267,6 +274,29 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 		}
 	}
 	return d, nil
+}
+
+// beforeCandidates reads the bookings a "before" rule can pair with: those starting before until, or
+// with client set, that client's bookings in the next 365 days.
+func beforeCandidates(ctx context.Context, queries *sqlc.Queries, now, until time.Time, client uuid.NullUUID) ([]sqlc.ListBeforeCandidatesRow, error) {
+	if !client.Valid {
+		rows, err := queries.ListBeforeCandidates(ctx, sqlc.ListBeforeCandidatesParams{Now: now, Until: until})
+		if err != nil {
+			return nil, fmt.Errorf("list before candidates: %w", err)
+		}
+		return rows, nil
+	}
+	rows, err := queries.ListClientUpcomingAppointments(ctx, sqlc.ListClientUpcomingAppointmentsParams{
+		ClientID: client.UUID, Now: now, Until: now.AddDate(0, 0, maxOffsetDays),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list client upcoming appointments: %w", err)
+	}
+	out := make([]sqlc.ListBeforeCandidatesRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, sqlc.ListBeforeCandidatesRow(r))
+	}
+	return out, nil
 }
 
 // business is the settings a rendered message needs.
@@ -390,6 +420,34 @@ func apptRowFrom(r sqlc.ListBeforeCandidatesRow) apptRow {
 // rows, every rule is checked here.
 func compute(d dueData, now time.Time) []DueItem {
 	today := locale.LocalDay(now, d.TZ)
+	return listItems(d, now, pass{today: today, oldest: locale.AddDays(today, -lookBackDays, d.TZ)})
+}
+
+// upcoming is the look-ahead pass (reminders-and-replies design, "Look-ahead pass"): the items due
+// after today and on or before horizon, each as compute will list it on its due day while the rows
+// stay as they are. A general rule gives at most one item per client and due day.
+func upcoming(d dueData, now, horizon time.Time) []DueItem {
+	return listItems(d, now, pass{today: locale.LocalDay(now, d.TZ), until: &horizon})
+}
+
+// pass is the due days a computation lists: compute lists the days that have come, a come-back item
+// back to oldest; upcoming lists the days after today up to until.
+type pass struct {
+	today  time.Time
+	oldest time.Time
+	until  *time.Time
+}
+
+// lists reports whether the pass lists an item due on due; comeBack applies the 60-day cut.
+func (p pass) lists(due time.Time, comeBack bool) bool {
+	if p.until != nil {
+		return due.After(p.today) && !due.After(*p.until)
+	}
+	return dueReached(due, p.today) && (!comeBack || !due.Before(p.oldest))
+}
+
+// listItems is the items of the pass p, sorted by due day, client name, then ID.
+func listItems(d dueData, now time.Time, p pass) []DueItem {
 	var items []DueItem
 	for _, r := range d.Rules {
 		if !r.canSend() || r.general() {
@@ -398,19 +456,19 @@ func compute(d dueData, now time.Time) []DueItem {
 		switch r.Kind {
 		case KindBefore:
 			for _, a := range d.Before {
-				if it, ok := beforeItem(d, r, a, now, today); ok {
+				if it, ok := beforeItem(d, r, a, now, p); ok {
 					items = append(items, it)
 				}
 			}
 		case KindComeBack:
 			for _, a := range d.ComeBack {
-				if it, ok := comeBackItem(d, r, a, now, today); ok {
+				if it, ok := comeBackItem(d, r, a, now, p); ok {
 					items = append(items, it)
 				}
 			}
 		}
 	}
-	items = append(items, generalItems(d, now, today)...)
+	items = append(items, generalItems(d, now, p)...)
 	slices.SortFunc(items, func(x, y DueItem) int {
 		return cmp.Or(x.DueDate.Compare(y.DueDate), cmp.Compare(x.ClientName, y.ClientName), cmp.Compare(x.ID, y.ID))
 	})
@@ -419,15 +477,15 @@ func compute(d dueData, now time.Time) []DueItem {
 
 // beforeItem is the "before" item of rule r for appointment a: due offset_days before the start
 // day, shown until the start, never for a cancelled or no-show appointment.
-func beforeItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueItem, bool) {
+func beforeItem(d dueData, r ruleRow, a apptRow, now time.Time, p pass) (DueItem, bool) {
 	if !active(a.Status) || !a.StartsAt.After(now) {
 		return DueItem{}, false
 	}
 	due := locale.AddDays(locale.LocalDay(a.StartsAt, d.TZ), -r.OffsetDays, d.TZ)
-	if !dueReached(due, today) || !allowedFrom(d, r, a, due) || d.Logged[logKey{RuleID: r.ID, AppointmentID: a.ID, AnchorAt: a.StartsAt.UTC()}] {
+	if !p.lists(due, false) || !allowedFrom(d, r, a, due) || d.Logged[logKey{RuleID: r.ID, AppointmentID: a.ID, AnchorAt: a.StartsAt.UTC()}] {
 		return DueItem{}, false
 	}
-	it := newItem(d, r, a, due, today)
+	it := newItem(d, r, a, due, p.today)
 	it.ShownUntil = locale.LocalDay(a.StartsAt, d.TZ)
 	it.MessageNumber = 1
 	anchor := a.StartsAt
@@ -440,12 +498,12 @@ func beforeItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueItem,
 // end day, listed for 60 days, skipped while the client has a later appointment with the return
 // service, and once a general reminder for the visit was sent. A future booking without the return
 // service turns the item into a booking prompt.
-func comeBackItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueItem, bool) {
+func comeBackItem(d dueData, r ruleRow, a apptRow, now time.Time, p pass) (DueItem, bool) {
 	if !r.covers(a) || !appointments.IsDone(a.Status, a.EndsAt, now) || d.GeneralSent[a.ID] {
 		return DueItem{}, false
 	}
 	due := locale.AddDays(locale.LocalDay(a.EndsAt, d.TZ), r.OffsetDays, d.TZ)
-	if !dueReached(due, today) || !allowedFrom(d, r, a, due) || due.Before(locale.AddDays(today, -lookBackDays, d.TZ)) {
+	if !p.lists(due, true) || !allowedFrom(d, r, a, due) {
 		return DueItem{}, false
 	}
 	var next *laterAppt
@@ -466,7 +524,7 @@ func comeBackItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueIte
 	if d.Logged[logKey{RuleID: r.ID, AppointmentID: a.ID}] {
 		return DueItem{}, false
 	}
-	it := comeBackNew(d, r, a, due, today)
+	it := comeBackNew(d, r, a, due, p.today)
 	if next != nil {
 		it.Mode = ModeBookingPrompt
 		it.Prompt = &Prompt{
@@ -488,10 +546,11 @@ func active(s appointments.Status) bool {
 	return false
 }
 
-// generalItems is at most one general reminder per client (reminders-and-replies design,
-// "Due-list rules"): for the client's latest done visit v, the latest due general rule that can
+// generalItems is at most one general reminder per client and pick (reminders-and-replies design,
+// "Due-list rules"): for the client's latest done visit v, the latest listed general rule that can
 // send, unless a later appointment, a specific rule that can send for v, or a log row stops it.
-func generalItems(d dueData, now, today time.Time) []DueItem {
+// compute has one pick per client; upcoming has one per due day.
+func generalItems(d dueData, now time.Time, p pass) []DueItem {
 	var general []ruleRow
 	for _, r := range d.Rules {
 		if r.general() && r.canSend() {
@@ -503,9 +562,7 @@ func generalItems(d dueData, now, today time.Time) []DueItem {
 	}
 	var items []DueItem
 	for _, v := range latestVisits(d.ComeBack, now) {
-		if it, ok := generalItem(d, general, v, today); ok {
-			items = append(items, it)
-		}
+		items = append(items, generalItem(d, general, v, p)...)
 	}
 	return items
 }
@@ -531,11 +588,18 @@ func latestVisits(candidates []apptRow, now time.Time) []apptRow {
 	return out
 }
 
-// generalItem is the general reminder for visit v, the client's latest done visit.
-func generalItem(d dueData, general []ruleRow, v apptRow, today time.Time) (DueItem, bool) {
+// candidate is a general rule with its due day for one visit.
+type candidate struct {
+	rule ruleRow
+	due  time.Time
+}
+
+// generalItem is the general reminders for visit v, the client's latest done visit: one in compute,
+// one per due day in upcoming.
+func generalItem(d dueData, general []ruleRow, v apptRow, p pass) []DueItem {
 	for _, l := range d.Later {
 		if l.ClientID == v.ClientID && after(l.StartsAt, l.ID, v.StartsAt, v.ID) {
-			return DueItem{}, false // G1: any later appointment
+			return nil // G1: any later appointment
 		}
 	}
 	var cutoff *time.Time
@@ -544,45 +608,57 @@ func generalItem(d dueData, general []ruleRow, v apptRow, today time.Time) (DueI
 			continue
 		}
 		if r.canSend() {
-			return DueItem{}, false // G2: a specific rule that can send has the visit
+			return nil // G2: a specific rule that can send has the visit
 		}
 		if r.HandoverFrom != nil && (cutoff == nil || r.HandoverFrom.After(*cutoff)) {
 			cutoff = r.HandoverFrom
 		}
 	}
 	end := locale.LocalDay(v.EndsAt, d.TZ)
-	oldest := locale.AddDays(today, -lookBackDays, d.TZ)
 	from := func(g ruleRow, due time.Time) bool {
 		return allowedFrom(d, g, v, due) && (cutoff == nil || !due.Before(locale.LocalDay(*cutoff, d.TZ)))
 	}
-	var pick *ruleRow
-	var pickDue time.Time
-	for i := range general {
-		g := &general[i]
-		due := locale.AddDays(end, g.OffsetDays, d.TZ)
-		if !dueReached(due, today) || due.Before(oldest) || !from(*g, due) {
-			continue
-		}
-		if pick == nil || laterPick(due, *g, pickDue, *pick) {
-			pick, pickDue = g, due
-		}
-	}
-	if pick == nil || d.Logged[logKey{RuleID: pick.ID, AppointmentID: v.ID}] {
-		return DueItem{}, false // G3: a handled latest due hides the earlier ones
-	}
-	it := comeBackNew(d, *pick, v, pickDue, today)
+	// compute keeps one pick (slot 0); upcoming one per due day (slot = the day).
+	var picks []candidate
+	slot := map[int64]int{}
 	for _, g := range general {
 		due := locale.AddDays(end, g.OffsetDays, d.TZ)
-		if due.After(pickDue) && from(g, due) && (it.NextDueDate == nil || due.Before(*it.NextDueDate)) {
-			it.NextDueDate = &due
+		if !p.lists(due, true) || !from(g, due) {
+			continue
+		}
+		var key int64
+		if p.until != nil {
+			key = due.Unix()
+		}
+		i, ok := slot[key]
+		switch {
+		case !ok:
+			slot[key] = len(picks)
+			picks = append(picks, candidate{rule: g, due: due})
+		case laterPick(due, g, picks[i].due, picks[i].rule):
+			picks[i] = candidate{rule: g, due: due}
 		}
 	}
-	if it.NextDueDate != nil {
-		if dayBefore := locale.AddDays(*it.NextDueDate, -1, d.TZ); dayBefore.Before(it.ShownUntil) {
-			it.ShownUntil = dayBefore
+	var items []DueItem
+	for _, pick := range picks {
+		if d.Logged[logKey{RuleID: pick.rule.ID, AppointmentID: v.ID}] {
+			continue // G3: a handled latest due hides the earlier ones
 		}
+		it := comeBackNew(d, pick.rule, v, pick.due, p.today)
+		for _, g := range general {
+			due := locale.AddDays(end, g.OffsetDays, d.TZ)
+			if due.After(pick.due) && from(g, due) && (it.NextDueDate == nil || due.Before(*it.NextDueDate)) {
+				it.NextDueDate = &due
+			}
+		}
+		if it.NextDueDate != nil {
+			if dayBefore := locale.AddDays(*it.NextDueDate, -1, d.TZ); dayBefore.Before(it.ShownUntil) {
+				it.ShownUntil = dayBefore
+			}
+		}
+		items = append(items, it)
 	}
-	return it, true
+	return items
 }
 
 // laterPick orders general candidates: the latest due, then the larger offset, then the higher id.

@@ -375,6 +375,67 @@ func (q *Queries) ListCandidateLines(ctx context.Context, ids []uuid.UUID) ([]Li
 	return items, nil
 }
 
+const listClientUpcomingAppointments = `-- name: ListClientUpcomingAppointments :many
+SELECT a.id, a.client_id, c.name AS client_name, c.phone_digits, c.attrs AS client_attrs,
+       a.starts_at, a.ends_at, a.created_at, a.status, a.attrs
+FROM appointments a JOIN clients c ON c.id = a.client_id
+WHERE a.client_id = $1 AND a.starts_at > $2::timestamptz AND a.starts_at <= $3::timestamptz
+  AND a.status IN ('scheduled', 'confirmed') AND c.archived_at IS NULL
+ORDER BY a.starts_at, a.id
+`
+
+type ListClientUpcomingAppointmentsParams struct {
+	ClientID uuid.UUID
+	Now      time.Time
+	Until    time.Time
+}
+
+type ListClientUpcomingAppointmentsRow struct {
+	ID          uuid.UUID
+	ClientID    uuid.UUID
+	ClientName  string
+	PhoneDigits *string
+	ClientAttrs json.RawMessage
+	StartsAt    time.Time
+	EndsAt      time.Time
+	CreatedAt   time.Time
+	Status      string
+	Attrs       json.RawMessage
+}
+
+// One client's bookings in (now, until], for the "before" reminders of the client page (the
+// reminders-and-replies design, "Look-ahead pass"). The columns are ListBeforeCandidates'.
+func (q *Queries) ListClientUpcomingAppointments(ctx context.Context, arg ListClientUpcomingAppointmentsParams) ([]ListClientUpcomingAppointmentsRow, error) {
+	rows, err := q.db.Query(ctx, listClientUpcomingAppointments, arg.ClientID, arg.Now, arg.Until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListClientUpcomingAppointmentsRow
+	for rows.Next() {
+		var i ListClientUpcomingAppointmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientID,
+			&i.ClientName,
+			&i.PhoneDigits,
+			&i.ClientAttrs,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.CreatedAt,
+			&i.Status,
+			&i.Attrs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listComeBackCandidates = `-- name: ListComeBackCandidates :many
 SELECT a.id, a.client_id, c.name AS client_name, c.phone_digits, c.attrs AS client_attrs,
        a.starts_at, a.ends_at, a.created_at, a.status, a.attrs

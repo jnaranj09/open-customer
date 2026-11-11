@@ -1,15 +1,19 @@
 package reminders
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/jnaranj09/open-customer/internal/db"
 	"github.com/jnaranj09/open-customer/internal/db/sqlc"
+	"github.com/jnaranj09/open-customer/internal/locale"
 	"github.com/jnaranj09/open-customer/internal/platform/problem"
 	"github.com/jnaranj09/open-customer/internal/templates"
 )
@@ -90,4 +94,85 @@ func unknownNames(refs []templates.VarRef) []string {
 		}
 	}
 	return out
+}
+
+// RuleDraft is a come-back rule as the rule form holds it. RuleID is the saved rule it edits; none
+// for a new rule. No ServiceID makes a general rule.
+type RuleDraft struct {
+	RuleID          uuid.NullUUID
+	ServiceID       uuid.NullUUID
+	ReturnServiceID uuid.NullUUID
+	OffsetDays      int
+	TemplateID      uuid.UUID
+}
+
+// RulePreviewResult is what a draft does (reminders-and-replies design, "Look-ahead pass"):
+// TodayCount clients have a reminder of it due exactly today; Next is its earliest reminder after
+// today, or nil.
+type RulePreviewResult struct {
+	TodayCount int
+	Next       *NextClient
+}
+
+// NextClient is the client of a draft's next reminder and its due day (business-local midnight).
+type NextClient struct {
+	ClientName string
+	DueDate    time.Time
+}
+
+// RulePreview computes the due list and the look-ahead with draft in place of the saved rule (or
+// added, for a new rule), and writes nothing. The draft gets the checks of a new come-back rule; an
+// unknown RuleID is problem.NotFound and a "before" one a 422 on "rule_id". The draft has no
+// applies_from, so late items count the same whatever the include-overdue answer; they are not in
+// TodayCount anyway.
+func (m *Module) RulePreview(ctx context.Context, q db.DBTX, now time.Time, draft RuleDraft) (RulePreviewResult, error) {
+	queries := sqlc.New(q)
+	id := uuid.Max // a new rule's id: later than every saved one, as a new UUIDv7 is
+	if draft.RuleID.Valid {
+		kind, err := queries.GetRuleKind(ctx, draft.RuleID.UUID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return RulePreviewResult{}, problem.NotFound{}
+		}
+		if err != nil {
+			return RulePreviewResult{}, fmt.Errorf("get rule kind: %w", err)
+		}
+		if Kind(kind) != KindComeBack {
+			return RulePreviewResult{}, problem.Field("rule_id", problem.MsgRuleNotComeBack)
+		}
+		id = draft.RuleID.UUID
+	}
+	offset, err := checkRuleInput(ctx, queries, RuleInput{
+		Kind: KindComeBack, ServiceID: draft.ServiceID, ReturnServiceID: draft.ReturnServiceID,
+		OffsetDays: draft.OffsetDays, TemplateID: draft.TemplateID,
+	})
+	if err != nil {
+		return RulePreviewResult{}, err
+	}
+	d, err := m.loadDue(ctx, q, now, loadOpts{extraComeBack: int(offset)})
+	if err != nil {
+		return RulePreviewResult{}, err
+	}
+	row := ruleRow{ID: id, Kind: KindComeBack, ServiceID: draft.ServiceID, OffsetDays: int(offset)}
+	if draft.ServiceID.Valid {
+		row.ReturnServiceID = cmp.Or(draft.ReturnServiceID.UUID, draft.ServiceID.UUID)
+	}
+	d.Rules = slices.DeleteFunc(d.Rules, func(r ruleRow) bool { return r.ID == id })
+	d.Rules = append(d.Rules, row)
+
+	var out RulePreviewResult
+	today := locale.LocalDay(now, d.TZ)
+	clients := map[uuid.UUID]bool{}
+	for _, it := range compute(d, now) {
+		if it.RuleID == id && it.DueDate.Equal(today) && !clients[it.ClientID] {
+			clients[it.ClientID] = true
+			out.TodayCount++
+		}
+	}
+	for _, it := range upcoming(d, now, locale.AddDays(today, maxOffsetDays, d.TZ)) {
+		if it.RuleID == id {
+			out.Next = &NextClient{ClientName: it.ClientName, DueDate: it.DueDate}
+			break
+		}
+	}
+	return out, nil
 }

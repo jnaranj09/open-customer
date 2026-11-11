@@ -380,13 +380,15 @@ Owner decision D22: the due list stays `compute(d, now)`. A separate function
 `upcoming(d, now, horizon)` answers "what comes next":
 
 *   It reuses `comeBackItem`, `generalItem`'s steps and `allowedFrom`, and replaces `dueReached`
-    and the 60-day cut with "after today and on or before `horizon`". The log is not checked (a
-    future reminder cannot be logged).
+    and the 60-day cut with "after today and on or before `horizon`" (one `pass` value in `due.go`
+    says which days a computation lists). The log is still checked: a come-back key has no due day,
+    so a rule whose days changed after a send already has its row.
 *   **Specific reminders**: from the same candidate visits. A future due day is at most
     `maxComeBack` days after a visit, so the current load window (`today - (maxComeBack + 60)`)
     already holds every visit that can have one.
-*   **General reminders**: the same `v`, G1, G2 and cutoff checks; the result is the candidate with
-    the **earliest** due after today (the next one she will see).
+*   **General reminders**: the same `v`, G1, G2 and cutoff checks; one reminder per due day after
+    today (on a tie, the larger offset, then the higher id), each as `compute` will list it on that
+    day. The preview and the client page take the **earliest** (the next one she will see).
 *   **"Before" reminders**: only for the client page, from that client's appointments in the next
     365 days (new query `ListClientUpcomingAppointments`: the client's `scheduled` or `confirmed`
     appointments with `starts_at` in `(now, now + 365 days]`, with their service lines).
@@ -398,7 +400,8 @@ The two reads:
     `RulePreviewInput`: the come-back rule form fields (`service_id` or null, `return_service_id`,
     `offset_days`, `template_id`) plus `rule_id` (the rule being edited, or absent). Checks: the
     same field checks and messages as creating a rule (422); an unknown `rule_id` → 404; a
-    `rule_id` of a "before" rule → 422 on `rule_id`. The handler loads the due data in
+    `rule_id` of a "before" rule → 422 on `rule_id` ("Esta regla no es de después de un
+    servicio"). The draft has no `applies_from`; a new rule's draft takes the highest id. The handler loads the due data in
     `s.snapshot`, with the draft's offset counted in `maxComeBack` before the windows are sized,
     puts the draft in place of the saved rule, and answers `RulePreviewResult`
     `{ today_count, next: { client_name, due_date } | null }`:
@@ -1095,8 +1098,9 @@ And the handover and rule texts (D17):
 
 *   `RulePreview(ctx, q, now, draft, ruleID) (RulePreviewResult, error)` (the existing `Preview`
     type is the template preview; this one is separate). `NextForClient(ctx, q, now, clientID)`.
-    `loadDue` takes the draft's offset into account before sizing windows. New query
-    `ListClientUpcomingAppointments` in `internal/db/queries/reminders.sql`.
+    `loadDue` takes the draft's offset into account before sizing windows, and for the client page
+    reads that client's bookings (new query `ListClientUpcomingAppointments` in
+    `internal/db/queries/reminders.sql`) as the "before" candidates.
 
 #### 42. `internal/reminders/upcoming_test.go`, `next_db_test.go` (Create), `preview_db_test.go`, `docs/threat-model.md` (Modify)
 
@@ -1114,7 +1118,9 @@ And the handover and rule texts (D17):
 #### 43. `api/openapi.yaml` (Modify)
 
 *   `PreviewRule` (`POST /reminder-rules/preview`, `RulePreviewInput` → `RulePreviewResult`) and
-    `GetClientNextReminder` (`GET /clients/{id}/next-reminder`, `NextReminder` or 204).
+    `GetClientNextReminder` (`GET /clients/{id}/next-reminder`, `NextReminder` or 204). The spec's
+    `operationId`s are `previewRule` and `getClientNextReminder`, as the other operations are
+    written.
 
 #### 44. `internal/httpapi/handlers_reminders.go`, `handlers_clients.go`, `handlers_bootstrap_test.go` (Modify)
 
@@ -1132,21 +1138,27 @@ And the handover and rule texts (D17):
 
 *   For come-back rules only: `rule_preview` "Hoy: {count} clientas · próxima: {name}, {date}"
     (`rule_preview_one` for one client; `rule_preview_none` "Hoy: {count} clientas" when `next` is
-    null). Sent only while the form is valid, after the same pause as the template preview; a newer
-    answer replaces an older one; on an error or offline the line is hidden.
+    null, `rule_preview_none_one` "Hoy: 1 clienta"). Sent only while the form is valid and the rule
+    is not archived, after the same pause as the template preview (`PREVIEW_DEBOUNCE_MS`,
+    `web/src/lib/preview.ts`); a newer answer replaces an older one; on an error or offline the
+    line is hidden. `previewInput` and `rulePreviewText` in `web/src/lib/rules.ts`.
 
 #### 47. `web/src/routes/clientas/[id]/+page.svelte` (Modify)
 
-*   In the reminders section: `client_next_reminder` "Próximo mensaje: {date} ({services})",
-    `client_next_today` "Mensaje para hoy ({services})", `client_next_late` "Mensaje atrasado desde
-    {date} ({services})", `client_next_none` "Sin mensajes pendientes". Services joined as in the
-    row label. Hidden offline, while loading and on an error.
+*   In the reminders section: `client_next_reminder` "Próximo mensaje: {date}",
+    `client_next_today` "Mensaje para hoy", `client_next_late` "Mensaje atrasado desde {date}",
+    each followed by `client_next_services` "({services})" when the visit has services (a visit
+    with only an end time has none); `client_next_none` "Sin mensajes pendientes". Services joined
+    as in the row label (`nextReminderText` in `web/src/lib/due.ts`). Hidden offline, while loading
+    and on an error.
 
 #### 48. `web/src/lib/i18n/es.json`, `web/tests/e2e/ui-probe.spec.ts`, `web/tests/e2e/reminders.spec.ts` (Modify)
 
 *   The S4 texts. Probe data states: next-reminder answers 204 (shows `client_next_none`), 500
     (line hidden, no alert), never answers (line hidden); the preview answers `today_count: 0`
-    and `next: null`, 500 (line hidden), never answers (line hidden). R7 and R10 end to end.
+    and `next: null`, 500 (line hidden), never answers (line hidden): a "quiet" feed in the probe
+    table, whose line is left out on an error and while it loads. R7 and R10 end to end, in
+    `general-rules.spec.ts` with the other general-rule journeys.
 
 #### 49. `CLAUDE.md` (Modify)
 

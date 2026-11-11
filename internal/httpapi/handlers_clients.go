@@ -10,6 +10,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/clients"
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/nullval"
+	"github.com/jnaranj09/open-customer/internal/reminders"
 )
 
 // ListClients answers the active clients, or the archived ones with archived=true.
@@ -63,6 +64,30 @@ func (s *Server) GetClient(w http.ResponseWriter, r *http.Request, id openapi_ty
 		return
 	}
 	writeJSON(w, http.StatusOK, toGenClient(out))
+}
+
+// GetClientNextReminder answers the client's next planned message, read in one snapshot, or 204.
+func (s *Server) GetClientNextReminder(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var out *reminders.NextReminder
+	if err := s.snapshot(r, func(tx pgx.Tx) error {
+		var err error
+		if out, err = s.reminders.NextForClient(r.Context(), tx, s.clock.Now(), id); err != nil {
+			return fmt.Errorf("next reminder: %w", err)
+		}
+		return nil
+	}); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if out == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	res := gen.NextReminder{DueDate: dateOf(out.DueDate), SourceServices: out.SourceServices, General: out.General}
+	if res.SourceServices == nil {
+		res.SourceServices = []string{}
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // UpdateClient changes the fields sent. Only phone and notes may be null.

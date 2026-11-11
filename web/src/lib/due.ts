@@ -2,7 +2,7 @@
 // the phone only hides, from a cached copy, what the server would no longer return.
 import type { Api } from './api/client';
 import type { Result } from './api/errors';
-import type { Appointment, DueItem } from './api/schemas';
+import type { Appointment, DueItem, NextReminder } from './api/schemas';
 import { t } from './i18n';
 import { daysBetween, formatTime, shortDay, todayIn } from './time';
 
@@ -73,6 +73,31 @@ const WARN_DAYS = 7;
 /** How many service names a label spells out before "+n". */
 const NAMED_SERVICES = 2;
 
+/** Service names as a label shows them: the first two joined by ", ", then "+n" for the rest. */
+function servicesText(names: readonly string[]): string {
+	const named = names.slice(0, NAMED_SERVICES).join(', ');
+	const more = names.length - NAMED_SERVICES;
+	return more > 0 ? `${named} ${t('due_label_more', { n: more })}` : named;
+}
+
+/** The client page's line for her next planned message (reminders-and-replies design, CUJ R10):
+ *  "Próximo mensaje", "Mensaje para hoy" or "Mensaje atrasado desde", with the visit's services as
+ *  the row label joins them; `null` (none planned) is "Sin mensajes pendientes". */
+export function nextReminderText(next: NextReminder | null, today: string): string {
+	if (next === null) {
+		return t('client_next_none');
+	}
+	const date = shortDay(next.due_date);
+	const head =
+		next.due_date > today
+			? t('client_next_reminder', { date })
+			: next.due_date === today
+				? t('client_next_today')
+				: t('client_next_late', { date });
+	const services = servicesText(next.source_services);
+	return services === '' ? head : `${head} ${t('client_next_services', { services })}`;
+}
+
 /** The label of a due item (reminders-and-replies design, "Row label"), from the item's fields only:
  *  the source visit, its services, "General N días" for a general rule, "Nº mensaje" from the 2nd,
  *  and, online only (offline the cached list may be a day old), the days left. `warning` when a
@@ -85,13 +110,12 @@ export function dueLabel(
 ): { text: string; warning: boolean } {
 	const date = shortDay(todayIn(zone, new Date(item.source_starts_at)));
 	const before = item.kind === 'before_appointment';
-	const named = item.source_services.slice(0, NAMED_SERVICES).join(', ');
-	const more = item.source_services.length - NAMED_SERVICES;
+	const services = servicesText(item.source_services);
 	const parts = [
 		before
 			? t('due_label_visit_time', { date, time: formatTime(item.source_starts_at, zone) })
 			: t('due_label_visit', { date }),
-		...(named === '' ? [] : [more > 0 ? `${named} ${t('due_label_more', { n: more })}` : named])
+		...(services === '' ? [] : [services])
 	];
 	if (before) {
 		return { text: parts.join(' · '), warning: false };

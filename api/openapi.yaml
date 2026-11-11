@@ -773,6 +773,39 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /clients/{id}/next-reminder:
+    get:
+      operationId: getClientNextReminder
+      summary: The client's next planned message
+      description: >-
+        Read in one snapshot: the client's earliest reminder due today or late, or else the earliest
+        one after today (come_back from her done visits, before_appointment from her bookings in the
+        next 365 days); ties by due day, then rule id. 204 when there is none. An archived client is
+        allowed (she has no reminders).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The next reminder.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextReminder"
+        "204":
+          description: No reminder is planned.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /clients/{id}/media:
     get:
       operationId: listClientMedia
@@ -928,6 +961,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/Rule"
         "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /reminder-rules/preview:
+    post:
+      operationId: previewRule
+      summary: Preview a come_back rule draft
+      description: >-
+        Only reads. The body is a come_back rule as the form holds it, with rule_id when it edits a
+        saved rule; the fields get the same checks as on create (422). An unknown rule_id is 404 and
+        a before_appointment one is 422 on rule_id. The draft takes the saved rule's place (or is
+        added) in one snapshot of the due data. today_count is the clients with a reminder of the
+        draft due exactly today (late ones are not counted); next is the earliest reminder of the
+        draft after today, or null.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulePreviewInput"
+      responses:
+        "200":
+          description: What the draft does.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulePreviewResult"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
           $ref: "#/components/responses/Problem"
         "413":
           $ref: "#/components/responses/Problem"
@@ -1781,6 +1848,61 @@ components:
           type: string
           format: uuid
         include_overdue:
+          type: boolean
+    RulePreviewInput:
+      type: object
+      required: [offset_days, template_id]
+      description: A come_back rule draft; no service_id makes a general rule.
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+          description: The saved rule the draft edits; left out for a new rule.
+        service_id:
+          type: string
+          format: uuid
+          nullable: true
+        return_service_id:
+          type: string
+          format: uuid
+          nullable: true
+        offset_days:
+          type: integer
+        template_id:
+          type: string
+          format: uuid
+    RulePreviewResult:
+      type: object
+      required: [today_count, next]
+      properties:
+        today_count:
+          type: integer
+        next:
+          allOf:
+            - $ref: "#/components/schemas/RulePreviewNext"
+          nullable: true
+    RulePreviewNext:
+      type: object
+      required: [client_name, due_date]
+      properties:
+        client_name:
+          type: string
+        due_date:
+          type: string
+          format: date
+    NextReminder:
+      type: object
+      required: [due_date, source_services, general]
+      properties:
+        due_date:
+          type: string
+          format: date
+        source_services:
+          type: array
+          items:
+            type: string
+          description: The service names of the appointment the reminder comes from, in line order.
+        general:
           type: boolean
     RulePatch:
       type: object

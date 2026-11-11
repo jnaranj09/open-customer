@@ -5,6 +5,7 @@
 import type { Rule, Service, Template } from './api/schemas';
 import type { components } from './api/schema';
 import { t, type MessageKey } from './i18n';
+import { shortDay } from './time';
 
 type Schemas = components['schemas'];
 
@@ -119,6 +120,35 @@ export function ruleRequest(
 		}
 	}
 	return { ok: true, body };
+}
+
+/** The rule preview's body for a valid come-back form, `ruleId` naming the saved rule it edits;
+ *  null for a "before" rule, which has no preview. */
+export function previewInput(
+	body: RuleInput,
+	ruleId: string | undefined
+): Schemas['RulePreviewInput'] | null {
+	if (body.kind !== 'come_back') {
+		return null;
+	}
+	return {
+		...(ruleId === undefined ? {} : { rule_id: ruleId }),
+		service_id: body.service_id ?? null,
+		return_service_id: body.return_service_id ?? null,
+		offset_days: body.offset_days,
+		template_id: body.template_id
+	};
+}
+
+/** "Hoy: 4 clientas · próxima: Carla, 10 nov", or only the count when nothing is ahead. */
+export function rulePreviewText(preview: Schemas['RulePreviewResult']): string {
+	const count = preview.today_count;
+	const next = preview.next;
+	if (next === null) {
+		return count === 1 ? t('rule_preview_none_one') : t('rule_preview_none', { count });
+	}
+	const vars = { name: next.client_name, date: shortDay(next.due_date) };
+	return count === 1 ? t('rule_preview_one', vars) : t('rule_preview', { count, ...vars });
 }
 
 /** The fields of `body` that differ from the saved rule. A come-back rule that goes back to its own

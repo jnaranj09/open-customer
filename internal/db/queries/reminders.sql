@@ -97,6 +97,16 @@ WHERE a.ends_at >= @since::timestamptz AND a.ends_at <= @now::timestamptz
   AND a.status IN ('scheduled', 'confirmed') AND c.archived_at IS NULL
 ORDER BY a.ends_at, a.id;
 
+-- name: ListClientUpcomingAppointments :many
+-- One client's bookings in (now, until], for the "before" reminders of the client page (the
+-- reminders-and-replies design, "Look-ahead pass"). The columns are ListBeforeCandidates'.
+SELECT a.id, a.client_id, c.name AS client_name, c.phone_digits, c.attrs AS client_attrs,
+       a.starts_at, a.ends_at, a.created_at, a.status, a.attrs
+FROM appointments a JOIN clients c ON c.id = a.client_id
+WHERE a.client_id = @client_id AND a.starts_at > @now::timestamptz AND a.starts_at <= @until::timestamptz
+  AND a.status IN ('scheduled', 'confirmed') AND c.archived_at IS NULL
+ORDER BY a.starts_at, a.id;
+
 -- name: ListCandidateLines :many
 SELECT appointment_id, service_id, name
 FROM appointment_services

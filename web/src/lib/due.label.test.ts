@@ -1,7 +1,7 @@
 // The row label of a due item (reminders-and-replies design, "Row label"; item 34).
 import { describe, expect, it } from 'vitest';
 import type { DueItem } from './api/schemas';
-import { dueLabel } from './due';
+import { dueLabel, nextReminderText } from './due';
 
 const ID = '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f';
 const ZONE = 'America/Costa_Rica';
@@ -95,5 +95,32 @@ describe('dueLabel', () => {
 			text: 'Cita 2 nov 09:30 · Uñas',
 			warning: false
 		});
+	});
+});
+
+describe('nextReminderText', () => {
+	const next = { due_date: '2026-10-31', source_services: ['Uñas'], general: true };
+
+	it.each([
+		['a future day', '2026-10-20', 'Próximo mensaje: 31 oct (Uñas)'],
+		['today', '2026-10-31', 'Mensaje para hoy (Uñas)'],
+		['a past day', '2026-11-05', 'Mensaje atrasado desde 31 oct (Uñas)']
+	])('says when the message is due on %s', (_, today, want) => {
+		expect(nextReminderText(next, today)).toBe(want);
+	});
+
+	it('joins services as the row label does', () => {
+		const three = { ...next, source_services: ['Uñas', 'Cejas', 'Pestañas'] };
+		expect(nextReminderText(three, '2026-10-20')).toBe('Próximo mensaje: 31 oct (Uñas, Cejas +1)');
+	});
+
+	it('leaves the parentheses out for a visit with no services', () => {
+		expect(nextReminderText({ ...next, source_services: [] }, '2026-10-31')).toBe(
+			'Mensaje para hoy'
+		);
+	});
+
+	it('says nothing is planned for none', () => {
+		expect(nextReminderText(null, TODAY)).toBe('Sin mensajes pendientes');
 	});
 });

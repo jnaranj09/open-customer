@@ -209,6 +209,7 @@ func TestClientRoutesNeedSession(t *testing.T) {
 		{http.MethodPost, clientsPath, clientBody},
 		{http.MethodGet, clientsPath + "/" + id, ""},
 		{http.MethodPatch, clientsPath + "/" + id, `{"archived":true}`},
+		{http.MethodGet, clientsPath + "/" + id + "/next-reminder", ""},
 	} {
 		t.Run(rt.method+" "+rt.target, func(t *testing.T) {
 			assertUnauthorized(t, send(app.handler, rt.method, rt.target, testOrigin, rt.body, nil))

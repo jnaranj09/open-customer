@@ -67,6 +67,38 @@ func (s *Server) UpdateReminderRule(w http.ResponseWriter, r *http.Request, id o
 	writeJSON(w, http.StatusOK, toGenRule(out))
 }
 
+// PreviewRule answers what a come-back rule draft does. It is a POST because it carries the draft,
+// but it only reads, so it runs in one snapshot.
+func (s *Server) PreviewRule(w http.ResponseWriter, r *http.Request) {
+	var body gen.RulePreviewInput
+	if decodeJSON(w, r, &body) != nil {
+		return
+	}
+	draft := reminders.RuleDraft{
+		ServiceID: nullUUID(body.ServiceId), ReturnServiceID: nullUUID(body.ReturnServiceId),
+		OffsetDays: body.OffsetDays, TemplateID: body.TemplateId,
+	}
+	if body.RuleId != nil {
+		draft.RuleID = uuid.NullUUID{UUID: *body.RuleId, Valid: true}
+	}
+	var out reminders.RulePreviewResult
+	if err := s.snapshot(r, func(tx pgx.Tx) error {
+		var err error
+		if out, err = s.reminders.RulePreview(r.Context(), tx, s.clock.Now(), draft); err != nil {
+			return fmt.Errorf("preview rule: %w", err)
+		}
+		return nil
+	}); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	res := gen.RulePreviewResult{TodayCount: out.TodayCount, Next: nullable.NewNullNullable[gen.RulePreviewNext]()}
+	if out.Next != nil {
+		res.Next.Set(gen.RulePreviewNext{ClientName: out.Next.ClientName, DueDate: dateOf(out.Next.DueDate)})
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
 // toGenRule is the wire form of a rule.
 func toGenRule(r reminders.Rule) gen.Rule {
 	return gen.Rule{

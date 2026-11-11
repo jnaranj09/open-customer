@@ -37,45 +37,10 @@ func (m *Module) ListRules(ctx context.Context, q db.DBTX) ([]Rule, error) {
 // and return service must exist and be active. A come-back rule with no service is a general rule
 // and takes no return service. AppliesFrom is now, or nil with IncludeOverdue.
 func (m *Module) CreateRule(ctx context.Context, q db.DBTX, in RuleInput) (Rule, error) {
-	var errs []problem.FieldError
-	if _, err := ParseKind(string(in.Kind)); err != nil {
-		return Rule{}, err
-	}
 	queries := sqlc.New(q)
-	offset, offsetMsg := offsetDays(in.Kind, in.OffsetDays)
-	if offsetMsg != "" {
-		errs = append(errs, problem.FieldError{Field: "offset_days", Message: offsetMsg})
-	}
-	switch in.Kind {
-	case KindBefore:
-		if in.ServiceID.Valid {
-			errs = append(errs, problem.FieldError{Field: "service_id", Message: problem.MsgServiceNotAllowed})
-		}
-		if in.ReturnServiceID.Valid {
-			errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgServiceNotAllowed})
-		}
-	case KindComeBack:
-		if !in.ServiceID.Valid && in.ReturnServiceID.Valid {
-			errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgGeneralNoReturn})
-		}
-	}
-	if err := checkActive(ctx, &errs, "template_id", problem.MsgTemplateUnavailable, in.TemplateID, queries.GetTemplateState); err != nil {
+	offset, err := checkRuleInput(ctx, queries, in)
+	if err != nil {
 		return Rule{}, err
-	}
-	if in.Kind == KindComeBack {
-		if in.ServiceID.Valid {
-			if err := checkActive(ctx, &errs, "service_id", problem.MsgServiceUnavailable, in.ServiceID.UUID, queries.GetServiceState); err != nil {
-				return Rule{}, err
-			}
-		}
-		if in.ReturnServiceID.Valid {
-			if err := checkActive(ctx, &errs, "return_service_id", problem.MsgServiceUnavailable, in.ReturnServiceID.UUID, queries.GetServiceState); err != nil {
-				return Rule{}, err
-			}
-		}
-	}
-	if len(errs) > 0 {
-		return Rule{}, problem.Validation{Errors: errs}
 	}
 	id, err := ids.New()
 	if err != nil {
@@ -96,6 +61,51 @@ func (m *Module) CreateRule(ctx context.Context, q db.DBTX, in RuleInput) (Rule,
 		ID: id, Kind: in.Kind, ServiceID: in.ServiceID, ReturnServiceID: in.ReturnServiceID,
 		OffsetDays: in.OffsetDays, TemplateID: in.TemplateID, AppliesFrom: appliesFrom, CreatedAt: now,
 	}, nil
+}
+
+// checkRuleInput checks a new rule (every bad field is reported, as problem.Validation) and returns
+// its offset as the column type. The rule preview checks its draft with it too.
+func checkRuleInput(ctx context.Context, queries *sqlc.Queries, in RuleInput) (int32, error) {
+	var errs []problem.FieldError
+	if _, err := ParseKind(string(in.Kind)); err != nil {
+		return 0, err
+	}
+	offset, offsetMsg := offsetDays(in.Kind, in.OffsetDays)
+	if offsetMsg != "" {
+		errs = append(errs, problem.FieldError{Field: "offset_days", Message: offsetMsg})
+	}
+	switch in.Kind {
+	case KindBefore:
+		if in.ServiceID.Valid {
+			errs = append(errs, problem.FieldError{Field: "service_id", Message: problem.MsgServiceNotAllowed})
+		}
+		if in.ReturnServiceID.Valid {
+			errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgServiceNotAllowed})
+		}
+	case KindComeBack:
+		if !in.ServiceID.Valid && in.ReturnServiceID.Valid {
+			errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgGeneralNoReturn})
+		}
+	}
+	if err := checkActive(ctx, &errs, "template_id", problem.MsgTemplateUnavailable, in.TemplateID, queries.GetTemplateState); err != nil {
+		return 0, err
+	}
+	if in.Kind == KindComeBack {
+		if in.ServiceID.Valid {
+			if err := checkActive(ctx, &errs, "service_id", problem.MsgServiceUnavailable, in.ServiceID.UUID, queries.GetServiceState); err != nil {
+				return 0, err
+			}
+		}
+		if in.ReturnServiceID.Valid {
+			if err := checkActive(ctx, &errs, "return_service_id", problem.MsgServiceUnavailable, in.ReturnServiceID.UUID, queries.GetServiceState); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return 0, problem.Validation{Errors: errs}
+	}
+	return offset, nil
 }
 
 // UpdateRule changes the given fields of one rule (every bad field is reported). An unknown id is
