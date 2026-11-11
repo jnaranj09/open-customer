@@ -11,6 +11,7 @@
 	import { cache } from '../cache/store.svelte';
 	import type { BodyProblem } from '../chips';
 	import { t } from '../i18n';
+	import { handoverAsks } from '../rules';
 	import { navigationAllowed, templateDirty, type Exemption } from '../templateEdit';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
@@ -18,6 +19,7 @@
 	import Button from './ui/Button.svelte';
 	import ChipEditor from './ChipEditor.svelte';
 	import FormCard from './FormCard.svelte';
+	import OverdueChoice from './OverdueChoice.svelte';
 	import TextField from './ui/TextField.svelte';
 	import WriteButton from './WriteButton.svelte';
 
@@ -111,14 +113,41 @@
 		}
 	);
 
+	// The handover question of an archive or restore (reminders-and-replies design, "Handover"):
+	// asked when a general rule takes or gives back the visits of the rules this template stops or
+	// restarts; with no answer the server starts from today.
+	let handover = $state<boolean | null>(null);
+	function toggle(archived: boolean): void {
+		const snap = cache.snapshot;
+		const asks =
+			template !== undefined &&
+			snap !== null &&
+			handoverAsks(
+				{ kind: archived ? 'template_archive' : 'template_restore', id: template.id },
+				snap.rules,
+				snap.templates,
+				snap.services
+			);
+		archiving = false;
+		if (asks) {
+			handover = archived;
+		} else {
+			void setArchived.run(archived, undefined);
+		}
+	}
+
 	const setArchived = submitOnce(
-		async (archived: boolean) => {
+		async (archived: boolean, include: boolean | undefined) => {
 			if (template === undefined) {
 				return;
 			}
 			failure = null;
 			const sent = { name: name.trim(), body };
-			const result = await api.updateTemplate(template.id, { archived });
+			const result = await api.updateTemplate(template.id, {
+				archived,
+				...(include === undefined ? {} : { include_overdue: include })
+			});
+			handover = null;
 			if (!result.ok) {
 				failure = result.error;
 				archiving = false;
@@ -186,7 +215,7 @@
 					variant="glass"
 					busy={toggling}
 					onclick={() => {
-						void setArchived.run(false);
+						toggle(false);
 					}}
 				>
 					{t('template_restore')}
@@ -206,6 +235,26 @@
 </FormCard>
 
 <BottomSheet
+	open={handover !== null}
+	title={t('overdue_title')}
+	onclose={() => {
+		handover = null;
+	}}
+>
+	<OverdueChoice
+		busy={toggling}
+		onanswer={(include: boolean) => {
+			if (handover !== null) {
+				void setArchived.run(handover, include);
+			}
+		}}
+		oncancel={() => {
+			handover = null;
+		}}
+	/>
+</BottomSheet>
+
+<BottomSheet
 	open={archiving}
 	title={t('template_archive')}
 	onclose={() => {
@@ -217,7 +266,7 @@
 		variant="danger"
 		busy={toggling}
 		onclick={() => {
-			void setArchived.run(true);
+			toggle(true);
 		}}
 	>
 		{t('template_archive')}

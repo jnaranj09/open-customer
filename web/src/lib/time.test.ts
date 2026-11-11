@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+	daysBetween,
+	shortDay,
 	addDays,
 	clockText,
 	formatDayLong,
@@ -79,6 +81,21 @@ describe('formatWeekdayShort', () => {
 
 	it('starts the week on lunes for a Monday', () => {
 		expect(formatWeekdayShort('2026-11-02')).toBe('lun');
+	});
+});
+
+describe('shortDay', () => {
+	it('says the day and the month in three letters', () => {
+		expect(shortDay('2026-11-15')).toBe('15 nov');
+		expect(shortDay('2026-09-01')).toBe('1 sep');
+	});
+});
+
+describe('daysBetween', () => {
+	it('counts whole calendar days, across a DST change', () => {
+		expect(daysBetween('2026-10-31', '2026-11-14')).toBe(14);
+		expect(daysBetween('2026-03-28', '2026-03-30')).toBe(2);
+		expect(daysBetween('2026-11-02', '2026-11-01')).toBe(-1);
 	});
 });
 

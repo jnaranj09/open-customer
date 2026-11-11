@@ -70,6 +70,7 @@
 		{#if editing !== null}
 			<RuleSheet
 				{...editing === 'new' ? {} : { rule: editing }}
+				rules={data.rules}
 				templates={data.templates}
 				services={data.services}
 				onclose={() => {

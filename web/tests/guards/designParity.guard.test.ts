@@ -29,8 +29,6 @@ const CODE_ONLY: Record<string, string> = {};
 const DESIGN_ONLY: Record<string, string> = {
 	AppointmentRow: 'not built: the agenda draws appointments in TimeGrid, no list of rows',
 	SearchField: 'not built: search uses a labelled TextField of type search',
-	'LabelChip/Normal': 'reminders-and-replies design: the primitive lands in stage S3',
-	'LabelChip/Warning': 'reminders-and-replies design: the primitive lands in stage S3',
 	'TabNav/Pill': 'reminders-and-replies design: the primitive lands in stage S5',
 	'TabNav/Underline': 'reminders-and-replies design: the primitive lands in stage S5'
 };

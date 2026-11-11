@@ -6,18 +6,22 @@
 	import { cache } from '../cache/store.svelte';
 	import { t, type MessageKey } from '../i18n';
 	import { amountText, exponentOf } from '../money';
+	import { handoverAsks } from '../rules';
 	import { servicePatch, serviceRequest, type ServiceField } from '../services';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
 	import BottomSheet from './ui/BottomSheet.svelte';
 	import Button from './ui/Button.svelte';
 	import ColorPicker from './ColorPicker.svelte';
+	import OverdueChoice from './OverdueChoice.svelte';
 	import SaveButton from './SaveButton.svelte';
 	import TextField from './ui/TextField.svelte';
 
 	// Add or edit one service in a sheet (design doc item 77, CUJ 2 step 1). The page mounts it when
 	// she opens a service, so every opening starts from the saved values. Archiving is one tap and
-	// "Restaurar servicio" undoes it: past appointments keep what they copied.
+	// "Restaurar servicio" undoes it: past appointments keep what they copied. When a general rule
+	// takes or gives back the visits of the rules the change stops or restarts, the handover
+	// question replaces the form first (reminders-and-replies design, "Handover").
 	let {
 		service,
 		currency,
@@ -102,13 +106,36 @@
 		}
 	);
 
+	let handover = $state<boolean | null>(null);
+	function toggle(archived: boolean): void {
+		const snap = cache.snapshot;
+		const asks =
+			service !== undefined &&
+			snap !== null &&
+			handoverAsks(
+				{ kind: archived ? 'service_archive' : 'service_restore', id: service.id },
+				snap.rules,
+				snap.templates,
+				snap.services
+			);
+		if (asks) {
+			handover = archived;
+		} else {
+			void setArchived.run(archived, undefined);
+		}
+	}
+
 	const setArchived = submitOnce(
-		async (archived: boolean) => {
+		async (archived: boolean, include: boolean | undefined) => {
 			if (service === undefined) {
 				return;
 			}
 			failure = null;
-			const result = await api.updateService(service.id, { archived });
+			const result = await api.updateService(service.id, {
+				archived,
+				...(include === undefined ? {} : { include_overdue: include })
+			});
+			handover = null;
 			if (!result.ok) {
 				failure = result.error;
 				return;
@@ -124,84 +151,108 @@
 
 <BottomSheet
 	open
-	title={service === undefined ? t('service_new_title') : t('service_edit_title')}
-	{onclose}
+	title={handover !== null
+		? t('overdue_title')
+		: service === undefined
+			? t('service_new_title')
+			: t('service_edit_title')}
+	onclose={() => {
+		if (handover === null) {
+			onclose();
+		} else {
+			handover = null;
+		}
+	}}
 >
-	<form
-		class="flex flex-col gap-4"
-		onsubmit={(e) => {
-			e.preventDefault();
-			void save.run();
-		}}
-	>
-		<TextField
-			label={t('service_name')}
-			bind:value={name}
-			autocomplete="off"
-			error={fieldError('name', 'name')}
+	{#if handover !== null}
+		<OverdueChoice
+			busy={toggling}
+			onanswer={(include: boolean) => {
+				if (handover !== null) {
+					void setArchived.run(handover, include);
+				}
+			}}
+			oncancel={() => {
+				handover = null;
+			}}
 		/>
-		<TextField
-			label={t('service_description')}
-			bind:value={description}
-			autocomplete="off"
-			hint={t('service_description_hint')}
-			error={fieldError('description', 'description')}
-		/>
-		<div class="grid grid-cols-2 gap-3">
+	{:else}
+		<form
+			class="flex flex-col gap-4"
+			onsubmit={(e) => {
+				e.preventDefault();
+				void save.run();
+			}}
+		>
 			<TextField
-				label={t('service_duration')}
-				bind:value={duration}
-				inputmode="numeric"
-				error={fieldError('duration', 'duration_min')}
+				label={t('service_name')}
+				bind:value={name}
+				autocomplete="off"
+				error={fieldError('name', 'name')}
 			/>
 			<TextField
-				label={t('service_price', { currency })}
-				bind:value={price}
-				inputmode="decimal"
-				error={fieldError('price', 'price_cents')}
+				label={t('service_description')}
+				bind:value={description}
+				autocomplete="off"
+				hint={t('service_description_hint')}
+				error={fieldError('description', 'description')}
 			/>
-		</div>
-		<div class="flex flex-col gap-1.5">
-			<span class="text-sm font-bold text-ink">{t('service_color')}</span>
-			<ColorPicker bind:value={color} />
-			{#if failure?.kind === 'problem' && failure.fields['color'] !== undefined}
-				<p class="text-sm text-error">{failure.fields['color']}</p>
+			<div class="grid grid-cols-2 gap-3">
+				<TextField
+					label={t('service_duration')}
+					bind:value={duration}
+					inputmode="numeric"
+					error={fieldError('duration', 'duration_min')}
+				/>
+				<TextField
+					label={t('service_price', { currency })}
+					bind:value={price}
+					inputmode="decimal"
+					error={fieldError('price', 'price_cents')}
+				/>
+			</div>
+			<div class="flex flex-col gap-1.5">
+				<span class="text-sm font-bold text-ink">{t('service_color')}</span>
+				<ColorPicker bind:value={color} />
+				{#if failure?.kind === 'problem' && failure.fields['color'] !== undefined}
+					<p class="text-sm text-error">{failure.fields['color']}</p>
+				{/if}
+			</div>
+			{#if otherError !== null}
+				<p role="alert" class="text-sm text-error">{otherError}</p>
 			{/if}
-		</div>
-		{#if otherError !== null}
-			<p role="alert" class="text-sm text-error">{otherError}</p>
+			<SaveButton {busy}>
+				{t('service_save')}
+			</SaveButton>
+		</form>
+		{#if service !== undefined}
+			{#if service.archived}
+				<div class="flex">
+					<ActionButton
+						variant="glass"
+						busy={toggling}
+						onclick={() => {
+							toggle(false);
+						}}
+					>
+						{t('service_restore')}
+					</ActionButton>
+				</div>
+			{:else}
+				<p class="text-sm text-ink-muted">{t('service_archive_body')}</p>
+				<div class="flex">
+					<ActionButton
+						variant="glass"
+						busy={toggling}
+						onclick={() => {
+							toggle(true);
+						}}
+					>
+						{t('service_archive')}
+					</ActionButton>
+				</div>
+			{/if}
 		{/if}
-		<SaveButton {busy}>
-			{t('service_save')}
-		</SaveButton>
-	</form>
-	{#if service !== undefined}
-		{#if service.archived}
-			<div class="flex">
-				<ActionButton
-					variant="glass"
-					busy={toggling}
-					onclick={() => {
-						void setArchived.run(false);
-					}}
-				>
-					{t('service_restore')}
-				</ActionButton>
-			</div>
-		{:else}
-			<p class="text-sm text-ink-muted">{t('service_archive_body')}</p>
-			<div class="flex">
-				<ActionButton
-					variant="glass"
-					busy={toggling}
-					onclick={() => {
-						void setArchived.run(true);
-					}}
-				>
-					{t('service_archive')}
-				</ActionButton>
-			</div>
-		{/if}
+		<Button variant="ghost" onclick={onclose}>{t('cancel')}</Button>
 	{/if}
-	<Button variant="ghost" onclick={onclose}>{t('cancel')}</Button>
 </BottomSheet>

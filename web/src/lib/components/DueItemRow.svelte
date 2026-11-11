@@ -1,20 +1,25 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import Card from './ui/Card.svelte';
 
-	// One line of a list on "Para enviar": a due item on the wide layout (a button that selects it),
-	// or a sent one under "Enviados" (plain, with the time).
+	// One line of a list on "Para enviar": a due item on the wide layout (a button that selects it,
+	// with its label under it, outside the button), or a sent one under "Enviados" (plain, with the
+	// time).
 	let {
 		title,
 		subtitle,
 		meta,
 		selected = false,
-		onselect
+		onselect,
+		label
 	}: {
 		title: string;
 		subtitle?: string | null | undefined;
 		meta?: string;
 		selected?: boolean;
 		onselect?: () => void;
+		/** The item's label (a LabelChip), shown next to the button, never inside it. */
+		label?: Snippet;
 	} = $props();
 </script>
 
@@ -39,15 +44,20 @@
 		{@render content()}
 	</Card>
 {:else}
-	<Card
-		as="button"
-		type="button"
-		onclick={onselect}
-		aria-current={selected ? 'true' : undefined}
-		pad="message"
-		{selected}
-		class="flex min-h-tap w-full items-center gap-3 text-left text-ink hover:bg-accent-100"
-	>
-		{@render content()}
-	</Card>
+	<div class="flex flex-col items-start gap-1.5">
+		<Card
+			as="button"
+			type="button"
+			onclick={onselect}
+			aria-current={selected ? 'true' : undefined}
+			pad="message"
+			{selected}
+			class="flex min-h-tap w-full items-center gap-3 text-left text-ink hover:bg-accent-100"
+		>
+			{@render content()}
+		</Card>
+		{#if label !== undefined}
+			{@render label()}
+		{/if}
+	</div>
 {/if}

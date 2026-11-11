@@ -1052,12 +1052,13 @@ And the handover and rule texts (D17):
 *   `dueLabel` per "Row label", tested for each segment and each days-left text. Both row
     components show `LabelChip` next to their button.
 
-#### 35. `web/src/lib/pending.ts`, `web/src/lib/components/ConfirmSentSheet.svelte`, `web/src/routes/enviar/+page.svelte` (Modify)
+#### 35. `web/src/lib/components/ConfirmSentSheet.svelte`, `web/src/routes/enviar/+page.svelte` (Modify)
 
-*   The pending confirmation stores `next_due_date` (copied from the due item when she taps
-    "Enviar"). After "Sí, lo envié", `toaster.say` shows `due_sent_next` "Enviado a {name} ·
-    siguiente el {date}" (with `shortDay`) when it is set, else `due_sent` "Enviado a {name}". The
-    skip toast `due_skipped` becomes "Omitido: {name} · no se mostrará de nuevo".
+*   After "Sí, lo envié", `toaster.say` shows `due_sent_next` "Enviado a {name} · siguiente el
+    {date}" (with `shortDay`) when the item's `next_due_date` is set, else `due_sent` "Enviado a
+    {name}". The sheet asks only while its item is still in the cached due list
+    (`pendingToAsk`), so it reads `next_due_date` from that item; the pending confirmation stores
+    nothing new. The skip toast `due_skipped` becomes "Omitido: {name} · no se mostrará de nuevo".
 *   A skip toast and a sent toast never compete: "Enviar" already sends a waiting skip before it
     opens WhatsApp (`enviar/+page.svelte:85`).
 

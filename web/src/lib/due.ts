@@ -3,6 +3,8 @@
 import type { Api } from './api/client';
 import type { Result } from './api/errors';
 import type { Appointment, DueItem } from './api/schemas';
+import { t } from './i18n';
+import { daysBetween, formatTime, shortDay, todayIn } from './time';
 
 /** The list to show. Online it is the server's list as sent. Offline, a "before" item whose
  *  `anchor_at` (the appointment's start) has passed is hidden, because the server would no longer
@@ -64,4 +66,51 @@ export async function addToBooking(
 		service_ids: addReturnService(current.data, prompt.return_service_id),
 		...(allowOverlap ? { allow_overlap: true } : {})
 	});
+}
+
+/** The days left when a label turns into a warning. */
+const WARN_DAYS = 7;
+/** How many service names a label spells out before "+n". */
+const NAMED_SERVICES = 2;
+
+/** The label of a due item (reminders-and-replies design, "Row label"), from the item's fields only:
+ *  the source visit, its services, "General N días" for a general rule, "Nº mensaje" from the 2nd,
+ *  and, online only (offline the cached list may be a day old), the days left. `warning` when a
+ *  week or less is left. "Before" items show the visit's time and no days left. */
+export function dueLabel(
+	item: DueItem,
+	today: string,
+	zone: string,
+	online: boolean
+): { text: string; warning: boolean } {
+	const date = shortDay(todayIn(zone, new Date(item.source_starts_at)));
+	const before = item.kind === 'before_appointment';
+	const named = item.source_services.slice(0, NAMED_SERVICES).join(', ');
+	const more = item.source_services.length - NAMED_SERVICES;
+	const parts = [
+		before
+			? t('due_label_visit_time', { date, time: formatTime(item.source_starts_at, zone) })
+			: t('due_label_visit', { date }),
+		...(named === '' ? [] : [more > 0 ? `${named} ${t('due_label_more', { n: more })}` : named])
+	];
+	if (before) {
+		return { text: parts.join(' · '), warning: false };
+	}
+	if (item.general) {
+		parts.push(t('due_label_general', { n: item.offset_days }));
+	}
+	if (item.message_number >= 2) {
+		parts.push(t('due_label_number', { n: item.message_number }));
+	}
+	const left = daysBetween(today, item.shown_until);
+	if (online) {
+		parts.push(
+			left >= 2
+				? t('due_label_left_other', { n: left })
+				: left === 1
+					? t('due_label_left_one')
+					: t('due_label_last_day')
+		);
+	}
+	return { text: parts.join(' · '), warning: online && left <= WARN_DAYS };
 }

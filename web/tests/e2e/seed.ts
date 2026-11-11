@@ -165,3 +165,67 @@ export async function insertSentReminder(r: {
 	);
 	return id;
 }
+
+/** Inserts an active message template and returns its id. */
+export async function insertTemplate(name: string, body: string): Promise<string> {
+	const id = randomUUID();
+	await db().query('INSERT INTO message_templates (id, name, body) VALUES ($1, $2, $3)', [
+		id,
+		name,
+		body
+	]);
+	return id;
+}
+
+/** Inserts an active service of 30 minutes, last in the catalog, and returns its id. */
+export async function insertService(name: string): Promise<string> {
+	const id = randomUUID();
+	await db().query(
+		`INSERT INTO services (id, name, duration_min, color, position)
+		 VALUES ($1, $2, 30, '#aa3366', (SELECT COALESCE(MAX(position), -1) + 1 FROM services))`,
+		[id, name]
+	);
+	return id;
+}
+
+/** Inserts an active come-back rule that counts late visits; `serviceId` null makes it a general
+ *  rule for every service. Returns its id. */
+export async function insertComeBackRule(r: {
+	serviceId: string | null;
+	offsetDays: number;
+	templateId: string;
+}): Promise<string> {
+	const id = randomUUID();
+	await db().query(
+		`INSERT INTO reminder_rules (id, kind, service_id, offset_days, template_id)
+		 VALUES ($1, 'come_back', $2, $3, $4)`,
+		[id, r.serviceId, r.offsetDays, r.templateId]
+	);
+	return id;
+}
+
+/** Removes what a spec added on top of the setup data: the log, the appointments, every general
+ *  rule and the given rules, templates and services. `resetData` keeps rules, templates and
+ *  services, so a spec that adds them removes them in `afterEach`. */
+export async function deleteSpecRows(rows: {
+	rules: string[];
+	templates: string[];
+	services: string[];
+}): Promise<void> {
+	await db().query('TRUNCATE reminder_log, appointments, appointment_services CASCADE');
+	await db().query(
+		"DELETE FROM reminder_rules WHERE id = ANY($1) OR (kind = 'come_back' AND service_id IS NULL)",
+		[rows.rules]
+	);
+	await db().query('DELETE FROM message_templates WHERE id = ANY($1)', [rows.templates]);
+	await db().query('DELETE FROM services WHERE id = ANY($1)', [rows.services]);
+}
+
+/** The handover_from of a rule (null when unset). */
+export async function handoverOf(ruleId: string): Promise<string | null> {
+	const { rows } = await db().query<{ handover_from: Date | null }>(
+		'SELECT handover_from FROM reminder_rules WHERE id = $1',
+		[ruleId]
+	);
+	return rows[0]?.handover_from?.toISOString() ?? null;
+}
