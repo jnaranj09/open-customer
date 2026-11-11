@@ -69,6 +69,13 @@ const (
 	MsgTextOneLine = "Escríbelo en una sola línea"
 )
 
+// Field messages for quick replies (reminders-and-replies design, item 57). The title also takes
+// the text.Line messages.
+const (
+	MsgReplyTitleRequired = "Escribe un nombre"
+	MsgReplyBodyLength    = "Escribe un mensaje de 1 a 2000 caracteres"
+)
+
 // Field messages for clients (design doc item 48).
 const (
 	MsgClientNameInvalid = "Escribe un nombre de 1 a 120 caracteres"

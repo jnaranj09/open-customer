@@ -1,19 +1,20 @@
 <script lang="ts">
-	import Card from '../../../lib/components/ui/Card.svelte';
+	import Card from '../../../../lib/components/ui/Card.svelte';
 	import { resolve } from '$app/paths';
-	import type { Rule } from '../../../lib/api/schemas';
-	import { cache } from '../../../lib/cache/store.svelte';
-	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
-	import RuleSentence from '../../../lib/components/RuleSentence.svelte';
-	import RuleSheet from '../../../lib/components/RuleSheet.svelte';
-	import { t, type MessageKey } from '../../../lib/i18n';
-	import { sortRules } from '../../../lib/rules';
-	import { toaster } from '../../../lib/toaster.svelte';
-	import WriteButton from '../../../lib/components/WriteButton.svelte';
+	import type { Rule } from '../../../../lib/api/schemas';
+	import { cache } from '../../../../lib/cache/store.svelte';
+	import EmptyState from '../../../../lib/components/ui/EmptyState.svelte';
+	import RuleSentence from '../../../../lib/components/RuleSentence.svelte';
+	import RuleSheet from '../../../../lib/components/RuleSheet.svelte';
+	import { t, type MessageKey } from '../../../../lib/i18n';
+	import { sortRules } from '../../../../lib/rules';
+	import { toaster } from '../../../../lib/toaster.svelte';
+	import WriteButton from '../../../../lib/components/WriteButton.svelte';
 
-	// Ajustes → Recordatorios (design doc item 77, CUJ 2 steps 3 and 4): the rules as sentences, with
-	// a sheet to add one or edit the one she taps. Archived rules are listed apart, so she can
-	// restore one. With no template yet there is nothing to send, so the screen leads to Plantillas.
+	// Ajustes → Recordatorios, tab Reglas (design doc item 77, CUJ 2 steps 3 and 4): the rules as
+	// sentences, with a sheet to add one or edit the one she taps. Archived rules are listed apart, so
+	// she can restore one. With no template yet there is nothing to send, so the screen leads to
+	// Plantillas. The heading and the tabs are the group layout's.
 
 	const data = $derived(cache.snapshot);
 	const active = $derived(sortRules(data?.rules.filter((r) => !r.archived) ?? []));
@@ -30,19 +31,16 @@
 </script>
 
 <div class="flex max-w-190 flex-col gap-4">
-	<header class="flex min-h-12 flex-wrap items-center justify-between gap-3">
-		<h1 class="text-3xl font-extrabold text-ink">{t('rules_title')}</h1>
-		{#if data !== null && hasTemplate}
-			<div class="w-44 shrink-0">
-				<WriteButton
-					variant="strong"
-					onclick={() => {
-						editing = 'new';
-					}}>{t('rules_new')}</WriteButton
-				>
-			</div>
-		{/if}
-	</header>
+	{#if data !== null && hasTemplate}
+		<div class="w-44">
+			<WriteButton
+				variant="strong"
+				onclick={() => {
+					editing = 'new';
+				}}>{t('rules_new')}</WriteButton
+			>
+		</div>
+	{/if}
 
 	{#if data === null}
 		<p role="status" class="px-2 text-base text-ink-muted">{t('rules_loading')}</p>
@@ -53,7 +51,7 @@
 					title={t('rules_templates_title')}
 					body={t('rules_templates_body')}
 					actionLabel={t('rules_templates_action')}
-					href={resolve('/ajustes/plantillas')}
+					href={resolve('/ajustes/(reglas)/plantillas')}
 				/>
 			</Card>
 		{:else if data.rules.length === 0}

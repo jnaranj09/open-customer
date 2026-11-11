@@ -30,6 +30,10 @@ describe('pageTitle', () => {
 		expect(pageTitle('/servicios/catalogo')).toBe('Servicios');
 	});
 
+	it('keys the rule pages by their grouped route id', () => {
+		expect(pageTitle('/ajustes/(reglas)/plantillas')).toBe('Plantillas');
+	});
+
 	it('falls back to the app name for a path with no route', () => {
 		expect(pageTitle(null)).toBe('Agenda');
 	});

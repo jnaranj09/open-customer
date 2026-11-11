@@ -57,7 +57,7 @@ DEADCODE_BUDGET := 0
 
 # Packages make cover holds to the 90% statement floor (an owner decision; design doc item 2). It
 # grows by phase: auth (P2); attributes, appointments, templates (P3); reminders (P4).
-COVER_PKGS := ./internal/auth ./internal/attributes ./internal/appointments ./internal/templates ./internal/reminders
+COVER_PKGS := ./internal/auth ./internal/attributes ./internal/appointments ./internal/templates ./internal/reminders ./internal/replies
 COVER_FLOOR := 90.0
 
 # The dev Postgres container of make dev and make e2e (design doc item 2). The password is for this

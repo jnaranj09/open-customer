@@ -84,6 +84,7 @@ export function bootstrap(dueCount = 0, clientName = 'Ana Rojas'): Bootstrap {
 		],
 		due: Array.from({ length: dueCount }, (_, i) => dueItem(i)),
 		template_vars: [{ ns: 'client', key: 'name', label: 'Nombre' }],
-		backup_red: false
+		backup_red: false,
+		quick_replies: []
 	};
 }

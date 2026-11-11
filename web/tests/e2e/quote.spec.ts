@@ -7,38 +7,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
-import { draftStored, fill, serverOff, setArchived } from './steps';
+import { copied, draftStored, fill, serverOff, setArchived, stubClipboard } from './steps';
 
 /** The business name `setup.spec.ts` gives the app. */
 const HEADING = fill(es.quote_heading_named, { name: 'Estudio Prueba' });
-
-type Clipboard = 'ok' | 'missing' | 'throws' | 'rejects';
-
-/** Replaces `navigator.clipboard` before the app loads. `ok` records the written text on
- *  `window.copied`; the others fail the way iOS can: no API, a throw at once, a rejected promise. */
-async function stubClipboard(page: Page, mode: Clipboard): Promise<void> {
-	await page.addInitScript((m: Clipboard) => {
-		const win = window as unknown as { copied: string | null };
-		win.copied = null;
-		const writeText = (text: string): Promise<void> => {
-			if (m === 'throws') {
-				throw new DOMException('refused', 'NotAllowedError');
-			}
-			if (m === 'rejects') {
-				return Promise.reject(new DOMException('refused', 'NotAllowedError'));
-			}
-			win.copied = text;
-			return Promise.resolve();
-		};
-		Object.defineProperty(navigator, 'clipboard', {
-			configurable: true,
-			value: m === 'missing' ? undefined : { writeText }
-		});
-	}, mode);
-}
-
-const copied = (page: Page): Promise<string | null> =>
-	page.evaluate(() => (window as unknown as { copied: string | null }).copied);
 
 /** The quote text block, found by its heading line. */
 const quoteBlock = (page: Page) => page.getByText(HEADING);

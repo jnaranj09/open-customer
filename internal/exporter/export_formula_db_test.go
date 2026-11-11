@@ -3,6 +3,7 @@
 package exporter_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
@@ -58,5 +59,10 @@ func TestExportNeutralizesFormulaCells(t *testing.T) {
 	}
 	if got := column(t, serviceRows, 2, "descripcion"); got != "'=1+1" {
 		t.Errorf("service descripcion = %q, want '=1+1", got)
+	}
+	e.reply(t, "=Título", "+Texto", 0, false)
+	replyRows := e.csvFile(t, "respuestas.csv")
+	if got := replyRows[1][:2]; !slices.Equal(got, []string{"'=Título", "'+Texto"}) {
+		t.Errorf("reply titulo, texto = %q, want them neutralized", got)
 	}
 }

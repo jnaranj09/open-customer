@@ -54,3 +54,13 @@ JOIN clients c ON c.id = a.client_id
 WHERE l.id > @after
 ORDER BY l.id
 LIMIT 500;
+
+-- name: ExportQuickReplies :many
+-- rank is the reply's place in her order, from 1 (respuestas.csv "orden"); it is counted over
+-- every reply before the page is cut.
+SELECT id, title, body, position, archived_at, rank
+FROM (SELECT id, title, body, position, archived_at, row_number() OVER (ORDER BY position, id)::int AS rank
+      FROM quick_replies) r
+WHERE id > @after
+ORDER BY id
+LIMIT 500;

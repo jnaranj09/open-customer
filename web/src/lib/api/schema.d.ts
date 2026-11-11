@@ -304,6 +304,50 @@ export interface paths {
         patch: operations["updateService"];
         trace?: never;
     };
+    "/quick-replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the quick replies
+         * @description Every quick reply, archived ones too, by position.
+         */
+        get: operations["listQuickReplies"];
+        put?: never;
+        /**
+         * Add a quick reply
+         * @description The reply goes last. title is one line of 1 to 60 characters; body is 1 to 2000 characters, trimmed at both ends, its line breaks kept.
+         */
+        post: operations["createQuickReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/quick-replies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a quick reply
+         * @description Changes only the fields sent; none may be null. title and body get the same checks as on create. A position change sets this one reply; the caller moves the others. archived true archives the reply and false restores it.
+         */
+        patch: operations["updateQuickReply"];
+        trace?: never;
+    };
     "/clients": {
         parameters: {
             query?: never;
@@ -992,6 +1036,28 @@ export interface components {
             /** @description Read only with archived; see updateService. */
             include_overdue?: boolean;
         };
+        QuickReply: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            body: string;
+            position: number;
+            archived: boolean;
+        };
+        QuickReplyList: {
+            items: components["schemas"]["QuickReply"][];
+        };
+        QuickReplyInput: {
+            title: string;
+            body: string;
+        };
+        /** @description Every field is optional; a field left out is not changed. None may be null. */
+        QuickReplyPatch: {
+            title?: string;
+            body?: string;
+            position?: number;
+            archived?: boolean;
+        };
         Template: {
             /** Format: uuid */
             id: string;
@@ -1198,6 +1264,8 @@ export interface components {
             due: components["schemas"]["DueItem"][];
             template_vars: components["schemas"]["TemplateVar"][];
             backup_red: boolean;
+            /** @description Every quick reply, archived ones too, by position. */
+            quick_replies: components["schemas"]["QuickReply"][];
         };
         Status: {
             version: string;
@@ -1867,6 +1935,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Service"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listQuickReplies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quick replies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickReplyList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createQuickReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickReplyInput"];
+            };
+        };
+        responses: {
+            /** @description The new reply. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickReply"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateQuickReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickReplyPatch"];
+            };
+        };
+        responses: {
+            /** @description The reply after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickReply"];
                 };
             };
             401: components["responses"]["Problem"];

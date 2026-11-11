@@ -19,8 +19,8 @@ const bootstrapPath = "/api/v1/bootstrap"
 
 // bootstrapKeys are the keys of a Bootstrap.
 var bootstrapKeys = []string{
-	"appointments", "attributes", "backup_red", "clients", "due", "rules", "server_time", "services",
-	"settings", "template_vars", "templates",
+	"appointments", "attributes", "backup_red", "clients", "due", "quick_replies", "rules", "server_time",
+	"services", "settings", "template_vars", "templates",
 }
 
 // archive archives the record at path as the owner c.

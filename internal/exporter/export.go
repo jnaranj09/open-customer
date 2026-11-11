@@ -1,4 +1,4 @@
-// Package exporter writes all of the business's data as one ZIP (design doc "Export"): three
+// Package exporter writes all of the business's data as one ZIP (design doc "Export"): four
 // Spanish CSV files and datos.json, read inside the caller's one read-only snapshot.
 package exporter
 
@@ -69,7 +69,7 @@ type run struct {
 
 // Write streams the ZIP to w. q is the caller's read-only REPEATABLE READ transaction, so every
 // file is one snapshot. The entries are written in the order clientas.csv, citas.csv,
-// servicios.csv, datos.json, and each table is paged twice (once for its CSV, once for the JSON),
+// servicios.csv, respuestas.csv, datos.json, and each table is paged twice (once for its CSV, once for the JSON),
 // so no more than one page of 500 rows is held at a time. On an error the ZIP is left unclosed:
 // with no central directory the download is broken, never a file that looks complete.
 func (e *Exporter) Write(ctx context.Context, q db.DBTX, w io.Writer) error {
@@ -85,6 +85,7 @@ func (e *Exporter) Write(ctx context.Context, q db.DBTX, w io.Writer) error {
 		{x.text.ClientsFile, x.writeClients},
 		{x.text.AppointmentsFile, x.writeAppointments},
 		{x.text.ServicesFile, x.writeServices},
+		{x.text.RepliesFile, x.writeReplies},
 		{jsonFile, x.writeJSON},
 	}
 	for _, en := range entries {
@@ -174,6 +175,16 @@ func (x *run) services(after uuid.UUID) ([]sqlc.Service, error) {
 	}
 	return rows, nil
 }
+
+func (x *run) replies(after uuid.UUID) ([]sqlc.ExportQuickRepliesRow, error) {
+	rows, err := x.q.ExportQuickReplies(x.ctx, after)
+	if err != nil {
+		return nil, fmt.Errorf("export quick replies: %w", err)
+	}
+	return rows, nil
+}
+
+func replyID(r sqlc.ExportQuickRepliesRow) uuid.UUID { return r.ID }
 
 func (x *run) templates(after uuid.UUID) ([]sqlc.ExportTemplatesRow, error) {
 	rows, err := x.q.ExportTemplates(x.ctx, after)
@@ -386,6 +397,19 @@ func (x *run) writeServices(w io.Writer) error {
 					r.Name, deref(r.Description), strconv.Itoa(int(r.DurationMin)), x.money(r.PriceCents),
 					x.yes(r.ArchivedAt != nil),
 				})
+			}
+			return writePage(cw, records)
+		})
+	})
+}
+
+// writeReplies writes respuestas.csv; "orden" is her order from 1.
+func (x *run) writeReplies(w io.Writer) error {
+	return csvFile(w, x.text.ReplyCols, func(cw *csv.Writer) error {
+		return eachPage(x.replies, replyID, func(page []sqlc.ExportQuickRepliesRow) error {
+			records := make([][]string, 0, len(page))
+			for _, r := range page {
+				records = append(records, []string{r.Title, r.Body, strconv.Itoa(int(r.Rank)), x.yes(r.ArchivedAt != nil)})
 			}
 			return writePage(cw, records)
 		})

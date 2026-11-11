@@ -2,6 +2,7 @@
 	import Callout from './ui/Callout.svelte';
 	import TextButton from './ui/TextButton.svelte';
 	import IconButton from './ui/IconButton.svelte';
+	import MoveButtons from './MoveButtons.svelte';
 	import { tick } from 'svelte';
 	import type { AttrOption } from '../api/schemas';
 	import { cache } from '../cache/store.svelte';
@@ -216,20 +217,14 @@
 					</div>
 					{#if menu === option.id}
 						<div role="group" aria-label={option.label} class="mt-1 flex flex-wrap gap-1 pl-2">
-							<TextButton
-								variant="accent"
-								disabled={off || i === 0}
-								onclick={() => {
-									void move(parent, option.id, i - 1);
-								}}>{t('option_up')}</TextButton
-							>
-							<TextButton
-								variant="accent"
-								disabled={off || i === siblings.length - 1}
-								onclick={() => {
-									void move(parent, option.id, i + 1);
-								}}>{t('option_down')}</TextButton
-							>
+							<MoveButtons
+								index={i}
+								count={siblings.length}
+								disabled={off}
+								onmove={(to: number) => {
+									void move(parent, option.id, to);
+								}}
+							/>
 							<TextButton
 								variant="accent"
 								onclick={() => {

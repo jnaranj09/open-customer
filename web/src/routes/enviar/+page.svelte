@@ -309,7 +309,7 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex flex-col gap-0.5">
-		<h1 class="text-3xl font-extrabold text-ink">{t('due_today_heading')}</h1>
+		<h2 class="text-xl font-bold text-ink">{t('due_today_heading')}</h2>
 		{#if cache.snapshot !== null}
 			<p class="text-sm text-ink-muted">{count}</p>
 		{/if}

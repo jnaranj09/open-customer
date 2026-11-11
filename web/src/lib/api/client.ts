@@ -22,6 +22,7 @@ import {
 	ProblemSchema,
 	PushKeySchema,
 	PushSubscriptionIdSchema,
+	QuickReplySchema,
 	RulePreviewResultSchema,
 	RuleSchema,
 	ServiceSchema,
@@ -293,6 +294,14 @@ export function createApi(opts: ApiOptions) {
 		/** Changes only the fields sent (name, timezone, accent_color, push_hour). */
 		updateSettings: (body: Schemas['SettingsPatch']) =>
 			read('/settings', SettingsSchema, () => client.PATCH('/settings', { body })),
+		/** Adds a quick reply; it goes last. */
+		createQuickReply: (body: Schemas['QuickReplyInput']) =>
+			read('/quick-replies', QuickReplySchema, () => client.POST('/quick-replies', { body })),
+		/** Changes only the fields sent; `archived` archives or restores, `position` moves this one. */
+		updateQuickReply: (id: string, body: Schemas['QuickReplyPatch']) =>
+			read('/quick-replies/{id}', QuickReplySchema, () =>
+				client.PATCH('/quick-replies/{id}', { params: { path: { id } }, body })
+			),
 		/** Adds a service; it goes last. */
 		createService: (body: Schemas['ServiceInput']) =>
 			read('/services', ServiceSchema, () => client.POST('/services', { body })),

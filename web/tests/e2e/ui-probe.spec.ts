@@ -38,6 +38,7 @@ import {
 	closePool,
 	insertAppointment,
 	insertClient,
+	insertReply,
 	insertSentReminder,
 	resetData
 } from './seed';
@@ -58,7 +59,14 @@ type Ids = { client: string; appointment: string };
 
 /** The bootstrap lists a feed can empty. */
 type BootList =
-	'appointments' | 'due' | 'clients' | 'services' | 'attributes' | 'templates' | 'rules';
+	| 'appointments'
+	| 'due'
+	| 'clients'
+	| 'services'
+	| 'attributes'
+	| 'templates'
+	| 'rules'
+	| 'quick_replies';
 
 /** One source of server data on a screen. `empty` is what the screen says with no rows: from
  *  the real answer with `bootstrap` lists (or a list answer's `items`) emptied; `none` says why
@@ -139,6 +147,21 @@ const PROBES: Record<string, Probe> = {
 			bootFeed('due list', { bootstrap: ['due'], text: es.due_today_none }),
 			{ name: 'sent log', api: /^\/api\/v1\/reminders\/log$/, empty: { text: es.due_sent_empty } }
 		]
+	},
+	'/enviar/respuestas': {
+		open: fixed('/enviar/respuestas'),
+		ready: LONG_NAME,
+		sheets: [
+			{
+				name: 'reply',
+				open: async (page) => {
+					// The row's name is its title and its text.
+					await page.getByRole('button', { name: new RegExp(`^${LONG_NAME} `) }).click();
+				}
+			},
+			{ name: 'new reply', open: button(es.replies_new) }
+		],
+		feeds: [bootFeed('replies', { bootstrap: ['quick_replies'], text: es.replies_empty_title })]
 	},
 	'/clientas': {
 		open: fixed('/clientas'),
@@ -341,7 +364,9 @@ function routesOnDisk(): string[] {
 		.map((p) =>
 			`/${relative(root, join(root, p, '..'))
 				.split(sep)
-				.join('/')}`.replace(/\/$/, '')
+				.join('/')}`
+				.replace(/\/\([^/]+\)/g, '')
+				.replace(/\/$/, '')
 		)
 		.map((r) => (r === '' ? '/' : r))
 		.sort();
@@ -535,6 +560,8 @@ test.beforeEach(async () => {
 		actedAt: at(0, '08:00')
 	});
 	await uploadPhoto(appointment);
+	// A quick reply with the long one-word name as its title, for the Respuestas rows.
+	await insertReply({ title: LONG_NAME, body: `Hola, soy ${LONG_NAME}.\nTe escribo pronto.` });
 	ids = { client, appointment };
 });
 

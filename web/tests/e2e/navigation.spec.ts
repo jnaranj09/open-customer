@@ -1,6 +1,7 @@
 // Moving between screens and keeping what she typed: Back after a new form (M4), the appointment's
 // back arrow (M7), a typed amount through a status change (M8), the archived list after a restore
-// (M9) and the client's history after "Ver todas las citas" (L10).
+// (M9), the client's history after "Ver todas las citas" (L10), and the tabs of Enviar and of
+// Ajustes → Recordatorios with their old URLs (reminders-and-replies CUJ R12).
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { at, businessDate, closePool, insertAppointment, insertClient, resetData } from './seed';
@@ -106,7 +107,7 @@ const LEAVE_NEW_FORM: {
 				page.getByRole('heading', { name: es.templates_new_title, level: 2 })
 			).toBeVisible();
 			await page.getByRole('button', { name: es.cancel, exact: true }).click();
-			await expect(page.getByRole('heading', { name: es.templates_title, level: 1 })).toBeVisible();
+			await expect(page.getByRole('heading', { name: es.settings_rules, level: 1 })).toBeVisible();
 			return { name: es.templates_new_title, level: 2 };
 		}
 	},
@@ -223,4 +224,48 @@ test.describe('wide', () => {
 		await expect(list.getByRole('link', { name: /Ana Rojas/ })).toHaveCount(0);
 		await expect(page.getByText(es.clients_archived_empty, { exact: true })).toBeVisible();
 	});
+});
+
+test('CUJ R12: the old rule and template URLs open their tab inside Recordatorios', async ({
+	page
+}) => {
+	const sections = page.getByRole('navigation', { name: es.settings_sections });
+	const tabs = page.getByRole('navigation', { name: es.rules_tabs_label });
+	const entry = sections.getByRole('link', { name: es.settings_rules, exact: true });
+
+	await page.goto('/ajustes/plantillas');
+	await expect(tabs.getByRole('link', { name: es.tab_templates })).toHaveAttribute(
+		'aria-current',
+		'page'
+	);
+	await expect(entry).toHaveAttribute('aria-current', 'true');
+	await expect(sections.getByRole('link', { name: es.tab_templates, exact: true })).toHaveCount(0);
+
+	await page.goto('/ajustes/recordatorios');
+	await expect(tabs.getByRole('link', { name: es.tab_rules })).toHaveAttribute(
+		'aria-current',
+		'page'
+	);
+	await expect(entry).toHaveAttribute('aria-current', 'true');
+
+	await tabs.getByRole('link', { name: es.tab_templates }).click();
+	await expect(page).toHaveURL(/\/ajustes\/plantillas$/);
+	await tabs.getByRole('link', { name: es.tab_rules }).click();
+	await expect(page).toHaveURL(/\/ajustes\/recordatorios$/);
+});
+
+test('Enviar has two tabs: Recordatorios and Respuestas', async ({ page }) => {
+	await page.goto('/enviar');
+	const tabs = page.getByRole('navigation', { name: es.send_tabs_label });
+	await expect(page.getByRole('heading', { name: es.send_title, level: 1 })).toBeVisible();
+	await expect(tabs.getByRole('link', { name: es.tab_reminders })).toHaveAttribute(
+		'aria-current',
+		'page'
+	);
+	await tabs.getByRole('link', { name: es.tab_replies }).click();
+	await expect(page).toHaveURL(/\/enviar\/respuestas$/);
+	await expect(tabs.getByRole('link', { name: es.tab_replies })).toHaveAttribute(
+		'aria-current',
+		'page'
+	);
 });

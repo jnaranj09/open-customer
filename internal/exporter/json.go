@@ -66,6 +66,15 @@ type Service struct {
 	Archived    bool      `json:"archived"`
 }
 
+// QuickReply is the API QuickReply schema.
+type QuickReply struct {
+	ID       uuid.UUID `json:"id"`
+	Title    string    `json:"title"`
+	Body     string    `json:"body"`
+	Position int       `json:"position"`
+	Archived bool      `json:"archived"`
+}
+
 // Template is the API Template schema.
 type Template struct {
 	ID       uuid.UUID `json:"id"`
@@ -145,8 +154,8 @@ type LogItem struct {
 const jsonFile = "datos.json"
 
 // jsonVersion is the datos.json format version. 2: services gained description. 3: rules gained
-// handover_from.
-const jsonVersion = 3
+// handover_from. 4: quick_replies.
+const jsonVersion = 4
 
 // jsonStream writes datos.json piece by piece, so each array is written one page at a time.
 type jsonStream struct{ w io.Writer }
@@ -259,6 +268,9 @@ func (x *run) writeJSON(w io.Writer) error {
 	if err := pagedField(s, "reminder_log", x.reminderLog, func(r sqlc.ExportLogRow) uuid.UUID { return r.ID }, each(logJSON)); err != nil {
 		return err
 	}
+	if err := pagedField(s, "quick_replies", x.replies, replyID, each(replyJSON)); err != nil {
+		return err
+	}
 	return s.raw("}")
 }
 
@@ -301,6 +313,10 @@ func serviceJSON(r sqlc.Service) Service {
 		ID: r.ID, Name: r.Name, Description: r.Description, DurationMin: int(r.DurationMin),
 		PriceCents: r.PriceCents, Color: r.Color, Position: int(r.Position), Archived: r.ArchivedAt != nil,
 	}
+}
+
+func replyJSON(r sqlc.ExportQuickRepliesRow) QuickReply {
+	return QuickReply{ID: r.ID, Title: r.Title, Body: r.Body, Position: int(r.Position), Archived: r.ArchivedAt != nil}
 }
 
 func templateJSON(r sqlc.ExportTemplatesRow) Template {

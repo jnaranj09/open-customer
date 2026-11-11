@@ -1,26 +1,28 @@
 <script lang="ts">
-	import Card from '../../../lib/components/ui/Card.svelte';
+	import Card from '../../../../lib/components/ui/Card.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
-	import type { Template } from '../../../lib/api/schemas';
-	import { cache } from '../../../lib/cache/store.svelte';
-	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
-	import ListRow from '../../../lib/components/ui/ListRow.svelte';
-	import { t } from '../../../lib/i18n';
-	import WriteLink from '../../../lib/components/WriteLink.svelte';
+	import type { Template } from '../../../../lib/api/schemas';
+	import { cache } from '../../../../lib/cache/store.svelte';
+	import EmptyState from '../../../../lib/components/ui/EmptyState.svelte';
+	import ListRow from '../../../../lib/components/ui/ListRow.svelte';
+	import { t } from '../../../../lib/i18n';
+	import WriteLink from '../../../../lib/components/WriteLink.svelte';
 
-	// Ajustes → Plantillas (design doc item 77): the list of message templates, with the open
-	// template or the new-template form beside it. The two panes follow the width this page is
+	// Ajustes → Recordatorios, tab Plantillas (design doc item 77): the list of message templates,
+	// with "Nueva plantilla" on top, and the open template or the new-template form beside it. The two panes follow the width this page is
 	// given (a container query), not the window: with room they sit side by side; narrower, the
 	// list is one screen and the editor the next. The page has no shell of its own: the Ajustes
-	// layout frames it.
+	// layout and the group layout (heading and tabs) frame it.
 	let { children }: { children: Snippet } = $props();
 
 	const templates = $derived(cache.snapshot?.templates ?? []);
 	const active = $derived(templates.filter((x) => !x.archived));
 	const archived = $derived(templates.filter((x) => x.archived));
-	const onList = $derived(page.url.pathname.replace(/\/$/, '') === resolve('/ajustes/plantillas'));
+	const onList = $derived(
+		page.url.pathname.replace(/\/$/, '') === resolve('/ajustes/(reglas)/plantillas')
+	);
 </script>
 
 {#snippet rows(list: Template[])}
@@ -28,7 +30,7 @@
 		{#each list as template (template.id)}
 			<li>
 				<ListRow
-					href={resolve('/ajustes/plantillas/[id]', { id: template.id })}
+					href={resolve('/ajustes/(reglas)/plantillas/[id]', { id: template.id })}
 					title={template.name}
 					selected={template.id === page.params['id']}
 				/>
@@ -44,12 +46,15 @@
 				? 'w-full'
 				: 'hidden @3xl:flex'}"
 		>
-			<header class="flex min-h-12 items-center justify-between gap-3">
-				<h1 class="text-3xl font-extrabold text-ink">{t('templates_title')}</h1>
-				<WriteLink href={resolve('/ajustes/plantillas/nueva')} variant="strong" width="w-44">
+			<div class="flex">
+				<WriteLink
+					href={resolve('/ajustes/(reglas)/plantillas/nueva')}
+					variant="strong"
+					width="w-44"
+				>
 					{t('templates_new')}
 				</WriteLink>
-			</header>
+			</div>
 
 			{#if cache.snapshot === null}
 				<p role="status" class="px-2 text-base text-ink-muted">{t('templates_loading')}</p>

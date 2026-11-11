@@ -36,7 +36,7 @@ test.describe('CUJ 4: morning sending', () => {
 	/** "Para enviar hoy" → "Enviar" on Ana's item; returns the message the wa.me link carries. */
 	async function sendToAna(page: Page): Promise<string> {
 		await page.goto('/enviar');
-		await expect(page.getByRole('heading', { name: es.due_today_heading, level: 1 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: es.due_today_heading, level: 2 })).toBeVisible();
 		await dueItem(page, 'Ana Rojas')
 			.getByRole('button', { name: es.due_send, exact: true })
 			.click();
@@ -91,7 +91,7 @@ test.describe('CUJ 4: morning sending', () => {
 			.getByRole('link', { name: es.due_send, exact: true })
 			.click();
 
-		await expect(page.getByRole('heading', { name: es.due_today_heading, level: 1 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: es.due_today_heading, level: 2 })).toBeVisible();
 		// On wide the only client heading is the selected item's pane.
 		await expect(page.getByRole('heading', { name: 'Marta Solano', level: 2 })).toBeVisible();
 		await expect(page.getByRole('heading', { name: 'Ana Rojas', level: 2 })).toHaveCount(0);

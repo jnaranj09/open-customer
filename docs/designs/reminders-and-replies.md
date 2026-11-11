@@ -1259,6 +1259,21 @@ And the handover and rule texts (D17):
 *   Add `replies/` and its imports to "Code layout and module rules", and the new files to the export
     format.
 
+#### As built (S5)
+
+*   The body field of `ReplySheet` is `ui/TextField` with a new `lines` prop (a `<textarea>`); no
+    new primitive. The sheet's title is "Nueva respuesta" or the reply's title.
+*   `GET /quick-replies` is in the API, but the web reads the replies from the bootstrap cache and
+    has no caller for it.
+*   One more text: `replies_loading` "Cargando respuestas…" (the probe's busy state).
+*   The cache upgrade test is `db.upgrade-v4.test.ts`, in the style of v2 and v3; version 5 clears
+    the copied data like the others, so the next start fills `quick_replies`.
+*   E2E: R11 and the offline copy of R6 in `replies.spec.ts`; R12 and the Enviar tabs in
+    `navigation.spec.ts`. The clipboard stub moved from `quote.spec.ts` to `steps.ts`.
+*   `TabNav`'s match logic is `ui/tabNav.ts` (`isCurrent`), tested in `tabNav.test.ts`: the repo
+    has no component test setup.
+*   The two reply handlers share `replyTx` (lint `dupl`).
+
 ### Verification Plan
 
 *   **Every stage, S1 on**: the gate in `CLAUDE.md` (`make check-pins lint test vuln build

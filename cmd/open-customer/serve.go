@@ -27,6 +27,7 @@ import (
 	"github.com/jnaranj09/open-customer/internal/platform/logging"
 	"github.com/jnaranj09/open-customer/internal/push"
 	"github.com/jnaranj09/open-customer/internal/reminders"
+	"github.com/jnaranj09/open-customer/internal/replies"
 	"github.com/jnaranj09/open-customer/internal/scheduler"
 	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/settings"
@@ -194,6 +195,7 @@ func startup(ctx context.Context, cfg config.Config, log *slog.Logger, stdout io
 		Media:          mods.media,
 		Templates:      mods.templates,
 		Reminders:      mods.reminders,
+		Replies:        mods.replies,
 		Push:           mods.push,
 		Appointments:   mods.appointments,
 		Exporter:       exporter.New(exporter.Options{Clock: clock.Real{}, Settings: mods.settings, Attributes: mods.attributes}),
@@ -233,6 +235,7 @@ type modules struct {
 	media        *media.Module
 	templates    *templates.Module
 	reminders    *reminders.Module
+	replies      *replies.Module
 	push         *push.Module
 	auth         *auth.Auth
 }
@@ -258,6 +261,7 @@ func newModules(cfg config.Config) (modules, error) {
 		media:        media.New(media.Options{Clock: clock.Real{}, MediaDir: cfg.MediaDir}),
 		templates:    templates.New(templates.Options{Clock: clock.Real{}, Attributes: attributesModule}),
 		reminders:    reminders.New(reminders.Options{Clock: clock.Real{}, Attributes: attributesModule}),
+		replies:      replies.New(replies.Options{Clock: clock.Real{}}),
 		push:         push.New(push.Options{Clock: clock.Real{}, Subject: cfg.VAPIDSubject}),
 		auth:         authModule,
 	}, nil

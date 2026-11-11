@@ -45,7 +45,8 @@ type datos struct {
 			ServiceID uuid.UUID `json:"service_id"`
 		} `json:"services"`
 	} `json:"appointments"`
-	ReminderLog []struct {
+	QuickReplies []withID `json:"quick_replies"`
+	ReminderLog  []struct {
 		ID         uuid.UUID `json:"id"`
 		ClientID   uuid.UUID `json:"client_id"`
 		ClientName string    `json:"client_name"`
@@ -85,11 +86,15 @@ func TestExportJSONRoundTripsIDs(t *testing.T) {
 	later := e.book(t, ana.ID, starts.Add(48*time.Hour), pedicure)
 	ruleID := e.rule(t, tpl.ID)
 	logID := e.logRow(t, ruleID, visit.ID, starts)
+	reply := e.reply(t, "Dirección", "Calle 1", 0, false)
 	e.clock.Set(time.Date(2026, 10, 25, 9, 0, 0, 0, time.UTC))
 
 	d := e.datos(t)
-	if d.Version != 3 || !d.ExportedAt.Equal(e.clock.Now()) {
-		t.Errorf("version %d, exported_at %s; want 3 and %s", d.Version, d.ExportedAt, e.clock.Now())
+	if d.Version != 4 || !d.ExportedAt.Equal(e.clock.Now()) {
+		t.Errorf("version %d, exported_at %s; want 4 and %s", d.Version, d.ExportedAt, e.clock.Now())
+	}
+	if got := idsOf(d.QuickReplies); !slices.Equal(got, []uuid.UUID{reply}) {
+		t.Errorf("quick reply ids = %v, want %v", got, reply)
 	}
 	if d.Settings.Currency != "USD" || d.Settings.Timezone != "Europe/Madrid" {
 		t.Errorf("settings = %+v", d.Settings)

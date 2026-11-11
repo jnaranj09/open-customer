@@ -61,6 +61,14 @@ export const TemplateSchema = z.object({
 	archived: z.boolean()
 }) satisfies z.ZodType<Schemas['Template']>;
 
+export const QuickReplySchema = z.object({
+	id,
+	title: z.string(),
+	body: z.string(),
+	position: z.number().int(),
+	archived: z.boolean()
+}) satisfies z.ZodType<Schemas['QuickReply']>;
+
 export const TemplatePreviewSchema = z.object({
 	text: z.string(),
 	unknown_vars: z.array(z.string())
@@ -203,7 +211,8 @@ export const BootstrapSchema = z.object({
 	appointments: z.array(AppointmentSchema),
 	due: z.array(DueItemSchema),
 	template_vars: z.array(TemplateVarSchema),
-	backup_red: z.boolean()
+	backup_red: z.boolean(),
+	quick_replies: z.array(QuickReplySchema)
 }) satisfies z.ZodType<Schemas['Bootstrap']>;
 
 export const StatusSchema = z.object({
@@ -308,6 +317,7 @@ export type Service = z.infer<typeof ServiceSchema>;
 export type Rule = z.infer<typeof RuleSchema>;
 export type Status = z.infer<typeof StatusSchema>;
 export type Template = z.infer<typeof TemplateSchema>;
+export type QuickReply = z.infer<typeof QuickReplySchema>;
 export type Client = z.infer<typeof ClientSchema>;
 export type Media = z.infer<typeof MediaSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;

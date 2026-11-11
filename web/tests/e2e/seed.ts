@@ -14,12 +14,12 @@ function db(): pg.Pool {
 	return pool;
 }
 
-/** Empties the per-spec tables. The user, sessions, settings, attributes, services, templates and
- *  rules stay, so the saved login and the setup data keep working; a service description a spec
+/** Empties the per-spec tables (the quick replies among them). The user, sessions, settings,
+ *  attributes, services, templates and rules stay, so the saved login and the setup data keep working; a service description a spec
  *  wrote is cleared, so every spec quotes the setup services as they were. */
 export async function resetData(): Promise<void> {
 	await db().query(
-		'TRUNCATE clients, appointments, appointment_services, media, reminder_log CASCADE'
+		'TRUNCATE clients, appointments, appointment_services, media, reminder_log, quick_replies CASCADE'
 	);
 	await db().query('UPDATE services SET description = NULL');
 }
@@ -228,4 +228,15 @@ export async function handoverOf(ruleId: string): Promise<string | null> {
 		[ruleId]
 	);
 	return rows[0]?.handover_from?.toISOString() ?? null;
+}
+
+/** Inserts an active quick reply, last in her order, and returns its id. */
+export async function insertReply(r: { title: string; body: string }): Promise<string> {
+	const id = randomUUID();
+	await db().query(
+		`INSERT INTO quick_replies (id, title, body, position)
+		 VALUES ($1, $2, $3, (SELECT COALESCE(MAX(position), -1) + 1 FROM quick_replies))`,
+		[id, r.title, r.body]
+	);
+	return id;
 }

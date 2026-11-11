@@ -112,6 +112,14 @@ type PushSubscription struct {
 	CreatedAt time.Time
 }
 
+type QuickReply struct {
+	ID         uuid.UUID
+	Title      string
+	Body       string
+	Position   int32
+	ArchivedAt *time.Time
+}
+
 type ReminderLog struct {
 	ID            uuid.UUID
 	RuleID        uuid.UUID

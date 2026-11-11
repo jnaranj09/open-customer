@@ -211,6 +211,53 @@ func (q *Queries) ExportLog(ctx context.Context, after uuid.UUID) ([]ExportLogRo
 	return items, nil
 }
 
+const exportQuickReplies = `-- name: ExportQuickReplies :many
+SELECT id, title, body, position, archived_at, rank
+FROM (SELECT id, title, body, position, archived_at, row_number() OVER (ORDER BY position, id)::int AS rank
+      FROM quick_replies) r
+WHERE id > $1
+ORDER BY id
+LIMIT 500
+`
+
+type ExportQuickRepliesRow struct {
+	ID         uuid.UUID
+	Title      string
+	Body       string
+	Position   int32
+	ArchivedAt *time.Time
+	Rank       int32
+}
+
+// rank is the reply's place in her order, from 1 (respuestas.csv "orden"); it is counted over
+// every reply before the page is cut.
+func (q *Queries) ExportQuickReplies(ctx context.Context, after uuid.UUID) ([]ExportQuickRepliesRow, error) {
+	rows, err := q.db.Query(ctx, exportQuickReplies, after)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExportQuickRepliesRow
+	for rows.Next() {
+		var i ExportQuickRepliesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.Position,
+			&i.ArchivedAt,
+			&i.Rank,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const exportRules = `-- name: ExportRules :many
 SELECT id, kind, service_id, return_service_id, offset_days, applies_from, template_id, archived_at, handover_from
 FROM reminder_rules

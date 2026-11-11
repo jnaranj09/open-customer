@@ -42,7 +42,8 @@ with fnm, `fnm use` in web/).
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
   (testcontainers).
 - `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`,
-  `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
+  `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`,
+  `internal/replies`).
 - `make vuln`: govulncheck. `make build`: web build, the script CSP check on the built
   `web/build/index.html` (`scripts/security/csp-check.sh`: one CSP `<meta>`, `script-src` only
   `'self'` and sha256 hashes, every inline script hashed), then `bin/open-customer`. `make image`: the

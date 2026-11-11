@@ -91,6 +91,21 @@ func TestSchemaRejectsInvalidRows(t *testing.T) {
 			code: checkViolation,
 		},
 		{
+			name: "quick reply empty title",
+			stmt: `INSERT INTO quick_replies (id, title, body, position) VALUES (gen_random_uuid(), '', 'Hola', 0)`,
+			code: checkViolation,
+		},
+		{
+			name: "quick reply title of 61 characters",
+			stmt: `INSERT INTO quick_replies (id, title, body, position) VALUES (gen_random_uuid(), repeat('a', 61), 'Hola', 0)`,
+			code: checkViolation,
+		},
+		{
+			name: "quick reply body of 2001 characters",
+			stmt: `INSERT INTO quick_replies (id, title, body, position) VALUES (gen_random_uuid(), 'Hola', repeat('a', 2001), 0)`,
+			code: checkViolation,
+		},
+		{
 			name:  "come_back rule with offset_days 0",
 			setup: []string{insertService, insertTemplate},
 			stmt: `INSERT INTO reminder_rules (id, kind, service_id, offset_days, template_id)

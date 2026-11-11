@@ -447,6 +447,87 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /quick-replies:
+    get:
+      operationId: listQuickReplies
+      summary: List the quick replies
+      description: Every quick reply, archived ones too, by position.
+      responses:
+        "200":
+          description: The quick replies.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReplyList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createQuickReply
+      summary: Add a quick reply
+      description: >-
+        The reply goes last. title is one line of 1 to 60 characters; body is 1 to 2000 characters,
+        trimmed at both ends, its line breaks kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuickReplyInput"
+      responses:
+        "201":
+          description: The new reply.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReply"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /quick-replies/{id}:
+    patch:
+      operationId: updateQuickReply
+      summary: Change a quick reply
+      description: >-
+        Changes only the fields sent; none may be null. title and body get the same checks as on
+        create. A position change sets this one reply; the caller moves the others. archived true
+        archives the reply and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuickReplyPatch"
+      responses:
+        "200":
+          description: The reply after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReply"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /clients:
     get:
       operationId: listClients
@@ -1736,6 +1817,49 @@ components:
         include_overdue:
           type: boolean
           description: Read only with archived; see updateService.
+    QuickReply:
+      type: object
+      required: [id, title, body, position, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+    QuickReplyList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuickReply"
+    QuickReplyInput:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+    QuickReplyPatch:
+      type: object
+      description: Every field is optional; a field left out is not changed. None may be null.
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
     Template:
       type: object
       required: [id, name, body, archived]
@@ -2070,7 +2194,7 @@ components:
           type: string
     Bootstrap:
       type: object
-      required: [server_time, settings, attributes, services, templates, rules, clients, appointments, due, template_vars, backup_red]
+      required: [server_time, settings, attributes, services, templates, rules, clients, appointments, due, template_vars, backup_red, quick_replies]
       properties:
         server_time:
           type: string
@@ -2111,6 +2235,11 @@ components:
             $ref: "#/components/schemas/TemplateVar"
         backup_red:
           type: boolean
+        quick_replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuickReply"
+          description: Every quick reply, archived ones too, by position.
     Status:
       type: object
       required: [version, migration_version, heartbeat_age_s, backup, media_free_bytes, push]
