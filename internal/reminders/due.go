@@ -49,6 +49,12 @@ type Prompt struct {
 // "before" item and nil for a come-back item. DueDate is the business-local midnight of the due
 // day. PhoneDigits and WaLink are nil when the client has no phone. Prompt is set only in
 // ModeBookingPrompt; Text and WaLink are still set then, for "Enviar mensaje".
+//
+// The label fields (reminders-and-replies design, "New fields on each due item"): SourceStartsAt
+// and SourceServices are the appointment the item comes from; General marks a general rule's item;
+// OffsetDays is the rule's days; ShownUntil is the business-local midnight of the last day the item
+// is listed; MessageNumber counts the come-back messages sent for the same appointment, + 1;
+// NextDueDate is the due day of the next general rule for the same visit (general items only).
 type DueItem struct {
 	ID            string
 	RuleID        uuid.UUID
@@ -64,12 +70,24 @@ type DueItem struct {
 	WaLink        *string
 	Mode          Mode
 	Prompt        *Prompt
+
+	SourceStartsAt time.Time
+	SourceServices []string
+	General        bool
+	OffsetDays     int
+	ShownUntil     time.Time
+	MessageNumber  int
+	NextDueDate    *time.Time
 }
 
-// ruleRow is an active rule as the loader reads it. ReturnServiceID is the effective return
-// service (return_service_id, or service_id when it is empty) and is zero for a "before" rule.
+// ruleRow is a rule as the loader reads it: an active rule, or an archived specific come-back rule
+// (Archived; it never makes an item, but its HandoverFrom limits the general rule). ReturnServiceID
+// is the effective return service (return_service_id, or service_id when it is empty) and is zero
+// for a "before" rule and a general rule.
 type ruleRow struct {
 	ID                uuid.UUID
+	Archived          bool
+	HandoverFrom      *time.Time
 	Kind              Kind
 	ServiceID         uuid.NullUUID
 	ReturnServiceID   uuid.UUID
@@ -80,6 +98,20 @@ type ruleRow struct {
 	TemplateArchived  bool
 	ServiceArchived   bool
 	ReturnArchived    bool
+}
+
+// general reports whether r is a general rule: a come-back rule for every service.
+func (r ruleRow) general() bool { return r.Kind == KindComeBack && !r.ServiceID.Valid }
+
+// canSend reports whether r can make items: it, its template, its service and its effective return
+// service are active. A general rule has no service or return service.
+func (r ruleRow) canSend() bool {
+	return !r.Archived && !r.TemplateArchived && !r.ServiceArchived && !r.ReturnArchived
+}
+
+// covers reports whether the specific come-back rule r is about visit a: a holds r's service.
+func (r ruleRow) covers(a apptRow) bool {
+	return r.Kind == KindComeBack && r.ServiceID.Valid && slices.Contains(a.ServiceIDs, r.ServiceID.UUID)
 }
 
 // apptRow is a candidate appointment with its client and service lines.
@@ -99,7 +131,7 @@ type apptRow struct {
 }
 
 // laterAppt is an appointment (not cancelled or no-show) of a come-back candidate's client that
-// starts after that client's earliest candidate ends_at.
+// starts at or after that client's earliest candidate starts_at.
 type laterAppt struct {
 	ID           uuid.UUID
 	ClientID     uuid.UUID
@@ -116,7 +148,8 @@ type logKey struct {
 	AnchorAt      time.Time
 }
 
-// dueData is everything compute needs, read in one snapshot.
+// dueData is everything compute needs, read in one snapshot. SentByVisit counts the sent come-back
+// log rows per appointment; GeneralSent marks an appointment with a sent general row.
 type dueData struct {
 	TZ       *time.Location
 	Locale   locale.Locale
@@ -127,6 +160,9 @@ type dueData struct {
 	ComeBack []apptRow
 	Later    []laterAppt
 	Logged   map[logKey]bool
+
+	SentByVisit map[uuid.UUID]int
+	GeneralSent map[uuid.UUID]bool
 }
 
 // DueList returns the items due today or earlier ("Para enviar hoy"). It loads the rows in a few
@@ -151,11 +187,14 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 	if err != nil {
 		return dueData{}, err
 	}
-	d := dueData{TZ: b.TZ, Locale: b.Locale, Business: b.Name, Logged: map[logKey]bool{}}
+	d := dueData{
+		TZ: b.TZ, Locale: b.Locale, Business: b.Name, Logged: map[logKey]bool{},
+		SentByVisit: map[uuid.UUID]int{}, GeneralSent: map[uuid.UUID]bool{},
+	}
 	if d.Attrs, err = m.attributes.List(ctx, q); err != nil {
 		return dueData{}, fmt.Errorf("due attributes: %w", err)
 	}
-	rules, err := queries.ListActiveRulesForDue(ctx)
+	rules, err := queries.ListRulesForDue(ctx)
 	if err != nil {
 		return dueData{}, fmt.Errorf("list due rules: %w", err)
 	}
@@ -163,6 +202,9 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 	for _, r := range rules {
 		row := ruleRowFrom(r)
 		d.Rules = append(d.Rules, row)
+		if row.Archived {
+			continue
+		}
 		switch row.Kind {
 		case KindBefore:
 			maxBefore = max(maxBefore, row.OffsetDays)
@@ -217,6 +259,12 @@ func (m *Module) loadDue(ctx context.Context, q db.DBTX, now time.Time) (dueData
 			key.AnchorAt = k.AnchorAt.UTC()
 		}
 		d.Logged[key] = true
+		if k.Action == string(ActionSent) && Kind(k.Kind) == KindComeBack {
+			d.SentByVisit[k.AppointmentID]++
+			if k.General {
+				d.GeneralSent[k.AppointmentID] = true
+			}
+		}
 	}
 	return d, nil
 }
@@ -271,16 +319,17 @@ func linesByAppointment(ctx context.Context, queries *sqlc.Queries, ids []uuid.U
 }
 
 // laterAppointments reads, for the clients of the come-back candidates, the appointments (not
-// cancelled or no-show) that start after the earliest candidate ends_at, with their lines. compute
-// keeps only the ones after each visit's own ends_at.
+// cancelled or no-show) that start at or after the earliest candidate starts_at, with their lines,
+// so a booking at the same start as a visit reaches compute. compute keeps, per visit, the ones it
+// needs: after the visit's ends_at for a specific rule, after its start for a general rule.
 func laterAppointments(ctx context.Context, queries *sqlc.Queries, candidates []apptRow) ([]laterAppt, error) {
 	if len(candidates) == 0 {
 		return nil, nil
 	}
-	after := candidates[0].EndsAt
+	after := candidates[0].StartsAt
 	clientIDs := make([]uuid.UUID, 0, len(candidates))
 	for _, a := range candidates {
-		after = minTime(after, a.EndsAt)
+		after = minTime(after, a.StartsAt)
 		if !slices.Contains(clientIDs, a.ClientID) {
 			clientIDs = append(clientIDs, a.ClientID)
 		}
@@ -314,9 +363,9 @@ func minTime(a, b time.Time) time.Time {
 	return a
 }
 
-func ruleRowFrom(r sqlc.ListActiveRulesForDueRow) ruleRow {
+func ruleRowFrom(r sqlc.ListRulesForDueRow) ruleRow {
 	row := ruleRow{
-		ID: r.ID, Kind: Kind(r.Kind), ServiceID: r.ServiceID, ReturnServiceID: r.ReturnServiceID.UUID,
+		ID: r.ID, Archived: r.ArchivedAt != nil, HandoverFrom: r.HandoverFrom, Kind: Kind(r.Kind), ServiceID: r.ServiceID, ReturnServiceID: r.ReturnServiceID.UUID,
 		OffsetDays: int(r.OffsetDays), AppliesFrom: r.AppliesFrom, TemplateBody: r.TemplateBody,
 		TemplateArchived: r.TemplateArchivedAt != nil, ServiceArchived: r.ServiceArchivedAt != nil,
 		ReturnArchived: r.ReturnArchivedAt != nil,
@@ -335,14 +384,15 @@ func apptRowFrom(r sqlc.ListBeforeCandidatesRow) apptRow {
 	}
 }
 
-// compute applies the rules table ("Reminder rules and the 'done' rule") to the loaded rows and
-// returns the items due today or earlier, sorted by due day, client name, then ID. It is pure:
-// the loader only narrows the rows, every rule is checked here.
+// compute applies the rules table ("Reminder rules and the 'done' rule", and the
+// reminders-and-replies design's "Due-list rules") to the loaded rows and returns the items due
+// today or earlier, sorted by due day, client name, then ID. It is pure: the loader only narrows the
+// rows, every rule is checked here.
 func compute(d dueData, now time.Time) []DueItem {
 	today := locale.LocalDay(now, d.TZ)
 	var items []DueItem
 	for _, r := range d.Rules {
-		if r.TemplateArchived || r.ServiceArchived {
+		if !r.canSend() || r.general() {
 			continue
 		}
 		switch r.Kind {
@@ -353,9 +403,6 @@ func compute(d dueData, now time.Time) []DueItem {
 				}
 			}
 		case KindComeBack:
-			if r.ReturnArchived {
-				continue
-			}
 			for _, a := range d.ComeBack {
 				if it, ok := comeBackItem(d, r, a, now, today); ok {
 					items = append(items, it)
@@ -363,6 +410,7 @@ func compute(d dueData, now time.Time) []DueItem {
 			}
 		}
 	}
+	items = append(items, generalItems(d, now, today)...)
 	slices.SortFunc(items, func(x, y DueItem) int {
 		return cmp.Or(x.DueDate.Compare(y.DueDate), cmp.Compare(x.ClientName, y.ClientName), cmp.Compare(x.ID, y.ID))
 	})
@@ -376,10 +424,12 @@ func beforeItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueItem,
 		return DueItem{}, false
 	}
 	due := locale.AddDays(locale.LocalDay(a.StartsAt, d.TZ), -r.OffsetDays, d.TZ)
-	if !allowed(d, r, a, due, today) || d.Logged[logKey{RuleID: r.ID, AppointmentID: a.ID, AnchorAt: a.StartsAt.UTC()}] {
+	if !dueReached(due, today) || !allowedFrom(d, r, a, due) || d.Logged[logKey{RuleID: r.ID, AppointmentID: a.ID, AnchorAt: a.StartsAt.UTC()}] {
 		return DueItem{}, false
 	}
 	it := newItem(d, r, a, due, today)
+	it.ShownUntil = locale.LocalDay(a.StartsAt, d.TZ)
+	it.MessageNumber = 1
 	anchor := a.StartsAt
 	it.ID += ":" + strconv.FormatInt(anchor.Unix(), 10)
 	it.AnchorAt = &anchor
@@ -388,13 +438,14 @@ func beforeItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueItem,
 
 // comeBackItem is the come-back item of rule r for the done visit a: due offset_days after the
 // end day, listed for 60 days, skipped while the client has a later appointment with the return
-// service. A future booking without it turns the item into a booking prompt.
+// service, and once a general reminder for the visit was sent. A future booking without the return
+// service turns the item into a booking prompt.
 func comeBackItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueItem, bool) {
-	if !r.ServiceID.Valid || !slices.Contains(a.ServiceIDs, r.ServiceID.UUID) || !appointments.IsDone(a.Status, a.EndsAt, now) {
+	if !r.covers(a) || !appointments.IsDone(a.Status, a.EndsAt, now) || d.GeneralSent[a.ID] {
 		return DueItem{}, false
 	}
 	due := locale.AddDays(locale.LocalDay(a.EndsAt, d.TZ), r.OffsetDays, d.TZ)
-	if !allowed(d, r, a, due, today) || due.Before(locale.AddDays(today, -lookBackDays, d.TZ)) {
+	if !dueReached(due, today) || !allowedFrom(d, r, a, due) || due.Before(locale.AddDays(today, -lookBackDays, d.TZ)) {
 		return DueItem{}, false
 	}
 	var next *laterAppt
@@ -415,7 +466,7 @@ func comeBackItem(d dueData, r ruleRow, a apptRow, now, today time.Time) (DueIte
 	if d.Logged[logKey{RuleID: r.ID, AppointmentID: a.ID}] {
 		return DueItem{}, false
 	}
-	it := newItem(d, r, a, due, today)
+	it := comeBackNew(d, r, a, due, today)
 	if next != nil {
 		it.Mode = ModeBookingPrompt
 		it.Prompt = &Prompt{
@@ -437,10 +488,123 @@ func active(s appointments.Status) bool {
 	return false
 }
 
-// allowed holds for a due day that has come, is not before the appointment existed, and is not
-// before the rule's applies_from day.
-func allowed(d dueData, r ruleRow, a apptRow, due, today time.Time) bool {
-	if due.After(today) || due.Before(locale.LocalDay(a.CreatedAt, d.TZ)) {
+// generalItems is at most one general reminder per client (reminders-and-replies design,
+// "Due-list rules"): for the client's latest done visit v, the latest due general rule that can
+// send, unless a later appointment, a specific rule that can send for v, or a log row stops it.
+func generalItems(d dueData, now, today time.Time) []DueItem {
+	var general []ruleRow
+	for _, r := range d.Rules {
+		if r.general() && r.canSend() {
+			general = append(general, r)
+		}
+	}
+	if len(general) == 0 {
+		return nil
+	}
+	var items []DueItem
+	for _, v := range latestVisits(d.ComeBack, now) {
+		if it, ok := generalItem(d, general, v, today); ok {
+			items = append(items, it)
+		}
+	}
+	return items
+}
+
+// latestVisits is each client's latest done candidate visit (the latest start; on a tie, the higher
+// id), in the order the candidates came.
+func latestVisits(candidates []apptRow, now time.Time) []apptRow {
+	at := map[uuid.UUID]int{}
+	var out []apptRow
+	for _, a := range candidates {
+		if !appointments.IsDone(a.Status, a.EndsAt, now) {
+			continue
+		}
+		i, seen := at[a.ClientID]
+		switch {
+		case !seen:
+			at[a.ClientID] = len(out)
+			out = append(out, a)
+		case after(a.StartsAt, a.ID, out[i].StartsAt, out[i].ID):
+			out[i] = a
+		}
+	}
+	return out
+}
+
+// generalItem is the general reminder for visit v, the client's latest done visit.
+func generalItem(d dueData, general []ruleRow, v apptRow, today time.Time) (DueItem, bool) {
+	for _, l := range d.Later {
+		if l.ClientID == v.ClientID && after(l.StartsAt, l.ID, v.StartsAt, v.ID) {
+			return DueItem{}, false // G1: any later appointment
+		}
+	}
+	var cutoff *time.Time
+	for _, r := range d.Rules {
+		if !r.covers(v) {
+			continue
+		}
+		if r.canSend() {
+			return DueItem{}, false // G2: a specific rule that can send has the visit
+		}
+		if r.HandoverFrom != nil && (cutoff == nil || r.HandoverFrom.After(*cutoff)) {
+			cutoff = r.HandoverFrom
+		}
+	}
+	end := locale.LocalDay(v.EndsAt, d.TZ)
+	oldest := locale.AddDays(today, -lookBackDays, d.TZ)
+	from := func(g ruleRow, due time.Time) bool {
+		return allowedFrom(d, g, v, due) && (cutoff == nil || !due.Before(locale.LocalDay(*cutoff, d.TZ)))
+	}
+	var pick *ruleRow
+	var pickDue time.Time
+	for i := range general {
+		g := &general[i]
+		due := locale.AddDays(end, g.OffsetDays, d.TZ)
+		if !dueReached(due, today) || due.Before(oldest) || !from(*g, due) {
+			continue
+		}
+		if pick == nil || laterPick(due, *g, pickDue, *pick) {
+			pick, pickDue = g, due
+		}
+	}
+	if pick == nil || d.Logged[logKey{RuleID: pick.ID, AppointmentID: v.ID}] {
+		return DueItem{}, false // G3: a handled latest due hides the earlier ones
+	}
+	it := comeBackNew(d, *pick, v, pickDue, today)
+	for _, g := range general {
+		due := locale.AddDays(end, g.OffsetDays, d.TZ)
+		if due.After(pickDue) && from(g, due) && (it.NextDueDate == nil || due.Before(*it.NextDueDate)) {
+			it.NextDueDate = &due
+		}
+	}
+	if it.NextDueDate != nil {
+		if dayBefore := locale.AddDays(*it.NextDueDate, -1, d.TZ); dayBefore.Before(it.ShownUntil) {
+			it.ShownUntil = dayBefore
+		}
+	}
+	return it, true
+}
+
+// laterPick orders general candidates: the latest due, then the larger offset, then the higher id.
+func laterPick(due time.Time, g ruleRow, pickDue time.Time, pick ruleRow) bool {
+	return cmp.Or(
+		due.Compare(pickDue), cmp.Compare(g.OffsetDays, pick.OffsetDays), slices.Compare(g.ID[:], pick.ID[:]),
+	) > 0
+}
+
+// after reports whether the appointment (start s, id) comes after (t, other): a later start, or the
+// same start and a higher id (ids are UUIDv7, so the later created).
+func after(s time.Time, id uuid.UUID, t time.Time, other uuid.UUID) bool {
+	return cmp.Or(s.Compare(t), slices.Compare(id[:], other[:])) > 0
+}
+
+// dueReached holds for a due day that has come.
+func dueReached(due, today time.Time) bool { return !due.After(today) }
+
+// allowedFrom holds for a due day that is not before the appointment existed and not before the
+// rule's applies_from day.
+func allowedFrom(d dueData, r ruleRow, a apptRow, due time.Time) bool {
+	if due.Before(locale.LocalDay(a.CreatedAt, d.TZ)) {
 		return false
 	}
 	return r.AppliesFrom == nil || !due.Before(locale.LocalDay(*r.AppliesFrom, d.TZ))
@@ -468,5 +632,16 @@ func newItem(d dueData, r ruleRow, a apptRow, due, today time.Time) DueItem {
 		ID: r.ID.String() + ":" + a.ID.String(), RuleID: r.ID, AppointmentID: a.ID, Kind: r.Kind,
 		ClientID: a.ClientID, ClientName: a.ClientName, DueDate: due, Late: due.Before(today),
 		Text: text, PhoneDigits: a.PhoneDigits, WaLink: link, Mode: ModeMessage,
+		SourceStartsAt: a.StartsAt, SourceServices: a.ServiceNames, General: r.general(),
+		OffsetDays: r.OffsetDays,
 	}
+}
+
+// comeBackNew is newItem for a come-back rule: listed until 60 days after the due day, numbered
+// after the come-back messages already sent for the visit.
+func comeBackNew(d dueData, r ruleRow, a apptRow, due, today time.Time) DueItem {
+	it := newItem(d, r, a, due, today)
+	it.ShownUntil = locale.AddDays(due, lookBackDays, d.TZ)
+	it.MessageNumber = d.SentByVisit[a.ID] + 1
+	return it
 }

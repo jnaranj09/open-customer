@@ -113,8 +113,8 @@ const (
 	MsgRuleKindInvalid       = "Elige un tipo de regla"
 	MsgOffsetInvalid         = "Escribe un número de días de 0 a 365"
 	MsgComeBackOffsetInvalid = "Escribe un número de días de 1 a 365"
-	MsgServiceRequired       = "Elige un servicio"
 	MsgServiceNotAllowed     = "Esta regla no lleva servicio"
+	MsgGeneralNoReturn       = "Una regla para todos los servicios no lleva servicio para agendar"
 	MsgTemplateUnavailable   = "Esa plantilla no existe o está archivada"
 )
 

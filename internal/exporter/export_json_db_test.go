@@ -88,8 +88,8 @@ func TestExportJSONRoundTripsIDs(t *testing.T) {
 	e.clock.Set(time.Date(2026, 10, 25, 9, 0, 0, 0, time.UTC))
 
 	d := e.datos(t)
-	if d.Version != 2 || !d.ExportedAt.Equal(e.clock.Now()) {
-		t.Errorf("version %d, exported_at %s; want 2 and %s", d.Version, d.ExportedAt, e.clock.Now())
+	if d.Version != 3 || !d.ExportedAt.Equal(e.clock.Now()) {
+		t.Errorf("version %d, exported_at %s; want 3 and %s", d.Version, d.ExportedAt, e.clock.Now())
 	}
 	if d.Settings.Currency != "USD" || d.Settings.Timezone != "Europe/Madrid" {
 		t.Errorf("settings = %+v", d.Settings)

@@ -299,7 +299,7 @@ export interface paths {
         head?: never;
         /**
          * Change a service
-         * @description Changes only the fields sent. Only price_cents and description may be null, which clears the price or the description. archived true archives the service and false restores it. Past appointments keep the values they copied.
+         * @description Changes only the fields sent. Only price_cents and description may be null, which clears the price or the description. archived true archives the service and false restores it. Past appointments keep the values they copied. include_overdue is read only with archived, as on updateTemplate, for the specific come_back rules whose service or return service this is.
          */
         patch: operations["updateService"];
         trace?: never;
@@ -512,7 +512,7 @@ export interface paths {
         head?: never;
         /**
          * Change a message template
-         * @description Changes only the fields sent; none may be null. A body that is sent goes through the same check as on create. archived true archives the template and false restores it.
+         * @description Changes only the fields sent; none may be null. A body that is sent goes through the same check as on create. archived true archives the template and false restores it. include_overdue is read only with archived: on archive, as on a reminder rule archive, for each specific come_back rule the archive stops; on restore, as on a reminder rule restore, for each one the restore lets send again.
          */
         patch: operations["updateTemplate"];
         trace?: never;
@@ -528,7 +528,7 @@ export interface paths {
         put?: never;
         /**
          * Add a reminder rule
-         * @description A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule takes a service_id, an optional return_service_id (the service to book again; the rule's own service when left out) and an offset_days of 1 to 365. The template and the services must exist and be active. include_overdue true counts items already past their moment; false or left out counts only items from now on.
+         * @description A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule takes an offset_days of 1 to 365 and either a service_id with an optional return_service_id (the service to book again; the rule's own service when left out), or no service_id: a general rule for every service, which takes no return_service_id. The template and the services must exist and be active. include_overdue true counts items already past their moment; false or left out counts only items from now on.
          */
         post: operations["createReminderRule"];
         delete?: never;
@@ -552,7 +552,7 @@ export interface paths {
         head?: never;
         /**
          * Change a reminder rule
-         * @description Changes only the fields sent. Only return_service_id may be null (the rule's own service again). A rule never changes kind or service. include_overdue is read only when the change can make new items appear.
+         * @description Changes only the fields sent. Only return_service_id may be null (the rule's own service again); a general rule takes none. A rule never changes kind or service. include_overdue is read only when the change can make new items appear, and when archiving a specific come_back rule that could send: true lets the general rule bring that rule's late visits, false or left out starts it from now (handover_from).
          */
         patch: operations["updateReminderRule"];
         trace?: never;
@@ -949,6 +949,8 @@ export interface components {
             color?: string;
             position?: number;
             archived?: boolean;
+            /** @description Read only with archived; see updateService. */
+            include_overdue?: boolean;
         };
         Template: {
             /** Format: uuid */
@@ -975,6 +977,8 @@ export interface components {
             name?: string;
             body?: string;
             archived?: boolean;
+            /** @description Read only with archived; see updateTemplate. */
+            include_overdue?: boolean;
         };
         /** @enum {string} */
         RuleKind: "before_appointment" | "come_back";
@@ -995,6 +999,11 @@ export interface components {
              */
             applies_from: string | null;
             archived: boolean;
+            /**
+             * Format: date-time
+             * @description Only on a specific come_back rule that stopped sending: the general rule brings its visits due from this moment on; null means from the start (or not answered).
+             */
+            handover_from: string | null;
         };
         RuleInput: {
             kind: components["schemas"]["RuleKind"];
@@ -1055,6 +1064,29 @@ export interface components {
             mode: components["schemas"]["DueItemMode"];
             /** @description Set only when mode is booking_prompt. */
             prompt: components["schemas"]["BookingPrompt"] | null;
+            /**
+             * Format: date-time
+             * @description The start of the appointment the item comes from.
+             */
+            source_starts_at: string;
+            /** @description That appointment's service names, in line order. */
+            source_services: string[];
+            /** @description True for a general rule's item (a come_back rule for every service). */
+            general: boolean;
+            /** @description The rule's days. */
+            offset_days: number;
+            /**
+             * Format: date
+             * @description The last day the item is listed: come_back, the due day + 60 (a general item also ends the day before next_due_date); before_appointment, the appointment's day.
+             */
+            shown_until: string;
+            /** @description For come_back, the come_back messages sent for the same appointment + 1 (skipped ones do not count); 1 for before_appointment. */
+            message_number: number;
+            /**
+             * Format: date
+             * @description General items only, the due day of the next general rule for the same visit.
+             */
+            next_due_date: string | null;
         };
         DueList: {
             items: components["schemas"]["DueItem"][];

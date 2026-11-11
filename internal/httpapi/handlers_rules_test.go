@@ -33,7 +33,7 @@ func TestCreateRuleOK(t *testing.T) {
 	tpl := ruleTemplate(t, app, c)
 	rec := sendAs(app, c, http.MethodPost, rulesPath, beforeRuleBody(tpl))
 	got := decodeInto[gen.Rule](t, rec, http.StatusCreated)
-	assertKeys(t, rec.Body.Bytes(), "applies_from", "archived", "id", "kind", "offset_days", "return_service_id", "service_id", "template_id")
+	assertKeys(t, rec.Body.Bytes(), "applies_from", "archived", "handover_from", "id", "kind", "offset_days", "return_service_id", "service_id", "template_id")
 	if got.Kind != gen.RuleKind("before_appointment") || got.OffsetDays != 1 || got.TemplateId != tpl.Id || got.Archived {
 		t.Fatalf("rule = %+v, want a before rule, offset 1, the template, active", got)
 	}

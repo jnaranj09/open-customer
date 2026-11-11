@@ -76,7 +76,8 @@ export const RuleSchema = z.object({
 	offset_days: z.number().int(),
 	template_id: id,
 	applies_from: z.nullable(instant),
-	archived: z.boolean()
+	archived: z.boolean(),
+	handover_from: z.nullable(instant)
 }) satisfies z.ZodType<Schemas['Rule']>;
 
 export const ClientSchema = z.object({
@@ -145,7 +146,14 @@ export const DueItemSchema = z.object({
 	phone_digits: z.nullable(z.string()),
 	wa_link: z.nullable(z.string()),
 	mode: z.enum(['message', 'booking_prompt']),
-	prompt: z.nullable(BookingPromptSchema)
+	prompt: z.nullable(BookingPromptSchema),
+	source_starts_at: instant,
+	source_services: z.array(z.string()),
+	general: z.boolean(),
+	offset_days: z.number().int(),
+	shown_until: day,
+	message_number: z.number().int(),
+	next_due_date: z.nullable(day)
 }) satisfies z.ZodType<Schemas['DueItem']>;
 
 export const LogItemSchema = z.object({

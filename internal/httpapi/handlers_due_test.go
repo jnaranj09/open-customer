@@ -18,8 +18,9 @@ const duePath = "/api/v1/reminders/due"
 
 // dueItemKeys are the keys of a DueItem.
 var dueItemKeys = []string{
-	"anchor_at", "appointment_id", "client_id", "client_name", "due_date", "id", "kind", "late",
-	"mode", "phone_digits", "prompt", "rule_id", "text", "wa_link",
+	"anchor_at", "appointment_id", "client_id", "client_name", "due_date", "general", "id", "kind",
+	"late", "message_number", "mode", "next_due_date", "offset_days", "phone_digits", "prompt",
+	"rule_id", "shown_until", "source_services", "source_starts_at", "text", "wa_link",
 }
 
 // bookAt books an appointment of client for the service at start (an RFC 3339 time), allowing an

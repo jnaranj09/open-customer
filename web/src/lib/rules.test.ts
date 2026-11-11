@@ -28,6 +28,7 @@ function rule(over: Partial<Rule> = {}): Rule {
 		template_id: REMINDER,
 		applies_from: null,
 		archived: false,
+		handover_from: null,
 		...over
 	};
 }

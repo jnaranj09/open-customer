@@ -84,6 +84,7 @@ type Rule struct {
 	AppliesFrom     *time.Time    `json:"applies_from"`
 	TemplateID      uuid.UUID     `json:"template_id"`
 	Archived        bool          `json:"archived"`
+	HandoverFrom    *time.Time    `json:"handover_from"`
 }
 
 // Client is the API Client schema.
@@ -143,8 +144,9 @@ type LogItem struct {
 // jsonFile is the name of the JSON entry. It is not Spanish, so it is not in locale.
 const jsonFile = "datos.json"
 
-// jsonVersion is the datos.json format version. 2: services gained description.
-const jsonVersion = 2
+// jsonVersion is the datos.json format version. 2: services gained description. 3: rules gained
+// handover_from.
+const jsonVersion = 3
 
 // jsonStream writes datos.json piece by piece, so each array is written one page at a time.
 type jsonStream struct{ w io.Writer }
@@ -309,7 +311,7 @@ func ruleJSON(r sqlc.ExportRulesRow) Rule {
 	return Rule{
 		ID: r.ID, Kind: r.Kind, ServiceID: r.ServiceID, ReturnServiceID: r.ReturnServiceID,
 		OffsetDays: int(r.OffsetDays), AppliesFrom: utcPtr(r.AppliesFrom), TemplateID: r.TemplateID,
-		Archived: r.ArchivedAt != nil,
+		Archived: r.ArchivedAt != nil, HandoverFrom: utcPtr(r.HandoverFrom),
 	}
 }
 

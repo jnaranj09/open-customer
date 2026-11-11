@@ -758,7 +758,8 @@ describe('the settings calls', () => {
 		offset_days: 1,
 		template_id: USER_ID,
 		applies_from: null,
-		archived: false
+		archived: false,
+		handover_from: null
 	};
 	const statusReport = {
 		version: 'v1.2.0',

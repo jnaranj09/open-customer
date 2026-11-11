@@ -38,7 +38,7 @@ ORDER BY id
 LIMIT 500;
 
 -- name: ExportRules :many
-SELECT id, kind, service_id, return_service_id, offset_days, applies_from, template_id, archived_at
+SELECT id, kind, service_id, return_service_id, offset_days, applies_from, template_id, archived_at, handover_from
 FROM reminder_rules
 WHERE id > @after
 ORDER BY id

@@ -212,7 +212,7 @@ func (q *Queries) ExportLog(ctx context.Context, after uuid.UUID) ([]ExportLogRo
 }
 
 const exportRules = `-- name: ExportRules :many
-SELECT id, kind, service_id, return_service_id, offset_days, applies_from, template_id, archived_at
+SELECT id, kind, service_id, return_service_id, offset_days, applies_from, template_id, archived_at, handover_from
 FROM reminder_rules
 WHERE id > $1
 ORDER BY id
@@ -228,6 +228,7 @@ type ExportRulesRow struct {
 	AppliesFrom     *time.Time
 	TemplateID      uuid.UUID
 	ArchivedAt      *time.Time
+	HandoverFrom    *time.Time
 }
 
 func (q *Queries) ExportRules(ctx context.Context, after uuid.UUID) ([]ExportRulesRow, error) {
@@ -248,6 +249,7 @@ func (q *Queries) ExportRules(ctx context.Context, after uuid.UUID) ([]ExportRul
 			&i.AppliesFrom,
 			&i.TemplateID,
 			&i.ArchivedAt,
+			&i.HandoverFrom,
 		); err != nil {
 			return nil, err
 		}

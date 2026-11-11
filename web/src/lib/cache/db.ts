@@ -26,8 +26,9 @@ import {
  *  copied server data in its upgrade (and sets `lastSyncAt` to null), so the next start refreshes
  *  from `/bootstrap`; drafts and the rest of meta (the pending send confirmation, the logged ids,
  *  the last `Me`) are the phone's own and stay. A row that still fails its schema on read clears the whole cache (see `guarded`).
- *  2: due rows became `{id, position, item}`. 3: services gained `description`. */
-export const SCHEMA_VERSION = 3;
+ *  2: due rows became `{id, position, item}`. 3: services gained `description`. 4: rules gained
+ *  `handover_from` and due items their label fields. */
+export const SCHEMA_VERSION = 4;
 export const DB_NAME = 'open-customer';
 
 const PendingSendSchema = z.object({
@@ -120,6 +121,7 @@ async function dropServerData(tx: Transaction): Promise<void> {
 const db = new Dexie(DB_NAME);
 db.version(1).stores(STORES);
 db.version(2).stores(STORES).upgrade(dropServerData);
+db.version(3).stores(STORES).upgrade(dropServerData);
 db.version(SCHEMA_VERSION).stores(STORES).upgrade(dropServerData);
 
 const t = {

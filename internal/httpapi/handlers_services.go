@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/jnaranj09/open-customer/internal/httpapi/gen"
 	"github.com/jnaranj09/open-customer/internal/platform/nullval"
+	"github.com/jnaranj09/open-customer/internal/reminders"
 	"github.com/jnaranj09/open-customer/internal/services"
 )
 
@@ -51,12 +53,14 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id openap
 		PriceCents: body.PriceCents, Color: body.Color, Position: body.Position, Archived: body.Archived,
 	}
 	var out services.Service
+	scope := reminders.HandoverScope{ServiceID: uuid.NullUUID{UUID: id, Valid: true}}
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
-		var err error
-		if out, err = s.services.Update(r.Context(), tx, id, patch); err != nil {
-			return fmt.Errorf("update service: %w", err)
-		}
-		return nil
+		return s.handover(r.Context(), tx, body.Archived, body.IncludeOverdue, scope, func() (err error) {
+			if out, err = s.services.Update(r.Context(), tx, id, patch); err != nil {
+				return fmt.Errorf("update service: %w", err)
+			}
+			return nil
+		})
 	}) {
 		return
 	}

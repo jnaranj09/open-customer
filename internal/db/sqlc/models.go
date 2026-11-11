@@ -134,6 +134,7 @@ type ReminderRule struct {
 	ArchivedAt      *time.Time
 	CreatedAt       time.Time
 	ReturnServiceID uuid.NullUUID
+	HandoverFrom    *time.Time
 }
 
 type SchedulerState struct {

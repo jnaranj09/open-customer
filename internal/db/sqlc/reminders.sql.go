@@ -160,7 +160,7 @@ func (q *Queries) GetPreviewClient(ctx context.Context, id uuid.UUID) (GetPrevie
 }
 
 const getRule = `-- name: GetRule :one
-SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id
+SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id, handover_from
 FROM reminder_rules
 WHERE id = $1
 `
@@ -178,6 +178,7 @@ func (q *Queries) GetRule(ctx context.Context, id uuid.UUID) (ReminderRule, erro
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.ReturnServiceID,
+		&i.HandoverFrom,
 	)
 	return i, err
 }
@@ -281,67 +282,6 @@ func (q *Queries) InsertRule(ctx context.Context, arg InsertRuleParams) error {
 		arg.Now,
 	)
 	return err
-}
-
-const listActiveRulesForDue = `-- name: ListActiveRulesForDue :many
-SELECT r.id, r.kind, r.service_id, r.offset_days, r.applies_from,
-       t.body AS template_body, t.archived_at AS template_archived_at,
-       s.archived_at AS service_archived_at,
-       rs.id AS return_service_id, rs.name AS return_service_name, rs.archived_at AS return_archived_at
-FROM reminder_rules r
-JOIN message_templates t ON t.id = r.template_id
-LEFT JOIN services s ON s.id = r.service_id
-LEFT JOIN services rs ON rs.id = COALESCE(r.return_service_id, r.service_id)
-WHERE r.archived_at IS NULL
-ORDER BY r.created_at, r.id
-`
-
-type ListActiveRulesForDueRow struct {
-	ID                 uuid.UUID
-	Kind               string
-	ServiceID          uuid.NullUUID
-	OffsetDays         int32
-	AppliesFrom        *time.Time
-	TemplateBody       string
-	TemplateArchivedAt *time.Time
-	ServiceArchivedAt  *time.Time
-	ReturnServiceID    uuid.NullUUID
-	ReturnServiceName  *string
-	ReturnArchivedAt   *time.Time
-}
-
-// The return service is the effective one: return_service_id, or service_id when it is empty. A
-// "before" rule has neither, so its return columns are NULL.
-func (q *Queries) ListActiveRulesForDue(ctx context.Context) ([]ListActiveRulesForDueRow, error) {
-	rows, err := q.db.Query(ctx, listActiveRulesForDue)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListActiveRulesForDueRow
-	for rows.Next() {
-		var i ListActiveRulesForDueRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Kind,
-			&i.ServiceID,
-			&i.OffsetDays,
-			&i.AppliesFrom,
-			&i.TemplateBody,
-			&i.TemplateArchivedAt,
-			&i.ServiceArchivedAt,
-			&i.ReturnServiceID,
-			&i.ReturnServiceName,
-			&i.ReturnArchivedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listBeforeCandidates = `-- name: ListBeforeCandidates :many
@@ -496,7 +436,7 @@ func (q *Queries) ListComeBackCandidates(ctx context.Context, arg ListComeBackCa
 const listLaterAppointments = `-- name: ListLaterAppointments :many
 SELECT id, client_id, starts_at
 FROM appointments
-WHERE client_id = ANY($1::uuid[]) AND starts_at > $2::timestamptz
+WHERE client_id = ANY($1::uuid[]) AND starts_at >= $2::timestamptz
   AND status NOT IN ('cancelled', 'no_show')
 ORDER BY starts_at, id
 `
@@ -652,15 +592,18 @@ func (q *Queries) ListLogInRange(ctx context.Context, arg ListLogInRangeParams) 
 }
 
 const listLogKeys = `-- name: ListLogKeys :many
-SELECT rule_id, appointment_id, anchor_at
-FROM reminder_log
-WHERE appointment_id = ANY($1::uuid[])
+SELECT l.rule_id, l.appointment_id, l.anchor_at, l.action, r.kind, (r.service_id IS NULL)::boolean AS general
+FROM reminder_log l JOIN reminder_rules r ON r.id = l.rule_id
+WHERE l.appointment_id = ANY($1::uuid[])
 `
 
 type ListLogKeysRow struct {
 	RuleID        uuid.UUID
 	AppointmentID uuid.UUID
 	AnchorAt      *time.Time
+	Action        string
+	Kind          string
+	General       bool
 }
 
 func (q *Queries) ListLogKeys(ctx context.Context, ids []uuid.UUID) ([]ListLogKeysRow, error) {
@@ -672,7 +615,14 @@ func (q *Queries) ListLogKeys(ctx context.Context, ids []uuid.UUID) ([]ListLogKe
 	var items []ListLogKeysRow
 	for rows.Next() {
 		var i ListLogKeysRow
-		if err := rows.Scan(&i.RuleID, &i.AppointmentID, &i.AnchorAt); err != nil {
+		if err := rows.Scan(
+			&i.RuleID,
+			&i.AppointmentID,
+			&i.AnchorAt,
+			&i.Action,
+			&i.Kind,
+			&i.General,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -684,7 +634,7 @@ func (q *Queries) ListLogKeys(ctx context.Context, ids []uuid.UUID) ([]ListLogKe
 }
 
 const listRules = `-- name: ListRules :many
-SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id
+SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id, handover_from
 FROM reminder_rules
 ORDER BY created_at, id
 `
@@ -708,6 +658,7 @@ func (q *Queries) ListRules(ctx context.Context) ([]ReminderRule, error) {
 			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.ReturnServiceID,
+			&i.HandoverFrom,
 		); err != nil {
 			return nil, err
 		}
@@ -719,14 +670,136 @@ func (q *Queries) ListRules(ctx context.Context) ([]ReminderRule, error) {
 	return items, nil
 }
 
+const listRulesForDue = `-- name: ListRulesForDue :many
+SELECT r.id, r.kind, r.service_id, r.offset_days, r.applies_from, r.archived_at, r.handover_from,
+       t.body AS template_body, t.archived_at AS template_archived_at,
+       s.archived_at AS service_archived_at,
+       rs.id AS return_service_id, rs.name AS return_service_name, rs.archived_at AS return_archived_at
+FROM reminder_rules r
+JOIN message_templates t ON t.id = r.template_id
+LEFT JOIN services s ON s.id = r.service_id
+LEFT JOIN services rs ON rs.id = COALESCE(r.return_service_id, r.service_id)
+WHERE r.archived_at IS NULL OR (r.kind = 'come_back' AND r.service_id IS NOT NULL)
+ORDER BY r.created_at, r.id
+`
+
+type ListRulesForDueRow struct {
+	ID                 uuid.UUID
+	Kind               string
+	ServiceID          uuid.NullUUID
+	OffsetDays         int32
+	AppliesFrom        *time.Time
+	ArchivedAt         *time.Time
+	HandoverFrom       *time.Time
+	TemplateBody       string
+	TemplateArchivedAt *time.Time
+	ServiceArchivedAt  *time.Time
+	ReturnServiceID    uuid.NullUUID
+	ReturnServiceName  *string
+	ReturnArchivedAt   *time.Time
+}
+
+// The active rules, plus the archived specific come-back rules (their handover_from limits the
+// general rule). The return service is the effective one: return_service_id, or service_id when it
+// is empty. A "before" rule and a general rule have neither, so their return columns are NULL.
+func (q *Queries) ListRulesForDue(ctx context.Context) ([]ListRulesForDueRow, error) {
+	rows, err := q.db.Query(ctx, listRulesForDue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRulesForDueRow
+	for rows.Next() {
+		var i ListRulesForDueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.ServiceID,
+			&i.OffsetDays,
+			&i.AppliesFrom,
+			&i.ArchivedAt,
+			&i.HandoverFrom,
+			&i.TemplateBody,
+			&i.TemplateArchivedAt,
+			&i.ServiceArchivedAt,
+			&i.ReturnServiceID,
+			&i.ReturnServiceName,
+			&i.ReturnArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const restartRules = `-- name: RestartRules :exec
+UPDATE reminder_rules r SET applies_from = $1::timestamptz, handover_from = NULL
+FROM message_templates t, services s, services rs
+WHERE r.kind = 'come_back' AND r.service_id IS NOT NULL AND r.archived_at IS NULL
+  AND t.id = r.template_id AND s.id = r.service_id AND rs.id = COALESCE(r.return_service_id, r.service_id)
+  AND (
+    (r.template_id = $2::uuid AND t.archived_at IS NOT NULL
+      AND s.archived_at IS NULL AND rs.archived_at IS NULL)
+    OR
+    ($3::uuid IN (s.id, rs.id) AND t.archived_at IS NULL
+      AND (s.archived_at IS NULL OR s.id = $3::uuid)
+      AND (rs.archived_at IS NULL OR rs.id = $3::uuid)
+      AND EXISTS (SELECT 1 FROM services x WHERE x.id = $3::uuid AND x.archived_at IS NOT NULL))
+  )
+`
+
+type RestartRulesParams struct {
+	AppliesFrom *time.Time
+	TemplateID  uuid.NullUUID
+	ServiceID   uuid.NullUUID
+}
+
+// The specific rules that cannot send only because the template, or the service (their service or
+// effective return service), about to be restored is archived. Exactly one of the two ids is set.
+func (q *Queries) RestartRules(ctx context.Context, arg RestartRulesParams) error {
+	_, err := q.db.Exec(ctx, restartRules, arg.AppliesFrom, arg.TemplateID, arg.ServiceID)
+	return err
+}
+
+const setHandover = `-- name: SetHandover :exec
+
+UPDATE reminder_rules r SET handover_from = $1::timestamptz
+FROM message_templates t, services s, services rs
+WHERE r.kind = 'come_back' AND r.service_id IS NOT NULL AND r.archived_at IS NULL
+  AND t.id = r.template_id AND t.archived_at IS NULL
+  AND s.id = r.service_id AND s.archived_at IS NULL
+  AND rs.id = COALESCE(r.return_service_id, r.service_id) AND rs.archived_at IS NULL
+  AND (r.template_id = $2::uuid OR $3::uuid IN (s.id, rs.id))
+`
+
+type SetHandoverParams struct {
+	HandoverFrom *time.Time
+	TemplateID   uuid.NullUUID
+	ServiceID    uuid.NullUUID
+}
+
+// The handover (reminders-and-replies design, "Handover"). A specific rule "can send" when it, its
+// template, its service and its effective return service are all active.
+// The specific rules that can send under the template, or with the service (as their service or
+// effective return service), about to be archived. Exactly one of the two ids is set.
+func (q *Queries) SetHandover(ctx context.Context, arg SetHandoverParams) error {
+	_, err := q.db.Exec(ctx, setHandover, arg.HandoverFrom, arg.TemplateID, arg.ServiceID)
+	return err
+}
+
 const updateRule = `-- name: UpdateRule :exec
 UPDATE reminder_rules SET
     offset_days       = $1,
     template_id       = $2,
     return_service_id = $3,
     applies_from      = $4::timestamptz,
-    archived_at       = $5::timestamptz
-WHERE id = $6
+    archived_at       = $5::timestamptz,
+    handover_from     = $6::timestamptz
+WHERE id = $7
 `
 
 type UpdateRuleParams struct {
@@ -735,6 +808,7 @@ type UpdateRuleParams struct {
 	ReturnServiceID uuid.NullUUID
 	AppliesFrom     *time.Time
 	ArchivedAt      *time.Time
+	HandoverFrom    *time.Time
 	ID              uuid.UUID
 }
 
@@ -745,6 +819,7 @@ func (q *Queries) UpdateRule(ctx context.Context, arg UpdateRuleParams) error {
 		arg.ReturnServiceID,
 		arg.AppliesFrom,
 		arg.ArchivedAt,
+		arg.HandoverFrom,
 		arg.ID,
 	)
 	return err

@@ -181,10 +181,10 @@ func TestCreateRuleRejects(t *testing.T) {
 			t.Helper()
 			return RuleInput{Kind: KindBefore, ReturnServiceID: nu(f.service(t, false)), OffsetDays: 1, TemplateID: f.template(t, false)}
 		}, "return_service_id", problem.MsgServiceNotAllowed},
-		{"come_back without service_id", func(t *testing.T, f fixture) RuleInput {
+		{"general with return_service_id", func(t *testing.T, f fixture) RuleInput {
 			t.Helper()
-			return RuleInput{Kind: KindComeBack, OffsetDays: 21, TemplateID: f.template(t, false)}
-		}, "service_id", problem.MsgServiceRequired},
+			return RuleInput{Kind: KindComeBack, ReturnServiceID: nu(f.service(t, false)), OffsetDays: 21, TemplateID: f.template(t, false)}
+		}, "return_service_id", problem.MsgGeneralNoReturn},
 		{"come_back offset 0", func(t *testing.T, f fixture) RuleInput {
 			t.Helper()
 			return RuleInput{Kind: KindComeBack, ServiceID: nu(f.service(t, false)), OffsetDays: 0, TemplateID: f.template(t, false)}

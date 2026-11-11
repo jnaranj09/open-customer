@@ -959,9 +959,10 @@ And the handover and rule texts (D17):
     returning `r.archived_at` and `r.handover_from`.
 *   `ListLaterAppointments`: `starts_at >= @after`.
 *   `ListLogKeys` as in "New fields on each due item".
-*   New: `SetRuleHandover` (one rule), `SetHandoverByTemplate` and `SetHandoverByService` (rules
-    that can send under that template or service), `RestartRulesByTemplate` and
-    `RestartRulesByService` (rules that will send again).
+*   `ListRules`, `GetRule` and `UpdateRule` read and write `handover_from` (a rule archive or
+    restore sets it). New: `SetHandover` (the rules that can send under that template or service)
+    and `RestartRules` (the rules that will send again), each taking a nullable `template_id` and
+    `service_id`, exactly one set.
 
 #### 25. `internal/reminders/rules.go`, `rules_db_test.go` (Modify)
 
@@ -1012,7 +1013,8 @@ And the handover and rule texts (D17):
 
 #### 29. `api/openapi.yaml`, `internal/httpapi/handlers_reminders.go`, `handlers_templates.go`, `handlers_services.go` and their tests (Modify)
 
-*   Spec: the new `DueItem` fields; `RuleInput.service_id` is already nullable, its text now
+*   Spec: the new `DueItem` fields; `Rule.handover_from` (nullable; `TestExportJSONMatchesSchemas`
+    keeps the export's rule equal to it); `RuleInput.service_id` is already nullable, its text now
     allows NULL for a come-back rule; `TemplatePatch.include_overdue` and
     `ServicePatch.include_overdue` (optional boolean, described as on `RulePatch`, read only on
     archive and restore).
@@ -1022,9 +1024,11 @@ And the handover and rule texts (D17):
 *   Tests: with the failing-commit fake (`handlers_auth_test.go:442-462`), neither the archive nor
     `handover_from` is visible after the request.
 
-#### 30. `web/src/lib/api/schemas.ts`, `web/src/lib/cache/db.ts`, `db.upgrade.test.ts` (Modify)
+#### 30. `web/src/lib/api/schemas.ts`, `web/src/lib/cache/db.ts` (Modify), `db.upgrade-v3.test.ts`, `upgradeSeed.ts` (Create)
 
-*   `DueItemSchema` new fields. `SCHEMA_VERSION` 3 → 4; the upgrade drops the cached due list.
+*   `DueItemSchema` new fields, `RuleSchema.handover_from`. `SCHEMA_VERSION` 3 → 4; the upgrade
+    drops the cached server data, the due list included. `upgradeSeed.ts` writes the older
+    database for each `db.upgrade-v*.test.ts`.
 
 #### 31. `web/src/lib/rules.ts`, `rules.test.ts` (Modify)
 

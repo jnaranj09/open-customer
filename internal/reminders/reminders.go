@@ -44,6 +44,9 @@ type Rule struct {
 	AppliesFrom     *time.Time
 	Archived        bool
 	CreatedAt       time.Time
+	// HandoverFrom is set only on a specific come-back rule that stopped sending: the general rule
+	// brings its visits due from that moment on (reminders-and-replies design, "Handover").
+	HandoverFrom *time.Time
 }
 
 // RuleInput is everything CreateRule needs. IncludeOverdue false means "only from now on".
@@ -58,7 +61,8 @@ type RuleInput struct {
 
 // RulePatch holds the fields UpdateRule changes. There is no kind and no service: a rule never
 // changes either. ReturnServiceID distinguishes unspecified (kept), null (back to the rule's own
-// service) and a value. IncludeOverdue is read only when the change asks (see UpdateRule).
+// service) and a value. IncludeOverdue is read only when the change asks, and on the archive of a
+// specific come-back rule that could send (see UpdateRule).
 type RulePatch struct {
 	OffsetDays      *int
 	TemplateID      *uuid.UUID
