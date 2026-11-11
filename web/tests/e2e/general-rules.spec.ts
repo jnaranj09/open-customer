@@ -3,7 +3,6 @@
 // and removes them after, so the other specs see the setup rules only.
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
-import { shortDay } from '../../src/lib/time';
 import {
 	at,
 	businessDate,
@@ -170,6 +169,14 @@ test('archiving and restoring its service ask the handover question', async ({ p
 	await expect(page.getByText(es.service_restored)).toBeVisible();
 	expect(await handoverOf(rule)).toBeNull();
 });
+
+/** "10 nov" for `YYYY-MM-DD`, as the app's `shortDay` writes it (src/lib/time imports es.json
+ *  without `type: json`, which Playwright's loader rejects). */
+function shortDay(day: string): string {
+	const [, m, d] = day.split('-').map(Number);
+	const month = (es as Record<string, string>)[`month_${String(m)}`] ?? '';
+	return `${String(d)} ${month.slice(0, 3)}`;
+}
 
 /** The general rule "30 días" on its own template. */
 async function generalRule(): Promise<void> {
