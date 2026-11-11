@@ -226,32 +226,39 @@ test.describe('wide', () => {
 	});
 });
 
-test('CUJ R12: the old rule and template URLs open their tab inside Recordatorios', async ({
-	page
-}) => {
-	const sections = page.getByRole('navigation', { name: es.settings_sections });
-	const tabs = page.getByRole('navigation', { name: es.rules_tabs_label });
-	const entry = sections.getByRole('link', { name: es.settings_rules, exact: true });
+// The Ajustes section list marks the open entry on wide only, beside the open section.
+test.describe('on wide', () => {
+	test.use({ viewport: { width: 1440, height: 900 } });
 
-	await page.goto('/ajustes/plantillas');
-	await expect(tabs.getByRole('link', { name: es.tab_templates })).toHaveAttribute(
-		'aria-current',
-		'page'
-	);
-	await expect(entry).toHaveAttribute('aria-current', 'true');
-	await expect(sections.getByRole('link', { name: es.tab_templates, exact: true })).toHaveCount(0);
+	test('CUJ R12: the old rule and template URLs open their tab inside Recordatorios', async ({
+		page
+	}) => {
+		const sections = page.getByRole('navigation', { name: es.settings_sections });
+		const tabs = page.getByRole('navigation', { name: es.rules_tabs_label });
+		const entry = sections.getByRole('link', { name: es.settings_rules, exact: true });
 
-	await page.goto('/ajustes/recordatorios');
-	await expect(tabs.getByRole('link', { name: es.tab_rules })).toHaveAttribute(
-		'aria-current',
-		'page'
-	);
-	await expect(entry).toHaveAttribute('aria-current', 'true');
+		await page.goto('/ajustes/plantillas');
+		await expect(tabs.getByRole('link', { name: es.tab_templates })).toHaveAttribute(
+			'aria-current',
+			'page'
+		);
+		await expect(entry).toHaveAttribute('aria-current', 'true');
+		await expect(sections.getByRole('link', { name: es.tab_templates, exact: true })).toHaveCount(
+			0
+		);
 
-	await tabs.getByRole('link', { name: es.tab_templates }).click();
-	await expect(page).toHaveURL(/\/ajustes\/plantillas$/);
-	await tabs.getByRole('link', { name: es.tab_rules }).click();
-	await expect(page).toHaveURL(/\/ajustes\/recordatorios$/);
+		await page.goto('/ajustes/recordatorios');
+		await expect(tabs.getByRole('link', { name: es.tab_rules })).toHaveAttribute(
+			'aria-current',
+			'page'
+		);
+		await expect(entry).toHaveAttribute('aria-current', 'true');
+
+		await tabs.getByRole('link', { name: es.tab_templates }).click();
+		await expect(page).toHaveURL(/\/ajustes\/plantillas$/);
+		await tabs.getByRole('link', { name: es.tab_rules }).click();
+		await expect(page).toHaveURL(/\/ajustes\/recordatorios$/);
+	});
 });
 
 test('Enviar has two tabs: Recordatorios and Respuestas', async ({ page }) => {

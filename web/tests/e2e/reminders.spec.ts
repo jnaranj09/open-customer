@@ -183,7 +183,9 @@ test.describe('CUJ 5: come-back reminder lifecycle', () => {
 		await expect(item).toContainText('Café');
 		await expect(item.getByRole('button', { name: es.due_send, exact: true })).toBeVisible();
 		// Due today, not late: it is under "Hoy", and there is no "Atrasados" group.
-		await expect(page.getByRole('heading', { name: es.today_title, level: 2 })).toBeVisible();
+		await expect(
+			page.getByRole('heading', { name: es.today_title, level: 2, exact: true })
+		).toBeVisible();
 		await expect(page.getByRole('heading', { name: es.due_overdue_heading })).toHaveCount(0);
 	});
 
