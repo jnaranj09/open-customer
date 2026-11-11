@@ -97,8 +97,8 @@ func TestExportOK(t *testing.T) {
 	if got, want := rec.Header().Get("Content-Disposition"), `attachment; filename="open-customer-2026-03-03.zip"`; got != want {
 		t.Errorf("Content-Disposition = %q, want %q", got, want)
 	}
-	if got := zipEntryNames(t, rec.Body.Bytes()); len(got) != 4 {
-		t.Errorf("entries = %v, want 4", got)
+	if got := zipEntryNames(t, rec.Body.Bytes()); len(got) != 5 {
+		t.Errorf("entries = %v, want 5", got)
 	}
 }
 
@@ -181,7 +181,7 @@ func TestExportAbortsAfterStreamStarts(t *testing.T) {
 	var total int
 	clean := httptest.NewServer(newTestApp(t, testServerConfig{pool: pool, beginner: failingQueries{pool: pool, calls: &total}}).handler)
 	defer clean.Close()
-	if body := getExport(t, clean.URL, c); body.err != nil || len(zipEntryNames(t, body.bytes)) != 4 {
+	if body := getExport(t, clean.URL, c); body.err != nil || len(zipEntryNames(t, body.bytes)) != 5 {
 		t.Fatalf("clean export: err %v", body.err)
 	}
 	sink := &lockedBuffer{}
