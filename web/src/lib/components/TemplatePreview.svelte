@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Chip from './ui/Chip.svelte';
+	import { PREVIEW_DEBOUNCE_MS } from '../preview';
 	import { untrack } from 'svelte';
 	import { api } from '../api/app';
 	import { errorText, type ApiError } from '../api/errors';
@@ -10,8 +11,6 @@
 	// What the message looks like, rendered by the server (one renderer), 300 ms after the last
 	// change. "Vista previa con:" picks the sample client or one of hers (design doc item 70).
 	let { body }: { body: string } = $props();
-
-	const DEBOUNCE_MS = 300;
 
 	let mode = $state<'sample' | 'client'>('sample');
 	let clientId = $state<string | null>(null);
@@ -33,7 +32,7 @@
 			return;
 		}
 		// The first answer does not wait; later ones wait for her to stop typing.
-		const wait = untrack(() => (text === null && failure === null ? 0 : DEBOUNCE_MS));
+		const wait = untrack(() => (text === null && failure === null ? 0 : PREVIEW_DEBOUNCE_MS));
 		updating = true;
 		let stale = false;
 		const timer = setTimeout(() => {

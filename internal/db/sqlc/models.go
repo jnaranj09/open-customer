@@ -112,6 +112,14 @@ type PushSubscription struct {
 	CreatedAt time.Time
 }
 
+type QuickReply struct {
+	ID         uuid.UUID
+	Title      string
+	Body       string
+	Position   int32
+	ArchivedAt *time.Time
+}
+
 type ReminderLog struct {
 	ID            uuid.UUID
 	RuleID        uuid.UUID
@@ -134,6 +142,7 @@ type ReminderRule struct {
 	ArchivedAt      *time.Time
 	CreatedAt       time.Time
 	ReturnServiceID uuid.NullUUID
+	HandoverFrom    *time.Time
 }
 
 type SchedulerState struct {
@@ -156,6 +165,7 @@ type Service struct {
 	Color       string
 	Position    int32
 	ArchivedAt  *time.Time
+	Description *string
 }
 
 type Session struct {

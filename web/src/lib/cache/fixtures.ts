@@ -22,7 +22,14 @@ function dueItem(n: number): DueItem {
 		phone_digits: '50688887777',
 		wa_link: 'https://wa.me/50688887777?text=Hola',
 		mode: 'message',
-		prompt: null
+		prompt: null,
+		source_starts_at: '2026-10-14T15:00:00Z',
+		source_services: ['Acrílico'],
+		general: false,
+		offset_days: 21,
+		shown_until: '2027-01-03',
+		message_number: 1,
+		next_due_date: null
 	};
 }
 
@@ -77,6 +84,7 @@ export function bootstrap(dueCount = 0, clientName = 'Ana Rojas'): Bootstrap {
 		],
 		due: Array.from({ length: dueCount }, (_, i) => dueItem(i)),
 		template_vars: [{ ns: 'client', key: 'name', label: 'Nombre' }],
-		backup_red: false
+		backup_red: false,
+		quick_replies: []
 	};
 }

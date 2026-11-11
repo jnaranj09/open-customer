@@ -9,19 +9,23 @@
 	import { resolve } from '$app/paths';
 	import type { DueItem } from '../../api/schemas';
 	import { t } from '../../i18n';
+	import { dueLabel } from '../../due';
 	import { canSend, type Sendable } from '../../pending';
+	import LabelChip from './LabelChip.svelte';
 	import { formatDayShort, todayIn } from '../../time';
 	import Button from './Button.svelte';
 	import { OFFLINE_REASON_ID } from './offlineReason';
 	import WriteButton from '../WriteButton.svelte';
 	import { buttonClasses } from './buttonStyle';
 
-	// A due item with its actions: the client, the full message and Enviar / Omitir, or the booking
-	// prompt (CUJ 5) with "Agregar a la cita", "Enviar mensaje" and "Omitir". A client without a
-	// phone gets "Agregar teléfono" in place of the send button.
+	// A due item with its actions: the client, its label (where it comes from; reminders-and-replies
+	// design, "Row label"), the full message and Enviar / Omitir, or the booking prompt (CUJ 5) with
+	// "Agregar a la cita", "Enviar mensaje" and "Omitir". A client without a phone gets "Agregar
+	// teléfono" in place of the send button.
 	let {
 		item,
 		zone,
+		today,
 		offline,
 		busy,
 		skipBlocked,
@@ -32,6 +36,8 @@
 	}: {
 		item: DueItem;
 		zone: string;
+		/** The business day, for the label's days left. */
+		today: string;
 		offline: boolean;
 		busy: boolean;
 		/** Another "Omitir" is still inside its "Deshacer" window. */
@@ -47,6 +53,7 @@
 		item.mode === 'booking_prompt' ? 'bookingPrompt' : 'message'
 	);
 	const prompt = $derived(variant === 'bookingPrompt' ? item.prompt : null);
+	const label = $derived(dueLabel(item, today, zone, !offline));
 	const promptText = $derived(
 		prompt === null
 			? null
@@ -72,7 +79,16 @@
 </script>
 
 <article class="flex flex-col gap-4">
-	<h2 class="text-xl font-bold text-ink">{item.client_name}</h2>
+	<div class="flex flex-col gap-2">
+		<h2 class="text-xl font-bold text-ink">{item.client_name}</h2>
+		<div>
+			<LabelChip
+				variant={label.warning ? 'warning' : 'normal'}
+				text={label.text}
+				appointmentId={offline ? null : item.appointment_id}
+			/>
+		</div>
+	</div>
 	{#if promptText !== null}
 		<Callout as="p" class="text-base font-bold">{promptText}</Callout>
 	{/if}

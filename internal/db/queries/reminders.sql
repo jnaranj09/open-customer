@@ -1,10 +1,10 @@
 -- name: ListRules :many
-SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id
+SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id, handover_from
 FROM reminder_rules
 ORDER BY created_at, id;
 
 -- name: GetRule :one
-SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id
+SELECT id, kind, service_id, offset_days, applies_from, template_id, archived_at, created_at, return_service_id, handover_from
 FROM reminder_rules
 WHERE id = @id;
 
@@ -19,8 +19,40 @@ UPDATE reminder_rules SET
     template_id       = @template_id,
     return_service_id = @return_service_id,
     applies_from      = sqlc.narg('applies_from')::timestamptz,
-    archived_at       = sqlc.narg('archived_at')::timestamptz
+    archived_at       = sqlc.narg('archived_at')::timestamptz,
+    handover_from     = sqlc.narg('handover_from')::timestamptz
 WHERE id = @id;
+
+-- The handover (reminders-and-replies design, "Handover"). A specific rule "can send" when it, its
+-- template, its service and its effective return service are all active.
+
+-- name: SetHandover :exec
+-- The specific rules that can send under the template, or with the service (as their service or
+-- effective return service), about to be archived. Exactly one of the two ids is set.
+UPDATE reminder_rules r SET handover_from = sqlc.narg('handover_from')::timestamptz
+FROM message_templates t, services s, services rs
+WHERE r.kind = 'come_back' AND r.service_id IS NOT NULL AND r.archived_at IS NULL
+  AND t.id = r.template_id AND t.archived_at IS NULL
+  AND s.id = r.service_id AND s.archived_at IS NULL
+  AND rs.id = COALESCE(r.return_service_id, r.service_id) AND rs.archived_at IS NULL
+  AND (r.template_id = sqlc.narg('template_id')::uuid OR sqlc.narg('service_id')::uuid IN (s.id, rs.id));
+
+-- name: RestartRules :exec
+-- The specific rules that cannot send only because the template, or the service (their service or
+-- effective return service), about to be restored is archived. Exactly one of the two ids is set.
+UPDATE reminder_rules r SET applies_from = sqlc.narg('applies_from')::timestamptz, handover_from = NULL
+FROM message_templates t, services s, services rs
+WHERE r.kind = 'come_back' AND r.service_id IS NOT NULL AND r.archived_at IS NULL
+  AND t.id = r.template_id AND s.id = r.service_id AND rs.id = COALESCE(r.return_service_id, r.service_id)
+  AND (
+    (r.template_id = sqlc.narg('template_id')::uuid AND t.archived_at IS NOT NULL
+      AND s.archived_at IS NULL AND rs.archived_at IS NULL)
+    OR
+    (sqlc.narg('service_id')::uuid IN (s.id, rs.id) AND t.archived_at IS NULL
+      AND (s.archived_at IS NULL OR s.id = sqlc.narg('service_id')::uuid)
+      AND (rs.archived_at IS NULL OR rs.id = sqlc.narg('service_id')::uuid)
+      AND EXISTS (SELECT 1 FROM services x WHERE x.id = sqlc.narg('service_id')::uuid AND x.archived_at IS NOT NULL))
+  );
 
 -- name: GetTemplateState :one
 SELECT archived_at FROM message_templates WHERE id = @id;
@@ -34,10 +66,11 @@ SELECT archived_at FROM services WHERE id = @id;
 -- name: GetDueSettings :one
 SELECT name, timezone, locale FROM business_settings WHERE id = 1;
 
--- name: ListActiveRulesForDue :many
--- The return service is the effective one: return_service_id, or service_id when it is empty. A
--- "before" rule has neither, so its return columns are NULL.
-SELECT r.id, r.kind, r.service_id, r.offset_days, r.applies_from,
+-- name: ListRulesForDue :many
+-- The active rules, plus the archived specific come-back rules (their handover_from limits the
+-- general rule). The return service is the effective one: return_service_id, or service_id when it
+-- is empty. A "before" rule and a general rule have neither, so their return columns are NULL.
+SELECT r.id, r.kind, r.service_id, r.offset_days, r.applies_from, r.archived_at, r.handover_from,
        t.body AS template_body, t.archived_at AS template_archived_at,
        s.archived_at AS service_archived_at,
        rs.id AS return_service_id, rs.name AS return_service_name, rs.archived_at AS return_archived_at
@@ -45,7 +78,7 @@ FROM reminder_rules r
 JOIN message_templates t ON t.id = r.template_id
 LEFT JOIN services s ON s.id = r.service_id
 LEFT JOIN services rs ON rs.id = COALESCE(r.return_service_id, r.service_id)
-WHERE r.archived_at IS NULL
+WHERE r.archived_at IS NULL OR (r.kind = 'come_back' AND r.service_id IS NOT NULL)
 ORDER BY r.created_at, r.id;
 
 -- name: ListBeforeCandidates :many
@@ -64,6 +97,16 @@ WHERE a.ends_at >= @since::timestamptz AND a.ends_at <= @now::timestamptz
   AND a.status IN ('scheduled', 'confirmed') AND c.archived_at IS NULL
 ORDER BY a.ends_at, a.id;
 
+-- name: ListClientUpcomingAppointments :many
+-- One client's bookings in (now, until], for the "before" reminders of the client page (the
+-- reminders-and-replies design, "Look-ahead pass"). The columns are ListBeforeCandidates'.
+SELECT a.id, a.client_id, c.name AS client_name, c.phone_digits, c.attrs AS client_attrs,
+       a.starts_at, a.ends_at, a.created_at, a.status, a.attrs
+FROM appointments a JOIN clients c ON c.id = a.client_id
+WHERE a.client_id = @client_id AND a.starts_at > @now::timestamptz AND a.starts_at <= @until::timestamptz
+  AND a.status IN ('scheduled', 'confirmed') AND c.archived_at IS NULL
+ORDER BY a.starts_at, a.id;
+
 -- name: ListCandidateLines :many
 SELECT appointment_id, service_id, name
 FROM appointment_services
@@ -73,14 +116,14 @@ ORDER BY appointment_id, position;
 -- name: ListLaterAppointments :many
 SELECT id, client_id, starts_at
 FROM appointments
-WHERE client_id = ANY(@client_ids::uuid[]) AND starts_at > @after::timestamptz
+WHERE client_id = ANY(@client_ids::uuid[]) AND starts_at >= @after::timestamptz
   AND status NOT IN ('cancelled', 'no_show')
 ORDER BY starts_at, id;
 
 -- name: ListLogKeys :many
-SELECT rule_id, appointment_id, anchor_at
-FROM reminder_log
-WHERE appointment_id = ANY(@ids::uuid[]);
+SELECT l.rule_id, l.appointment_id, l.anchor_at, l.action, r.kind, (r.service_id IS NULL)::boolean AS general
+FROM reminder_log l JOIN reminder_rules r ON r.id = l.rule_id
+WHERE l.appointment_id = ANY(@ids::uuid[]);
 
 -- The reminder log (design doc item 55, log.go).
 

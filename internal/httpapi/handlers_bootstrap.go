@@ -59,6 +59,11 @@ func (s *Server) GetBootstrap(w http.ResponseWriter, r *http.Request, params gen
 		for _, v := range svcs {
 			out.Services = append(out.Services, toGenService(v))
 		}
+		replyList, err := s.replies.List(ctx, tx)
+		if err != nil {
+			return fmt.Errorf("bootstrap quick replies: %w", err)
+		}
+		out.QuickReplies = toGenReplies(replyList)
 		tmpls, err := s.templates.List(ctx, tx)
 		if err != nil {
 			return fmt.Errorf("bootstrap templates: %w", err)

@@ -139,6 +139,23 @@ export function formatWeekdayShort(day: string): string {
 	return t(weekday).slice(0, 3);
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** `15 nov`: the day and the first three letters of the month (labels and toasts). */
+export function shortDay(day: string): string {
+	const { m, d } = parseDay(day);
+	const month = MONTHS[m - 1];
+	if (month === undefined) {
+		throw new RangeError('time: a day must be a real date');
+	}
+	return `${String(d)} ${t(month).slice(0, 3)}`;
+}
+
+/** The whole days from `from` to `to` (both `YYYY-MM-DD`); negative when `to` is earlier. */
+export function daysBetween(from: string, to: string): number {
+	return Math.round((noon(parseDay(to)).getTime() - noon(parseDay(from)).getTime()) / MS_PER_DAY);
+}
+
 /** `4/11`: day and month, not padded. */
 export function formatDayShort(day: string): string {
 	const { m, d } = parseDay(day);

@@ -195,10 +195,10 @@ func (e env) book(t *testing.T, clientID uuid.UUID, starts time.Time, serviceIDs
 
 func ptr[T any](v T) *T { return &v }
 
-func TestExportHasFourFilesInOrder(t *testing.T) {
+func TestExportHasFiveFilesInOrder(t *testing.T) {
 	e := newEnv(t, "USD")
 	names, _ := zipFiles(t, e.export(t))
-	want := []string{"clientas.csv", "citas.csv", "servicios.csv", "datos.json"}
+	want := []string{"clientas.csv", "citas.csv", "servicios.csv", "respuestas.csv", "datos.json"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("entries = %q, want %q", names, want)
 	}
@@ -327,11 +327,43 @@ func TestExportZeroDecimalCurrency(t *testing.T) {
 	e := newEnv(t, "JPY")
 	e.service(t, "Pedicure", 30, ptr(int64(12500)))
 	rows := e.csvFile(t, "servicios.csv")
-	if want := []string{"nombre", "duracion_min", "precio", "archivado"}; !slices.Equal(rows[0], want) {
+	if want := []string{"nombre", "descripcion", "duracion_min", "precio", "archivado"}; !slices.Equal(rows[0], want) {
 		t.Errorf("header = %q, want %q", rows[0], want)
 	}
-	if got := rows[1]; !slices.Equal(got, []string{"Pedicure", "30", "12500", ""}) {
-		t.Fatalf("service row = %q, want [Pedicure 30 12500 \"\"]", got)
+	if got := rows[1]; !slices.Equal(got, []string{"Pedicure", "", "30", "12500", ""}) {
+		t.Fatalf("service row = %q, want [Pedicure \"\" 30 12500 \"\"]", got)
+	}
+}
+
+// reply inserts a quick reply at position (the replies module is only for httpapi and cmd).
+func (e env) reply(t *testing.T, title, body string, position int, archived bool) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	var archivedAt *time.Time
+	if archived {
+		now := e.clock.Now()
+		archivedAt = &now
+	}
+	if _, err := e.pool.Exec(t.Context(),
+		`INSERT INTO quick_replies (id, title, body, position, archived_at) VALUES ($1, $2, $3, $4, $5)`,
+		id, title, body, position, archivedAt); err != nil {
+		t.Fatalf("insert reply: %v", err)
+	}
+	return id
+}
+
+func TestExportRepliesInHerOrder(t *testing.T) {
+	e := newEnv(t, "USD")
+	e.reply(t, "Precios", "Uñas: 20 USD", 5, false)
+	e.reply(t, "Dirección", "Calle 1\nSan José", 2, true)
+	rows := e.csvFile(t, "respuestas.csv")
+	if want := []string{"titulo", "texto", "orden", "archivada"}; !slices.Equal(rows[0], want) {
+		t.Fatalf("header = %q, want %q", rows[0], want)
+	}
+	got := map[string][]string{rows[1][0]: rows[1], rows[2][0]: rows[2]}
+	if !slices.Equal(got["Dirección"], []string{"Dirección", "Calle 1\nSan José", "1", "sí"}) ||
+		!slices.Equal(got["Precios"], []string{"Precios", "Uñas: 20 USD", "2", ""}) {
+		t.Fatalf("rows = %q, want Dirección first (archived) and Precios second", rows[1:])
 	}
 }
 

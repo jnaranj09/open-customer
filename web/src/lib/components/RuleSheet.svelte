@@ -7,10 +7,16 @@
 	import { t, type MessageKey } from '../i18n';
 	import { byPosition } from '../order';
 	import {
+		ALL_SERVICES,
+		handoverAsks,
+		isGeneral,
 		overdueChoice,
+		previewInput,
 		rulePatch,
+		rulePreviewText,
 		ruleRequest,
 		type RuleField,
+		type RuleForm,
 		type RuleInput,
 		type RulePatch,
 		type RuleKind
@@ -18,19 +24,23 @@
 	import type { Option } from '../setup';
 	import { submitOnce } from '../submit';
 	import ActionButton from './ActionButton.svelte';
+	import OverdueChoice from './OverdueChoice.svelte';
 	import BottomSheet from './ui/BottomSheet.svelte';
 	import Button from './ui/Button.svelte';
 	import SaveButton from './SaveButton.svelte';
 	import SelectField from './ui/SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
-	import WriteButton from './WriteButton.svelte';
+	import { PREVIEW_DEBOUNCE_MS } from '../preview';
 
 	// Add or edit one reminder rule in a sheet (design doc item 77, CUJ 2 steps 3 and 4). A
-	// come-back change that can add items first asks "¿Incluir recordatorios atrasados?": the
-	// question replaces the form in the same sheet, and "Cancelar" or Escape on it goes back to the
-	// form. A rule never changes kind or service, so an open rule shows those as text.
+	// come-back change that can add items first asks "¿Incluir atrasados?", and so does the archive
+	// of a rule for one service while a general rule takes its visits (reminders-and-replies design,
+	// "Handover"): the question replaces the form in the same sheet, and "Cancelar" or Escape on it
+	// goes back to the form. A rule never changes kind or service, so an open rule shows those as
+	// text. "Todos los servicios" makes a general rule, which has no service to book.
 	let {
 		rule,
+		rules,
 		templates,
 		services,
 		onclose,
@@ -38,6 +48,8 @@
 	}: {
 		/** The rule being edited; none means a new one. */
 		rule?: Rule;
+		/** Every rule, for the handover question. */
+		rules: readonly Rule[];
 		templates: readonly Template[];
 		services: readonly Service[];
 		onclose: () => void;
@@ -82,7 +94,54 @@
 		{ id: 'before_appointment', label: t('rule_kind_before') },
 		{ id: 'come_back', label: t('rule_kind_come_back') }
 	]);
-	const serviceName = $derived(services.find((x) => x.id === rule?.service_id)?.name ?? '…');
+	const serviceName = $derived(
+		rule !== undefined && isGeneral(rule)
+			? t('rule_service_all')
+			: (services.find((x) => x.id === rule?.service_id)?.name ?? '…')
+	);
+	// A general rule (new with "Todos los servicios", or open) has no service to book.
+	const general = $derived(rule === undefined ? serviceId === ALL_SERVICES : isGeneral(rule));
+
+	/** The form as `ruleRequest` reads it. */
+	function form(): RuleForm {
+		return {
+			kind,
+			templateId,
+			days,
+			serviceId: rule === undefined ? serviceId : (rule.service_id ?? ALL_SERVICES),
+			returnId: general ? '' : returnId
+		};
+	}
+
+	// The preview of a come-back rule (reminders-and-replies design, CUJ R7): asked for while the
+	// form is valid, after the template preview's pause. An archived rule sends nothing, so it has
+	// none. On an error or offline the line is hidden.
+	const previewBody = $derived.by(() => {
+		const request = ruleRequest(form());
+		return request.ok && rule?.archived !== true ? previewInput(request.body, rule?.id) : null;
+	});
+	let previewLine = $state<string | null>(null);
+	// Timers and the server are outside systems, so this is an effect. A change before the answer
+	// comes marks that answer stale: it is dropped, never shown after a newer one.
+	$effect(() => {
+		const body = previewBody;
+		if (body === null) {
+			previewLine = null;
+			return;
+		}
+		let stale = false;
+		const timer = setTimeout(() => {
+			void api.previewRule(body).then((result) => {
+				if (!stale) {
+					previewLine = result.ok ? rulePreviewText(result.data) : null;
+				}
+			});
+		}, PREVIEW_DEBOUNCE_MS);
+		return () => {
+			stale = true;
+			clearTimeout(timer);
+		};
+	});
 
 	const fieldError = (field: RuleField, key: string): string | undefined => {
 		const own = errors[field];
@@ -143,7 +202,12 @@
 				: rule === undefined
 					? 'none'
 					: overdueChoice(rule, action.update, archivedTemplates);
-		if (choice === 'ask') {
+		const handover =
+			'update' in action &&
+			action.update.archived === true &&
+			rule !== undefined &&
+			handoverAsks({ kind: 'rule_archive', id: rule.id }, rules, templates, services);
+		if (choice === 'ask' || handover) {
 			asking = action;
 		} else {
 			void send.run(action, choice === 'include' ? true : undefined);
@@ -152,13 +216,7 @@
 
 	function save(): void {
 		failure = null;
-		const request = ruleRequest({
-			kind,
-			templateId,
-			days,
-			serviceId: rule === undefined ? serviceId : (rule.service_id ?? ''),
-			returnId
-		});
+		const request = ruleRequest(form());
 		if (!request.ok) {
 			errors = request.errors;
 			return;
@@ -223,7 +281,10 @@
 						<SelectField
 							label={t('rule_service')}
 							bind:value={serviceId}
-							options={serviceOptions(undefined)}
+							options={[
+								{ id: ALL_SERVICES, label: t('rule_service_all') },
+								...serviceOptions(undefined)
+							]}
 							error={fieldError('service', 'service_id')}
 						/>
 					{:else}
@@ -231,13 +292,18 @@
 							{t('rule_service')}: <span class="font-bold text-ink">{serviceName}</span>
 						</p>
 					{/if}
-					<SelectField
-						label={t('rule_return')}
-						bind:value={returnId}
-						options={serviceOptions(rule?.return_service_id)}
-						clearLabel={t('rule_return_same')}
-						error={failure?.kind === 'problem' ? failure.fields['return_service_id'] : undefined}
-					/>
+					{#if !general}
+						<SelectField
+							label={t('rule_return')}
+							bind:value={returnId}
+							options={serviceOptions(rule?.return_service_id)}
+							clearLabel={t('rule_return_same')}
+							error={failure?.kind === 'problem' ? failure.fields['return_service_id'] : undefined}
+						/>
+					{/if}
+				{/if}
+				{#if previewLine !== null}
+					<p role="status" class="text-sm text-ink-muted">{previewLine}</p>
 				{/if}
 				{#if otherError !== null}
 					<p role="alert" class="text-sm text-error">{otherError}</p>
@@ -275,32 +341,16 @@
 			<Button variant="ghost" onclick={onclose}>{t('cancel')}</Button>
 		</div>
 	{:else}
-		<div class="flex flex-col gap-3" {@attach focusFirst}>
-			<p class="text-base text-ink-muted">{t('overdue_body')}</p>
-			<WriteButton
-				variant="strong"
-				{busy}
-				onclick={() => {
-					if (asking !== null) {
-						void send.run(asking, false);
-					}
-				}}>{t('overdue_from_today')}</WriteButton
-			>
-			<WriteButton
-				variant="glass"
-				{busy}
-				onclick={() => {
-					if (asking !== null) {
-						void send.run(asking, true);
-					}
-				}}>{t('overdue_include')}</WriteButton
-			>
-			<Button
-				variant="ghost"
-				onclick={() => {
-					asking = null;
-				}}>{t('cancel')}</Button
-			>
-		</div>
+		<OverdueChoice
+			{busy}
+			onanswer={(include: boolean) => {
+				if (asking !== null) {
+					void send.run(asking, include);
+				}
+			}}
+			oncancel={() => {
+				asking = null;
+			}}
+		/>
 	{/if}
 </BottomSheet>

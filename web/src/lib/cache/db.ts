@@ -4,7 +4,7 @@
 // a bad cached row never reaches a screen (rules/boundaries.md). A bad snapshot or meta row clears
 // the whole cache and reads as empty; a bad draft is deleted alone, because it is the app's own
 // local value, not a copy of the server.
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
 import { z } from 'zod';
 import { byPosition } from '../order';
 import {
@@ -18,6 +18,7 @@ import {
 	SettingsSchema,
 	TemplateSchema,
 	TemplateVarSchema,
+	QuickReplySchema,
 	type Bootstrap,
 	type Settings
 } from '../api/schemas';
@@ -26,8 +27,10 @@ import {
  *  copied server data in its upgrade (and sets `lastSyncAt` to null), so the next start refreshes
  *  from `/bootstrap`; drafts and the rest of meta (the pending send confirmation, the logged ids,
  *  the last `Me`) are the phone's own and stay. A row that still fails its schema on read clears the whole cache (see `guarded`).
- *  2: due rows became `{id, position, item}`. */
-export const SCHEMA_VERSION = 2;
+ *  2: due rows became `{id, position, item}`. 3: services gained `description`. 4: rules gained
+ *  `handover_from` and due items their label fields. 5: the `quick_replies` table (cleared too, so
+ *  the next start fills it). */
+export const SCHEMA_VERSION = 5;
 export const DB_NAME = 'open-customer';
 
 const PendingSendSchema = z.object({
@@ -72,6 +75,7 @@ export type CacheSnapshot = Pick<
 	| 'clients'
 	| 'appointments'
 	| 'due'
+	| 'quick_replies'
 >;
 
 type Keyed = { key: string; value: unknown };
@@ -86,7 +90,8 @@ const DATA_TABLES = [
 	'rules',
 	'clients',
 	'appointments',
-	'due'
+	'due',
+	'quick_replies'
 ] as const;
 const STORES = {
 	settings: 'key',
@@ -97,28 +102,33 @@ const STORES = {
 	clients: 'id',
 	appointments: 'id',
 	due: 'id',
+	quick_replies: 'id',
 	drafts: 'key',
 	meta: 'key'
 };
 
+/** The upgrade of a version whose cached rows change shape: drop the copied server data. */
+async function dropServerData(tx: Transaction): Promise<void> {
+	for (const name of DATA_TABLES) {
+		await tx.table(name).clear();
+	}
+	// The data is gone, so the sync line must not claim a time for it.
+	await tx
+		.table<Keyed, string>('meta')
+		.toCollection()
+		.modify((row) => {
+			if (typeof row.value === 'object' && row.value !== null) {
+				Reflect.set(row.value, 'lastSyncAt', null);
+			}
+		});
+}
+
 const db = new Dexie(DB_NAME);
 db.version(1).stores(STORES);
-db.version(SCHEMA_VERSION)
-	.stores(STORES)
-	.upgrade(async (tx) => {
-		for (const name of DATA_TABLES) {
-			await tx.table(name).clear();
-		}
-		// The data is gone, so the sync line must not claim a time for it.
-		await tx
-			.table<Keyed, string>('meta')
-			.toCollection()
-			.modify((row) => {
-				if (typeof row.value === 'object' && row.value !== null) {
-					Reflect.set(row.value, 'lastSyncAt', null);
-				}
-			});
-	});
+db.version(2).stores(STORES).upgrade(dropServerData);
+db.version(3).stores(STORES).upgrade(dropServerData);
+db.version(4).stores(STORES).upgrade(dropServerData);
+db.version(SCHEMA_VERSION).stores(STORES).upgrade(dropServerData);
 
 const t = {
 	settings: db.table<Keyed, string>('settings'),
@@ -129,6 +139,7 @@ const t = {
 	clients: db.table<unknown, string>('clients'),
 	appointments: db.table<unknown, string>('appointments'),
 	due: db.table<unknown, string>('due'),
+	quick_replies: db.table<unknown, string>('quick_replies'),
 	drafts: db.table<DraftRow, string>('drafts'),
 	meta: db.table<Keyed, string>('meta')
 };
@@ -227,7 +238,7 @@ export function readAll(): Promise<CacheSnapshot | null> {
 		if (settings === null) {
 			return null;
 		}
-		const [attributes, services, templates, rules, clients, appointments, due] =
+		const [attributes, services, templates, rules, clients, appointments, due, replies] =
 			await db.transaction('r', ALL_TABLES, () =>
 				Promise.all([
 					t.attributes.toArray(),
@@ -236,7 +247,8 @@ export function readAll(): Promise<CacheSnapshot | null> {
 					t.rules.toArray(),
 					t.clients.toArray(),
 					t.appointments.toArray(),
-					t.due.toArray()
+					t.due.toArray(),
+					t.quick_replies.toArray()
 				])
 			);
 		return {
@@ -249,7 +261,11 @@ export function readAll(): Promise<CacheSnapshot | null> {
 			appointments: parseRows('appointments', AppointmentSchema, appointments),
 			due: parseRows('due', DueRowSchema, due)
 				.sort((a, b) => a.position - b.position)
-				.map((row) => row.item)
+				.map((row) => row.item),
+			quick_replies: byPosition(
+				parseRows('quick_replies', QuickReplySchema, replies),
+				(x) => x.title
+			)
 		};
 	}, null);
 }
@@ -298,6 +314,7 @@ export async function writeSnapshot(data: Bootstrap, syncedAt: string): Promise<
 		await replace(t.rules, data.rules);
 		await replace(t.clients, data.clients);
 		await replace(t.appointments, data.appointments);
+		await replace(t.quick_replies, data.quick_replies);
 		await replace(
 			t.due,
 			data.due.map((item, position) => ({ id: item.id, position, item }))

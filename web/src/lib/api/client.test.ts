@@ -187,7 +187,7 @@ describe('errorText', () => {
 	});
 
 	it('maps offline to its text', () => {
-		expect(errorText({ kind: 'offline' })).toBe('Sin conexión con el sistema');
+		expect(errorText({ kind: 'offline' })).toBe('Sin conexión');
 	});
 });
 
@@ -695,6 +695,43 @@ describe('the template calls', () => {
 		expect([result.ok, hooks.reportInvalid.mock.calls]).toEqual([false, [['/templates/preview']]]);
 	});
 
+	it('previewRule posts the draft and returns the count and the next client', async () => {
+		const answer = { today_count: 4, next: { client_name: 'Carla', due_date: '2026-11-10' } };
+		const { api, fetchFn } = setup(() => json(answer));
+		const draft = { rule_id: USER_ID, offset_days: 21, template_id: USER_ID };
+		const result = await api.previewRule(draft);
+		expect([result, await sent(fetchFn)]).toEqual([
+			{ ok: true, data: answer },
+			['POST', `${BASE}/reminder-rules/preview`, draft]
+		]);
+	});
+
+	it('nextReminder returns the next message of a client', async () => {
+		const answer = { due_date: '2026-10-31', source_services: ['Uñas'], general: true };
+		const { api, fetchFn } = setup(() => json(answer));
+		const result = await api.nextReminder(USER_ID);
+		const request = fetchFn.mock.calls[0]?.[0] as Request;
+		expect([result, request.method, request.url]).toEqual([
+			{ ok: true, data: answer },
+			'GET',
+			`${BASE}/clients/${USER_ID}/next-reminder`
+		]);
+	});
+
+	it('nextReminder turns a 204 into null', async () => {
+		const { api } = setup(() => new Response(null, { status: 204, headers: appHeaders() }));
+		expect(await api.nextReminder(USER_ID)).toEqual({ ok: true, data: null });
+	});
+
+	it('nextReminder reports an answer without a due date as invalid', async () => {
+		const { api, hooks } = setup(() => json({ source_services: [], general: false }));
+		const result = await api.nextReminder(USER_ID);
+		expect([result.ok, hooks.reportInvalid.mock.calls]).toEqual([
+			false,
+			[['/clients/{id}/next-reminder']]
+		]);
+	});
+
 	it('createTemplate hands back the server messages of a 422 by field', async () => {
 		const { api } = setup(() =>
 			problem('validation', 422, { errors: [{ field: 'body', message: 'Hay un {{ sin cerrar' }] })
@@ -723,6 +760,7 @@ describe('the settings calls', () => {
 	const service = {
 		id: USER_ID,
 		name: 'Acrílico',
+		description: null,
 		duration_min: 90,
 		price_cents: null,
 		color: PINK,
@@ -757,7 +795,8 @@ describe('the settings calls', () => {
 		offset_days: 1,
 		template_id: USER_ID,
 		applies_from: null,
-		archived: false
+		archived: false,
+		handover_from: null
 	};
 	const statusReport = {
 		version: 'v1.2.0',

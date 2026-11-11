@@ -16,7 +16,7 @@
 	// by Save or Cancel replaces its history entry, so Back does not open an empty form again.
 	let { template, missing = false }: { template?: Template; missing?: boolean } = $props();
 
-	const list = $derived(resolve('/ajustes/plantillas'));
+	const list = $derived(resolve('/ajustes/(reglas)/plantillas'));
 </script>
 
 <div class="flex flex-col gap-4">
@@ -50,7 +50,9 @@
 			onsaved={(saved: Template) => {
 				toaster.say('template_saved');
 				if (template === undefined) {
-					void goto(resolve('/ajustes/plantillas/[id]', { id: saved.id }), { replaceState: true });
+					void goto(resolve('/ajustes/(reglas)/plantillas/[id]', { id: saved.id }), {
+						replaceState: true
+					});
 				}
 			}}
 			onarchived={(isArchived: boolean) => {

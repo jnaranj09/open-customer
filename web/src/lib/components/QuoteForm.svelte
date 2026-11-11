@@ -5,6 +5,7 @@
 	import type { Service } from '../api/schemas';
 	import { activeServiceIds, removeService, tapService, type Line } from '../booking';
 	import { draftKey } from '../cache/drafts';
+	import { copiedFlag, copyText } from '../copy';
 	import { formDraft } from '../cache/formDraft.svelte';
 	import { convertQuote } from '../cache/quoteHandoff';
 	import { t } from '../i18n';
@@ -38,7 +39,6 @@
 	} = $props();
 
 	/** How long the Copiar button says "Copiado". */
-	const COPIED_MS = 2000;
 
 	const activeIds = $derived(activeServiceIds(services));
 	const wide = $derived(layout.current === 'wide');
@@ -48,7 +48,9 @@
 	let message = $state<'none' | 'confirm_replace' | 'copy_failed' | 'convert_failed'>('none');
 	let converting = $state(false);
 	let copied = $state(false);
-	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	const copiedNote = copiedFlag((on) => {
+		copied = on;
+	});
 
 	const draft = formDraft(
 		draftKey('cotizacion', 'new'),
@@ -72,33 +74,11 @@
 		lines = next;
 	}
 
-	function copyFailed(): void {
-		message = 'copy_failed';
-		console.warn('code=clipboard_failed');
-	}
-
-	function copyDone(): void {
-		copied = true;
-		clearTimeout(copiedTimer);
-		copiedTimer = setTimeout(() => {
-			copied = false;
-		}, COPIED_MS);
-	}
-
-	// The write starts inside the tap, with nothing awaited before it: iOS allows it only then.
 	function copy(): void {
 		message = 'none';
-		// Missing outside a secure context, which the DOM types do not show.
-		const clipboard = navigator.clipboard as Clipboard | undefined;
-		if (clipboard === undefined) {
-			copyFailed();
-			return;
-		}
-		try {
-			void clipboard.writeText(text).then(copyDone, copyFailed);
-		} catch {
-			copyFailed();
-		}
+		copyText(text, copiedNote.show, () => {
+			message = 'copy_failed';
+		});
 	}
 
 	// Inside `submitOnce`, so a second tap while it runs does nothing. The quote is cleared only once
@@ -127,7 +107,7 @@
 	}
 
 	onDestroy(() => {
-		clearTimeout(copiedTimer);
+		copiedNote.stop();
 	});
 </script>
 

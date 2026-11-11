@@ -34,47 +34,13 @@ func (m *Module) ListRules(ctx context.Context, q db.DBTX) ([]Rule, error) {
 }
 
 // CreateRule validates in (every bad field is reported) and stores the rule. The template, service
-// and return service must exist and be active. AppliesFrom is now, or nil with IncludeOverdue.
+// and return service must exist and be active. A come-back rule with no service is a general rule
+// and takes no return service. AppliesFrom is now, or nil with IncludeOverdue.
 func (m *Module) CreateRule(ctx context.Context, q db.DBTX, in RuleInput) (Rule, error) {
-	var errs []problem.FieldError
-	if _, err := ParseKind(string(in.Kind)); err != nil {
-		return Rule{}, err
-	}
 	queries := sqlc.New(q)
-	offset, offsetMsg := offsetDays(in.Kind, in.OffsetDays)
-	if offsetMsg != "" {
-		errs = append(errs, problem.FieldError{Field: "offset_days", Message: offsetMsg})
-	}
-	switch in.Kind {
-	case KindBefore:
-		if in.ServiceID.Valid {
-			errs = append(errs, problem.FieldError{Field: "service_id", Message: problem.MsgServiceNotAllowed})
-		}
-		if in.ReturnServiceID.Valid {
-			errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgServiceNotAllowed})
-		}
-	case KindComeBack:
-		if !in.ServiceID.Valid {
-			errs = append(errs, problem.FieldError{Field: "service_id", Message: problem.MsgServiceRequired})
-		}
-	}
-	if err := checkActive(ctx, &errs, "template_id", problem.MsgTemplateUnavailable, in.TemplateID, queries.GetTemplateState); err != nil {
+	offset, err := checkRuleInput(ctx, queries, in)
+	if err != nil {
 		return Rule{}, err
-	}
-	if in.Kind == KindComeBack {
-		if in.ServiceID.Valid {
-			if err := checkActive(ctx, &errs, "service_id", problem.MsgServiceUnavailable, in.ServiceID.UUID, queries.GetServiceState); err != nil {
-				return Rule{}, err
-			}
-		}
-		if in.ReturnServiceID.Valid {
-			if err := checkActive(ctx, &errs, "return_service_id", problem.MsgServiceUnavailable, in.ReturnServiceID.UUID, queries.GetServiceState); err != nil {
-				return Rule{}, err
-			}
-		}
-	}
-	if len(errs) > 0 {
-		return Rule{}, problem.Validation{Errors: errs}
 	}
 	id, err := ids.New()
 	if err != nil {
@@ -97,13 +63,62 @@ func (m *Module) CreateRule(ctx context.Context, q db.DBTX, in RuleInput) (Rule,
 	}, nil
 }
 
+// checkRuleInput checks a new rule (every bad field is reported, as problem.Validation) and returns
+// its offset as the column type. The rule preview checks its draft with it too.
+func checkRuleInput(ctx context.Context, queries *sqlc.Queries, in RuleInput) (int32, error) {
+	var errs []problem.FieldError
+	if _, err := ParseKind(string(in.Kind)); err != nil {
+		return 0, err
+	}
+	offset, offsetMsg := offsetDays(in.Kind, in.OffsetDays)
+	if offsetMsg != "" {
+		errs = append(errs, problem.FieldError{Field: "offset_days", Message: offsetMsg})
+	}
+	switch in.Kind {
+	case KindBefore:
+		if in.ServiceID.Valid {
+			errs = append(errs, problem.FieldError{Field: "service_id", Message: problem.MsgServiceNotAllowed})
+		}
+		if in.ReturnServiceID.Valid {
+			errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgServiceNotAllowed})
+		}
+	case KindComeBack:
+		if !in.ServiceID.Valid && in.ReturnServiceID.Valid {
+			errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgGeneralNoReturn})
+		}
+	}
+	if err := checkActive(ctx, &errs, "template_id", problem.MsgTemplateUnavailable, in.TemplateID, queries.GetTemplateState); err != nil {
+		return 0, err
+	}
+	if in.Kind == KindComeBack {
+		if in.ServiceID.Valid {
+			if err := checkActive(ctx, &errs, "service_id", problem.MsgServiceUnavailable, in.ServiceID.UUID, queries.GetServiceState); err != nil {
+				return 0, err
+			}
+		}
+		if in.ReturnServiceID.Valid {
+			if err := checkActive(ctx, &errs, "return_service_id", problem.MsgServiceUnavailable, in.ReturnServiceID.UUID, queries.GetServiceState); err != nil {
+				return 0, err
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return 0, problem.Validation{Errors: errs}
+	}
+	return offset, nil
+}
+
 // UpdateRule changes the given fields of one rule (every bad field is reported). An unknown id is
 // problem.NotFound, before any field check. A change that can make new items appear asks the
 // include-overdue question: it sets AppliesFrom to now, or to nil with IncludeOverdue. The changes
 // that ask are: a new offset, a new effective return service (the return service, or the rule's own
 // service when none), restoring an archived rule, a new template while the stored one is archived,
 // and a new return service while the stored effective one is archived. Any other change keeps
-// AppliesFrom and ignores IncludeOverdue.
+// AppliesFrom.
+//
+// The handover (reminders-and-replies design, "Handover"): archiving a specific come-back rule that
+// could send writes HandoverFrom, now or nil with IncludeOverdue; restoring one that can then send
+// clears it. Any other change keeps it.
 func (m *Module) UpdateRule(ctx context.Context, q db.DBTX, id uuid.UUID, p RulePatch) (Rule, error) {
 	queries := sqlc.New(q)
 	row, err := queries.GetRule(ctx, id)
@@ -123,8 +138,11 @@ func (m *Module) UpdateRule(ctx context.Context, q db.DBTX, id uuid.UUID, p Rule
 		}
 	}
 	newReturn := nullval.Ptr(p.ReturnServiceID)
-	if kind == KindBefore && newReturn != nil {
+	switch {
+	case kind == KindBefore && newReturn != nil:
 		errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgServiceNotAllowed})
+	case kind == KindComeBack && !row.ServiceID.Valid && newReturn != nil:
+		errs = append(errs, problem.FieldError{Field: "return_service_id", Message: problem.MsgGeneralNoReturn})
 	}
 	storedTemplateArchived := false
 	if p.TemplateID != nil {
@@ -158,7 +176,7 @@ func (m *Module) UpdateRule(ctx context.Context, q db.DBTX, id uuid.UUID, p Rule
 	}
 	params := sqlc.UpdateRuleParams{
 		ID: id, OffsetDays: row.OffsetDays, TemplateID: row.TemplateID,
-		ReturnServiceID: row.ReturnServiceID, AppliesFrom: row.AppliesFrom,
+		ReturnServiceID: row.ReturnServiceID, AppliesFrom: row.AppliesFrom, HandoverFrom: row.HandoverFrom,
 	}
 	asks := false
 	if p.OffsetDays != nil {
@@ -187,12 +205,94 @@ func (m *Module) UpdateRule(ctx context.Context, q db.DBTX, id uuid.UUID, p Rule
 		}
 	}
 	params.ArchivedAt = archive.At(p.Archived, row.ArchivedAt, now)
+	if kind == KindComeBack && row.ServiceID.Valid && (row.ArchivedAt == nil) != (params.ArchivedAt == nil) {
+		// Archive or restore of a specific rule: it stops or starts sending only when its parts are
+		// active once the change is made.
+		parts, err := partsActive(ctx, queries, params.TemplateID, row.ServiceID.UUID, params.ReturnServiceID)
+		if err != nil {
+			return Rule{}, err
+		}
+		if parts {
+			params.HandoverFrom = nil
+			if params.ArchivedAt != nil && !p.IncludeOverdue {
+				params.HandoverFrom = &now
+			}
+		}
+	}
 	if err := queries.UpdateRule(ctx, params); err != nil {
 		return Rule{}, fmt.Errorf("update rule: %w", err)
 	}
 	row.OffsetDays, row.TemplateID, row.ReturnServiceID = params.OffsetDays, params.TemplateID, params.ReturnServiceID
-	row.AppliesFrom, row.ArchivedAt = params.AppliesFrom, params.ArchivedAt
+	row.AppliesFrom, row.ArchivedAt, row.HandoverFrom = params.AppliesFrom, params.ArchivedAt, params.HandoverFrom
 	return ruleFrom(row), nil
+}
+
+// partsActive reports whether a specific rule's template, service and effective return service
+// (returnID, or the service when it is empty) are all active.
+func partsActive(ctx context.Context, queries *sqlc.Queries, templateID, serviceID uuid.UUID, returnID uuid.NullUUID) (bool, error) {
+	ids := []uuid.UUID{serviceID}
+	if returnID.Valid {
+		ids = append(ids, returnID.UUID)
+	}
+	tpl, err := queries.GetTemplateState(ctx, templateID)
+	if err != nil {
+		return false, fmt.Errorf("get template state: %w", err)
+	}
+	if tpl != nil {
+		return false, nil
+	}
+	for _, id := range ids {
+		svc, err := queries.GetServiceState(ctx, id)
+		if err != nil {
+			return false, fmt.Errorf("get service state: %w", err)
+		}
+		if svc != nil {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// HandoverScope names the template or the service whose archive or restore changes which specific
+// rules can send. Exactly one is set.
+type HandoverScope struct {
+	TemplateID uuid.NullUUID
+	ServiceID  uuid.NullUUID
+}
+
+// SetHandover answers the handover question for the template or service about to be archived: every
+// specific come-back rule that can send under it gets HandoverFrom now, or nil with includeOverdue.
+// The caller runs it before the archive, in the same transaction; on an archived template or
+// service it changes nothing.
+func (m *Module) SetHandover(ctx context.Context, q db.DBTX, scope HandoverScope, includeOverdue bool) error {
+	if err := sqlc.New(q).SetHandover(ctx, sqlc.SetHandoverParams{
+		TemplateID: scope.TemplateID, ServiceID: scope.ServiceID, HandoverFrom: m.answer(includeOverdue),
+	}); err != nil {
+		return fmt.Errorf("set handover: %w", err)
+	}
+	return nil
+}
+
+// RestartRules answers the include-overdue question for the template or service about to be
+// restored: every specific come-back rule that cannot send only because of it gets AppliesFrom now
+// (nil with includeOverdue), as a rule restore does, and loses its HandoverFrom. The caller runs it
+// before the restore, in the same transaction; on an active template or service it changes nothing.
+func (m *Module) RestartRules(ctx context.Context, q db.DBTX, scope HandoverScope, includeOverdue bool) error {
+	if err := sqlc.New(q).RestartRules(ctx, sqlc.RestartRulesParams{
+		TemplateID: scope.TemplateID, ServiceID: scope.ServiceID, AppliesFrom: m.answer(includeOverdue),
+	}); err != nil {
+		return fmt.Errorf("restart rules: %w", err)
+	}
+	return nil
+}
+
+// answer is the include-overdue answer as a time: now for "from today", nil for "include late".
+func (m *Module) answer(includeOverdue bool) *time.Time {
+	if includeOverdue {
+		return nil
+	}
+	now := m.clock.Now()
+	return &now
 }
 
 // offsetDays checks an offset against the range of the kind and converts it to the column type. The
@@ -229,6 +329,6 @@ func ruleFrom(r sqlc.ReminderRule) Rule {
 	return Rule{
 		ID: r.ID, Kind: Kind(r.Kind), ServiceID: r.ServiceID, ReturnServiceID: r.ReturnServiceID,
 		OffsetDays: int(r.OffsetDays), TemplateID: r.TemplateID, AppliesFrom: r.AppliesFrom,
-		Archived: r.ArchivedAt != nil, CreatedAt: r.CreatedAt,
+		Archived: r.ArchivedAt != nil, CreatedAt: r.CreatedAt, HandoverFrom: r.HandoverFrom,
 	}
 }

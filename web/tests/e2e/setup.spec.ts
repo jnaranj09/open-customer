@@ -165,7 +165,11 @@ test.describe('logged in', () => {
 		await expect(sheet).toBeHidden();
 
 		// CUJ 2 step 3: two messages, each with the "+ Bebida favorita" chip and a live preview.
-		await openSettings(page, es.settings_templates);
+		await openSettings(page, es.settings_rules);
+		await page
+			.getByRole('navigation', { name: es.rules_tabs_label })
+			.getByRole('link', { name: es.tab_templates })
+			.click();
 		await expect(page.getByText(es.templates_empty_title)).toBeVisible();
 		for (const template of TEMPLATES) {
 			await page.getByRole('link', { name: es.templates_new }).click();

@@ -26,7 +26,14 @@ function item(id: string): DueItem & { wa_link: string } {
 		phone_digits: '50688887777',
 		wa_link: 'https://wa.me/50688887777?text=Hola',
 		mode: 'message',
-		prompt: null
+		prompt: null,
+		source_starts_at: '2026-11-05T21:00:00Z',
+		source_services: ['Acrílico'],
+		general: false,
+		offset_days: 1,
+		shown_until: '2026-11-05',
+		message_number: 1,
+		next_due_date: null
 	};
 }
 

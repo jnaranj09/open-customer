@@ -1,9 +1,11 @@
 // The pure parts of Ajustes → Recordatorios (design doc item 77, "Reminder rules and the 'done'
-// rule"): how a rule reads as a sentence, when a change asks "¿Incluir recordatorios atrasados?",
-// the form to a request, the patch of what changed, and the warnings for archived parts.
+// rule"; general rules and the handover: reminders-and-replies design): how a rule reads as a
+// sentence, when a change asks "¿Incluir atrasados?", the form to a request, the patch of what
+// changed, and the warnings for archived parts.
 import type { Rule, Service, Template } from './api/schemas';
 import type { components } from './api/schema';
 import { t, type MessageKey } from './i18n';
+import { shortDay } from './time';
 
 type Schemas = components['schemas'];
 
@@ -57,9 +59,9 @@ function addsItems(
 }
 
 /** What saving `after` does about overdue items. `ask`: a come-back change that can add items asks
- *  "¿Incluir recordatorios atrasados?" first. `include`: the same change on a "before" rule asks
+ *  "¿Incluir atrasados?" first. `include`: the same change on a "before" rule asks
  *  nothing and sends `include_overdue: true`, because its items hide at the appointment's start, so
- *  the only ones "Incluir atrasadas" adds are for appointments still ahead whose due day just
+ *  the only ones "Incluir atrasados" adds are for appointments still ahead whose due day just
  *  passed (a new 2-day rule and tomorrow's visit); "Solo de hoy en adelante" would drop those.
  *  `none`: nothing new can appear; the server ignores the flag. */
 export function overdueChoice(
@@ -74,7 +76,11 @@ export function overdueChoice(
 	return kind === 'before_appointment' ? 'include' : 'ask';
 }
 
-/** What the rule form holds. `returnId` and `serviceId` are empty strings when not chosen. */
+/** The service picker's value for a general rule: a come-back rule for every service. */
+export const ALL_SERVICES = 'all';
+
+/** What the rule form holds. `returnId` and `serviceId` are empty strings when not chosen;
+ *  `serviceId` is `ALL_SERVICES` for a general rule. */
 export type RuleForm = {
 	kind: RuleKind;
 	templateId: string;
@@ -107,7 +113,7 @@ export function ruleRequest(
 		return { ok: false, errors };
 	}
 	const body: RuleInput = { kind: form.kind, template_id: form.templateId, offset_days: days };
-	if (!before) {
+	if (!before && form.serviceId !== ALL_SERVICES) {
 		body.service_id = form.serviceId;
 		if (form.returnId !== '') {
 			body.return_service_id = form.returnId;
@@ -116,14 +122,44 @@ export function ruleRequest(
 	return { ok: true, body };
 }
 
+/** The rule preview's body for a valid come-back form, `ruleId` naming the saved rule it edits;
+ *  null for a "before" rule, which has no preview. */
+export function previewInput(
+	body: RuleInput,
+	ruleId: string | undefined
+): Schemas['RulePreviewInput'] | null {
+	if (body.kind !== 'come_back') {
+		return null;
+	}
+	return {
+		...(ruleId === undefined ? {} : { rule_id: ruleId }),
+		service_id: body.service_id ?? null,
+		return_service_id: body.return_service_id ?? null,
+		offset_days: body.offset_days,
+		template_id: body.template_id
+	};
+}
+
+/** "Hoy: 4 clientas · próxima: Carla, 10 nov", or only the count when nothing is ahead. */
+export function rulePreviewText(preview: Schemas['RulePreviewResult']): string {
+	const count = preview.today_count;
+	const next = preview.next;
+	if (next === null) {
+		return count === 1 ? t('rule_preview_none_one') : t('rule_preview_none', { count });
+	}
+	const vars = { name: next.client_name, date: shortDay(next.due_date) };
+	return count === 1 ? t('rule_preview_one', vars) : t('rule_preview', { count, ...vars });
+}
+
 /** The fields of `body` that differ from the saved rule. A come-back rule that goes back to its own
- *  service sends `return_service_id: null`; one whose effective return service is the same sends none. */
+ *  service sends `return_service_id: null`; one whose effective return service is the same sends
+ *  none, and a general rule never sends one. */
 export function rulePatch(saved: Rule, body: RuleInput): RulePatch {
 	const next = body.return_service_id ?? saved.service_id;
 	return {
 		...(body.offset_days === saved.offset_days ? {} : { offset_days: body.offset_days }),
 		...(body.template_id === saved.template_id ? {} : { template_id: body.template_id }),
-		...(saved.kind === 'before_appointment' || next === effectiveReturn(saved)
+		...(saved.kind === 'before_appointment' || isGeneral(saved) || next === effectiveReturn(saved)
 			? {}
 			: { return_service_id: body.return_service_id ?? null })
 	};
@@ -132,7 +168,13 @@ export function rulePatch(saved: Rule, body: RuleInput): RulePatch {
 const nameOf = (list: readonly { id: string; name: string }[], id: string | null): string =>
 	list.find((row) => row.id === id)?.name ?? '…';
 
-/** "Enviar Relleno 21 días después de Acrílico, para agendar Relleno". */
+/** A general rule: a come-back rule for every service (no service). */
+export function isGeneral(rule: Pick<Rule, 'kind' | 'service_id'>): boolean {
+	return rule.kind === 'come_back' && rule.service_id === null;
+}
+
+/** "Enviar Relleno 21 días después de Acrílico, para agendar Relleno"; a general rule: "Enviar
+ *  Volver 30 días después de la última visita". */
 export function ruleSentence(
 	rule: Rule,
 	templates: readonly Template[],
@@ -142,6 +184,9 @@ export function ruleSentence(
 	const offset = offsetText(rule.kind, rule.offset_days);
 	if (rule.kind === 'before_appointment') {
 		return t('rule_sentence_before', { template, offset });
+	}
+	if (isGeneral(rule)) {
+		return t('rule_sentence_general', { template, offset });
 	}
 	return t('rule_sentence_come_back', {
 		template,
@@ -171,10 +216,79 @@ export function ruleWarnings(
 	];
 }
 
-/** The rules in the order she reads them: "before" rules first, then each kind by days, then by id. */
+/** The rules in the order she reads them: "before" rules, then come-back rules for one service, then
+ *  general rules; each group by days, then by id. */
 export function sortRules(rules: readonly Rule[]): Rule[] {
-	const rank = (rule: Rule): number => (rule.kind === 'before_appointment' ? 0 : 1);
+	const rank = (rule: Rule): number =>
+		rule.kind === 'before_appointment' ? 0 : isGeneral(rule) ? 2 : 1;
 	return [...rules].sort(
 		(a, b) => rank(a) - rank(b) || a.offset_days - b.offset_days || a.id.localeCompare(b.id)
+	);
+}
+
+/** A change that can stop or restart specific rules (reminders-and-replies design, "Handover"). */
+export type HandoverChange =
+	| { kind: 'rule_archive'; id: string }
+	| { kind: 'template_archive' | 'template_restore'; id: string }
+	| { kind: 'service_archive' | 'service_restore'; id: string };
+
+type Parts = { templates: readonly Template[]; services: readonly Service[] };
+
+/** Whether `rule` can make items with these templates and services: it, its template, its service
+ *  and its effective return service are active. */
+function canSend(rule: Rule, parts: Parts): boolean {
+	const active = (list: readonly { id: string; archived: boolean }[], id: string | null) =>
+		id === null || list.find((row) => row.id === id)?.archived === false;
+	return (
+		!rule.archived &&
+		active(parts.templates, rule.template_id) &&
+		active(parts.services, rule.service_id) &&
+		active(parts.services, effectiveReturn(rule))
+	);
+}
+
+/** The rules and parts as they will be once `change` is saved. */
+function afterChange(change: HandoverChange, rules: readonly Rule[], parts: Parts) {
+	const flip = <T extends { id: string; archived: boolean }>(
+		list: readonly T[],
+		archived: boolean
+	) => list.map((row) => (row.id === change.id ? { ...row, archived } : row));
+	switch (change.kind) {
+		case 'rule_archive':
+			return { rules: flip(rules, true), parts };
+		case 'template_archive':
+		case 'template_restore':
+			return {
+				rules,
+				parts: { ...parts, templates: flip(parts.templates, change.kind === 'template_archive') }
+			};
+		case 'service_archive':
+		case 'service_restore':
+			return {
+				rules,
+				parts: { ...parts, services: flip(parts.services, change.kind === 'service_archive') }
+			};
+	}
+}
+
+/** Whether `change` asks the handover question ("Solo de hoy en adelante" / "Incluir atrasados"):
+ *  a general rule can send once it is saved, and it stops or restarts at least one rule for one
+ *  service. Otherwise the web sends no answer, which means "from today". From the cached data. */
+export function handoverAsks(
+	change: HandoverChange,
+	rules: readonly Rule[],
+	templates: readonly Template[],
+	services: readonly Service[]
+): boolean {
+	const now: Parts = { templates, services };
+	const next = afterChange(change, rules, now);
+	if (!next.rules.some((rule) => isGeneral(rule) && canSend(rule, next.parts))) {
+		return false;
+	}
+	return rules.some(
+		(rule, i) =>
+			rule.kind === 'come_back' &&
+			!isGeneral(rule) &&
+			canSend(rule, now) !== canSend(next.rules[i] ?? rule, next.parts)
 	);
 }

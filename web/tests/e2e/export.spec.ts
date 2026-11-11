@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
-import { at, closePool, insertAppointment, insertClient, resetData } from './seed';
+import { at, closePool, insertAppointment, insertClient, insertReply, resetData } from './seed';
 import { readZip } from './zip';
 
 test.beforeEach(async () => {
@@ -17,6 +17,7 @@ test.beforeEach(async () => {
 		attrs: { 'Bebida favorita': 'Café' }
 	});
 	await insertAppointment({ clientId: ana, services: ['Acrílico'], startsAt: at(1, '15:00') });
+	await insertReply({ title: 'Dirección', body: 'Calle 1' });
 });
 
 test.afterAll(closePool);
@@ -57,7 +58,17 @@ test('Descargar mis datos downloads the data as CSV and JSON', async ({ page }) 
 		await rm(dir, { recursive: true, force: true });
 	}
 
-	expect([...files.keys()]).toEqual(['clientas.csv', 'citas.csv', 'servicios.csv', 'datos.json']);
+	expect([...files.keys()]).toEqual([
+		'clientas.csv',
+		'citas.csv',
+		'servicios.csv',
+		'respuestas.csv',
+		'datos.json'
+	]);
+	expect(csvRows(files.get('respuestas.csv') ?? '')).toEqual([
+		['titulo', 'texto', 'orden', 'archivada'],
+		['Dirección', 'Calle 1', '1', '']
+	]);
 	const clients = files.get('clientas.csv') ?? '';
 	expect(csvColumn(clients, 'nombre')).toEqual(['Ana Rojas']);
 	expect(csvColumn(clients, 'Bebida favorita')).toEqual(['Café']);
@@ -74,6 +85,7 @@ test('Descargar mis datos downloads the data as CSV and JSON', async ({ page }) 
 		rules: { kind: string }[];
 		clients: { name: string }[];
 		appointments: { client_name: string }[];
+		quick_replies: { title: string }[];
 	};
 	expect(data.attributes.map((a) => a.label)).toEqual(
 		expect.arrayContaining(['Bebida favorita', 'Forma'])
@@ -84,4 +96,5 @@ test('Descargar mis datos downloads the data as CSV and JSON', async ({ page }) 
 	expect(data.rules.map((r) => r.kind).sort()).toEqual(['before_appointment', 'come_back']);
 	expect(data.clients.map((c) => c.name)).toEqual(['Ana Rojas']);
 	expect(data.appointments.map((a) => a.client_name)).toEqual(['Ana Rojas']);
+	expect(data.quick_replies.map((r) => r.title)).toEqual(['Dirección']);
 });

@@ -299,9 +299,53 @@ export interface paths {
         head?: never;
         /**
          * Change a service
-         * @description Changes only the fields sent. Only price_cents may be null, which clears the price. archived true archives the service and false restores it. Past appointments keep the values they copied.
+         * @description Changes only the fields sent. Only price_cents and description may be null, which clears the price or the description. archived true archives the service and false restores it. Past appointments keep the values they copied. include_overdue is read only with archived, as on updateTemplate, for the specific come_back rules whose service or return service this is.
          */
         patch: operations["updateService"];
+        trace?: never;
+    };
+    "/quick-replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the quick replies
+         * @description Every quick reply, archived ones too, by position.
+         */
+        get: operations["listQuickReplies"];
+        put?: never;
+        /**
+         * Add a quick reply
+         * @description The reply goes last. title is one line of 1 to 60 characters; body is 1 to 2000 characters, trimmed at both ends, its line breaks kept.
+         */
+        post: operations["createQuickReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/quick-replies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a quick reply
+         * @description Changes only the fields sent; none may be null. title and body get the same checks as on create. A position change sets this one reply; the caller moves the others. archived true archives the reply and false restores it.
+         */
+        patch: operations["updateQuickReply"];
         trace?: never;
     };
     "/clients": {
@@ -437,6 +481,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/clients/{id}/next-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The client's next planned message
+         * @description Read in one snapshot: the client's earliest reminder due today or late, or else the earliest one after today (come_back from her done visits, before_appointment from her bookings in the next 365 days); ties by due day, then rule id. 204 when there is none. An archived client is allowed (she has no reminders).
+         */
+        get: operations["getClientNextReminder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clients/{id}/media": {
         parameters: {
             query?: never;
@@ -512,7 +576,7 @@ export interface paths {
         head?: never;
         /**
          * Change a message template
-         * @description Changes only the fields sent; none may be null. A body that is sent goes through the same check as on create. archived true archives the template and false restores it.
+         * @description Changes only the fields sent; none may be null. A body that is sent goes through the same check as on create. archived true archives the template and false restores it. include_overdue is read only with archived: on archive, as on a reminder rule archive, for each specific come_back rule the archive stops; on restore, as on a reminder rule restore, for each one the restore lets send again.
          */
         patch: operations["updateTemplate"];
         trace?: never;
@@ -528,9 +592,29 @@ export interface paths {
         put?: never;
         /**
          * Add a reminder rule
-         * @description A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule takes a service_id, an optional return_service_id (the service to book again; the rule's own service when left out) and an offset_days of 1 to 365. The template and the services must exist and be active. include_overdue true counts items already past their moment; false or left out counts only items from now on.
+         * @description A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule takes an offset_days of 1 to 365 and either a service_id with an optional return_service_id (the service to book again; the rule's own service when left out), or no service_id: a general rule for every service, which takes no return_service_id. The template and the services must exist and be active. include_overdue true counts items already past their moment; false or left out counts only items from now on.
          */
         post: operations["createReminderRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reminder-rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a come_back rule draft
+         * @description Only reads. The body is a come_back rule as the form holds it, with rule_id when it edits a saved rule; the fields get the same checks as on create (422). An unknown rule_id is 404 and a before_appointment one is 422 on rule_id. The draft takes the saved rule's place (or is added) in one snapshot of the due data. today_count is the clients with a reminder of the draft due exactly today (late ones are not counted); next is the earliest reminder of the draft after today, or null.
+         */
+        post: operations["previewRule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -552,7 +636,7 @@ export interface paths {
         head?: never;
         /**
          * Change a reminder rule
-         * @description Changes only the fields sent. Only return_service_id may be null (the rule's own service again). A rule never changes kind or service. include_overdue is read only when the change can make new items appear.
+         * @description Changes only the fields sent. Only return_service_id may be null (the rule's own service again); a general rule takes none. A rule never changes kind or service. include_overdue is read only when the change can make new items appear, and when archiving a specific come_back rule that could send: true lets the general rule bring that rule's late visits, false or left out starts it from now (handover_from).
          */
         patch: operations["updateReminderRule"];
         trace?: never;
@@ -917,6 +1001,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            /** @description One line added to quotes after the service name; null when the service has none. */
+            description: string | null;
             duration_min: number;
             /**
              * Format: int64
@@ -929,18 +1015,46 @@ export interface components {
         };
         ServiceInput: {
             name: string;
+            /** @description One line, up to 200 characters; blank or null means none. */
+            description?: string | null;
             duration_min: number;
             /** Format: int64 */
             price_cents?: number | null;
             color: string;
         };
-        /** @description Every field is optional; a field left out is not changed. Only price_cents may be null. */
+        /** @description Every field is optional; a field left out is not changed. Only price_cents and description may be null. */
         ServicePatch: {
             name?: string;
+            /** @description One line, up to 200 characters; blank or null clears it. */
+            description?: string | null;
             duration_min?: number;
             /** Format: int64 */
             price_cents?: number | null;
             color?: string;
+            position?: number;
+            archived?: boolean;
+            /** @description Read only with archived; see updateService. */
+            include_overdue?: boolean;
+        };
+        QuickReply: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            body: string;
+            position: number;
+            archived: boolean;
+        };
+        QuickReplyList: {
+            items: components["schemas"]["QuickReply"][];
+        };
+        QuickReplyInput: {
+            title: string;
+            body: string;
+        };
+        /** @description Every field is optional; a field left out is not changed. None may be null. */
+        QuickReplyPatch: {
+            title?: string;
+            body?: string;
             position?: number;
             archived?: boolean;
         };
@@ -969,6 +1083,8 @@ export interface components {
             name?: string;
             body?: string;
             archived?: boolean;
+            /** @description Read only with archived; see updateTemplate. */
+            include_overdue?: boolean;
         };
         /** @enum {string} */
         RuleKind: "before_appointment" | "come_back";
@@ -989,6 +1105,11 @@ export interface components {
              */
             applies_from: string | null;
             archived: boolean;
+            /**
+             * Format: date-time
+             * @description Only on a specific come_back rule that stopped sending: the general rule brings its visits due from this moment on; null means from the start (or not answered).
+             */
+            handover_from: string | null;
         };
         RuleInput: {
             kind: components["schemas"]["RuleKind"];
@@ -1000,6 +1121,37 @@ export interface components {
             /** Format: uuid */
             template_id: string;
             include_overdue?: boolean;
+        };
+        /** @description A come_back rule draft; no service_id makes a general rule. */
+        RulePreviewInput: {
+            /**
+             * Format: uuid
+             * @description The saved rule the draft edits; left out for a new rule.
+             */
+            rule_id?: string;
+            /** Format: uuid */
+            service_id?: string | null;
+            /** Format: uuid */
+            return_service_id?: string | null;
+            offset_days: number;
+            /** Format: uuid */
+            template_id: string;
+        };
+        RulePreviewResult: {
+            today_count: number;
+            next: components["schemas"]["RulePreviewNext"] | null;
+        };
+        RulePreviewNext: {
+            client_name: string;
+            /** Format: date */
+            due_date: string;
+        };
+        NextReminder: {
+            /** Format: date */
+            due_date: string;
+            /** @description The service names of the appointment the reminder comes from, in line order. */
+            source_services: string[];
+            general: boolean;
         };
         /** @description Every field is optional; a field left out is not changed. Only return_service_id may be null. */
         RulePatch: {
@@ -1049,6 +1201,29 @@ export interface components {
             mode: components["schemas"]["DueItemMode"];
             /** @description Set only when mode is booking_prompt. */
             prompt: components["schemas"]["BookingPrompt"] | null;
+            /**
+             * Format: date-time
+             * @description The start of the appointment the item comes from.
+             */
+            source_starts_at: string;
+            /** @description That appointment's service names, in line order. */
+            source_services: string[];
+            /** @description True for a general rule's item (a come_back rule for every service). */
+            general: boolean;
+            /** @description The rule's days. */
+            offset_days: number;
+            /**
+             * Format: date
+             * @description The last day the item is listed: come_back, the due day + 60 (a general item also ends the day before next_due_date); before_appointment, the appointment's day.
+             */
+            shown_until: string;
+            /** @description For come_back, the come_back messages sent for the same appointment + 1 (skipped ones do not count); 1 for before_appointment. */
+            message_number: number;
+            /**
+             * Format: date
+             * @description General items only, the due day of the next general rule for the same visit.
+             */
+            next_due_date: string | null;
         };
         DueList: {
             items: components["schemas"]["DueItem"][];
@@ -1089,6 +1264,8 @@ export interface components {
             due: components["schemas"]["DueItem"][];
             template_vars: components["schemas"]["TemplateVar"][];
             backup_red: boolean;
+            /** @description Every quick reply, archived ones too, by position. */
+            quick_replies: components["schemas"]["QuickReply"][];
         };
         Status: {
             version: string;
@@ -1767,6 +1944,87 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listQuickReplies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quick replies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickReplyList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createQuickReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickReplyInput"];
+            };
+        };
+        responses: {
+            /** @description The new reply. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickReply"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateQuickReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickReplyPatch"];
+            };
+        };
+        responses: {
+            /** @description The reply after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickReply"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     listClients: {
         parameters: {
             query?: {
@@ -2050,6 +2308,39 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getClientNextReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The next reminder. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextReminder"];
+                };
+            };
+            /** @description No reminder is planned. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     listClientMedia: {
         parameters: {
             query?: never;
@@ -2186,6 +2477,35 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    previewRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePreviewInput"];
+            };
+        };
+        responses: {
+            /** @description What the draft does. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulePreviewResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             default: components["responses"]["Problem"];

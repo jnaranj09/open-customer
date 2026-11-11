@@ -13,8 +13,10 @@ through `TASKS.md` in order.
 
 **Architecture source:** `docs/designs/release-1.md` for the app; build it phase by phase (its
 "Build order"). `docs/designs/quick-quotes.md` for the Servicios place and quotes, built in its
-stages S1-S4. `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
-every threat and its check. A change that makes a doc false fixes the doc in the same change.
+stages S1-S4. `docs/designs/reminders-and-replies.md` for general rules, row labels and quick
+replies, built in its stages S1-S5. `docs/designs/devsecops.md` for the security pipeline;
+`docs/threat-model.md` lists every threat and its check. A change that makes a doc false fixes the
+doc in the same change.
 
 ## Never commit
 
@@ -40,7 +42,8 @@ with fnm, `fnm use` in web/).
 - `make test`: Go unit tests + Vitest, guards included. `make test-db`: Go tests tagged `db`
   (testcontainers).
 - `make cover`: the 90% gate (`COVER_FLOOR`) on the packages in `COVER_PKGS` (`internal/auth`,
-  `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`).
+  `internal/attributes`, `internal/appointments`, `internal/templates`, `internal/reminders`,
+  `internal/replies`).
 - `make vuln`: govulncheck. `make build`: web build, the script CSP check on the built
   `web/build/index.html` (`scripts/security/csp-check.sh`: one CSP `<meta>`, `script-src` only
   `'self'` and sha256 hashes, every inline script hashed), then `bin/open-customer`. `make image`: the
@@ -124,11 +127,12 @@ A check that could not run is reported as NOT RUN, never as passing.
    two in-memory limit checks `auth.BeginLogin` and `auth.BeginPasswordChange`, which run before
    the handler opens its transaction. Every non-GET handler that reads or writes the database runs
    in `db.WithTx` and commits before writing the response. The snapshot readers
-   (bootstrap, due list, daily timer, export) use a read-only REPEATABLE READ transaction.
+   (bootstrap, due list, daily timer, export, rule preview, next message) use a read-only
+   REPEATABLE READ transaction.
 10. **Time is injected.** Modules take the clock from the platform clock package and the business
     time zone from settings; no direct `time.Now()` in a module.
 11. **Language.** Code, comments and docs are English. Every UI string is Spanish and lives in the
-    web `es.json`; no inline Spanish in components.
+    web `es.json`; no inline Spanish in components. How to write them: `rules/spanish-texts.md`.
 
 **Debugging?** Read `rules/troubleshooting.md` first (Step-0 questions before theorizing).
 
@@ -167,7 +171,7 @@ copy in one commit, and `make check-pins` must stay green. Every image is pinned
 `<tag>@sha256:<index digest>` and every Action by its full commit SHA with `# vX.Y.Z` (guard
 `TestSupplyChainPins`): a bump changes the tag and the digest (or SHA and comment) together.
 
-- Go 1.27.3: `go.mod` (`go 1.27.0` + `toolchain go1.27.3`); `golang:` in the `Dockerfile`.
+- Go 1.27.4: `go.mod` (`go 1.27.0` + `toolchain go1.27.4`); `golang:` in the `Dockerfile`.
 - Node 26.13.0 and pnpm 12.16.1: `web/package.json` (`engines.node`, `packageManager`); `node:` and
   `pnpm@` in the `Dockerfile`.
 - Postgres 18.6: the `postgres` stage of `security/tools.Dockerfile` (with its digest), read into

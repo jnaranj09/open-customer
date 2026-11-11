@@ -13,7 +13,7 @@ import (
 )
 
 const getService = `-- name: GetService :one
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 WHERE id = $1
 `
@@ -29,12 +29,13 @@ func (q *Queries) GetService(ctx context.Context, id uuid.UUID) (Service, error)
 		&i.Color,
 		&i.Position,
 		&i.ArchivedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getServicesByIDs = `-- name: GetServicesByIDs :many
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 WHERE id = ANY($1::uuid[])
 `
@@ -56,6 +57,7 @@ func (q *Queries) GetServicesByIDs(ctx context.Context, ids []uuid.UUID) ([]Serv
 			&i.Color,
 			&i.Position,
 			&i.ArchivedAt,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -68,8 +70,8 @@ func (q *Queries) GetServicesByIDs(ctx context.Context, ids []uuid.UUID) ([]Serv
 }
 
 const insertService = `-- name: InsertService :exec
-INSERT INTO services (id, name, duration_min, price_cents, color, position)
-VALUES ($1, $2, $3, $4::bigint, $5, $6)
+INSERT INTO services (id, name, duration_min, price_cents, color, position, description)
+VALUES ($1, $2, $3, $4::bigint, $5, $6, $7::text)
 `
 
 type InsertServiceParams struct {
@@ -79,6 +81,7 @@ type InsertServiceParams struct {
 	PriceCents  *int64
 	Color       string
 	Position    int32
+	Description *string
 }
 
 func (q *Queries) InsertService(ctx context.Context, arg InsertServiceParams) error {
@@ -89,12 +92,13 @@ func (q *Queries) InsertService(ctx context.Context, arg InsertServiceParams) er
 		arg.PriceCents,
 		arg.Color,
 		arg.Position,
+		arg.Description,
 	)
 	return err
 }
 
 const listServices = `-- name: ListServices :many
-SELECT id, name, duration_min, price_cents, color, position, archived_at
+SELECT id, name, duration_min, price_cents, color, position, archived_at, description
 FROM services
 ORDER BY position, id
 `
@@ -116,6 +120,7 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 			&i.Color,
 			&i.Position,
 			&i.ArchivedAt,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -146,8 +151,9 @@ UPDATE services SET
     price_cents  = $3::bigint,
     color        = $4,
     position     = $5,
-    archived_at  = $6::timestamptz
-WHERE id = $7
+    archived_at  = $6::timestamptz,
+    description  = $7::text
+WHERE id = $8
 `
 
 type UpdateServiceParams struct {
@@ -157,6 +163,7 @@ type UpdateServiceParams struct {
 	Color       string
 	Position    int32
 	ArchivedAt  *time.Time
+	Description *string
 	ID          uuid.UUID
 }
 
@@ -168,6 +175,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) er
 		arg.Color,
 		arg.Position,
 		arg.ArchivedAt,
+		arg.Description,
 		arg.ID,
 	)
 	return err

@@ -40,12 +40,14 @@ func (s *Server) UpdateTemplate(w http.ResponseWriter, r *http.Request, id opena
 	}
 	patch := templates.TemplatePatch{Name: body.Name, Body: body.Body, Archived: body.Archived}
 	var out templates.Template
+	scope := reminders.HandoverScope{TemplateID: uuid.NullUUID{UUID: id, Valid: true}}
 	if !s.inWriteTx(w, r, func(tx pgx.Tx) error {
-		var err error
-		if out, err = s.templates.Update(r.Context(), tx, id, patch); err != nil {
-			return fmt.Errorf("update template: %w", err)
-		}
-		return nil
+		return s.handover(r.Context(), tx, body.Archived, body.IncludeOverdue, scope, func() (err error) {
+			if out, err = s.templates.Update(r.Context(), tx, id, patch); err != nil {
+				return fmt.Errorf("update template: %w", err)
+			}
+			return nil
+		})
 	}) {
 		return
 	}

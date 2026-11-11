@@ -33,10 +33,10 @@ type Locale struct {
 // fixed column headers of each file, the estado word per appointment status ("scheduled",
 // "confirmed", "cancelled", "no_show", and "done" for a done one) and the word for true.
 type ExportText struct {
-	ClientsFile, AppointmentsFile, ServicesFile string
-	ClientCols, AppointmentCols, ServiceCols    []string
-	Status                                      map[string]string
-	Yes                                         string
+	ClientsFile, AppointmentsFile, ServicesFile, RepliesFile string
+	ClientCols, AppointmentCols, ServiceCols, ReplyCols      []string
+	Status                                                   map[string]string
+	Yes                                                      string
 }
 
 // For returns the locale for lang. Only "es" exists; any other value is an error.
@@ -132,6 +132,7 @@ func (l Locale) ExportText() ExportText {
 	t.ClientCols = slices.Clone(t.ClientCols)
 	t.AppointmentCols = slices.Clone(t.AppointmentCols)
 	t.ServiceCols = slices.Clone(t.ServiceCols)
+	t.ReplyCols = slices.Clone(t.ReplyCols)
 	t.Status = maps.Clone(t.Status)
 	return t
 }

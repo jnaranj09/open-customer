@@ -7,38 +7,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
-import { draftStored, fill, serverOff, setArchived } from './steps';
+import { copied, draftStored, fill, serverOff, setArchived, stubClipboard } from './steps';
 
 /** The business name `setup.spec.ts` gives the app. */
 const HEADING = fill(es.quote_heading_named, { name: 'Estudio Prueba' });
-
-type Clipboard = 'ok' | 'missing' | 'throws' | 'rejects';
-
-/** Replaces `navigator.clipboard` before the app loads. `ok` records the written text on
- *  `window.copied`; the others fail the way iOS can: no API, a throw at once, a rejected promise. */
-async function stubClipboard(page: Page, mode: Clipboard): Promise<void> {
-	await page.addInitScript((m: Clipboard) => {
-		const win = window as unknown as { copied: string | null };
-		win.copied = null;
-		const writeText = (text: string): Promise<void> => {
-			if (m === 'throws') {
-				throw new DOMException('refused', 'NotAllowedError');
-			}
-			if (m === 'rejects') {
-				return Promise.reject(new DOMException('refused', 'NotAllowedError'));
-			}
-			win.copied = text;
-			return Promise.resolve();
-		};
-		Object.defineProperty(navigator, 'clipboard', {
-			configurable: true,
-			value: m === 'missing' ? undefined : { writeText }
-		});
-	}, mode);
-}
-
-const copied = (page: Page): Promise<string | null> =>
-	page.evaluate(() => (window as unknown as { copied: string | null }).copied);
 
 /** The quote text block, found by its heading line. */
 const quoteBlock = (page: Page) => page.getByText(HEADING);
@@ -104,6 +76,35 @@ test('CUJ Q1: she picks services, copies the quote and the button says Copiado',
 	expect(await copied(page)).toBe(text);
 	// The button's own label is the feedback (no toast), and it goes back.
 	await expect(copyButton(page)).toBeVisible();
+});
+
+test('CUJ R8: a service description is added at the end of the quote', async ({ page }) => {
+	await stubClipboard(page, 'ok');
+	await page.goto('/servicios');
+	await chip(page, 'Acrílico').click();
+	await chip(page, 'Relleno').click();
+	await copyButton(page).click();
+	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	// No described service: the text is as before, with no blank line.
+	expect(await copied(page)).not.toContain('\n\n');
+
+	await page.goto('/servicios/catalogo');
+	await page.getByRole('button', { name: /^Acrílico/ }).click();
+	const sheet = page.getByRole('dialog', { name: es.service_edit_title });
+	await sheet.getByLabel(es.service_description).fill('Incluye limado y esmalte');
+	await sheet.getByRole('button', { name: es.service_save }).click();
+	await expect(page.getByText(es.service_saved)).toBeVisible();
+
+	await page.goto('/servicios');
+	await chip(page, 'Acrílico').click();
+	await chip(page, 'Relleno').click();
+	await copyButton(page).click();
+	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	expect(await copied(page)).toMatch(
+		new RegExp(
+			`\\n\\n${fill(es.quote_detail_line, { name: 'Acrílico', description: 'Incluye limado y esmalte' })}$`
+		)
+	);
 });
 
 for (const mode of ['missing', 'throws', 'rejects'] as const) {

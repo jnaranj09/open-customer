@@ -13,7 +13,8 @@
 	import DueItemRow from '../../lib/components/DueItemRow.svelte';
 	import NoRulesState from '../../lib/components/NoRulesState.svelte';
 	import OverlapSheet from '../../lib/components/OverlapSheet.svelte';
-	import { addToBooking, groupDue, nextAfter } from '../../lib/due';
+	import LabelChip from '../../lib/components/ui/LabelChip.svelte';
+	import { addToBooking, dueLabel, groupDue, nextAfter } from '../../lib/due';
 	import { t } from '../../lib/i18n';
 	import { layout } from '../../lib/layout';
 	import { skipItem, startSend, type Sendable } from '../../lib/pending';
@@ -223,7 +224,16 @@
 				onselect={() => {
 					select(item.id);
 				}}
-			/>
+			>
+				{#snippet label()}
+					{@const l = dueLabel(item, today, zone, !cache.offline)}
+					<LabelChip
+						variant={l.warning ? 'warning' : 'normal'}
+						text={l.text}
+						appointmentId={cache.offline ? null : item.appointment_id}
+					/>
+				{/snippet}
+			</DueItemRow>
 		</li>
 	{:else}
 		<Card as="li" pad="md">
@@ -236,6 +246,7 @@
 	<DueCard
 		{item}
 		{zone}
+		{today}
 		offline={cache.offline}
 		{busy}
 		skipBlocked={skipping !== null}
@@ -298,7 +309,7 @@
 
 <div class="flex flex-col gap-4">
 	<header class="flex flex-col gap-0.5">
-		<h1 class="text-3xl font-extrabold text-ink">{t('due_today_heading')}</h1>
+		<h2 class="text-xl font-bold text-ink">{t('due_today_heading')}</h2>
 		{#if cache.snapshot !== null}
 			<p class="text-sm text-ink-muted">{count}</p>
 		{/if}

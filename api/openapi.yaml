@@ -412,9 +412,11 @@ paths:
       operationId: updateService
       summary: Change a service
       description: >-
-        Changes only the fields sent. Only price_cents may be null, which clears the price. archived
-        true archives the service and false restores it. Past appointments keep the values they
-        copied.
+        Changes only the fields sent. Only price_cents and description may be null, which clears
+        the price or the description. archived true archives the service and false restores it.
+        Past appointments keep the values they copied. include_overdue is read only with archived,
+        as on updateTemplate, for the specific come_back rules whose service or return service this
+        is.
       parameters:
         - name: id
           in: path
@@ -435,6 +437,87 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Service"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /quick-replies:
+    get:
+      operationId: listQuickReplies
+      summary: List the quick replies
+      description: Every quick reply, archived ones too, by position.
+      responses:
+        "200":
+          description: The quick replies.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReplyList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createQuickReply
+      summary: Add a quick reply
+      description: >-
+        The reply goes last. title is one line of 1 to 60 characters; body is 1 to 2000 characters,
+        trimmed at both ends, its line breaks kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuickReplyInput"
+      responses:
+        "201":
+          description: The new reply.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReply"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /quick-replies/{id}:
+    patch:
+      operationId: updateQuickReply
+      summary: Change a quick reply
+      description: >-
+        Changes only the fields sent; none may be null. title and body get the same checks as on
+        create. A position change sets this one reply; the caller moves the others. archived true
+        archives the reply and false restores it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuickReplyPatch"
+      responses:
+        "200":
+          description: The reply after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickReply"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -771,6 +854,39 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /clients/{id}/next-reminder:
+    get:
+      operationId: getClientNextReminder
+      summary: The client's next planned message
+      description: >-
+        Read in one snapshot: the client's earliest reminder due today or late, or else the earliest
+        one after today (come_back from her done visits, before_appointment from her bookings in the
+        next 365 days); ties by due day, then rule id. 204 when there is none. An archived client is
+        allowed (she has no reminders).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The next reminder.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextReminder"
+        "204":
+          description: No reminder is planned.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /clients/{id}/media:
     get:
       operationId: listClientMedia
@@ -868,6 +984,9 @@ paths:
       description: >-
         Changes only the fields sent; none may be null. A body that is sent goes through the same
         check as on create. archived true archives the template and false restores it.
+        include_overdue is read only with archived: on archive, as on a reminder rule archive, for
+        each specific come_back rule the archive stops; on restore, as on a reminder rule restore,
+        for each one the restore lets send again.
       parameters:
         - name: id
           in: path
@@ -904,10 +1023,11 @@ paths:
       summary: Add a reminder rule
       description: >-
         A before_appointment rule takes an offset_days of 0 to 365 and no service. A come_back rule
-        takes a service_id, an optional return_service_id (the service to book again; the rule's own
-        service when left out) and an offset_days of 1 to 365. The template and the services must
-        exist and be active. include_overdue true counts items already past their moment; false or
-        left out counts only items from now on.
+        takes an offset_days of 1 to 365 and either a service_id with an optional return_service_id
+        (the service to book again; the rule's own service when left out), or no service_id: a
+        general rule for every service, which takes no return_service_id. The template and the
+        services must exist and be active. include_overdue true counts items already past their
+        moment; false or left out counts only items from now on.
       requestBody:
         required: true
         content:
@@ -929,14 +1049,50 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /reminder-rules/preview:
+    post:
+      operationId: previewRule
+      summary: Preview a come_back rule draft
+      description: >-
+        Only reads. The body is a come_back rule as the form holds it, with rule_id when it edits a
+        saved rule; the fields get the same checks as on create (422). An unknown rule_id is 404 and
+        a before_appointment one is 422 on rule_id. The draft takes the saved rule's place (or is
+        added) in one snapshot of the due data. today_count is the clients with a reminder of the
+        draft due exactly today (late ones are not counted); next is the earliest reminder of the
+        draft after today, or null.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulePreviewInput"
+      responses:
+        "200":
+          description: What the draft does.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulePreviewResult"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /reminder-rules/{id}:
     patch:
       operationId: updateReminderRule
       summary: Change a reminder rule
       description: >-
         Changes only the fields sent. Only return_service_id may be null (the rule's own service
-        again). A rule never changes kind or service. include_overdue is read only when the change
-        can make new items appear.
+        again); a general rule takes none. A rule never changes kind or service. include_overdue is
+        read only when the change can make new items appear, and when archiving a specific
+        come_back rule that could send: true lets the general rule bring that rule's late visits,
+        false or left out starts it from now (handover_from).
       parameters:
         - name: id
           in: path
@@ -1591,13 +1747,18 @@ components:
             theme_color: the login screen uses it on a device with no cached settings.
     Service:
       type: object
-      required: [id, name, duration_min, price_cents, color, position, archived]
+      required: [id, name, description, duration_min, price_cents, color, position, archived]
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
+        description:
+          type: string
+          nullable: true
+          description: >-
+            One line added to quotes after the service name; null when the service has none.
         duration_min:
           type: integer
         price_cents:
@@ -1617,6 +1778,10 @@ components:
       properties:
         name:
           type: string
+        description:
+          type: string
+          nullable: true
+          description: One line, up to 200 characters; blank or null means none.
         duration_min:
           type: integer
         price_cents:
@@ -1628,10 +1793,15 @@ components:
     ServicePatch:
       type: object
       description: >-
-        Every field is optional; a field left out is not changed. Only price_cents may be null.
+        Every field is optional; a field left out is not changed. Only price_cents and description
+        may be null.
       properties:
         name:
           type: string
+        description:
+          type: string
+          nullable: true
+          description: One line, up to 200 characters; blank or null clears it.
         duration_min:
           type: integer
         price_cents:
@@ -1639,6 +1809,52 @@ components:
           format: int64
           nullable: true
         color:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+        include_overdue:
+          type: boolean
+          description: Read only with archived; see updateService.
+    QuickReply:
+      type: object
+      required: [id, title, body, position, archived]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        position:
+          type: integer
+        archived:
+          type: boolean
+    QuickReplyList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuickReply"
+    QuickReplyInput:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+    QuickReplyPatch:
+      type: object
+      description: Every field is optional; a field left out is not changed. None may be null.
+      properties:
+        title:
+          type: string
+        body:
           type: string
         position:
           type: integer
@@ -1694,12 +1910,15 @@ components:
           type: string
         archived:
           type: boolean
+        include_overdue:
+          type: boolean
+          description: Read only with archived; see updateTemplate.
     RuleKind:
       type: string
       enum: [before_appointment, come_back]
     Rule:
       type: object
-      required: [id, kind, service_id, return_service_id, offset_days, template_id, applies_from, archived]
+      required: [id, kind, service_id, return_service_id, offset_days, template_id, applies_from, archived, handover_from]
       properties:
         id:
           type: string
@@ -1726,6 +1945,13 @@ components:
           description: Items before this moment are not counted; null means overdue items are included.
         archived:
           type: boolean
+        handover_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Only on a specific come_back rule that stopped sending: the general rule brings its
+            visits due from this moment on; null means from the start (or not answered).
     RuleInput:
       type: object
       required: [kind, offset_days, template_id]
@@ -1746,6 +1972,61 @@ components:
           type: string
           format: uuid
         include_overdue:
+          type: boolean
+    RulePreviewInput:
+      type: object
+      required: [offset_days, template_id]
+      description: A come_back rule draft; no service_id makes a general rule.
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+          description: The saved rule the draft edits; left out for a new rule.
+        service_id:
+          type: string
+          format: uuid
+          nullable: true
+        return_service_id:
+          type: string
+          format: uuid
+          nullable: true
+        offset_days:
+          type: integer
+        template_id:
+          type: string
+          format: uuid
+    RulePreviewResult:
+      type: object
+      required: [today_count, next]
+      properties:
+        today_count:
+          type: integer
+        next:
+          allOf:
+            - $ref: "#/components/schemas/RulePreviewNext"
+          nullable: true
+    RulePreviewNext:
+      type: object
+      required: [client_name, due_date]
+      properties:
+        client_name:
+          type: string
+        due_date:
+          type: string
+          format: date
+    NextReminder:
+      type: object
+      required: [due_date, source_services, general]
+      properties:
+        due_date:
+          type: string
+          format: date
+        source_services:
+          type: array
+          items:
+            type: string
+          description: The service names of the appointment the reminder comes from, in line order.
+        general:
           type: boolean
     RulePatch:
       type: object
@@ -1790,7 +2071,7 @@ components:
           type: string
     DueItem:
       type: object
-      required: [id, rule_id, appointment_id, anchor_at, kind, client_id, client_name, due_date, late, text, phone_digits, wa_link, mode, prompt]
+      required: [id, rule_id, appointment_id, anchor_at, kind, client_id, client_name, due_date, late, text, phone_digits, wa_link, mode, prompt, source_starts_at, source_services, general, offset_days, shown_until, message_number, next_due_date]
       properties:
         id:
           type: string
@@ -1833,6 +2114,37 @@ components:
             - $ref: "#/components/schemas/BookingPrompt"
           nullable: true
           description: Set only when mode is booking_prompt.
+        source_starts_at:
+          type: string
+          format: date-time
+          description: The start of the appointment the item comes from.
+        source_services:
+          type: array
+          items:
+            type: string
+          description: That appointment's service names, in line order.
+        general:
+          type: boolean
+          description: True for a general rule's item (a come_back rule for every service).
+        offset_days:
+          type: integer
+          description: The rule's days.
+        shown_until:
+          type: string
+          format: date
+          description: >-
+            The last day the item is listed: come_back, the due day + 60 (a general item also ends
+            the day before next_due_date); before_appointment, the appointment's day.
+        message_number:
+          type: integer
+          description: >-
+            For come_back, the come_back messages sent for the same appointment + 1 (skipped ones do
+            not count); 1 for before_appointment.
+        next_due_date:
+          type: string
+          format: date
+          nullable: true
+          description: General items only, the due day of the next general rule for the same visit.
     DueList:
       type: object
       required: [items]
@@ -1882,7 +2194,7 @@ components:
           type: string
     Bootstrap:
       type: object
-      required: [server_time, settings, attributes, services, templates, rules, clients, appointments, due, template_vars, backup_red]
+      required: [server_time, settings, attributes, services, templates, rules, clients, appointments, due, template_vars, backup_red, quick_replies]
       properties:
         server_time:
           type: string
@@ -1923,6 +2235,11 @@ components:
             $ref: "#/components/schemas/TemplateVar"
         backup_red:
           type: boolean
+        quick_replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuickReply"
+          description: Every quick reply, archived ones too, by position.
     Status:
       type: object
       required: [version, migration_version, heartbeat_age_s, backup, media_free_bytes, push]

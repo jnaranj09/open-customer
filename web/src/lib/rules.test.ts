@@ -3,6 +3,8 @@ import type { Rule, Service, Template } from './api/schemas';
 import {
 	overdueChoice,
 	offsetText,
+	previewInput,
+	rulePreviewText,
 	ruleRequest,
 	rulePatch,
 	ruleSentence,
@@ -28,6 +30,7 @@ function rule(over: Partial<Rule> = {}): Rule {
 		template_id: REMINDER,
 		applies_from: null,
 		archived: false,
+		handover_from: null,
 		...over
 	};
 }
@@ -35,6 +38,7 @@ function rule(over: Partial<Rule> = {}): Rule {
 const service = (id: string, name: string, archived = false): Service => ({
 	id,
 	name,
+	description: null,
 	duration_min: 60,
 	price_cents: null,
 	color: ['#', 'c76b85'].join(''),
@@ -315,5 +319,52 @@ describe('sortRules', () => {
 			rule({ id: 'a', kind: 'before_appointment', offset_days: 0 })
 		]);
 		expect(sorted.map((r) => r.id)).toEqual(['a', 'b', 'd', 'c']);
+	});
+});
+
+describe('previewInput', () => {
+	it('sends a general draft with null services and the rule it edits', () => {
+		const body = { kind: 'come_back' as const, template_id: REMINDER, offset_days: 21 };
+		expect(previewInput(body, RULE_ID)).toEqual({
+			rule_id: RULE_ID,
+			service_id: null,
+			return_service_id: null,
+			offset_days: 21,
+			template_id: REMINDER
+		});
+	});
+
+	it('sends a new specific draft without a rule id', () => {
+		const body = {
+			kind: 'come_back' as const,
+			template_id: REMINDER,
+			offset_days: 21,
+			service_id: ACRYLIC,
+			return_service_id: REFILL
+		};
+		expect(previewInput(body, undefined)).toEqual({
+			service_id: ACRYLIC,
+			return_service_id: REFILL,
+			offset_days: 21,
+			template_id: REMINDER
+		});
+	});
+
+	it('has no preview for a before rule', () => {
+		const body = { kind: 'before_appointment' as const, template_id: REMINDER, offset_days: 1 };
+		expect(previewInput(body, undefined)).toBeNull();
+	});
+});
+
+describe('rulePreviewText', () => {
+	const carla = { client_name: 'Carla', due_date: '2026-11-10' };
+
+	it.each([
+		[4, carla, 'Hoy: 4 clientas · próxima: Carla, 10 nov'],
+		[1, carla, 'Hoy: 1 clienta · próxima: Carla, 10 nov'],
+		[0, null, 'Hoy: 0 clientas'],
+		[1, null, 'Hoy: 1 clienta']
+	])('reads %i clients today and next %o', (count, next, want) => {
+		expect(rulePreviewText({ today_count: count, next })).toBe(want);
 	});
 });

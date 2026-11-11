@@ -67,3 +67,31 @@ export async function setArchived(page: Page, name: string, archive: boolean): P
 		.click();
 	await expect(page.getByText(archive ? es.service_archived : es.service_restored)).toBeVisible();
 }
+
+type ClipboardMode = 'ok' | 'missing' | 'throws' | 'rejects';
+
+/** Replaces `navigator.clipboard` before the app loads. `ok` records the written text on
+ *  `window.copied`; the others fail the way iOS can: no API, a throw at once, a rejected promise. */
+export async function stubClipboard(page: Page, mode: ClipboardMode): Promise<void> {
+	await page.addInitScript((m: ClipboardMode) => {
+		const win = window as unknown as { copied: string | null };
+		win.copied = null;
+		const writeText = (text: string): Promise<void> => {
+			if (m === 'throws') {
+				throw new DOMException('refused', 'NotAllowedError');
+			}
+			if (m === 'rejects') {
+				return Promise.reject(new DOMException('refused', 'NotAllowedError'));
+			}
+			win.copied = text;
+			return Promise.resolve();
+		};
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: m === 'missing' ? undefined : { writeText }
+		});
+	}, mode);
+}
+
+export const copied = (page: Page): Promise<string | null> =>
+	page.evaluate(() => (window as unknown as { copied: string | null }).copied);

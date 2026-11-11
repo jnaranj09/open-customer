@@ -38,17 +38,20 @@ import {
 	closePool,
 	insertAppointment,
 	insertClient,
+	insertReply,
 	insertSentReminder,
 	resetData
 } from './seed';
+import { fill } from './steps';
 import { ALLOW } from './ui-probe.allow';
 
 const LOGGED_OUT = { cookies: [], origins: [] };
+const escapeRe = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** A busy status is a `role="status"` line with one of the `*_loading` texts. */
 const LOADING = new RegExp(
 	`^(${Object.entries(es)
 		.filter(([key]) => key.endsWith('_loading'))
-		.map(([, text]) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+		.map(([, text]) => escapeRe(text))
 		.join('|')})$`
 );
 
@@ -56,7 +59,14 @@ type Ids = { client: string; appointment: string };
 
 /** The bootstrap lists a feed can empty. */
 type BootList =
-	'appointments' | 'due' | 'clients' | 'services' | 'attributes' | 'templates' | 'rules';
+	| 'appointments'
+	| 'due'
+	| 'clients'
+	| 'services'
+	| 'attributes'
+	| 'templates'
+	| 'rules'
+	| 'quick_replies';
 
 /** One source of server data on a screen. `empty` is what the screen says with no rows: from
  *  the real answer with `bootstrap` lists (or a list answer's `items`) emptied; `none` says why
@@ -67,7 +77,31 @@ type Feed = {
 	/** The API paths of the feed. */
 	api: RegExp;
 	empty: { bootstrap?: BootList[]; text: string | Record<Width, string> } | { none: string };
+	/** A feed that only adds a line: on an error and while it loads the line is hidden, with no
+	 *  alert and no busy status. `answer` gives its empty answer; `open` makes the screen ask. */
+	quiet?: Quiet;
 };
+
+type Quiet = {
+	/** Every text the line can show. */
+	line: RegExp;
+	answer: (route: Route) => Promise<void>;
+	open?: (page: Page) => Promise<void>;
+};
+
+/** A line that starts with one of `texts` (each up to its first `{placeholder}`). */
+const startsWithOne = (texts: string[]): RegExp =>
+	new RegExp(`^(${texts.map((text) => escapeRe(text.split('{')[0] ?? '')).join('|')})`);
+
+/** The real answer with another status and body (its headers kept, the app's version among them). */
+const answerWith =
+	(status: number, json?: unknown) =>
+	async (route: Route): Promise<void> => {
+		const real = await route.fetch();
+		await route.fulfill(
+			json === undefined ? { response: real, status, body: '' } : { response: real, status, json }
+		);
+	};
 
 type Probe = {
 	/** The address to open; may set up routing first (the setup wizard). */
@@ -114,6 +148,21 @@ const PROBES: Record<string, Probe> = {
 			{ name: 'sent log', api: /^\/api\/v1\/reminders\/log$/, empty: { text: es.due_sent_empty } }
 		]
 	},
+	'/enviar/respuestas': {
+		open: fixed('/enviar/respuestas'),
+		ready: LONG_NAME,
+		sheets: [
+			{
+				name: 'reply',
+				open: async (page) => {
+					// The row's name is its title and its text.
+					await page.getByRole('button', { name: new RegExp(`^${LONG_NAME} `) }).click();
+				}
+			},
+			{ name: 'new reply', open: button(es.replies_new) }
+		],
+		feeds: [bootFeed('replies', { bootstrap: ['quick_replies'], text: es.replies_empty_title })]
+	},
 	'/clientas': {
 		open: fixed('/clientas'),
 		ready: LONG_NAME,
@@ -136,7 +185,21 @@ const PROBES: Record<string, Probe> = {
 				api: /^\/api\/v1\/reminders\/log$/,
 				empty: { text: es.client_reminders_empty }
 			},
-			{ name: 'photos', api: MEDIA, empty: { text: es.photos_empty_client } }
+			{ name: 'photos', api: MEDIA, empty: { text: es.photos_empty_client } },
+			{
+				name: 'next message',
+				api: /^\/api\/v1\/clients\/[^/]+\/next-reminder$/,
+				empty: { text: es.client_next_none },
+				quiet: {
+					line: startsWithOne([
+						es.client_next_reminder,
+						es.client_next_today,
+						es.client_next_late,
+						es.client_next_none
+					]),
+					answer: answerWith(204)
+				}
+			}
 		]
 	},
 	'/clientas/nueva': {
@@ -231,7 +294,30 @@ const PROBES: Record<string, Probe> = {
 		open: fixed('/ajustes/recordatorios'),
 		ready: es.rules_new,
 		sheets: [{ name: 'new rule', open: button(es.rules_new) }],
-		feeds: [bootFeed('rules', { bootstrap: ['rules'], text: es.due_no_rules_title })]
+		feeds: [
+			bootFeed('rules', { bootstrap: ['rules'], text: es.due_no_rules_title }),
+			{
+				name: 'rule preview',
+				api: /^\/api\/v1\/reminder-rules\/preview$/,
+				empty: { text: fill(es.rule_preview_none, { count: '0' }) },
+				quiet: {
+					line: startsWithOne([es.rule_preview, es.rule_preview_none]),
+					answer: answerWith(200, { today_count: 0, next: null }),
+					open: async (page) => {
+						await button(es.rules_new)(page);
+						const sheet = page.getByRole('dialog');
+						await sheet
+							.getByLabel(es.rule_kind, { exact: true })
+							.selectOption({ label: es.rule_kind_come_back });
+						await sheet.getByLabel(es.rule_template, { exact: true }).selectOption({ index: 1 });
+						await sheet.getByLabel(es.rule_days_after, { exact: true }).fill('30');
+						await sheet
+							.getByLabel(es.rule_service, { exact: true })
+							.selectOption({ label: es.rule_service_all });
+					}
+				}
+			}
+		]
 	},
 	'/ajustes/estado': {
 		open: fixed('/ajustes/estado'),
@@ -278,7 +364,9 @@ function routesOnDisk(): string[] {
 		.map((p) =>
 			`/${relative(root, join(root, p, '..'))
 				.split(sep)
-				.join('/')}`.replace(/\/$/, '')
+				.join('/')}`
+				.replace(/\/\([^/]+\)/g, '')
+				.replace(/\/$/, '')
 		)
 		.map((r) => (r === '' ? '/' : r))
 		.sort();
@@ -472,6 +560,8 @@ test.beforeEach(async () => {
 		actedAt: at(0, '08:00')
 	});
 	await uploadPhoto(appointment);
+	// A quick reply with the long one-word name as its title, for the Respuestas rows.
+	await insertReply({ title: LONG_NAME, body: `Hola, soy ${LONG_NAME}.\nTe escribo pronto.` });
 	ids = { client, appointment };
 });
 
@@ -520,6 +610,11 @@ for (const [route, probe] of Object.entries(PROBES)) {
 
 		const feeds = Array.isArray(probe.feeds) ? probe.feeds : [];
 		for (const feed of feeds) {
+			if (feed.quiet !== undefined && 'text' in feed.empty) {
+				quietTests(route, probe, feed, feed.quiet, feed.empty.text);
+				continue;
+			}
+
 			test(`${feed.name}: a 500 shows an alert`, async ({ page }, info) => {
 				await page.route(feedMatch(feed), answer500);
 				await page.goto(await probe.open(page, ids));
@@ -567,5 +662,60 @@ for (const [route, probe] of Object.entries(PROBES)) {
 				});
 			}
 		}
+	});
+}
+
+/** The states of a quiet feed: a 500 and no answer leave its line out, with no alert; its empty
+ *  answer shows `empty`. Runs inside the route's `describe`. */
+function quietTests(
+	route: string,
+	probe: Probe,
+	feed: Feed,
+	quiet: Quiet,
+	empty: string | Record<Width, string>
+): void {
+	/** Opens the screen with `answer` on the feed and waits until the screen has asked. */
+	const reach = async (page: Page, answer: (r: Route) => Promise<void> | void): Promise<void> => {
+		const asked = page.waitForRequest((r) => feed.api.test(new URL(r.url()).pathname));
+		await page.route(feedMatch(feed), answer);
+		await page.goto(await probe.open(page, ids));
+		await expect(readyText(page, probe)).toBeVisible();
+		await quiet.open?.(page);
+		await asked;
+	};
+
+	test(`${feed.name}: a 500 leaves the line out, with no alert`, async ({ page }, info) => {
+		await reach(page, answer500);
+		const shown = await shows(page.getByText(quiet.line).or(page.getByRole('alert')));
+		const found = unless(!shown, {
+			check: 'error',
+			target: feed.name,
+			detail: 'a line or an alert for a 500 of a quiet feed'
+		});
+		expect(verdict(found, route, info.project.name, `${feed.name} error`)).toEqual(CLEAN);
+	});
+
+	test(`${feed.name}: a slow answer leaves the line out`, async ({ page }, info) => {
+		// Never answered: the screen waits for as long as the test looks.
+		await reach(page, () => undefined);
+		const shown = await shows(page.getByText(quiet.line));
+		await page.unrouteAll({ behavior: 'ignoreErrors' });
+		const found = unless(!shown, {
+			check: 'busy',
+			target: feed.name,
+			detail: 'a line while a quiet feed is out'
+		});
+		expect(verdict(found, route, info.project.name, `${feed.name} busy`)).toEqual(CLEAN);
+	});
+
+	test(`${feed.name}: the empty answer shows the empty line`, async ({ page }, info) => {
+		await reach(page, quiet.answer);
+		const text = emptyText(empty, info.project.name);
+		const found = await whenShown(page, await shows(page.getByText(text, { exact: true })), {
+			check: 'empty',
+			target: feed.name,
+			detail: `no "${text}"`
+		});
+		expect(verdict(found, route, info.project.name, `${feed.name} empty`)).toEqual(CLEAN);
 	});
 }

@@ -63,6 +63,19 @@ const (
 	MsgPriceInvalid    = "El precio no puede ser negativo"
 )
 
+// Field messages for a one-line text (text.Line; reminders-and-replies design, item 11).
+const (
+	MsgTextTooLong = "Es muy largo"
+	MsgTextOneLine = "Escríbelo en una sola línea"
+)
+
+// Field messages for quick replies (reminders-and-replies design, item 57). The title also takes
+// the text.Line messages.
+const (
+	MsgReplyTitleRequired = "Escribe un nombre"
+	MsgReplyBodyLength    = "Escribe un mensaje de 1 a 2000 caracteres"
+)
+
 // Field messages for clients (design doc item 48).
 const (
 	MsgClientNameInvalid = "Escribe un nombre de 1 a 120 caracteres"
@@ -104,19 +117,21 @@ const (
 
 // Field messages for reminder rules (design doc item 55).
 const (
-	MsgRuleKindInvalid       = "Elige un tipo de recordatorio"
+	MsgRuleKindInvalid       = "Elige un tipo de regla"
 	MsgOffsetInvalid         = "Escribe un número de días de 0 a 365"
 	MsgComeBackOffsetInvalid = "Escribe un número de días de 1 a 365"
-	MsgServiceRequired       = "Elige un servicio"
-	MsgServiceNotAllowed     = "Este recordatorio no lleva servicio"
+	MsgServiceNotAllowed     = "Esta regla no lleva servicio"
+	MsgGeneralNoReturn       = "Una regla para todos los servicios no lleva servicio para agendar"
 	MsgTemplateUnavailable   = "Esa plantilla no existe o está archivada"
+	// MsgRuleNotComeBack is a rule preview of a "before" rule (reminders-and-replies design).
+	MsgRuleNotComeBack = "Esta regla no es de después de un servicio"
 )
 
 // Field messages for the reminder log (design doc item 55). MsgLogFilterInvalid is GET
 // /reminders/log with neither or both of its filters.
 const (
 	MsgActionInvalid      = "Acción no válida"
-	MsgRuleUnknown        = "Ese recordatorio no existe"
+	MsgRuleUnknown        = "Esa regla no existe"
 	MsgAnchorInvalid      = "La hora de la cita no corresponde al recordatorio"
 	MsgPhoneDigitsInvalid = "Número no válido"
 	MsgLogFilterInvalid   = "Elige una clienta o una fecha"

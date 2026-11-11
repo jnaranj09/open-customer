@@ -69,6 +69,8 @@ linters:
               desc: auth imports no domain module
             - pkg: github.com/jnaranj09/open-customer/internal/reminders
               desc: auth imports no domain module
+            - pkg: github.com/jnaranj09/open-customer/internal/replies
+              desc: auth imports no domain module
             - pkg: github.com/jnaranj09/open-customer/internal/push
               desc: auth imports no domain module
             - pkg: github.com/jnaranj09/open-customer/internal/scheduler
@@ -87,6 +89,15 @@ linters:
           deny:
             - pkg: github.com/jnaranj09/open-customer/internal/reminders
               desc: only httpapi, scheduler and cmd import reminders
+        replies-only-from-orchestrators:
+          files:
+            - "$all"
+            - "!**/internal/replies/**"
+            - "!**/internal/httpapi/**"
+            - "!**/cmd/open-customer/**"
+          deny:
+            - pkg: github.com/jnaranj09/open-customer/internal/replies
+              desc: only httpapi and cmd import replies
   exclusions:
     presets:
       - std-error-handling

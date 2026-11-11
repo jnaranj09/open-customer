@@ -211,8 +211,12 @@ func TestMoney(t *testing.T) {
 
 func TestExportText(t *testing.T) {
 	got := spanish(t).ExportText()
-	if got.ClientsFile != "clientas.csv" || got.AppointmentsFile != "citas.csv" || got.ServicesFile != "servicios.csv" {
-		t.Errorf("file names = %q, %q, %q", got.ClientsFile, got.AppointmentsFile, got.ServicesFile)
+	if got.ClientsFile != "clientas.csv" || got.AppointmentsFile != "citas.csv" || got.ServicesFile != "servicios.csv" ||
+		got.RepliesFile != "respuestas.csv" {
+		t.Errorf("file names = %q, %q, %q, %q", got.ClientsFile, got.AppointmentsFile, got.ServicesFile, got.RepliesFile)
+	}
+	if want := []string{"titulo", "texto", "orden", "archivada"}; !slices.Equal(got.ReplyCols, want) {
+		t.Errorf("ReplyCols = %q, want %q", got.ReplyCols, want)
 	}
 	if want := []string{"nombre", "telefono", "notas", "creada", "archivada"}; !slices.Equal(got.ClientCols, want) {
 		t.Errorf("ClientCols = %q, want %q", got.ClientCols, want)
@@ -220,7 +224,7 @@ func TestExportText(t *testing.T) {
 	if want := []string{"fecha", "hora", "clienta", "servicios", "total", "pagado", "estado", "notas"}; !slices.Equal(got.AppointmentCols, want) {
 		t.Errorf("AppointmentCols = %q, want %q", got.AppointmentCols, want)
 	}
-	if want := []string{"nombre", "duracion_min", "precio", "archivado"}; !slices.Equal(got.ServiceCols, want) {
+	if want := []string{"nombre", "descripcion", "duracion_min", "precio", "archivado"}; !slices.Equal(got.ServiceCols, want) {
 		t.Errorf("ServiceCols = %q, want %q", got.ServiceCols, want)
 	}
 	wantStatus := map[string]string{
@@ -239,9 +243,10 @@ func TestExportTextIsACopy(t *testing.T) {
 	l := spanish(t)
 	first := l.ExportText()
 	first.ClientCols[0] = "changed"
+	first.ReplyCols[0] = "changed"
 	first.Status["done"] = "changed"
 	again := l.ExportText()
-	if again.ClientCols[0] != "nombre" || again.Status["done"] != "realizada" {
+	if again.ClientCols[0] != "nombre" || again.ReplyCols[0] != "titulo" || again.Status["done"] != "realizada" {
 		t.Errorf("ExportText after a caller's change = %q, %q; want the original texts", again.ClientCols[0], again.Status["done"])
 	}
 }

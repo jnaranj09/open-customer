@@ -6,7 +6,8 @@
 	import { t } from '../i18n';
 	import { confirmSent, notYet, pendingToAsk } from '../pending';
 	import { submitOnce } from '../submit';
-	import { systemNow } from '../time';
+	import { shortDay, systemNow } from '../time';
+	import { toaster } from '../toaster.svelte';
 	import BottomSheet from './ui/BottomSheet.svelte';
 	import Button from './ui/Button.svelte';
 
@@ -66,6 +67,14 @@
 				console.warn('code=cache_write_failed');
 				error = errorText({ kind: 'cache_write_failed' });
 				return;
+			}
+			// The result in one line: sent, and when the next general message is due
+			// (reminders-and-replies design, D16).
+			const name = item.client_name;
+			if (item.next_due_date === null) {
+				toaster.say('due_sent', undefined, { name });
+			} else {
+				toaster.say('due_sent_next', undefined, { name, date: shortDay(item.next_due_date) });
 			}
 			await cache.refresh();
 		},

@@ -58,11 +58,21 @@ type Option struct {
 type Service struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
+	Description *string   `json:"description"`
 	DurationMin int       `json:"duration_min"`
 	PriceCents  *int64    `json:"price_cents"`
 	Color       string    `json:"color"`
 	Position    int       `json:"position"`
 	Archived    bool      `json:"archived"`
+}
+
+// QuickReply is the API QuickReply schema.
+type QuickReply struct {
+	ID       uuid.UUID `json:"id"`
+	Title    string    `json:"title"`
+	Body     string    `json:"body"`
+	Position int       `json:"position"`
+	Archived bool      `json:"archived"`
 }
 
 // Template is the API Template schema.
@@ -83,6 +93,7 @@ type Rule struct {
 	AppliesFrom     *time.Time    `json:"applies_from"`
 	TemplateID      uuid.UUID     `json:"template_id"`
 	Archived        bool          `json:"archived"`
+	HandoverFrom    *time.Time    `json:"handover_from"`
 }
 
 // Client is the API Client schema.
@@ -142,8 +153,9 @@ type LogItem struct {
 // jsonFile is the name of the JSON entry. It is not Spanish, so it is not in locale.
 const jsonFile = "datos.json"
 
-// jsonVersion is the datos.json format version.
-const jsonVersion = 1
+// jsonVersion is the datos.json format version. 2: services gained description. 3: rules gained
+// handover_from. 4: quick_replies.
+const jsonVersion = 4
 
 // jsonStream writes datos.json piece by piece, so each array is written one page at a time.
 type jsonStream struct{ w io.Writer }
@@ -256,6 +268,9 @@ func (x *run) writeJSON(w io.Writer) error {
 	if err := pagedField(s, "reminder_log", x.reminderLog, func(r sqlc.ExportLogRow) uuid.UUID { return r.ID }, each(logJSON)); err != nil {
 		return err
 	}
+	if err := pagedField(s, "quick_replies", x.replies, replyID, each(replyJSON)); err != nil {
+		return err
+	}
 	return s.raw("}")
 }
 
@@ -295,9 +310,13 @@ func attributeJSON(a attributes.Attribute) Attribute {
 
 func serviceJSON(r sqlc.Service) Service {
 	return Service{
-		ID: r.ID, Name: r.Name, DurationMin: int(r.DurationMin), PriceCents: r.PriceCents,
-		Color: r.Color, Position: int(r.Position), Archived: r.ArchivedAt != nil,
+		ID: r.ID, Name: r.Name, Description: r.Description, DurationMin: int(r.DurationMin),
+		PriceCents: r.PriceCents, Color: r.Color, Position: int(r.Position), Archived: r.ArchivedAt != nil,
 	}
+}
+
+func replyJSON(r sqlc.ExportQuickRepliesRow) QuickReply {
+	return QuickReply{ID: r.ID, Title: r.Title, Body: r.Body, Position: int(r.Position), Archived: r.ArchivedAt != nil}
 }
 
 func templateJSON(r sqlc.ExportTemplatesRow) Template {
@@ -308,7 +327,7 @@ func ruleJSON(r sqlc.ExportRulesRow) Rule {
 	return Rule{
 		ID: r.ID, Kind: r.Kind, ServiceID: r.ServiceID, ReturnServiceID: r.ReturnServiceID,
 		OffsetDays: int(r.OffsetDays), AppliesFrom: utcPtr(r.AppliesFrom), TemplateID: r.TemplateID,
-		Archived: r.ArchivedAt != nil,
+		Archived: r.ArchivedAt != nil, HandoverFrom: utcPtr(r.HandoverFrom),
 	}
 }
 

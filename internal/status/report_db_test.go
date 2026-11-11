@@ -5,6 +5,7 @@ package status_test
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -53,15 +54,36 @@ func (f reportFixture) addSubscription(t *testing.T) {
 		VALUES ('0192f0a0-0000-7000-8000-000000000002', '0192f0a0-0000-7000-8000-000000000001', 'https://push.example.com/1', 'k', 'a')`)
 }
 
-func TestReportMigrationVersionIs2(t *testing.T) {
+func TestReportMigrationVersionIsLatest(t *testing.T) {
 	f := newReportFixture(t, t.TempDir())
 	rep, err := f.s.Status(t.Context(), f.pool)
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
-	if rep.MigrationVersion != 2 || rep.Version != "v-test" {
-		t.Errorf("version = %q, migration = %d; want v-test, 2", rep.Version, rep.MigrationVersion)
+	want := latestMigration(t)
+	if rep.MigrationVersion != want || rep.Version != "v-test" {
+		t.Errorf("version = %q, migration = %d; want v-test, %d", rep.Version, rep.MigrationVersion, want)
 	}
+}
+
+// latestMigration is the highest number among the migration files the binary embeds (goose names
+// them <number>_<name>.sql), so a new migration needs no change here.
+func latestMigration(t *testing.T) int64 {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join("..", "db", "migrations", "*.sql"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("migration files: %v, %v", files, err)
+	}
+	var latest int64
+	for _, f := range files {
+		prefix, _, _ := strings.Cut(filepath.Base(f), "_")
+		n, err := strconv.ParseInt(prefix, 10, 64)
+		if err != nil {
+			t.Fatalf("migration %s: %v", f, err)
+		}
+		latest = max(latest, n)
+	}
+	return latest
 }
 
 func TestReportHeartbeatAge(t *testing.T) {

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -66,13 +67,64 @@ func (s *Server) UpdateReminderRule(w http.ResponseWriter, r *http.Request, id o
 	writeJSON(w, http.StatusOK, toGenRule(out))
 }
 
+// PreviewRule answers what a come-back rule draft does. It is a POST because it carries the draft,
+// but it only reads, so it runs in one snapshot.
+func (s *Server) PreviewRule(w http.ResponseWriter, r *http.Request) {
+	var body gen.RulePreviewInput
+	if decodeJSON(w, r, &body) != nil {
+		return
+	}
+	draft := reminders.RuleDraft{
+		ServiceID: nullUUID(body.ServiceId), ReturnServiceID: nullUUID(body.ReturnServiceId),
+		OffsetDays: body.OffsetDays, TemplateID: body.TemplateId,
+	}
+	if body.RuleId != nil {
+		draft.RuleID = uuid.NullUUID{UUID: *body.RuleId, Valid: true}
+	}
+	var out reminders.RulePreviewResult
+	if err := s.snapshot(r, func(tx pgx.Tx) error {
+		var err error
+		if out, err = s.reminders.RulePreview(r.Context(), tx, s.clock.Now(), draft); err != nil {
+			return fmt.Errorf("preview rule: %w", err)
+		}
+		return nil
+	}); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	res := gen.RulePreviewResult{TodayCount: out.TodayCount, Next: nullable.NewNullNullable[gen.RulePreviewNext]()}
+	if out.Next != nil {
+		res.Next.Set(gen.RulePreviewNext{ClientName: out.Next.ClientName, DueDate: dateOf(out.Next.DueDate)})
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
 // toGenRule is the wire form of a rule.
 func toGenRule(r reminders.Rule) gen.Rule {
 	return gen.Rule{
 		Id: r.ID, Kind: gen.RuleKind(r.Kind), ServiceId: nullableUUID(r.ServiceID),
 		ReturnServiceId: nullableUUID(r.ReturnServiceID), OffsetDays: r.OffsetDays,
 		TemplateId: r.TemplateID, AppliesFrom: nullval.Of(r.AppliesFrom), Archived: r.Archived,
+		HandoverFrom: nullTime(r.HandoverFrom),
 	}
+}
+
+// handover runs update, the archive or restore of a template or service, inside the caller's
+// transaction, after the handover question of that change (reminders-and-replies design,
+// "Handover"). Without archived in the patch it only runs update; an include_overdue left out means
+// "from today".
+func (s *Server) handover(ctx context.Context, tx pgx.Tx, archived, includeOverdue *bool, scope reminders.HandoverScope, update func() error) error {
+	if archived != nil {
+		include := includeOverdue != nil && *includeOverdue
+		answer := s.reminders.RestartRules
+		if *archived {
+			answer = s.reminders.SetHandover
+		}
+		if err := answer(ctx, tx, scope, include); err != nil {
+			return fmt.Errorf("handover: %w", err)
+		}
+	}
+	return update()
 }
 
 // nullUUID is a request id field as the module takes it: absent and null are both "none".
@@ -188,13 +240,21 @@ func (s *Server) logForDate(r *http.Request, date time.Time) ([]reminders.LogIte
 // toGenDueItem is the wire form of a due item. due_date is the calendar day of the business-local
 // midnight DueDate holds.
 func toGenDueItem(it reminders.DueItem) gen.DueItem {
-	y, m, d := it.DueDate.Date()
 	out := gen.DueItem{
 		Id: it.ID, RuleId: it.RuleID, AppointmentId: it.AppointmentID, AnchorAt: nullTime(it.AnchorAt),
 		Kind: gen.RuleKind(it.Kind), ClientId: it.ClientID, ClientName: it.ClientName,
-		DueDate: openapi_types.Date{Time: time.Date(y, m, d, 0, 0, 0, 0, time.UTC)}, Late: it.Late, Text: it.Text,
+		DueDate: dateOf(it.DueDate), Late: it.Late, Text: it.Text,
 		PhoneDigits: nullval.Of(it.PhoneDigits), WaLink: nullval.Of(it.WaLink),
 		Mode: gen.DueItemMode(it.Mode), Prompt: nullable.NewNullNullable[gen.BookingPrompt](),
+		SourceStartsAt: it.SourceStartsAt.UTC(), SourceServices: it.SourceServices, General: it.General,
+		OffsetDays: it.OffsetDays, ShownUntil: dateOf(it.ShownUntil), MessageNumber: it.MessageNumber,
+		NextDueDate: nullable.NewNullNullable[openapi_types.Date](),
+	}
+	if out.SourceServices == nil {
+		out.SourceServices = []string{}
+	}
+	if it.NextDueDate != nil {
+		out.NextDueDate = nullable.NewNullableWithValue(dateOf(*it.NextDueDate))
 	}
 	if p := it.Prompt; p != nil {
 		out.Prompt = nullable.NewNullableWithValue(gen.BookingPrompt{
@@ -203,6 +263,12 @@ func toGenDueItem(it reminders.DueItem) gen.DueItem {
 		})
 	}
 	return out
+}
+
+// dateOf is the wire date of a business-local midnight: its calendar day, whatever the zone.
+func dateOf(day time.Time) openapi_types.Date {
+	y, m, d := day.Date()
+	return openapi_types.Date{Time: time.Date(y, m, d, 0, 0, 0, 0, time.UTC)}
 }
 
 // toGenLogItem is the wire form of a log row.

@@ -16,38 +16,45 @@
 
 	// The Ajustes sections (the mockup's two groups): the screen on compact, the 280 px column on
 	// wide, where the open section is marked. "Cerrar sesión" ends the session; the rest are links.
-	type Section = { label: MessageKey; href: ResolvedPathname; prefix: string };
+	// "Recordatorios" holds the rules and the templates (two tabs), so it is open on both paths.
+	type Section = { label: MessageKey; href: ResolvedPathname; prefixes: string[] };
 	const config: Section[] = [
-		{ label: 'settings_business', href: resolve('/ajustes/negocio'), prefix: '/ajustes/negocio' },
+		{
+			label: 'settings_business',
+			href: resolve('/ajustes/negocio'),
+			prefixes: ['/ajustes/negocio']
+		},
 		{
 			label: 'settings_attributes',
 			href: resolve('/ajustes/atributos'),
-			prefix: '/ajustes/atributos'
-		},
-		{
-			label: 'settings_templates',
-			href: resolve('/ajustes/plantillas'),
-			prefix: '/ajustes/plantillas'
+			prefixes: ['/ajustes/atributos']
 		},
 		{
 			label: 'settings_rules',
-			href: resolve('/ajustes/recordatorios'),
-			prefix: '/ajustes/recordatorios'
+			href: resolve('/ajustes/(reglas)/recordatorios'),
+			prefixes: ['/ajustes/recordatorios', '/ajustes/plantillas']
 		},
-		{ label: 'settings_status', href: resolve('/ajustes/estado'), prefix: '/ajustes/estado' }
+		{ label: 'settings_status', href: resolve('/ajustes/estado'), prefixes: ['/ajustes/estado'] }
 	];
 	const account: Section[] = [
-		{ label: 'settings_export', href: resolve('/ajustes/exportar'), prefix: '/ajustes/exportar' },
-		{ label: 'settings_password', href: resolve('/cambiar-clave'), prefix: '/cambiar-clave' }
+		{
+			label: 'settings_export',
+			href: resolve('/ajustes/exportar'),
+			prefixes: ['/ajustes/exportar']
+		},
+		{ label: 'settings_password', href: resolve('/cambiar-clave'), prefixes: ['/cambiar-clave'] }
 	];
 
 	// On wide `/ajustes` shows Negocio, so Negocio is the marked row there.
 	const path = $derived(page.url.pathname.replace(/\/$/, ''));
-	const open = (prefix: string): boolean =>
+	const open = (prefixes: string[]): boolean =>
 		layout.current === 'wide' &&
-		(path === prefix ||
-			path.startsWith(`${prefix}/`) ||
-			(path === '/ajustes' && prefix === '/ajustes/negocio'));
+		prefixes.some(
+			(prefix) =>
+				path === prefix ||
+				path.startsWith(`${prefix}/`) ||
+				(path === '/ajustes' && prefix === '/ajustes/negocio')
+		);
 
 	let error = $state<string | null>(null);
 
@@ -70,7 +77,7 @@
 			<li class="mx-3 h-px bg-glass-edge" aria-hidden="true"></li>
 		{/if}
 		<li>
-			<ListRow href={section.href} title={t(section.label)} selected={open(section.prefix)} />
+			<ListRow href={section.href} title={t(section.label)} selected={open(section.prefixes)} />
 		</li>
 	{/each}
 {/snippet}

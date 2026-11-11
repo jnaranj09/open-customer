@@ -24,6 +24,13 @@ function item(over: Partial<DueItem>): DueItem {
 		wa_link: 'https://wa.me/50688887777',
 		mode: 'message',
 		prompt: null,
+		source_starts_at: '2026-10-14T15:00:00Z',
+		source_services: ['Acrílico'],
+		general: false,
+		offset_days: 21,
+		shown_until: '2027-01-03',
+		message_number: 1,
+		next_due_date: null,
 		...over
 	};
 }

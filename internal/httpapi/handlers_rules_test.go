@@ -33,7 +33,7 @@ func TestCreateRuleOK(t *testing.T) {
 	tpl := ruleTemplate(t, app, c)
 	rec := sendAs(app, c, http.MethodPost, rulesPath, beforeRuleBody(tpl))
 	got := decodeInto[gen.Rule](t, rec, http.StatusCreated)
-	assertKeys(t, rec.Body.Bytes(), "applies_from", "archived", "id", "kind", "offset_days", "return_service_id", "service_id", "template_id")
+	assertKeys(t, rec.Body.Bytes(), "applies_from", "archived", "handover_from", "id", "kind", "offset_days", "return_service_id", "service_id", "template_id")
 	if got.Kind != gen.RuleKind("before_appointment") || got.OffsetDays != 1 || got.TemplateId != tpl.Id || got.Archived {
 		t.Fatalf("rule = %+v, want a before rule, offset 1, the template, active", got)
 	}
@@ -127,6 +127,7 @@ func TestRuleRoutesNeedSession(t *testing.T) {
 	for _, rt := range []struct{ method, target, body string }{
 		{http.MethodPost, rulesPath, `{"kind":"before_appointment","offset_days":1,"template_id":"` + uuid.NewString() + `"}`},
 		{http.MethodPatch, rulesPath + "/" + uuid.NewString(), `{"archived":true}`},
+		{http.MethodPost, rulesPath + "/preview", `{"offset_days":30,"template_id":"` + uuid.NewString() + `"}`},
 	} {
 		t.Run(rt.method+" "+rt.target, func(t *testing.T) {
 			assertUnauthorized(t, send(app.handler, rt.method, rt.target, testOrigin, rt.body, nil))

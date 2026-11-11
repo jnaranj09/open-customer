@@ -46,6 +46,7 @@ export const AttributeSchema = z.object({
 export const ServiceSchema = z.object({
 	id,
 	name: z.string(),
+	description: z.nullable(z.string()),
 	duration_min: z.number().int(),
 	price_cents: z.nullable(z.number().int()),
 	color: z.string(),
@@ -60,10 +61,30 @@ export const TemplateSchema = z.object({
 	archived: z.boolean()
 }) satisfies z.ZodType<Schemas['Template']>;
 
+export const QuickReplySchema = z.object({
+	id,
+	title: z.string(),
+	body: z.string(),
+	position: z.number().int(),
+	archived: z.boolean()
+}) satisfies z.ZodType<Schemas['QuickReply']>;
+
 export const TemplatePreviewSchema = z.object({
 	text: z.string(),
 	unknown_vars: z.array(z.string())
 }) satisfies z.ZodType<Schemas['TemplatePreview']>;
+
+export const RulePreviewResultSchema = z.object({
+	today_count: z.number().int(),
+	next: z.nullable(z.object({ client_name: z.string(), due_date: day }))
+}) satisfies z.ZodType<Schemas['RulePreviewResult']>;
+
+export const NextReminderSchema = z.object({
+	due_date: day,
+	source_services: z.array(z.string()),
+	general: z.boolean()
+}) satisfies z.ZodType<Schemas['NextReminder']>;
+export type NextReminder = z.infer<typeof NextReminderSchema>;
 
 const RuleKindSchema = z.enum(['before_appointment', 'come_back']);
 
@@ -75,7 +96,8 @@ export const RuleSchema = z.object({
 	offset_days: z.number().int(),
 	template_id: id,
 	applies_from: z.nullable(instant),
-	archived: z.boolean()
+	archived: z.boolean(),
+	handover_from: z.nullable(instant)
 }) satisfies z.ZodType<Schemas['Rule']>;
 
 export const ClientSchema = z.object({
@@ -144,7 +166,14 @@ export const DueItemSchema = z.object({
 	phone_digits: z.nullable(z.string()),
 	wa_link: z.nullable(z.string()),
 	mode: z.enum(['message', 'booking_prompt']),
-	prompt: z.nullable(BookingPromptSchema)
+	prompt: z.nullable(BookingPromptSchema),
+	source_starts_at: instant,
+	source_services: z.array(z.string()),
+	general: z.boolean(),
+	offset_days: z.number().int(),
+	shown_until: day,
+	message_number: z.number().int(),
+	next_due_date: z.nullable(day)
 }) satisfies z.ZodType<Schemas['DueItem']>;
 
 export const LogItemSchema = z.object({
@@ -182,7 +211,8 @@ export const BootstrapSchema = z.object({
 	appointments: z.array(AppointmentSchema),
 	due: z.array(DueItemSchema),
 	template_vars: z.array(TemplateVarSchema),
-	backup_red: z.boolean()
+	backup_red: z.boolean(),
+	quick_replies: z.array(QuickReplySchema)
 }) satisfies z.ZodType<Schemas['Bootstrap']>;
 
 export const StatusSchema = z.object({
@@ -287,6 +317,7 @@ export type Service = z.infer<typeof ServiceSchema>;
 export type Rule = z.infer<typeof RuleSchema>;
 export type Status = z.infer<typeof StatusSchema>;
 export type Template = z.infer<typeof TemplateSchema>;
+export type QuickReply = z.infer<typeof QuickReplySchema>;
 export type Client = z.infer<typeof ClientSchema>;
 export type Media = z.infer<typeof MediaSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;

@@ -15,6 +15,7 @@ const service = (id: string, name: string, duration_min: number, price_cents: nu
 	({
 		id,
 		name,
+		description: null,
 		duration_min,
 		price_cents,
 		color: 'rose',
@@ -158,6 +159,36 @@ describe('quoteText', () => {
 		expect(lines(text)[1]).toBe(
 			t('quote_line', { name: 'Acrílico', price: formatMoney(1500000, 'USD', 'en-US') })
 		);
+	});
+});
+
+describe('quoteText detail block', () => {
+	const described = [
+		{ ...service(ACRILICO, 'Acrílico', 60, 1500000), description: 'Incluye retiro' },
+		service(DISENO, 'Diseño sencillo', 30, 300000),
+		{ ...service(CEJAS, 'Cejas', 45, null), description: 'Con diseño' }
+	];
+
+	it('adds a blank line and one line per described service, in price-line order', () => {
+		const text = quoteText([one(CEJAS), one(DISENO), one(ACRILICO)], described, SETTINGS);
+		expect(lines(text).slice(-3)).toEqual([
+			'',
+			t('quote_detail_line', { name: 'Cejas', description: 'Con diseño' }),
+			t('quote_detail_line', { name: 'Acrílico', description: 'Incluye retiro' })
+		]);
+	});
+
+	it('a service picked twice gets one detail line', () => {
+		const text = quoteText([one(ACRILICO, 2)], described, SETTINGS);
+		expect(lines(text).filter((l) => l.startsWith('Acrílico:'))).toHaveLength(1);
+	});
+
+	it('no described service: no blank line, the duration line is last', () => {
+		const text = quoteText([one(DISENO)], described, SETTINGS);
+		expect(lines(text).at(-1)).toBe(
+			t('quote_duration', { duration: t('service_minutes', { n: 30 }) })
+		);
+		expect(lines(text)).not.toContain('');
 	});
 });
 

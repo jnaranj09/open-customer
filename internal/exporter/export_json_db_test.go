@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jnaranj09/open-customer/internal/attributes"
+	"github.com/jnaranj09/open-customer/internal/services"
 	"github.com/jnaranj09/open-customer/internal/templates"
 )
 
@@ -44,7 +45,8 @@ type datos struct {
 			ServiceID uuid.UUID `json:"service_id"`
 		} `json:"services"`
 	} `json:"appointments"`
-	ReminderLog []struct {
+	QuickReplies []withID `json:"quick_replies"`
+	ReminderLog  []struct {
 		ID         uuid.UUID `json:"id"`
 		ClientID   uuid.UUID `json:"client_id"`
 		ClientName string    `json:"client_name"`
@@ -84,11 +86,15 @@ func TestExportJSONRoundTripsIDs(t *testing.T) {
 	later := e.book(t, ana.ID, starts.Add(48*time.Hour), pedicure)
 	ruleID := e.rule(t, tpl.ID)
 	logID := e.logRow(t, ruleID, visit.ID, starts)
+	reply := e.reply(t, "Dirección", "Calle 1", 0, false)
 	e.clock.Set(time.Date(2026, 10, 25, 9, 0, 0, 0, time.UTC))
 
 	d := e.datos(t)
-	if d.Version != 1 || !d.ExportedAt.Equal(e.clock.Now()) {
-		t.Errorf("version %d, exported_at %s; want 1 and %s", d.Version, d.ExportedAt, e.clock.Now())
+	if d.Version != 4 || !d.ExportedAt.Equal(e.clock.Now()) {
+		t.Errorf("version %d, exported_at %s; want 4 and %s", d.Version, d.ExportedAt, e.clock.Now())
+	}
+	if got := idsOf(d.QuickReplies); !slices.Equal(got, []uuid.UUID{reply}) {
+		t.Errorf("quick reply ids = %v, want %v", got, reply)
 	}
 	if d.Settings.Currency != "USD" || d.Settings.Timezone != "Europe/Madrid" {
 		t.Errorf("settings = %+v", d.Settings)
@@ -152,5 +158,38 @@ func TestExportArchivedAttributeOnlyInJSON(t *testing.T) {
 	got := d.Attributes[i]
 	if !got.Archived || len(got.Options) != 1 || got.Options[0].ID != optionID {
 		t.Fatalf("archived attribute in JSON = %+v; want archived with its option %s", got, optionID)
+	}
+}
+
+func TestExportServiceDescription(t *testing.T) {
+	e := newEnv(t, "USD")
+	if _, err := e.services.Create(t.Context(), e.pool, services.ServiceInput{
+		Name: "Acrílico", Description: ptr("Incluye retiro"), DurationMin: 90, Color: "#aa3366",
+	}); err != nil {
+		t.Fatalf("create service: %v", err)
+	}
+	e.service(t, "Pedicure", 30, nil)
+
+	rows := e.csvFile(t, "servicios.csv")
+	got := []string{column(t, rows, 1, "descripcion"), column(t, rows, 2, "descripcion")}
+	if !slices.Equal(got, []string{"Incluye retiro", ""}) {
+		t.Errorf("descripcion = %q, want [Incluye retiro \"\"]", got)
+	}
+	_, files := zipFiles(t, e.export(t))
+	var d struct {
+		Services []struct {
+			Name        string  `json:"name"`
+			Description *string `json:"description"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal(files["datos.json"], &d); err != nil {
+		t.Fatalf("parse datos.json: %v", err)
+	}
+	byName := map[string]*string{}
+	for _, s := range d.Services {
+		byName[s.Name] = s.Description
+	}
+	if v := byName["Acrílico"]; v == nil || *v != "Incluye retiro" || byName["Pedicure"] != nil {
+		t.Errorf("descriptions = %v, %v; want Incluye retiro and null", v, byName["Pedicure"])
 	}
 }

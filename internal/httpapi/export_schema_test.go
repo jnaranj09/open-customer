@@ -39,6 +39,7 @@ func TestExportJSONMatchesSchemas(t *testing.T) {
 		{"Option", exporter.Option{}, gen.Option{}},
 		{"Service", exporter.Service{}, gen.Service{}},
 		{"Template", exporter.Template{}, gen.Template{}},
+		{"QuickReply", exporter.QuickReply{}, gen.QuickReply{}},
 		{"Rule", exporter.Rule{}, gen.Rule{}},
 		{"Client", exporter.Client{}, gen.Client{}},
 		{"Appointment", exporter.Appointment{}, gen.Appointment{}},

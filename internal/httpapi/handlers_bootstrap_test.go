@@ -19,8 +19,8 @@ const bootstrapPath = "/api/v1/bootstrap"
 
 // bootstrapKeys are the keys of a Bootstrap.
 var bootstrapKeys = []string{
-	"appointments", "attributes", "backup_red", "clients", "due", "rules", "server_time", "services",
-	"settings", "template_vars", "templates",
+	"appointments", "attributes", "backup_red", "clients", "due", "quick_replies", "rules", "server_time",
+	"services", "settings", "template_vars", "templates",
 }
 
 // archive archives the record at path as the owner c.
@@ -175,14 +175,38 @@ func TestBootstrapNeedsSession(t *testing.T) {
 // in one read-only REPEATABLE READ transaction, as Postgres reports it, so a write between their
 // queries cannot show half a change (CLAUDE.md constraint 9).
 func TestSnapshotReadersUseReadOnlyRepeatableRead(t *testing.T) {
-	for _, path := range []string{bootstrapURL("2026-03-01", "2026-04-01"), duePath, exportPath} {
-		t.Run(path, func(t *testing.T) {
-			_, pool, c := signedInOwner(t)
+	type request struct{ method, path, body string }
+	get := func(path string) func(*testing.T, testApp, *http.Cookie) request {
+		return func(*testing.T, testApp, *http.Cookie) request { return request{http.MethodGet, path, ""} }
+	}
+	cases := []struct {
+		name string
+		req  func(*testing.T, testApp, *http.Cookie) request
+		want int
+	}{
+		{"bootstrap", get(bootstrapURL("2026-03-01", "2026-04-01")), http.StatusOK},
+		{"due list", get(duePath), http.StatusOK},
+		{"export", get(exportPath), http.StatusOK},
+		{"rule preview of a come-back draft", func(t *testing.T, app testApp, c *http.Cookie) request {
+			t.Helper()
+			tpl := ruleTemplate(t, app, c)
+			return request{http.MethodPost, rulesPath + "/preview", `{"offset_days":30,"template_id":"` + tpl.Id.String() + `"}`}
+		}, http.StatusOK},
+		{"next reminder of a client with none", func(t *testing.T, app testApp, c *http.Cookie) request {
+			t.Helper()
+			cl := createClient(t, app, c, `{"name":"Ana Rojas"}`)
+			return request{http.MethodGet, clientsPath + "/" + cl.Id.String() + "/next-reminder", ""}
+		}, http.StatusNoContent},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			seed, pool, c := signedInOwner(t)
+			req := tc.req(t, seed, c)
 			rec := &dbtest.TxModeRecorder{Pool: pool}
 			app := newTestApp(t, testServerConfig{pool: pool, beginner: rec})
 
-			if got := sendAs(app, c, http.MethodGet, path, ""); got.Code != http.StatusOK {
-				t.Fatalf("status = %d (%q)", got.Code, got.Body.String())
+			if got := sendAs(app, c, req.method, req.path, req.body); got.Code != tc.want {
+				t.Fatalf("status = %d (%q), want %d", got.Code, got.Body.String(), tc.want)
 			}
 			if got := rec.Modes(); !slices.Contains(got, dbtest.SnapshotMode) {
 				t.Fatalf("transaction modes = %+v, want one %+v", got, dbtest.SnapshotMode)
