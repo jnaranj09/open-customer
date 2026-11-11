@@ -14,13 +14,30 @@ function db(): pg.Pool {
 	return pool;
 }
 
+/** Postgres's deadlock_detected error code. */
+const DEADLOCK = '40P01';
+
+/** TRUNCATE ... CASCADE on `tables`, run again (at most three times) when Postgres ends it with
+ *  a deadlock. TRUNCATE locks each table in turn, and a read the app is still running for the page
+ *  the last test left open can hold one of them while it waits for another; Postgres then ends one
+ *  side (seen once in CI, at `deleteSpecRows`). The app's read finishes on its own, so trying again
+ *  is safe. */
+async function truncate(tables: string): Promise<void> {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			await db().query(`TRUNCATE ${tables} CASCADE`);
+			return;
+		} catch (err) {
+			if (attempt >= 3 || !(err instanceof pg.DatabaseError && err.code === DEADLOCK)) throw err;
+		}
+	}
+}
+
 /** Empties the per-spec tables (the quick replies among them). The user, sessions, settings,
  *  attributes, services, templates and rules stay, so the saved login and the setup data keep working; a service description a spec
  *  wrote is cleared, so every spec quotes the setup services as they were. */
 export async function resetData(): Promise<void> {
-	await db().query(
-		'TRUNCATE clients, appointments, appointment_services, media, reminder_log, quick_replies CASCADE'
-	);
+	await truncate('clients, appointments, appointment_services, media, reminder_log, quick_replies');
 	await db().query('UPDATE services SET description = NULL');
 }
 
@@ -212,7 +229,7 @@ export async function deleteSpecRows(rows: {
 	templates: string[];
 	services: string[];
 }): Promise<void> {
-	await db().query('TRUNCATE reminder_log, appointments, appointment_services CASCADE');
+	await truncate('reminder_log, appointments, appointment_services');
 	await db().query(
 		"DELETE FROM reminder_rules WHERE id = ANY($1) OR (kind = 'come_back' AND service_id IS NULL)",
 		[rows.rules]
