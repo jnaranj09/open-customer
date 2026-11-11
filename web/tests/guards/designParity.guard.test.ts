@@ -28,7 +28,11 @@ const CODE_ONLY: Record<string, string> = {};
 /** Design components with no primitive yet. Each: why. Only shrinks. */
 const DESIGN_ONLY: Record<string, string> = {
 	AppointmentRow: 'not built: the agenda draws appointments in TimeGrid, no list of rows',
-	SearchField: 'not built: search uses a labelled TextField of type search'
+	SearchField: 'not built: search uses a labelled TextField of type search',
+	'LabelChip/Normal': 'reminders-and-replies design: the primitive lands in stage S3',
+	'LabelChip/Warning': 'reminders-and-replies design: the primitive lands in stage S3',
+	'TabNav/Pill': 'reminders-and-replies design: the primitive lands in stage S5',
+	'TabNav/Underline': 'reminders-and-replies design: the primitive lands in stage S5'
 };
 
 /** Component names under the primitives folder: path relative to it, no extension, `/`-separated.

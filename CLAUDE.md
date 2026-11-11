@@ -13,8 +13,10 @@ through `TASKS.md` in order.
 
 **Architecture source:** `docs/designs/release-1.md` for the app; build it phase by phase (its
 "Build order"). `docs/designs/quick-quotes.md` for the Servicios place and quotes, built in its
-stages S1-S4. `docs/designs/devsecops.md` for the security pipeline; `docs/threat-model.md` lists
-every threat and its check. A change that makes a doc false fixes the doc in the same change.
+stages S1-S4. `docs/designs/reminders-and-replies.md` for general rules, row labels and quick
+replies, built in its stages S1-S5. `docs/designs/devsecops.md` for the security pipeline;
+`docs/threat-model.md` lists every threat and its check. A change that makes a doc false fixes the
+doc in the same change.
 
 ## Never commit
 
@@ -128,7 +130,7 @@ A check that could not run is reported as NOT RUN, never as passing.
 10. **Time is injected.** Modules take the clock from the platform clock package and the business
     time zone from settings; no direct `time.Now()` in a module.
 11. **Language.** Code, comments and docs are English. Every UI string is Spanish and lives in the
-    web `es.json`; no inline Spanish in components.
+    web `es.json`; no inline Spanish in components. How to write them: `rules/spanish-texts.md`.
 
 **Debugging?** Read `rules/troubleshooting.md` first (Step-0 questions before theorizing).
 

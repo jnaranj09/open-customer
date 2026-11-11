@@ -86,8 +86,9 @@ paths:
   per-feature tests.
 - **Error text maps from a problem code, never from a raw error message.** Sensor: the web client
   tests (item 78 cases).
-- **All UI text is Spanish and comes from `es.json` through `t()`.** No inline Spanish in a
-  component. Prose only (reviewer check; no lint rule in release 1).
+- **All UI text is Spanish and comes from `es.json` through `t()`** (wording:
+  `spanish-texts.md`). No inline Spanish in a component. Prose only (reviewer check; no lint rule
+  in release 1).
 - **A control she must not use is not rendered** (or is visibly disabled with a reason, like
   "Enviar" while offline). Prose only.
 - **The server holds truth; the phone cache is a read-only copy; derived values use `$derived`,
