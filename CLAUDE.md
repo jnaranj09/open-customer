@@ -171,7 +171,7 @@ copy in one commit, and `make check-pins` must stay green. Every image is pinned
 `<tag>@sha256:<index digest>` and every Action by its full commit SHA with `# vX.Y.Z` (guard
 `TestSupplyChainPins`): a bump changes the tag and the digest (or SHA and comment) together.
 
-- Go 1.27.3: `go.mod` (`go 1.27.0` + `toolchain go1.27.3`); `golang:` in the `Dockerfile`.
+- Go 1.27.4: `go.mod` (`go 1.27.0` + `toolchain go1.27.4`); `golang:` in the `Dockerfile`.
 - Node 26.13.0 and pnpm 12.16.1: `web/package.json` (`engines.node`, `packageManager`); `node:` and
   `pnpm@` in the `Dockerfile`.
 - Postgres 18.6: the `postgres` stage of `security/tools.Dockerfile` (with its digest), read into
