@@ -851,6 +851,8 @@ And the handover and rule texts (D17):
 | `rules_loading` | Cargando reglas… |
 | `due_no_rules_title` | Aún no tienes reglas |
 | `due_no_rules_action` | Crear una regla |
+| `due_no_rules_body` | Crea una regla para saber a quién escribirle cada día. |
+| `templates_empty_body` | Escribe tus mensajes una vez y úsalos en tus reglas. |
 
 #### 6. `internal/platform/problem/messages.go` and the tests that compare these texts (Modify)
 
