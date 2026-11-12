@@ -74,6 +74,12 @@
 		}
 	);
 
+	// The message opens under the choices and the date field; on a short phone that is below the
+	// fold, so it is brought into view when it appears.
+	const intoView = (slot: HTMLElement): void => {
+		slot.scrollIntoView({ block: 'nearest' });
+	};
+
 	function close(): void {
 		message = 'none';
 		otherDay = '';
@@ -124,23 +130,27 @@
 		</Button>
 	</div>
 
-	{#if message === 'confirm_replace'}
-		<ReplaceDraftPrompt
-			{busy}
-			onreplace={() => {
-				if (asked !== null) {
-					void pick.run(asked.day, asked.lines, true);
-				}
-			}}
-			oncancel={() => {
-				message = 'none';
-			}}
-		/>
-	{:else}
-		{#if message === 'failed'}
-			<Callout role="alert" class="text-sm">{t('cita_handoff_failed')}</Callout>
-		{/if}
-		<!-- Not rendered while the question shows: one "Cancelar" on screen, the question's. -->
+	{#if message !== 'none'}
+		<div {@attach intoView}>
+			{#if message === 'confirm_replace'}
+				<ReplaceDraftPrompt
+					{busy}
+					onreplace={() => {
+						if (asked !== null) {
+							void pick.run(asked.day, asked.lines, true);
+						}
+					}}
+					oncancel={() => {
+						message = 'none';
+					}}
+				/>
+			{:else}
+				<Callout role="alert" class="text-sm">{t('cita_handoff_failed')}</Callout>
+			{/if}
+		</div>
+	{/if}
+	<!-- Not rendered while the question shows: one "Cancelar" on screen, the question's. -->
+	{#if message !== 'confirm_replace'}
 		<Button variant="glass" onclick={close}>{t('cancel')}</Button>
 	{/if}
 </BottomSheet>

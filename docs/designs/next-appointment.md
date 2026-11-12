@@ -1,11 +1,12 @@
 # Book the next appointment ("Agendar próxima cita")
 
 *   **Author:** jnaranj09
-*   **Status:** Approved by the owner on 2026-11-12 (owner brainstorm, one builder check; the
-    findings of the check and of the planning pass are in the text)
+*   **Status:** Built on 2026-11-12 (stages S1 and S2), after the owner approved it that day. The
+    findings of the builder check, the planning pass and the code review are in the text. The
+    owner's check on the phone is NOT RUN (`TASKS.md`).
 *   **Date:** 2026-11-11
-*   **Build plan:** [next-appointment-plan.md](next-appointment-plan.md) (tasks, tests and exact
-    names; it moves to `history/` when the feature is built)
+*   **Build plan:** [history/next-appointment-plan.md](history/next-appointment-plan.md) (a
+    record: tasks, tests and exact names, with an "As built" note where the code differs)
 *   **Predecessor:** [feature-ideas-brief.md](feature-ideas-brief.md) (the research round this idea
     came from)
 *   **Builds on:** [release-1.md](release-1.md) (the app as built),
@@ -98,8 +99,8 @@ appointment of 12 nov has Acrílico and Pedicure.
     "Relleno, Pedicure" under it, and the field "Otra fecha".
 3.  She taps "En 21 días · 3 dic". Nueva cita opens with Ana, Relleno and Pedicure, 3 dic and the
     start time of the 12 nov appointment. Notes and per-appointment attributes are empty.
-4.  She saves. The app returns to the 12 nov appointment, and its back arrow goes where it went
-    before she tapped the button.
+4.  She saves. The app returns to the 12 nov appointment and says "Cita agendada · 3 dic"; its
+    back arrow goes where it went before she tapped the button.
 5.  On 3 dic, Enviar shows no come-back reminder for Ana's Acrílico: her new booking has Relleno.
 
 ### CUJ N2: Only the general rule
@@ -247,6 +248,9 @@ Top to bottom:
 5.  The message slot: the replace question (CUJ N4) or the write error. The question is the
     block Cotizar shows today; it becomes one feature component, `ReplaceDraftPrompt.svelte`, that
     both use (a copy fails jscpd).
+    The slot opens under the choices and the date field, so it is scrolled into view when it
+    appears (on a 393 × 659 screen with three choices it was below the fold; found by the code
+    review).
 6.  "Cancelar". It is not rendered while the question shows **(agent)**, so only one "Cancelar"
     is on screen: the question's.
 
@@ -267,6 +271,11 @@ and `notes` and `attrs` stay empty.
 Nueva cita opens, finds its draft, restores it with `restoreForm` and shows its usual "Recuperamos
 lo que habías escrito." note with "Empezar de nuevo", as after Cotizar. Save, Cancel and the header
 arrow all go to `volver`, the appointment she came from **(agent)**; see Alternative A7.
+
+That page does not show the new appointment, so a save in Nueva cita now ends with the toast "Cita
+agendada · 3 dic" (the day of the new appointment) **(agent)**. It shows after every save of Nueva
+cita, from Hoy and Cotizar too: one rule for the form, and `rules/ui.md` asks that every action
+ends in visible feedback (found by the code review).
 
 **History (agent).** This is the first caller that opens Nueva cita with `volver`, and the
 appointment page's back arrow is `history.back()`. Two things keep Back from looping:
@@ -336,6 +345,7 @@ return service). The rule "the due list is never computed on the phone" (`rules/
 | `next_choice_other` | En {n} días · {date} |
 | `next_other_date` | Otra fecha |
 | `next_use_date` | Usar esta fecha |
+| `appointment_created` | Cita agendada · {date} |
 | `draft_replace_prompt` (renamed from `quote_replace_prompt`) | Ya tienes una cita sin guardar. ¿Reemplazarla? |
 | `draft_replace` (renamed from `quote_replace`) | Reemplazar |
 | `cita_handoff_failed` (renamed from `quote_convert_failed`) | No se pudo crear la cita. Intenta de nuevo |

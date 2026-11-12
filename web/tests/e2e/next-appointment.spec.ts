@@ -45,6 +45,11 @@ const choice = (page: Page, days: number): Locator =>
 	sheet(page).getByRole('button', { name: new RegExp(`^En ${String(days)} días · `) });
 const useDate = (page: Page): Locator =>
 	sheet(page).getByRole('button', { name: es.next_use_date, exact: true });
+/** `3 dic`: a day as the app's `shortDay` writes it. */
+function shortDay(day: string): string {
+	const month = es[`month_${String(Number(day.slice(5, 7)))}` as keyof typeof es];
+	return `${String(Number(day.slice(8)))} ${month.slice(0, 3)}`;
+}
 const removeButton = (page: Page, name: string): Locator =>
 	page.getByRole('button', { name: fill(es.appointment_service_remove, { name }) });
 
@@ -111,8 +116,14 @@ test('CUJ N1: the rule names the next service, and its reminder goes', async ({ 
 	await expect(page.getByLabel(es.appointment_notes, { exact: true })).toHaveValue('');
 
 	await page.getByRole('button', { name: es.appointment_save }).click();
-	// Save returns to the visit she started from, and its back arrow goes where it went before.
+	// Save returns to the visit she started from and says what was booked: that page does not
+	// show the new appointment. Its back arrow goes where it went before.
 	await expect(page).toHaveURL(new RegExp(`/citas/${visit}$`));
+	await expect(
+		page.getByText(fill(es.appointment_created, { date: shortDay(businessDate(0)) }), {
+			exact: true
+		})
+	).toBeVisible();
 	await page.getByRole('button', { name: es.appointment_back }).click();
 	await expect(page.getByRole('heading', { name: 'Ana Rojas', level: 1 })).toBeVisible();
 
@@ -140,7 +151,7 @@ test('CUJ N2: only the general rule', async ({ page }) => {
 });
 
 test('CUJ N3: no rule, another date', async ({ page }) => {
-	await anaVisit(['Pedicure'], 1, '10:00');
+	const visit = await anaVisit(['Pedicure'], 1, '10:00');
 
 	await openSheet(page, '10:00');
 	await expect(sheet(page).getByRole('button', { name: /^En \d+ días? · / })).toHaveCount(0);
@@ -166,7 +177,8 @@ test('CUJ N3: no rule, another date', async ({ page }) => {
 
 	// The header arrow goes back to the appointment and leaves no Nueva cita behind in the history.
 	await page.getByRole('link', { name: es.appointment_back }).click();
-	await expect(page.getByRole('heading', { name: es.appointment_title, level: 1 })).toBeVisible();
+	// The URL, not the heading: "Cita" is also inside "Nueva cita".
+	await expect(page).toHaveURL(new RegExp(`/citas/${visit}$`));
 	await page.goBack();
 	await expect(page.getByRole('heading', { name: 'Ana Rojas', level: 1 })).toBeVisible();
 	await expect(page.getByRole('heading', { name: es.appointment_new, level: 1 })).toHaveCount(0);
@@ -193,12 +205,15 @@ test('CUJ N3b: the services follow the picked days', async ({ page }) => {
 
 test.describe('with an unsaved Nueva cita', () => {
 	test.beforeEach(async ({ page }) => {
+		// Three choices (21, 30 and 60 days), so the question opens below them.
+		await addRule('Pedicure', 30);
+		await addRule('Acrílico', 60);
 		await insertClient({ name: 'Marta Solano', phone: '+50688886666' });
-		await anaVisit(['Acrílico'], 1, '09:00');
+		await anaVisit(['Acrílico', 'Pedicure'], 1, '09:00');
 		await page.goto('/citas/nueva');
 		await page.getByLabel(es.appointment_client, { exact: true }).fill('marta');
 		await page.getByRole('button', { name: 'Marta Solano', exact: true }).click();
-		await page.getByRole('button', { name: 'Pedicure', exact: true }).click();
+		await page.getByRole('button', { name: 'Acrílico', exact: true }).click();
 		await expect.poll(() => draftStored(page, 'cita')).toBe(true);
 		await openSheet(page, '09:00');
 		await choice(page, 21).click();
@@ -215,8 +230,28 @@ test.describe('with an unsaved Nueva cita', () => {
 		await expect(sheet(page)).toBeVisible();
 		await page.goto('/citas/nueva');
 		await expect(page.getByText('Marta Solano')).toBeVisible();
-		await expect(removeButton(page, 'Pedicure')).toBeVisible();
+		await expect(removeButton(page, 'Acrílico')).toBeVisible();
 		await expect(removeButton(page, 'Relleno')).toHaveCount(0);
+	});
+
+	test('the question is in view on the phone, below three choices', async ({ page }) => {
+		await expect(
+			sheet(page).getByRole('button', { name: es.draft_replace, exact: true })
+		).toBeInViewport({ ratio: 1 });
+	});
+
+	test('Reemplazar books the choice she tapped last', async ({ page }) => {
+		await choice(page, 60).click();
+		await expect(sheet(page).getByText(es.draft_replace_prompt)).toBeVisible();
+		await sheet(page).getByRole('button', { name: es.draft_replace, exact: true }).click();
+
+		await expectFilled(page, {
+			client: 'Ana Rojas',
+			services: ['Acrílico', 'Pedicure'],
+			absent: ['Relleno'],
+			day: businessDate(61),
+			time: '09:00'
+		});
 	});
 
 	test('CUJ N4: Reemplazar puts the picked choice into Nueva cita', async ({ page }) => {
@@ -224,8 +259,8 @@ test.describe('with an unsaved Nueva cita', () => {
 
 		await expectFilled(page, {
 			client: 'Ana Rojas',
-			services: ['Relleno'],
-			absent: ['Pedicure', 'Acrílico'],
+			services: ['Relleno', 'Pedicure'],
+			absent: ['Acrílico'],
 			day: businessDate(22),
 			time: '09:00'
 		});

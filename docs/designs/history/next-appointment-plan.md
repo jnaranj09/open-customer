@@ -14,8 +14,24 @@ Nueva cita through the existing `cita:new` draft, written by one shared hand-off
 **Tech Stack:** SvelteKit (Svelte 5 runes), TypeScript strict, Zod, Dexie, Vitest, Playwright
 WebKit.
 
-**Spec:** [next-appointment.md](next-appointment.md). Read it first; section numbers below are its
-sections.
+**Spec:** [next-appointment.md](../next-appointment.md). Read it first; section numbers below are
+its sections.
+
+**As built (2026-11-12).** This plan is a record. The code differs from it in these places; the
+spec has the current text:
+
+*   The date choices are `glass` `Button`s with two lines, not `ListRow`s (contrast on the glass
+    sheet at 1440 px).
+*   The services of "Otra fecha" are the `hint` of the date field, not a line above it.
+*   Nueva cita's header arrow stays a link, with `data-sveltekit-replacestate` on its header; it is
+    not a button with `goto`.
+*   The reset, client and clean-up hooks of the two rule specs live in `ruleSpec(test)` in
+    `web/tests/e2e/seed.ts` (jscpd flagged the copied preamble).
+*   Added after the code review: the toast "Cita agendada · {date}" after a save in Nueva cita
+    (`appointment_created`), the message slot scrolled into view, and two more e2e tests (the
+    question in view under three choices; "Reemplazar" books the choice tapped last).
+*   The texts `next_choice_one` and `next_choice_other` landed in Task 2 and the other three with
+    the tests of Task 3.
 
 ## Global Constraints
 

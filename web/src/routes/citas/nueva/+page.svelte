@@ -3,12 +3,15 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Path } from '$app/types';
+	import type { Appointment } from '../../../lib/api/schemas';
 	import { dayParam, returnTo } from '../../../lib/booking';
 	import { cache } from '../../../lib/cache/store.svelte';
 	import { clock } from '../../../lib/clock.svelte';
 	import AppointmentForm from '../../../lib/components/AppointmentForm.svelte';
 	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import { t } from '../../../lib/i18n';
+	import { shortDay, todayIn } from '../../../lib/time';
+	import { toaster } from '../../../lib/toaster.svelte';
 
 	// "Nueva cita" (CUJ 3). `dia` is the day the link was opened from; `volver` is where "save"
 	// goes back to (Hoy by default). Save, Cancel and the header arrow all replace this form's
@@ -37,7 +40,12 @@
 		<AppointmentForm
 			data={cache.snapshot}
 			{day}
-			onsaved={() => {
+			onsaved={(saved: Appointment) => {
+				// The page she returns to may not show the new appointment (`volver` = another
+				// appointment's page), so the toast names its day.
+				toaster.say('appointment_created', undefined, {
+					date: shortDay(todayIn(zone, new Date(saved.starts_at)))
+				});
 				void goto(back, { replaceState: true });
 			}}
 			oncancel={() => {

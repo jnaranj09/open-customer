@@ -230,6 +230,7 @@
 	"appointment_edit_title": "Editar cita",
 	"appointment_save_changes": "Guardar cambios",
 	"appointment_updated": "Cita actualizada",
+	"appointment_created": "Cita agendada · {date}",
 	"appointment_loading": "Cargando cita…",
 	"appointment_paid": "Monto pagado",
 	"appointment_paid_save": "Guardar pago",
