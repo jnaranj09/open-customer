@@ -298,5 +298,11 @@
     "id": "CVE-2026-9947@image:postgres",
     "reason": "HIGH CVE with a fix (1.1.43-r4) in the Alpine libxslt package of the postgres image deploy/compose.yaml pins (only that image; the same CVE in our own images stays blocking, and the backup image upgrades the package). The newest postgres:18.6-alpine (checked 2026-11-11) still ships the unfixed version. The db service publishes no port, so only the Compose network reaches it. Remove this entry when a rebuilt postgres:18.6-alpine is pinned. Owner decision 2026-11-11.",
     "expires": "2027-05-10"
+  },
+  {
+    "tool": "trivy",
+    "id": "CVE-2026-125350@image:postgres",
+    "reason": "HIGH CVE with a fix (1.1.43-r4) in the Alpine libxslt package of the postgres image deploy/compose.yaml pins (only that image; the same CVE in our own images stays blocking, and the backup image upgrades the package). The newest postgres:18.6-alpine (sha256:9ba53c7d41ea, checked 2026-11-12 with make image-scan MODE=release) still ships the unfixed version. The db service publishes no port, so only the Compose network reaches it. Remove this entry when a rebuilt postgres:18.6-alpine is pinned. Owner decision 2026-11-12.",
+    "expires": "2027-05-10"
   }
 ]
