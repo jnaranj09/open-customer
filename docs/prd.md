@@ -102,6 +102,7 @@ Seis grupos: arranque y ajustes, clientas, atributos, servicios, citas y recorda
 - **FR-P3** Estados guardados: `scheduled`, `confirmed`, `cancelled`, `no_show`. "Realizada" no se guarda: se calcula en cada lectura (una cita `scheduled` o `confirmed` que ya terminó).
 - **FR-P4** Adjuntar fotos a la cita (el diseño terminado, referencias de la clienta).
 - **FR-P5** Reagendar y cancelar no tienen nada que recalcular: no se guardan recordatorios pendientes, y la lista se calcula de nuevo en cada lectura con los datos actuales.
+- **FR-P6** Agendar la próxima cita desde una cita: la app propone las fechas de las reglas de "volver" y abre la cita nueva ya llena, con la misma clienta, los servicios que las reglas dicen que siguen y la misma hora (ver [docs/designs/next-appointment.md](designs/next-appointment.md)).
 
 ### Recordatorios
 
@@ -175,6 +176,7 @@ Cada requerimiento, dentro (In) o fuera (Out) del release 1. El detalle de cada 
 | FR-P3 | In | "Realizada" se calcula, no se guarda |
 | FR-P4 | In | |
 | FR-P5 | In | No hay nada guardado que recalcular |
+| FR-P6 | In | Agendar la próxima cita; solo en el teléfono |
 | FR-R1 | In | Dos tipos de regla |
 | FR-R2 | Out | Diferido |
 | FR-R3 | In | |

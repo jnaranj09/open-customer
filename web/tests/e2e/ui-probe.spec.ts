@@ -210,6 +210,7 @@ const PROBES: Record<string, Probe> = {
 	'/citas/[id]': {
 		open: (_page, ids) => Promise.resolve(`/citas/${ids.appointment}`),
 		ready: LONG_NAME,
+		sheets: [{ name: 'next appointment', open: button(es.appointment_next) }],
 		feeds: [
 			{
 				name: 'appointment',

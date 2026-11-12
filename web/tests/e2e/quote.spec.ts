@@ -7,7 +7,15 @@ import { expect, test, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
-import { copied, draftStored, fill, serverOff, setArchived, stubClipboard } from './steps';
+import {
+	copied,
+	draftStored,
+	failDraftWrite,
+	fill,
+	serverOff,
+	setArchived,
+	stubClipboard
+} from './steps';
 
 /** The business name `setup.spec.ts` gives the app. */
 const HEADING = fill(es.quote_heading_named, { name: 'Estudio Prueba' });
@@ -351,19 +359,7 @@ test('a failed write says so and keeps the quote', async ({ page }) => {
 		}
 	});
 	// Only the hand-off writes `cita:new` from this page; the quote's own draft is untouched.
-	await page.addInitScript(() => {
-		const put = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')?.value as (
-			this: IDBObjectStore,
-			value: unknown,
-			key?: IDBValidKey
-		) => IDBRequest<IDBValidKey>;
-		IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
-			if ((value as { key?: string }).key === 'cita:new') {
-				throw new DOMException('full', 'QuotaExceededError');
-			}
-			return put.call(this, value, key);
-		};
-	});
+	await failDraftWrite(page, 'cita:new');
 	await page.goto('/servicios');
 	await chip(page, 'Acrílico').click();
 

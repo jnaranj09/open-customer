@@ -222,8 +222,8 @@ A come-back rule has 1 to 365 days, so there is no "same day" choice.
 
 ### 4. The sheet (`web/src/lib/components/NextAppointmentSheet.svelte`, new)
 
-A feature component made of existing primitives (`BottomSheet`, `ListRow`, `Button`, `TextField`,
-`Callout`), like `OverlapSheet`. It needs no new primitive, token or `.pen` component.
+A feature component made of existing primitives (`BottomSheet`, `Button`, `TextField`, `Callout`),
+like `OverlapSheet`. It needs no new primitive, token or `.pen` component.
 
 Top to bottom:
 
@@ -232,11 +232,15 @@ Top to bottom:
     `shortDay`), and under it the names of that choice's services joined with commas ("Relleno,
     Pedicure"; a count above one reads "Relleno ×2", with the existing
     `appointment_service_count`), or "Sin servicios". The whole choice is one control she taps: a
-    `ListRow` with `onclick`, the date as its title and the services as its subtitle **(agent)**.
-    `ListRow` has no busy look; the write is one local Dexie write and `submitOnce` drops a second
-    tap. A new primitive is not allowed without the `.pen` file (`rules/ui.md`, stage 1).
-3.  The services of `otherDate`, shown the same way above the date field.
-4.  A date field labelled "Otra fecha" and a button "Usar esta fecha". Until the field holds a real
+    `glass` `Button` with the date on its first line and the services on its second **(agent)**.
+    It shows the busy spinner while the draft is written. A `ListRow` was tried first: its
+    subtitle is in the muted ink, and on the glass sheet at 1440 px axe measured 4.02:1 for it
+    over a dark button of the page behind (the probe needs 4.5:1). A button has its own fill and
+    the normal ink. A new primitive is not allowed without the `.pen` file (`rules/ui.md`, stage
+    1).
+3.  A date field labelled "Otra fecha", with the services of `otherDate` as its hint line (the
+    `hint` of `TextField`, read with the field by a screen reader) **(agent)**.
+4.  A button "Usar esta fecha". Until the field holds a real
     day the button is off with the reason "Elige el día" (the existing `appointment_day_needed`; a
     `Button` cannot be off without a reason). Any day is accepted, a past one too: she can type in
     a visit from the notebook, as Nueva cita allows.

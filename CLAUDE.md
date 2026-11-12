@@ -14,7 +14,9 @@ through `TASKS.md` in order.
 **Architecture source:** `docs/designs/release-1.md` for the app; build it phase by phase (its
 "Build order"). `docs/designs/quick-quotes.md` for the Servicios place and quotes, built in its
 stages S1-S4. `docs/designs/reminders-and-replies.md` for general rules, row labels and quick
-replies, built in its stages S1-S5. `docs/designs/devsecops.md` for the security pipeline;
+replies, built in its stages S1-S5. `docs/designs/next-appointment.md` for the "Agendar próxima
+cita" button on an appointment, built in its stages S1-S2. `docs/designs/devsecops.md` for the
+security pipeline;
 `docs/threat-model.md` lists every threat and its check. A change that makes a doc false fixes the
 doc in the same change.
 
