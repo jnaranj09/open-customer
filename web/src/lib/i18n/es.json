@@ -240,6 +240,8 @@
 	"appointment_reactivate": "Reactivar",
 	"appointment_status_label": "Estado",
 	"appointment_no_services": "Sin servicios",
+	"next_choice_one": "En 1 día · {date}",
+	"next_choice_other": "En {n} días · {date}",
 	"client_change": "Cambiar",
 	"client_no_results": "Sin resultados",
 	"client_add": "Agregar clienta nueva",

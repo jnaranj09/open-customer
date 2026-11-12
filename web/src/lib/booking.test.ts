@@ -11,6 +11,7 @@ import {
 	endShown,
 	formErrors,
 	formFrom,
+	linesOf,
 	LineSchema,
 	optionPath,
 	patchBody,
@@ -21,6 +22,7 @@ import {
 	statusActions,
 	tapService,
 	totalOf,
+	validDay,
 	withSavedLines,
 	type Form,
 	type Line
@@ -406,6 +408,32 @@ describe('formFrom', () => {
 	it('writes a number back as text', () => {
 		const got = formFrom(appointment({ attrs: { tamano: 12.5 } }), ZONE, DEFS);
 		expect(got.attrs).toEqual({ tamano: '12.5' });
+	});
+});
+
+describe('linesOf', () => {
+	it('groups the copies of a service into one line, in first-seen order', () => {
+		const saved = (service_id: string) => ({
+			service_id,
+			name: 'x',
+			price_cents: null,
+			duration_min: 60
+		});
+
+		expect(linesOf([saved('a'), saved('b'), saved('a')])).toEqual([
+			{ service_id: 'a', count: 2 },
+			{ service_id: 'b', count: 1 }
+		]);
+	});
+});
+
+describe('validDay', () => {
+	it('accepts a real day', () => {
+		expect(validDay('2026-12-03')).toBe(true);
+	});
+
+	it.each(['', '2026-02-30', '03/12/2026'])('refuses %j', (day) => {
+		expect(validDay(day)).toBe(false);
 	});
 });
 

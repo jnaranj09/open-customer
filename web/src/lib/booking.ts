@@ -33,7 +33,8 @@ export function serviceIds(lines: Line[]): string[] {
 }
 
 const validTime = (time: string): boolean => /^\d{2}:\d{2}$/.test(time);
-const validDay = (day: string): boolean => z.iso.date().safeParse(day).success;
+/** Whether `day` is a real calendar day written `YYYY-MM-DD`. */
+export const validDay = (day: string): boolean => z.iso.date().safeParse(day).success;
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -246,10 +247,11 @@ function textOf(v: unknown): AttrValue | undefined {
 	return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined;
 }
 
-/** The form for an appointment already booked. */
-export function formFrom(a: Appointment, zone: string, defs: Attribute[]): Form {
+/** The lines of a booked appointment: one per service, in the order it first appears, with its
+ *  copies counted (the appointment stores one entry per copy). */
+export function linesOf(saved: Appointment['services']): Line[] {
 	const lines: Line[] = [];
-	for (const s of a.services) {
+	for (const s of saved) {
 		const at = lines.find((l) => l.service_id === s.service_id);
 		if (at === undefined) {
 			lines.push({ service_id: s.service_id, count: 1 });
@@ -257,9 +259,14 @@ export function formFrom(a: Appointment, zone: string, defs: Attribute[]): Form 
 			at.count += 1;
 		}
 	}
+	return lines;
+}
+
+/** The form for an appointment already booked. */
+export function formFrom(a: Appointment, zone: string, defs: Attribute[]): Form {
 	return {
 		clientId: a.client_id,
-		lines,
+		lines: linesOf(a.services),
 		day: todayIn(zone, new Date(a.starts_at)),
 		time: formatTime(a.starts_at, zone),
 		end: null,
