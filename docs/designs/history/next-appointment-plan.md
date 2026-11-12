@@ -20,9 +20,10 @@ its sections.
 **As built (2026-11-12).** This plan is a record. The code differs from it in these places; the
 spec has the current text:
 
-*   The date choices are `glass` `Button`s with two lines, not `ListRow`s (contrast on the glass
-    sheet at 1440 px).
-*   The services of "Otra fecha" are the `hint` of the date field, not a line above it.
+*   The date choices are one dropdown ("Fecha", a `SelectField`) with "Otra fecha" as its last
+    option, the services of the selected date in one line under it, and one button "Usar esta
+    fecha". The plan's `ListRow` per choice failed contrast on the glass sheet at 1440 px, and the
+    cards that replaced it took too much space (owner).
 *   Nueva cita's header arrow stays a link, with `data-sveltekit-replacestate` on its header; it is
     not a button with `goto`.
 *   The reset, client and clean-up hooks of the two rule specs live in `ruleSpec(test)` in

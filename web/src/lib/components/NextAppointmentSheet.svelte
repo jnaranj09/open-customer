@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { Appointment } from '../api/schemas';
-	import { blankForm, validDay, type Line } from '../booking';
+	import { blankForm, validDay } from '../booking';
 	import { handOff } from '../cache/citaHandoff';
 	import type { CacheSnapshot } from '../cache/db';
 	import { clock } from '../clock.svelte';
@@ -14,13 +14,15 @@
 	import BottomSheet from './ui/BottomSheet.svelte';
 	import Button from './ui/Button.svelte';
 	import Callout from './ui/Callout.svelte';
+	import SelectField from './ui/SelectField.svelte';
 	import TextField from './ui/TextField.svelte';
 
-	// "Agendar próxima cita" (next-appointment design, section 4): one date choice per come-back
-	// rule that applies to `appointment`, each with the services it books, and a field for another
-	// date. The picked day becomes the Nueva cita draft (same client, same start time; notes and
-	// attributes start empty), and Nueva cita opens in this page's place in the history, so its Save
-	// and its back arrow return here without a loop. Nothing is created here.
+	// "Agendar próxima cita" (next-appointment design, section 4): a dropdown with one date per
+	// come-back rule that applies to `appointment`, plus "Otra fecha" for a day she types, and under
+	// it the services the selected date books. "Usar esta fecha" makes that the Nueva cita draft
+	// (same client, same start time; notes and attributes start empty), and Nueva cita opens in
+	// this page's place in the history, so its Save and its back arrow return here without a loop.
+	// Nothing is created here.
 	let {
 		open,
 		appointment,
@@ -33,23 +35,42 @@
 		onclose: () => void;
 	} = $props();
 
+	/** The dropdown value of "Otra fecha"; a date choice has its number of days. */
+	const OTHER = 'other';
+
 	const zone = $derived(data.settings.timezone);
 	const plan = $derived(
 		nextVisit(appointment, data.rules, data.templates, data.services, zone, clock.today(zone))
 	);
+	const options = $derived([
+		...plan.choices.map((choice) => ({ id: String(choice.days), label: choiceTitle(choice) })),
+		{ id: OTHER, label: t('next_other_date') }
+	]);
 
+	// What she picked in the dropdown; until she does, the first choice (the fewest days), or
+	// "Otra fecha" when no rule gives a date.
+	let picked = $state<string | null>(null);
+	const selected = $derived(picked ?? options[0]?.id ?? OTHER);
+	const choice = $derived(plan.choices.find((c) => String(c.days) === selected));
 	let otherDay = $state('');
-	// At most one message: the replace question, or the failed write.
+	// The day and the services "Usar esta fecha" books now.
+	const day = $derived(choice?.day ?? otherDay);
+	const lines = $derived(choice?.lines ?? plan.otherDate);
+
+	// At most one message: the replace question, or the failed write. It goes with her next pick.
 	let message = $state<'none' | 'confirm_replace' | 'failed'>('none');
-	// What she tapped last, so "Reemplazar" books that and nothing else.
-	let asked = $state<{ day: string; lines: Line[] } | null>(null);
 	let busy = $state(false);
 
-	// Inside `submitOnce`, so a second tap while the draft is written does nothing.
-	const pick = submitOnce(
-		async (day: string, lines: Line[], replace: boolean): Promise<void> => {
+	function select(id: string): void {
+		message = 'none';
+		picked = id;
+	}
+
+	// Inside `submitOnce`, so a second tap while the draft is written does nothing. It books what
+	// is selected when it runs, so "Reemplazar" books the date on screen.
+	const use = submitOnce(
+		async (replace: boolean): Promise<void> => {
 			message = 'none';
-			asked = { day, lines };
 			const result = await handOff(
 				{
 					...blankForm(day),
@@ -74,14 +95,15 @@
 		}
 	);
 
-	// The message opens under the choices and the date field; on a short phone that is below the
-	// fold, so it is brought into view when it appears.
+	// The message opens under the button; on a short phone that can be below the fold, so it is
+	// brought into view when it appears.
 	const intoView = (slot: HTMLElement): void => {
 		slot.scrollIntoView({ block: 'nearest' });
 	};
 
 	function close(): void {
 		message = 'none';
+		picked = null;
 		otherDay = '';
 		onclose();
 	}
@@ -89,46 +111,27 @@
 
 <BottomSheet {open} title={t('appointment_next')} onclose={close}>
 	{#if plan.choices.length > 0}
-		<ul class="flex flex-col gap-3">
-			{#each plan.choices as choice (choice.days)}
-				<li>
-					<Button
-						variant="glass"
-						{busy}
-						onclick={() => {
-							void pick.run(choice.day, choice.lines, false);
-						}}
-					>
-						<span class="flex min-w-0 flex-col break-words">
-							<span>{choiceTitle(choice)}</span>
-							<span class="font-normal">{linesText(choice.lines, data.services)}</span>
-						</span>
-					</Button>
-				</li>
-			{/each}
-		</ul>
+		<SelectField label={t('appointment_day')} bind:value={() => selected, select} {options} />
 	{/if}
-
-	<div class="flex flex-col gap-3">
-		<TextField
-			label={t('next_other_date')}
-			type="date"
-			bind:value={otherDay}
-			hint={linesText(plan.otherDate, data.services)}
-		/>
-		<Button
-			variant="strong"
-			{busy}
-			onclick={() => {
-				void pick.run(otherDay, plan.otherDate, false);
-			}}
-			{...validDay(otherDay)
-				? {}
-				: { disabled: true as const, disabledReason: t('appointment_day_needed') }}
-		>
-			{t('next_use_date')}
-		</Button>
-	</div>
+	{#if choice === undefined}
+		<TextField label={t('next_other_date')} type="date" bind:value={otherDay} />
+	{/if}
+	<p class="text-sm text-ink">
+		<span class="font-bold">{t('appointment_services')}:</span>
+		{linesText(lines, data.services)}
+	</p>
+	<Button
+		variant="strong"
+		{busy}
+		onclick={() => {
+			void use.run(false);
+		}}
+		{...validDay(day)
+			? {}
+			: { disabled: true as const, disabledReason: t('appointment_day_needed') }}
+	>
+		{t('next_use_date')}
+	</Button>
 
 	{#if message !== 'none'}
 		<div {@attach intoView}>
@@ -136,9 +139,7 @@
 				<ReplaceDraftPrompt
 					{busy}
 					onreplace={() => {
-						if (asked !== null) {
-							void pick.run(asked.day, asked.lines, true);
-						}
+						void use.run(true);
 					}}
 					oncancel={() => {
 						message = 'none';

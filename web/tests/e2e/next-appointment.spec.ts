@@ -40,15 +40,27 @@ const anaVisit = (services: string[], dayOffset: number, time: string): Promise<
 	insertAppointment({ clientId: ana(), services, startsAt: at(dayOffset, time) });
 
 const sheet = (page: Page): Locator => page.getByRole('dialog', { name: es.appointment_next });
-/** The date choice of `days` in the sheet; its name goes on with the date and the services. */
-const choice = (page: Page, days: number): Locator =>
-	sheet(page).getByRole('button', { name: new RegExp(`^En ${String(days)} días · `) });
+/** The dropdown of date choices in the sheet. */
+const dateSelect = (page: Page): Locator =>
+	sheet(page).getByLabel(es.appointment_day, { exact: true });
+/** Its options that are date choices ("En 21 días · 3 dic"), not "Otra fecha". */
+const choices = (page: Page): Locator =>
+	dateSelect(page).getByRole('option', { name: /^En \d+ días? · / });
+/** The line under the dropdown: the services the selected date books. */
+const servicesLine = (page: Page, names: string): Locator =>
+	sheet(page).getByText(`${es.appointment_services}: ${names}`, { exact: true });
 const useDate = (page: Page): Locator =>
 	sheet(page).getByRole('button', { name: es.next_use_date, exact: true });
 /** `3 dic`: a day as the app's `shortDay` writes it. */
 function shortDay(day: string): string {
 	const month = es[`month_${String(Number(day.slice(5, 7)))}` as keyof typeof es];
 	return `${String(Number(day.slice(8)))} ${month.slice(0, 3)}`;
+}
+/** Selects the choice of `days` in the dropdown; `day` is the date its text names. */
+async function selectChoice(page: Page, days: number, day: string): Promise<void> {
+	await dateSelect(page).selectOption({
+		label: fill(es.next_choice_other, { n: String(days), date: shortDay(day) })
+	});
 }
 const removeButton = (page: Page, name: string): Locator =>
 	page.getByRole('button', { name: fill(es.appointment_service_remove, { name }) });
@@ -101,9 +113,13 @@ test('CUJ N1: the rule names the next service, and its reminder goes', async ({ 
 	await expect(comeBack).toBeVisible();
 
 	await openSheet(page, '14:30');
-	await expect(choice(page, 21)).toContainText('Relleno, Pedicure');
-	await expect(choice(page, 30)).toContainText('Relleno, Pedicure');
-	await choice(page, 21).click();
+	// The first choice is selected when the sheet opens.
+	await expect(choices(page)).toHaveCount(2);
+	await expect(servicesLine(page, 'Relleno, Pedicure')).toBeVisible();
+	await selectChoice(page, 30, businessDate(9));
+	await expect(servicesLine(page, 'Relleno, Pedicure')).toBeVisible();
+	await selectChoice(page, 21, businessDate(0));
+	await useDate(page).click();
 
 	await expect(page).toHaveURL(new RegExp(`/citas/nueva\\?volver=/citas/${visit}$`));
 	await expectFilled(page, {
@@ -137,9 +153,9 @@ test('CUJ N2: only the general rule', async ({ page }) => {
 	await anaVisit(['Pedicure'], 1, '10:00');
 
 	await openSheet(page, '10:00');
-	await expect(sheet(page).getByRole('button', { name: /^En \d+ días? · / })).toHaveCount(1);
-	await expect(choice(page, 30)).toContainText('Pedicure');
-	await choice(page, 30).click();
+	await expect(choices(page)).toHaveCount(1);
+	await expect(servicesLine(page, 'Pedicure')).toBeVisible();
+	await useDate(page).click();
 
 	await expectFilled(page, {
 		client: 'Ana Rojas',
@@ -154,8 +170,9 @@ test('CUJ N3: no rule, another date', async ({ page }) => {
 	const visit = await anaVisit(['Pedicure'], 1, '10:00');
 
 	await openSheet(page, '10:00');
-	await expect(sheet(page).getByRole('button', { name: /^En \d+ días? · / })).toHaveCount(0);
-	await expect(sheet(page).getByText('Pedicure', { exact: true })).toBeVisible();
+	// No rule gives a date, so there is no dropdown: only the date field.
+	await expect(dateSelect(page)).toHaveCount(0);
+	await expect(servicesLine(page, 'Pedicure')).toBeVisible();
 	const field = sheet(page).getByLabel(es.next_other_date, { exact: true });
 	await expect(useDate(page)).toBeDisabled();
 	await expect(useDate(page)).toHaveAccessibleDescription(es.appointment_day_needed);
@@ -189,10 +206,10 @@ test('CUJ N3b: the services follow the picked days', async ({ page }) => {
 	await anaVisit(['Acrílico'], 1, '09:00');
 
 	await openSheet(page, '09:00');
-	await expect(choice(page, 21)).toContainText('Relleno');
-	await expect(choice(page, 21)).not.toContainText('Acrílico');
-	await expect(choice(page, 60)).toContainText('Acrílico');
-	await choice(page, 60).click();
+	await expect(servicesLine(page, 'Relleno')).toBeVisible();
+	await selectChoice(page, 60, businessDate(61));
+	await expect(servicesLine(page, 'Acrílico')).toBeVisible();
+	await useDate(page).click();
 
 	await expectFilled(page, {
 		client: 'Ana Rojas',
@@ -205,7 +222,7 @@ test('CUJ N3b: the services follow the picked days', async ({ page }) => {
 
 test.describe('with an unsaved Nueva cita', () => {
 	test.beforeEach(async ({ page }) => {
-		// Three choices (21, 30 and 60 days), so the question opens below them.
+		// Three choices: 21, 30 and 60 days.
 		await addRule('Pedicure', 30);
 		await addRule('Acrílico', 60);
 		await insertClient({ name: 'Marta Solano', phone: '+50688886666' });
@@ -216,7 +233,7 @@ test.describe('with an unsaved Nueva cita', () => {
 		await page.getByRole('button', { name: 'Acrílico', exact: true }).click();
 		await expect.poll(() => draftStored(page, 'cita')).toBe(true);
 		await openSheet(page, '09:00');
-		await choice(page, 21).click();
+		await useDate(page).click();
 		await expect(sheet(page).getByText(es.draft_replace_prompt)).toBeVisible();
 	});
 
@@ -234,14 +251,17 @@ test.describe('with an unsaved Nueva cita', () => {
 		await expect(removeButton(page, 'Relleno')).toHaveCount(0);
 	});
 
-	test('the question is in view on the phone, below three choices', async ({ page }) => {
+	test('the question is in view on the phone', async ({ page }) => {
 		await expect(
 			sheet(page).getByRole('button', { name: es.draft_replace, exact: true })
 		).toBeInViewport({ ratio: 1 });
 	});
 
-	test('Reemplazar books the choice she tapped last', async ({ page }) => {
-		await choice(page, 60).click();
+	test('Reemplazar books the date selected now', async ({ page }) => {
+		// Another date while the question shows: the question goes, and comes back for that date.
+		await selectChoice(page, 60, businessDate(61));
+		await expect(sheet(page).getByText(es.draft_replace_prompt)).toHaveCount(0);
+		await useDate(page).click();
 		await expect(sheet(page).getByText(es.draft_replace_prompt)).toBeVisible();
 		await sheet(page).getByRole('button', { name: es.draft_replace, exact: true }).click();
 
@@ -279,7 +299,7 @@ test('a failed write says so and the sheet stays', async ({ page }) => {
 	const visit = await anaVisit(['Acrílico'], 1, '09:00');
 
 	await openSheet(page, '09:00');
-	await choice(page, 21).click();
+	await useDate(page).click();
 
 	await expect(
 		sheet(page).getByRole('alert').filter({ hasText: es.cita_handoff_failed })

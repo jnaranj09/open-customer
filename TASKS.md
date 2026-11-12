@@ -222,8 +222,6 @@ branch; `make image image-scan dast` (only the web bundle changed).
 
 Left for the owner from the code review (small, not fixed):
 
-- "Reemplazar" after "Usar esta fecha" books the day she typed before the question, also when she
-  changed the field while the question was open. She sees the day in Nueva cita before saving.
 - An appointment opened directly in a new tab: after the round trip through Nueva cita its back
   arrow is `history.back()` with nothing behind it (it leaves the app). Desktop or new tab only.
 - The wording "En 21 días · 3 dic" counts from the visit. On a visit of 21 days ago it reads "En 21

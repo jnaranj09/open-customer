@@ -25,8 +25,9 @@ already say when a client should return and for which service ("21 días despué
 Relleno"). Today that knowledge is only used to remind the client later.
 
 This design adds one button to the appointment page, **Agendar próxima cita**. It opens a sheet
-with one date choice per come-back rule that applies ("En 21 días · 3 dic"), each with the services
-it books, and a field for another date. Picking a date opens Nueva cita already filled: the same
+with a dropdown that has one date per come-back rule that applies ("En 21 días · 3 dic") and "Otra
+fecha", and under it the services the selected date books. "Usar esta fecha" opens Nueva cita
+already filled: the same
 client, the services her rules say come next, the chosen day and the same start time. She checks it
 and saves there.
 
@@ -51,7 +52,8 @@ and no controlled study was found. See the brief.
 
 1.  **The next visit is booked in a few taps.**
     Check: from an appointment page, with one rule that applies, she reaches a filled Nueva cita in
-    two taps (the button, the date choice) and saves with a third.
+    two taps (the button, then "Usar esta fecha": the first date is already selected) and saves
+    with a third.
 2.  **The date choices are the ones her rules give.**
     Check: the unit tests of the choice function have a passing case for every row of the table in
     "Which rules count" and every bullet of "The date choices".
@@ -95,9 +97,10 @@ Rules: "21 días después de Acrílico → Relleno" and "30 días después de Pe
 appointment of 12 nov has Acrílico and Pedicure.
 
 1.  She opens that appointment and taps **Agendar próxima cita**.
-2.  The sheet shows two choices, "En 21 días · 3 dic" and "En 30 días · 12 dic", each with
-    "Relleno, Pedicure" under it, and the field "Otra fecha".
-3.  She taps "En 21 días · 3 dic". Nueva cita opens with Ana, Relleno and Pedicure, 3 dic and the
+2.  The sheet shows the dropdown "Fecha" with "En 21 días · 3 dic" selected, and under it
+    "Servicios: Relleno, Pedicure". The dropdown also has "En 30 días · 12 dic" (the same
+    services) and "Otra fecha".
+3.  She taps "Usar esta fecha". Nueva cita opens with Ana, Relleno and Pedicure, 3 dic and the
     start time of the 12 nov appointment. Notes and per-appointment attributes are empty.
 4.  She saves. The app returns to the 12 nov appointment and says "Cita agendada · 3 dic"; its
     back arrow goes where it went before she tapped the button.
@@ -107,30 +110,31 @@ appointment of 12 nov has Acrílico and Pedicure.
 
 The only come-back rule is "Todos los servicios, 30 días". Eva's appointment has Corte.
 
-1.  The sheet shows one choice, "En 30 días · …" with "Corte" under it, plus "Otra fecha".
-2.  She picks it. Nueva cita opens with Eva and Corte.
+1.  The dropdown has one date, "En 30 días · …", selected, with "Servicios: Corte" under it, plus
+    "Otra fecha".
+2.  She taps "Usar esta fecha". Nueva cita opens with Eva and Corte.
 
 ### CUJ N3: No rule, or another date
 
-No come-back rule applies. The sheet shows only the "Otra fecha" field, with the services under
-it. She picks
-a date and taps "Usar esta fecha". Nueva cita opens with that day. The same field is there in N1
-and N2 for a client who wants a different day.
+No come-back rule applies. The sheet has no dropdown: it shows the "Otra fecha" date field, with
+the services under it. She picks a date and taps "Usar esta fecha". Nueva cita opens with that
+day. In N1 and N2 the same field shows when she selects "Otra fecha" in the dropdown, for a client
+who wants a different day.
 
 ### CUJ N3b: Two rules on one service
 
 Rules: "21 días después de Acrílico → Relleno" and "60 días después de Acrílico → Acrílico". Luz's
 appointment has Acrílico.
 
-1.  The sheet shows "En 21 días · …" with "Relleno" under it and "En 60 días · …" with "Acrílico"
-    under it.
-2.  She picks "En 60 días". Nueva cita opens with Acrílico.
+1.  The sheet shows "En 21 días · …" selected, with "Servicios: Relleno" under it.
+2.  She selects "En 60 días · …". The line under it changes to "Servicios: Acrílico".
+3.  She taps "Usar esta fecha". Nueva cita opens with Acrílico.
 
 ### CUJ N4: A booking is half written
 
-She has an unsaved Nueva cita. She taps a date choice. The sheet asks "Ya tienes una cita sin
-guardar. ¿Reemplazarla?" with "Reemplazar" and "Cancelar", as Cotizar does. "Reemplazar" goes on;
-"Cancelar" keeps her draft and the sheet stays open.
+She has an unsaved Nueva cita. She taps "Usar esta fecha". The sheet asks "Ya tienes una cita sin
+guardar. ¿Reemplazarla?" with "Reemplazar" and "Cancelar", as Cotizar does. "Reemplazar" goes on
+with the date selected at that moment; "Cancelar" keeps her draft and the sheet stays open.
 
 ### CUJ N5: Offline
 
@@ -223,42 +227,42 @@ A come-back rule has 1 to 365 days, so there is no "same day" choice.
 
 ### 4. The sheet (`web/src/lib/components/NextAppointmentSheet.svelte`, new)
 
-A feature component made of existing primitives (`BottomSheet`, `Button`, `TextField`, `Callout`),
-like `OverlapSheet`. It needs no new primitive, token or `.pen` component.
+A feature component made of existing primitives (`BottomSheet`, `SelectField`, `TextField`,
+`Button`, `Callout`), like `OverlapSheet`. It needs no new primitive, token or `.pen` component.
 
 Top to bottom:
 
 1.  Title: "Agendar próxima cita".
-2.  One choice per date: "En 21 días · 3 dic" ("En 1 día · …" for one day; the date uses
-    `shortDay`), and under it the names of that choice's services joined with commas ("Relleno,
-    Pedicure"; a count above one reads "Relleno ×2", with the existing
-    `appointment_service_count`), or "Sin servicios". The whole choice is one control she taps: a
-    `glass` `Button` with the date on its first line and the services on its second **(agent)**.
-    It shows the busy spinner while the draft is written. A `ListRow` was tried first: its
-    subtitle is in the muted ink, and on the glass sheet at 1440 px axe measured 4.02:1 for it
-    over a dark button of the page behind (the probe needs 4.5:1). A button has its own fill and
-    the normal ink. A new primitive is not allowed without the `.pen` file (`rules/ui.md`, stage
-    1).
-3.  A date field labelled "Otra fecha", with the services of `otherDate` as its hint line (the
-    `hint` of `TextField`, read with the field by a screen reader) **(agent)**.
-4.  A button "Usar esta fecha". Until the field holds a real
-    day the button is off with the reason "Elige el día" (the existing `appointment_day_needed`; a
-    `Button` cannot be off without a reason). Any day is accepted, a past one too: she can type in
-    a visit from the notebook, as Nueva cita allows.
-5.  The message slot: the replace question (CUJ N4) or the write error. The question is the
+2.  A dropdown labelled "Fecha" (the existing `appointment_day`) **(owner)**: one option per date
+    choice, "En 21 días · 3 dic" ("En 1 día · …" for one day; the date uses `shortDay`), then
+    "Otra fecha". The first choice (the fewest days) is selected when the sheet opens **(agent)**.
+    With no date choice the dropdown is not rendered. The first build had one card per choice with
+    its services inside; the owner found the cards took too much space (Alternative A9).
+3.  A date field labelled "Otra fecha", only when "Otra fecha" is selected or there is no date
+    choice. Any day is accepted, a past one too: she can type in a visit from the notebook, as
+    Nueva cita allows.
+4.  One line, "Servicios: Relleno, Pedicure": the services the selected date books (those of
+    `otherDate` for "Otra fecha"), joined with commas; a count above one reads "Relleno ×2" (the
+    existing `appointment_service_count`), and no service reads "Sin servicios". It is in the
+    normal ink: muted ink on the glass sheet measured 4.02:1 at 1440 px over a dark button of the
+    page behind (axe needs 4.5:1; see `TASKS.md`, "Found, not fixed").
+5.  A button "Usar esta fecha". It is off with the reason "Elige el día" (the existing
+    `appointment_day_needed`; a `Button` cannot be off without a reason) while "Otra fecha" is
+    selected and the field holds no real day. It shows the busy spinner while the draft is
+    written.
+6.  The message slot: the replace question (CUJ N4) or the write error. The question is the
     block Cotizar shows today; it becomes one feature component, `ReplaceDraftPrompt.svelte`, that
-    both use (a copy fails jscpd).
-    The slot opens under the choices and the date field, so it is scrolled into view when it
-    appears (on a 393 × 659 screen with three choices it was below the fold; found by the code
-    review).
-6.  "Cancelar". It is not rendered while the question shows **(agent)**, so only one "Cancelar"
+    both use (a copy fails jscpd). The slot is scrolled into view when it appears (found by the
+    code review, on a 393 × 659 screen). The message goes away when she selects another date.
+7.  "Cancelar". It is not rendered while the question shows **(agent)**, so only one "Cancelar"
     is on screen: the question's.
 
-Picking a choice or "Usar esta fecha" runs, inside `submitOnce`:
+"Usar esta fecha" runs, inside `submitOnce`:
 
 `handOff({ ...blankForm(day), clientId, lines, time }, replace)`
 
-where `lines` is the picked choice's (or `otherDate`), `time` is the appointment's start time in
+where `day` and `lines` are those of the date selected when it runs (so "Reemplazar" books the
+date on screen), `time` is the appointment's start time in
 the business zone (`formatTime(starts_at, zone)`), `end` stays `null` (it follows the services),
 and `notes` and `attrs` stay empty.
 
@@ -440,6 +444,14 @@ Relleno, and the services would be listed once at the top of the sheet.
 
 *   **Reason for Rejection**: she would work out "21 days from the 12th" by hand, the step the rule
     already knows.
+
+### A9: One card per date choice, with its services inside (the first build)
+
+*   **Pros**: one tap picks the date and opens Nueva cita.
+*   **Cons**: each card grows with its services; two choices of six services filled half the
+    phone screen, and the list grows with every rule.
+*   **Reason for Rejection**: owner decision after seeing it: a dropdown keeps any number of
+    choices in one row.
 
 ## Future Improvements
 
