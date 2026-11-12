@@ -12,9 +12,11 @@
 
 	// "Nueva cita" (CUJ 3). `dia` is the day the link was opened from; `volver` is where "save"
 	// goes back to (Hoy by default). Save, Cancel and the header arrow all replace this form's
-	// history entry, so Back does not open it again. The arrow matters for "Agendar próxima cita"
-	// (next-appointment design, "History"): it sends `volver` = the appointment page, whose own back
-	// arrow is `history.back()`; a pushed entry would make that arrow open this form again.
+	// history entry, so Back does not open it again. The arrow is a link, and
+	// `data-sveltekit-replacestate` on its header makes it replace. That matters for "Agendar
+	// próxima cita" (next-appointment design, "History"): it sends `volver` = the appointment page,
+	// whose own back arrow is `history.back()`; a pushed entry would make that arrow open this form
+	// again.
 	const zone = $derived(
 		cache.snapshot?.settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 	);
@@ -24,15 +26,8 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<header class="flex items-center gap-2">
-		<IconButton
-			variant="plain"
-			icon="chevron-left"
-			label={t('appointment_back')}
-			onclick={() => {
-				void goto(back, { replaceState: true });
-			}}
-		/>
+	<header data-sveltekit-replacestate class="flex items-center gap-2">
+		<IconButton variant="plain" icon="chevron-left" label={t('appointment_back')} href={back} />
 		<h1 class="text-3xl font-extrabold text-ink">{t('appointment_new')}</h1>
 	</header>
 

@@ -93,7 +93,7 @@
 							void pick.run(choice.day, choice.lines, false);
 						}}
 					>
-						<span class="flex flex-col">
+						<span class="flex min-w-0 flex-col break-words">
 							<span>{choiceTitle(choice)}</span>
 							<span class="font-normal">{linesText(choice.lines, data.services)}</span>
 						</span>

@@ -274,10 +274,11 @@ appointment page's back arrow is `history.back()`. Two things keep Back from loo
 *   The sheet opens Nueva cita with `replaceState`, so Nueva cita takes the appointment page's
     history entry. Save and Cancel already replace Nueva cita's entry with `volver`, so one entry
     for the appointment is left, and its back arrow goes to the page she was on before.
-*   Nueva cita's header arrow is a link today, so it adds an entry, and Back on the appointment
-    page would then open Nueva cita again with the draft restored. The arrow becomes a button that
-    does what Cancel does: `goto(back, { replaceState: true })`. This is the one change to
-    `routes/citas/nueva/+page.svelte`, and it holds for every caller.
+*   Nueva cita's header arrow is a link, so it added an entry, and Back on the appointment page
+    would then open Nueva cita again with the draft restored. The arrow stays a link and its
+    header gets SvelteKit's `data-sveltekit-replacestate`, so following it replaces the entry, as
+    Cancel does. This is the one change to `routes/citas/nueva/+page.svelte`, and it holds for
+    every caller.
 
 ### 5. The hand-off (`web/src/lib/cache/quoteHandoff.ts` → `citaHandoff.ts`)
 

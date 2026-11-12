@@ -165,7 +165,7 @@ test('CUJ N3: no rule, another date', async ({ page }) => {
 	});
 
 	// The header arrow goes back to the appointment and leaves no Nueva cita behind in the history.
-	await page.getByRole('button', { name: es.appointment_back }).click();
+	await page.getByRole('link', { name: es.appointment_back }).click();
 	await expect(page.getByRole('heading', { name: es.appointment_title, level: 1 })).toBeVisible();
 	await page.goBack();
 	await expect(page.getByRole('heading', { name: 'Ana Rojas', level: 1 })).toBeVisible();
