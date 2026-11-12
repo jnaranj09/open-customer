@@ -317,13 +317,13 @@ test.describe('with an unsaved Nueva cita', () => {
 		await page.goto('/servicios');
 		await chip(page, 'Acrílico').click();
 		await convertButton(page).click();
-		await expect(page.getByText(es.quote_replace_prompt)).toBeVisible();
+		await expect(page.getByText(es.draft_replace_prompt)).toBeVisible();
 	});
 
 	test('CUJ Q3: Cancelar keeps the quote and the unsaved booking', async ({ page }) => {
 		await page.getByRole('button', { name: es.cancel, exact: true }).click();
 
-		await expect(page.getByText(es.quote_replace_prompt)).toHaveCount(0);
+		await expect(page.getByText(es.draft_replace_prompt)).toHaveCount(0);
 		await expect(quoteBlock(page)).toContainText('Acrílico');
 		await expect(page).toHaveURL(/\/servicios$/);
 		await page.goto('/citas/nueva');
@@ -333,7 +333,7 @@ test.describe('with an unsaved Nueva cita', () => {
 	});
 
 	test('CUJ Q3: Reemplazar puts the quote into Nueva cita', async ({ page }) => {
-		await page.getByRole('button', { name: es.quote_replace, exact: true }).click();
+		await page.getByRole('button', { name: es.draft_replace, exact: true }).click();
 
 		await expect(page).toHaveURL(/\/citas\/nueva$/);
 		await expect(removeButton(page, 'Acrílico')).toBeVisible();
@@ -369,16 +369,16 @@ test('a failed write says so and keeps the quote', async ({ page }) => {
 
 	await convertButton(page).click();
 
-	await expect(page.getByRole('alert').filter({ hasText: es.quote_convert_failed })).toBeVisible();
+	await expect(page.getByRole('alert').filter({ hasText: es.cita_handoff_failed })).toBeVisible();
 	await expect(page).toHaveURL(/\/servicios$/);
 	await expect(quoteBlock(page)).toContainText('Acrílico');
-	expect(logs).toContain('code=quote_convert_failed');
+	expect(logs).toContain('code=cita_handoff_failed');
 	expect(logs.join('\n')).not.toContain('Acrílico');
 	await expect.poll(() => draftStored(page, 'cotizacion')).toBe(true);
 
 	// The message goes with her next pick.
 	await chip(page, 'Relleno').click();
-	await expect(page.getByRole('alert').filter({ hasText: es.quote_convert_failed })).toHaveCount(0);
+	await expect(page.getByRole('alert').filter({ hasText: es.cita_handoff_failed })).toHaveCount(0);
 });
 
 test('convert works offline', async ({ page }) => {

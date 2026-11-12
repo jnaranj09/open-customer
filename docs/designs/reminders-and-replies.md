@@ -828,8 +828,8 @@ Set these values (keys unchanged). 45 texts, written to `.claude/rules/spanish-t
 | `setup_icon_hint` | Imagen cuadrada para tu pantalla de inicio. Opcional |
 | `quote_empty` | Toca los servicios para cotizar |
 | `quote_copy_failed` | No se pudo copiar. Mantén presionado el texto |
-| `quote_replace_prompt` | Ya tienes una cita sin guardar. ¿Reemplazarla? |
-| `quote_convert_failed` | No se pudo crear la cita. Intenta de nuevo |
+| `draft_replace_prompt` | Ya tienes una cita sin guardar. ¿Reemplazarla? |
+| `cita_handoff_failed` | No se pudo crear la cita. Intenta de nuevo |
 | `status_timer` | Tarea diaria |
 | `status_timer_none` | Aún no ha corrido |
 

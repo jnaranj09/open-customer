@@ -69,13 +69,13 @@ Each goal has a check, and the stage that proves it (S0 to S4, Technical Plan se
     order she picked them, into Nueva cita. If an unsaved booking is already there, she is asked
     before it is replaced.
     Check (S4): e2e tests for convert into an empty Nueva cita and over an unsaved one; unit tests
-    of `convertQuote` for all three results, including a failed write.
+    of `handOff` for all three results, including a failed write.
 6.  **Every tap ends in something she can see.** After a copy the Copiar button itself shows
     a check icon and "Copiado" for about 2 seconds (no toast). A message on the page and a manual way to copy if
     the phone refuses. A message on the page if convert fails.
     Check (S3, S4): e2e tests with a stubbed clipboard (success shows "Copiado" on the button;
     missing API, synchronous throw, rejection show `quote_copy_failed`); the convert failure
-    through the `convertQuote` unit test.
+    through the `handOff` unit test.
 7.  **Servicios is one tap from every screen and opens on Cotizar.**
     Check (S3): e2e test: tap Servicios, land on Cotizar; the Mis servicios tab reaches the catalog.
 8.  **Five places fit on her phone.**
@@ -194,7 +194,7 @@ Tab bar / sidebar:  Hoy · Enviar · Clientas · Servicios · Ajustes
                           ServicePicker ──▶ lines (quote draft, 'cotizacion:new')
                           quoteText(visible, services, settings) ──▶ text on screen
                           Copiar ──▶ navigator.clipboard.writeText(text)
-                          Convertir ──▶ convertQuote(visible, today, replace)
+                          Convertir ──▶ handOff(form, replace)
                                           │ reads / writes 'cita:new' in Dexie
                                           ▼
                                  'ok' → clear quote draft → goto /citas/nueva
@@ -339,24 +339,26 @@ that case is drawn in S0 either way. The test result is recorded in section 10.
 
 ### 4. Convertir en cita
 
-The hand-off is one function in `web/src/lib/cache/quoteHandoff.ts` (new):
+The hand-off is one function in `web/src/lib/cache/citaHandoff.ts` (new):
 
-`convertQuote(lines, today, replace): Promise<'needs_confirm' | 'ok' | 'failed'>`
+`handOff(form, replace): Promise<'needs_confirm' | 'ok' | 'failed'>`
 
-The page passes the visible lines (section 2, "Visible lines"), not the raw draft.
+It was built as `convertQuote(lines, today, replace)` and made general when a second caller came
+(the "Agendar próxima cita" button, [next-appointment.md](next-appointment.md) section 5): the
+caller now passes the whole form. Cotizar passes `{ ...blankForm(today), lines }` with the visible
+lines (section 2, "Visible lines"), not the raw draft.
 
 1.  Read the current Nueva cita draft (`cita:new`) with `getDraft(key, FormSchema)`. A draft that
     fails to parse counts as none.
 2.  If a draft exists and `replace` is false, return `'needs_confirm'`.
-3.  Write `{ ...blankForm(today), lines }` with `putDraft`, after parsing it with `FormSchema`,
-    awaited. `blankForm(day)` is the empty Nueva cita form, extracted from `AppointmentForm` into
+3.  Write the form with `putDraft`, after parsing it with `FormSchema`, awaited. `blankForm(day)` is the empty Nueva cita form, extracted from `AppointmentForm` into
     `booking.ts` so both use one definition. The existing 500 ms `autosave` is not used: Nueva cita
     reads its draft once, when it opens, and could open before a delayed write lands.
-4.  Return `'ok'`, or `'failed'` if the write throws (logging `code=quote_convert_failed`).
+4.  Return `'ok'`, or `'failed'` if the write throws (logging `code=cita_handoff_failed`).
 
 The page wires it, inside `submitOnce` (`lib/submit.ts`) so a second tap while it runs does nothing:
 
-*   `'needs_confirm'`: the message slot shows `confirm_replace` with "Reemplazar" (`quote_replace`,
+*   `'needs_confirm'`: the message slot shows `confirm_replace` with "Reemplazar" (`draft_replace`,
     calls again with `replace` true) and "Cancelar" (the existing `cancel` key).
 *   `'ok'`: clear the quote through the draft's own `clear()` (it also cancels a pending 500 ms
     save, so the quote cannot be written back after the clear), then
@@ -483,7 +485,7 @@ stage after S0 changes what the app serves, so each also runs `make image image-
 | **S1. Draft fixes and refactors** | Rename the local `quote` in `AppointmentForm`. Export `LineSchema`. Extract `durationOf` and `blankForm`. Add `'cotizacion'` to `draftKey`. Then the two fixes in section 7, each with an e2e test that fails first. | The gate, `make e2e`. |
 | **S2. Servicios place, catalog moved** | Fifth nav item (pointing at `/servicios/catalogo` until S3), icon, `tab-fit` check then the padding fix, `servicios/+layout.svelte` with the `h1` and the header action slot (`header.svelte.ts`), catalog moved to `/servicios/catalogo`, Ajustes row and key removed, every link, title, probe row, e2e step and lint-suppression key re-pointed once. | The gate, `make e2e`, ui-probe at both widths, screenshots of the tab bar on every place. |
 | **S3. Cotizar and Copiar** | The nav item's `href` becomes `/servicios`; the tab links. `quote.ts`, `QuoteForm`, the text block, the message slot, Copiar with success and failure, Nueva cotización, the empty and busy states, the probe row, the CUJ Q1 e2e test with a clipboard stub. | The gate, `make e2e`, screenshots at 393 and 1440. |
-| **S4. Convert** | `convertQuote`, the inline confirm, its failure, clearing the quote, opening Nueva cita with no `volver`. | The gate, `make e2e`, e2e tests for CUJ Q2 and Q3, the owner's 15-second check. |
+| **S4. Convert** | `handOff`, the inline confirm, its failure, clearing the quote, opening Nueva cita with no `volver`. | The gate, `make e2e`, e2e tests for CUJ Q2 and Q3, the owner's 15-second check. |
 
 In S2 the Servicios place holds only the catalog, with a heading and no tab links; S3 adds Cotizar
 and the links. The catalog page moves once.
@@ -512,7 +514,7 @@ and the links. The catalog page moves once.
 *   **iPhone clipboard test:** pending (owner). When it is done, record here: pass or fail, the iOS
     version, and that it ran in the installed PWA.
 *   **Wording** taken from the frames: `quote_empty`, `quote_copy_failed`, `quote_hold_hint` (item
-    25), `quote_replace_prompt` and `quote_convert_failed` (item 30).
+    25), `draft_replace_prompt` and `cita_handoff_failed` (item 30).
 
 ## Risks
 
@@ -676,13 +678,13 @@ A redirect, or a nav link computed from the cache.
 #### Alternative C2: Write `cita:new` through the existing 500 ms `autosave` (agent)
 
 *   **Cons**: Nueva cita can open before the delayed write lands, and a failed write is only logged.
-*   **Reason for Rejection**: `convertQuote` writes and waits; the page navigates only on `'ok'`.
+*   **Reason for Rejection**: `handOff` writes and waits; the page navigates only on `'ok'`.
 
 #### Alternative C3: Convert steps in the route, with generic `readDraft` / `writeDraft` helpers (agent, review round 1)
 
 *   **Cons**: A route is not reachable from Vitest, so the failure path would have no test, and the
     two helpers would each have one caller.
-*   **Reason for Rejection**: One `convertQuote` in `lib/cache` with a tagged result, unit-tested.
+*   **Reason for Rejection**: One `handOff` in `lib/cache` with a tagged result, unit-tested.
 
 #### Alternative C4: Ask only when the Nueva cita draft is "not blank", by a hand-written field list (agent, review round 1)
 
@@ -1113,13 +1115,13 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 
 #### Stage S4: Convert
 
-##### 28. `web/src/lib/cache/quoteHandoff.ts` and `web/src/lib/cache/quoteHandoff.test.ts` (Create)
+##### 28. `web/src/lib/cache/citaHandoff.ts` and `web/src/lib/cache/citaHandoff.test.ts` (Create)
 
 *   **Proposed Changes**:
-    *   `convertQuote(lines: Line[], today: string, replace: boolean): Promise<'needs_confirm' | 'ok'
+    *   `handOff(form: Form, replace: boolean): Promise<'needs_confirm' | 'ok'
         | 'failed'>`, as in Technical Plan section 4, using `getDraft` and `putDraft` from `db.ts`
         and `FormSchema`, `blankForm` from `booking.ts`. The catch logs
-        `code=quote_convert_failed`.
+        `code=cita_handoff_failed`.
     *   Tests, on fake-indexeddb as `drafts.test.ts` runs: no `cita:new` → `'ok'` and the stored
         draft has the lines and `today`; an existing draft with `replace` false → `'needs_confirm'`
         and the draft is unchanged; with `replace` true → `'ok'` and replaced; a write failure
@@ -1130,18 +1132,18 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
 
 ##### 29. `web/src/lib/components/QuoteForm.svelte` (Modify)
 
-*   **Proposed Changes**: Convertir en cita runs `convertQuote` inside `submitOnce`: `'needs_confirm'`
-    → slot `confirm_replace` with `quote_replace` ("Reemplazar", runs again with `replace` true) and
+*   **Proposed Changes**: Convertir en cita runs `handOff` inside `submitOnce`: `'needs_confirm'`
+    → slot `confirm_replace` with `draft_replace` ("Reemplazar", runs again with `replace` true) and
     the existing `cancel`; `'ok'` → the draft's `clear()`, then `goto(resolve('/citas/nueva'))`;
-    `'failed'` → slot `convert_failed`. The slot's `confirm_replace` shows `quote_replace_prompt`
+    `'failed'` → slot `convert_failed`. The slot's `confirm_replace` shows `draft_replace_prompt`
     above the two buttons side by side, as in the S0 frame; the two buttons of the text block sit side
     by side on the phone and stacked on wide, and show the busy spinner while the hand-off runs.
 
 ##### 30. `web/src/lib/i18n/es.json` (Modify)
 
-*   **Proposed Changes**: `quote_convert` ("Convertir en cita"), `quote_replace` ("Reemplazar"),
-    `quote_replace_prompt` ("Ya tienes una cita sin guardar. ¿Reemplazarla?"),
-    `quote_convert_failed` ("No se pudo crear la cita. Intenta de nuevo"), wording from the S0
+*   **Proposed Changes**: `quote_convert` ("Convertir en cita"), `draft_replace` ("Reemplazar"),
+    `draft_replace_prompt` ("Ya tienes una cita sin guardar. ¿Reemplazarla?"),
+    `cita_handoff_failed` ("No se pudo crear la cita. Intenta de nuevo"), wording from the S0
     frames (both shortened later by the reminders-and-replies wording pass).
 
 ##### 31. `web/tests/e2e/quote.spec.ts` (Modify)
@@ -1151,14 +1153,14 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     pick order included (the chips follow the catalog, so the test reads the drafts), today; pick
     that client, fill 10:00, save; lands on Hoy, Cotizar empty after); CUJ Q3 (an unsaved Nueva cita draft: "Cancelar" keeps
     both; "Reemplazar" replaces it); a failed write to `cita:new` (the page's `IDBObjectStore.put`
-    throws for that key) shows `quote_convert_failed`, keeps the quote and logs only
-    `code=quote_convert_failed`; `convert works offline` (`serverOff`).
+    throws for that key) shows `cita_handoff_failed`, keeps the quote and logs only
+    `code=cita_handoff_failed`; `convert works offline` (`serverOff`).
 
 ### Verification Plan
 
 *   **Every stage after S0**: the gate in `CLAUDE.md`, including `make image image-scan dast` (each
     stage changes what the app serves).
-*   **Unit Tests** (`make test`): `quote.test.ts`, `quoteHandoff.test.ts`, `booking.test.ts`,
+*   **Unit Tests** (`make test`): `quote.test.ts`, `citaHandoff.test.ts`, `booking.test.ts`,
     `drafts.test.ts`, `nav.test.ts`, `titles.test.ts`, `settingsPage.test.ts`; the Go guards.
 *   **Static Analysis & Linting** (`make lint`): svelte-check, eslint with the re-keyed suppression,
     knip, jscpd.

@@ -3,17 +3,18 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { Service } from '../api/schemas';
-	import { activeServiceIds, removeService, tapService, type Line } from '../booking';
+	import { activeServiceIds, blankForm, removeService, tapService, type Line } from '../booking';
+	import { handOff } from '../cache/citaHandoff';
 	import { draftKey } from '../cache/drafts';
 	import { copiedFlag, copyText } from '../copy';
 	import { formDraft } from '../cache/formDraft.svelte';
-	import { convertQuote } from '../cache/quoteHandoff';
 	import { t } from '../i18n';
 	import { layout } from '../layout';
 	import { formatMoney } from '../money';
 	import { QuoteDraftSchema, quoteText } from '../quote';
 	import { submitOnce } from '../submit';
 	import Icon from './icons/Icon.svelte';
+	import ReplaceDraftPrompt from './ReplaceDraftPrompt.svelte';
 	import ServicePicker from './ServicePicker.svelte';
 	import Button from './ui/Button.svelte';
 	import Callout from './ui/Callout.svelte';
@@ -86,7 +87,7 @@
 	const convert = submitOnce(
 		async (replace: boolean): Promise<void> => {
 			message = 'none';
-			const result = await convertQuote(visible, today, replace);
+			const result = await handOff({ ...blankForm(today), lines: visible }, replace);
 			if (result === 'needs_confirm') {
 				message = 'confirm_replace';
 			} else if (result === 'failed') {
@@ -113,29 +114,19 @@
 
 {#snippet notice()}
 	{#if message === 'confirm_replace'}
-		<Callout role="status" class="flex flex-col gap-3 text-sm">
-			<p>{t('quote_replace_prompt')}</p>
-			<div class="grid grid-cols-2 gap-3">
-				<Button
-					variant="strong"
-					busy={converting}
-					onclick={() => {
-						void convert.run(true);
-					}}>{t('quote_replace')}</Button
-				>
-				<Button
-					variant="glass"
-					busy={converting}
-					onclick={() => {
-						message = 'none';
-					}}>{t('cancel')}</Button
-				>
-			</div>
-		</Callout>
+		<ReplaceDraftPrompt
+			busy={converting}
+			onreplace={() => {
+				void convert.run(true);
+			}}
+			oncancel={() => {
+				message = 'none';
+			}}
+		/>
 	{:else if message === 'copy_failed'}
 		<Callout role="alert" class="text-sm">{t('quote_copy_failed')}</Callout>
 	{:else if message === 'convert_failed'}
-		<Callout role="alert" class="text-sm">{t('quote_convert_failed')}</Callout>
+		<Callout role="alert" class="text-sm">{t('cita_handoff_failed')}</Callout>
 	{/if}
 {/snippet}
 
