@@ -23,7 +23,9 @@ export function offsetText(kind: RuleKind, days: number): string {
 }
 
 /** The service a come-back rule asks her to book: its return service, or its own when that is empty. */
-function effectiveReturn(rule: Pick<Rule, 'service_id' | 'return_service_id'>): string | null {
+export function effectiveReturn(
+	rule: Pick<Rule, 'service_id' | 'return_service_id'>
+): string | null {
 	return rule.return_service_id ?? rule.service_id;
 }
 
@@ -235,8 +237,9 @@ export type HandoverChange =
 type Parts = { templates: readonly Template[]; services: readonly Service[] };
 
 /** Whether `rule` can make items with these templates and services: it, its template, its service
- *  and its effective return service are active. */
-function canSend(rule: Rule, parts: Parts): boolean {
+ *  and its effective return service are active. The phone's copy of the server's `ruleRow.canSend`
+ *  (`internal/reminders/due.go`); `pending.ts` has another `canSend`, for a due item. */
+export function ruleCanSend(rule: Rule, parts: Parts): boolean {
 	const active = (list: readonly { id: string; archived: boolean }[], id: string | null) =>
 		id === null || list.find((row) => row.id === id)?.archived === false;
 	return (
@@ -282,13 +285,13 @@ export function handoverAsks(
 ): boolean {
 	const now: Parts = { templates, services };
 	const next = afterChange(change, rules, now);
-	if (!next.rules.some((rule) => isGeneral(rule) && canSend(rule, next.parts))) {
+	if (!next.rules.some((rule) => isGeneral(rule) && ruleCanSend(rule, next.parts))) {
 		return false;
 	}
 	return rules.some(
 		(rule, i) =>
 			rule.kind === 'come_back' &&
 			!isGeneral(rule) &&
-			canSend(rule, now) !== canSend(next.rules[i] ?? rule, next.parts)
+			ruleCanSend(rule, now) !== ruleCanSend(next.rules[i] ?? rule, next.parts)
 	);
 }

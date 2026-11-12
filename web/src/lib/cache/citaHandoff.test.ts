@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { blankForm, FormSchema, type Line } from '../booking';
 import { clearCache, getDraft, putDraft } from './db';
 import { draftKey } from './drafts';
-import { convertQuote } from './quoteHandoff';
+import { handOff } from './citaHandoff';
 
 const KEY = draftKey('cita', 'new');
 const TODAY = '2026-11-08';
@@ -18,9 +18,9 @@ beforeEach(async () => {
 	await clearCache();
 });
 
-describe('convertQuote', () => {
+describe('handOff', () => {
 	it('no draft writes lines and today', async () => {
-		expect(await convertQuote(lines, TODAY, false)).toBe('ok');
+		expect(await handOff({ ...blankForm(TODAY), lines }, false)).toBe('ok');
 
 		expect(await getDraft(KEY, FormSchema)).toEqual({ ...blankForm(TODAY), lines });
 	});
@@ -28,7 +28,7 @@ describe('convertQuote', () => {
 	it('existing draft asks first and stays', async () => {
 		await putDraft(KEY, ana);
 
-		expect(await convertQuote(lines, TODAY, false)).toBe('needs_confirm');
+		expect(await handOff({ ...blankForm(TODAY), lines }, false)).toBe('needs_confirm');
 
 		expect(await getDraft(KEY, FormSchema)).toEqual(ana);
 	});
@@ -36,7 +36,7 @@ describe('convertQuote', () => {
 	it('replace overwrites', async () => {
 		await putDraft(KEY, ana);
 
-		expect(await convertQuote(lines, TODAY, true)).toBe('ok');
+		expect(await handOff({ ...blankForm(TODAY), lines }, true)).toBe('ok');
 
 		expect(await getDraft(KEY, FormSchema)).toEqual({ ...blankForm(TODAY), lines });
 	});
@@ -44,7 +44,7 @@ describe('convertQuote', () => {
 	it('a draft that fails its schema counts as none', async () => {
 		await putDraft(KEY, { lines: 'not an array' });
 
-		expect(await convertQuote(lines, TODAY, false)).toBe('ok');
+		expect(await handOff({ ...blankForm(TODAY), lines }, false)).toBe('ok');
 
 		expect(await getDraft(KEY, FormSchema)).toEqual({ ...blankForm(TODAY), lines });
 	});
@@ -56,14 +56,32 @@ describe('convertQuote', () => {
 			throw new DOMException('full', 'QuotaExceededError');
 		});
 
-		// Dexie surfaces the throw as a rejection, which is what convertQuote catches.
+		// Dexie surfaces the throw as a rejection, which is what handOff catches.
 		await expect(putDraft(KEY, ana)).rejects.toThrow();
 
-		const result = await convertQuote(lines, TODAY, true);
+		const result = await handOff({ ...blankForm(TODAY), lines }, true);
 
 		vi.restoreAllMocks();
 		expect(result).toBe('failed');
-		expect(warn).toHaveBeenCalledWith('code=quote_convert_failed');
+		expect(warn).toHaveBeenCalledWith('code=cita_handoff_failed');
 		expect(await getDraft(KEY, FormSchema)).toEqual(ana);
+	});
+
+	it('writes the whole form, not only the lines', async () => {
+		const form = { ...blankForm('2026-12-03'), clientId: 'client-ana', lines, time: '14:30' };
+
+		expect(await handOff(form, false)).toBe('ok');
+
+		expect(await getDraft(KEY, FormSchema)).toEqual(form);
+	});
+
+	it('a form that fails its schema returns failed and writes nothing', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const bad = { ...blankForm(TODAY), lines: [{ service_id: 'svc-a', count: 0 }] };
+
+		expect(await handOff(bad, true)).toBe('failed');
+
+		expect(warn).toHaveBeenCalledWith('code=cita_handoff_failed');
+		expect(await getDraft(KEY, FormSchema)).toBeNull();
 	});
 });

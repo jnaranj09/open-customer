@@ -11,11 +11,16 @@ import { draftStored, dueItem, serverOff } from './steps';
 test.use({ serviceWorkers: 'block' });
 
 let ana = '';
+let todayVisit = '';
 
 test.beforeEach(async ({ page }) => {
 	await resetData();
 	ana = await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
-	await insertAppointment({ clientId: ana, services: ['Acrílico'], startsAt: at(0, '17:00') });
+	todayVisit = await insertAppointment({
+		clientId: ana,
+		services: ['Acrílico'],
+		startsAt: at(0, '17:00')
+	});
 	// The 1-day "before" rule makes this one's message due today.
 	await insertAppointment({ clientId: ana, services: ['Acrílico'], startsAt: at(1, '17:00') });
 
@@ -114,6 +119,18 @@ test('offline "Agregar foto" is off and says why', async ({ page }) => {
 	const add = page.getByRole('button', { name: es.photo_add });
 	await expect(add).toBeDisabled();
 	await expect(add).toHaveAccessibleDescription(es.offline_cannot_save);
+});
+
+test('CUJ N5: offline "Agendar próxima cita" is off and says why', async ({ page }) => {
+	await page.goto(`/citas/${todayVisit}`);
+	await expect(page.getByRole('heading', { name: es.appointment_title, level: 1 })).toBeVisible();
+	await serverOff(page);
+	await page.reload();
+
+	await expect(page.getByRole('status').getByText(BANNER)).toBeVisible();
+	const next = page.getByRole('button', { name: es.appointment_next, exact: true });
+	await expect(next).toBeDisabled();
+	await expect(next).toHaveAccessibleDescription(es.offline_cannot_save);
 });
 
 test('a started form is kept as a draft', async ({ page }) => {

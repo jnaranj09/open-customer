@@ -6,37 +6,20 @@ import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import {
 	at,
 	businessDate,
-	closePool,
-	deleteSpecRows,
 	handoverOf,
 	insertAppointment,
 	insertClient,
 	insertComeBackRule,
 	insertService,
 	insertTemplate,
-	resetData
+	ruleSpec
 } from './seed';
 import { dueItem, fill, serverOff } from './steps';
 
 // As in offline.spec.ts: with the service worker blocked, routing sees every request.
 test.use({ serviceWorkers: 'block' });
 
-const added = { rules: [] as string[], templates: [] as string[], services: [] as string[] };
-let anaId = '';
-
-test.beforeEach(async () => {
-	await resetData();
-	anaId = await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
-});
-
-test.afterEach(async () => {
-	await deleteSpecRows(added);
-	added.rules = [];
-	added.templates = [];
-	added.services = [];
-});
-
-test.afterAll(closePool);
+const { added, ana } = ruleSpec(test);
 
 /** A service, its template and its rule for one service, plus a general rule on another template. */
 async function specificAndGeneral(): Promise<{ rule: string; template: string; service: string }> {
@@ -71,7 +54,7 @@ test('CUJ R1: a general rule made with Todos los servicios shows its label', asy
 	added.templates.push(template);
 	// Pedicure has no rule of its own, so the general rule takes the visit.
 	const visit = await insertAppointment({
-		clientId: anaId,
+		clientId: ana(),
 		services: ['Pedicure'],
 		startsAt: at(-30, '08:00'),
 		createdAt: at(-31, '09:00')
@@ -111,7 +94,7 @@ test('CUJ R1: a general rule made with Todos los servicios shows its label', asy
 test('CUJ R6: offline the label is plain text with no days left', async ({ page }) => {
 	await specificAndGeneral();
 	await insertAppointment({
-		clientId: anaId,
+		clientId: ana(),
 		services: ['Pedicure'],
 		startsAt: at(-30, '08:00'),
 		createdAt: at(-31, '09:00')
@@ -203,7 +186,7 @@ test('CUJ R7: editing the days previews the clients due today and the next one',
 		await visit(await insertClient({ name }), 21);
 	}
 	await visit(await insertClient({ name: 'Carla Vega' }), 13);
-	await visit(anaId, 30); // due 9 days ago with 21 days: late, not counted
+	await visit(ana(), 30); // due 9 days ago with 21 days: late, not counted
 
 	await page.goto('/ajustes/recordatorios');
 	await page.getByRole('button', { name: /Te extrañamos/ }).click();
@@ -219,9 +202,9 @@ test('CUJ R7: editing the days previews the clients due today and the next one',
 
 test('CUJ R10: the client page shows her next message, and not offline', async ({ page }) => {
 	await generalRule();
-	await visit(anaId, 10);
+	await visit(ana(), 10);
 
-	await page.goto(`/clientas/${anaId}`);
+	await page.goto(`/clientas/${ana()}`);
 	const line = `${fill(es.client_next_reminder, { date: shortDay(businessDate(20)) })} (Pedicure)`;
 	await expect(page.getByText(line, { exact: true })).toBeVisible();
 

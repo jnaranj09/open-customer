@@ -205,10 +205,27 @@ only on an explicit request; it starts many agents.
 ## Quick quotes S4 (convert; owner's check NOT RUN)
 
 Stage S4 of `docs/designs/quick-quotes.md`: "Convertir en cita" turns the open quote into the Nueva
-cita draft. Ran: the unit tests for `convertQuote`, `make e2e-docker` with CUJ Q2, CUJ Q3, the
+cita draft. Ran: the unit tests for `handOff`, `make e2e-docker` with CUJ Q2, CUJ Q3, the
 failed write and `convert works offline`, the CLAUDE.md gate, and `make image image-scan dast`.
 NOT RUN: the owner's 15-second check on the phone (quote a price, Copiar, paste, then Convertir en
 cita and finish the booking); CI on the branch.
+
+## Next appointment (built; owner's check NOT RUN)
+
+Stages S1 and S2 of `docs/designs/next-appointment.md`: the button "Agendar próxima cita" on an
+appointment opens a sheet of date choices from the come-back rules and hands the picked one to
+Nueva cita. Ran: the unit tests of `nextVisit` and `handOff`, `make e2e-docker` with CUJ N1 to N5
+and the sheet in `ui-probe`, the CLAUDE.md gate, fault injection on `nextVisit`, the UI review at
+393 × 852 and 1440 × 900, and the `code-reviewer` pass. NOT RUN: the owner's check on the phone
+(open an appointment, tap "Agendar próxima cita", pick a date, save, read the toast); CI on the
+branch; `make image image-scan dast` (only the web bundle changed).
+
+Left for the owner from the code review (small, not fixed):
+
+- An appointment opened directly in a new tab: after the round trip through Nueva cita its back
+  arrow is `history.back()` with nothing behind it (it leaves the app). Desktop or new tab only.
+- The wording "En 21 días · 3 dic" counts from the visit. On a visit of 21 days ago it reads "En 21
+  días · <today>". A wording call ("A los 21 días · 3 dic").
 
 ## Found, not fixed (owner decides)
 
@@ -223,6 +240,14 @@ own change.
 - This PC's default Node (fnm) is 24; the pin is 26.13.0. `make` fails fast (`node-check`) and the
   hooks switch with fnm. Run `fnm default 26.13.0` if you want it everywhere.
 - TypeScript is held at 6.0.x: typescript-eslint (`<6.1`) and SvelteKit 3 (`^6`) do not accept 7.
+- Muted text on a bottom sheet can fall under the 4.5:1 contrast of WCAG AA. The sheet is glass
+  (`glass-panel`, 78% white) over the dimmed page, so the colour behind the text depends on what
+  the page has there. Seen on 2026-11-12: a `ListRow` subtitle (`text-ink-muted`) in the next
+  appointment sheet at 1440 px measured 4.02:1 over a dark button of the page (axe, `ui-probe`).
+  That sheet now uses buttons with their own fill, but the `TextField` hint and a disabled
+  button's reason use the same ink in every sheet, and axe reports them as "could not be
+  determined" there, not as passing. The fix is in the `BottomSheet` surface or the `ink-muted`
+  token, through `design/soft-glass.pen`.
 - Owner exception recorded: the design doc keeps the 90% `make cover` floor, which the bootstrap
   skill would not use. Kept by owner decision.
 - `make vuln` lists 1 known vulnerability in golang.org/x/crypto (`openpgp`, GO-2026-5932) that our

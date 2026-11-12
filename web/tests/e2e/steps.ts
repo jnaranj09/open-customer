@@ -49,6 +49,24 @@ export function draftStored(page: Page, form: Parameters<typeof draftKey>[0]): P
 	);
 }
 
+/** From the next page load on, writing the draft `key` (`cita:new`) fails like a full phone: the
+ *  IndexedDB `put` throws a QuotaExceededError for that key only. Call it before the first `goto`. */
+export async function failDraftWrite(page: Page, key: string): Promise<void> {
+	await page.addInitScript((failing) => {
+		const put = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')?.value as (
+			this: IDBObjectStore,
+			value: unknown,
+			key?: IDBValidKey
+		) => IDBRequest<IDBValidKey>;
+		IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+			if ((value as { key?: string }).key === failing) {
+				throw new DOMException('full', 'QuotaExceededError');
+			}
+			return put.call(this, value, key);
+		};
+	}, key);
+}
+
 /** Every API call answers like Cloudflare when the PC is off. */
 export async function serverOff(page: Page): Promise<void> {
 	await page.route('**/api/**', (route) =>

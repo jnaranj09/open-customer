@@ -7,7 +7,15 @@ import { expect, test, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
-import { copied, draftStored, fill, serverOff, setArchived, stubClipboard } from './steps';
+import {
+	copied,
+	draftStored,
+	failDraftWrite,
+	fill,
+	serverOff,
+	setArchived,
+	stubClipboard
+} from './steps';
 
 /** The business name `setup.spec.ts` gives the app. */
 const HEADING = fill(es.quote_heading_named, { name: 'Estudio Prueba' });
@@ -317,13 +325,13 @@ test.describe('with an unsaved Nueva cita', () => {
 		await page.goto('/servicios');
 		await chip(page, 'Acrílico').click();
 		await convertButton(page).click();
-		await expect(page.getByText(es.quote_replace_prompt)).toBeVisible();
+		await expect(page.getByText(es.draft_replace_prompt)).toBeVisible();
 	});
 
 	test('CUJ Q3: Cancelar keeps the quote and the unsaved booking', async ({ page }) => {
 		await page.getByRole('button', { name: es.cancel, exact: true }).click();
 
-		await expect(page.getByText(es.quote_replace_prompt)).toHaveCount(0);
+		await expect(page.getByText(es.draft_replace_prompt)).toHaveCount(0);
 		await expect(quoteBlock(page)).toContainText('Acrílico');
 		await expect(page).toHaveURL(/\/servicios$/);
 		await page.goto('/citas/nueva');
@@ -333,7 +341,7 @@ test.describe('with an unsaved Nueva cita', () => {
 	});
 
 	test('CUJ Q3: Reemplazar puts the quote into Nueva cita', async ({ page }) => {
-		await page.getByRole('button', { name: es.quote_replace, exact: true }).click();
+		await page.getByRole('button', { name: es.draft_replace, exact: true }).click();
 
 		await expect(page).toHaveURL(/\/citas\/nueva$/);
 		await expect(removeButton(page, 'Acrílico')).toBeVisible();
@@ -351,34 +359,22 @@ test('a failed write says so and keeps the quote', async ({ page }) => {
 		}
 	});
 	// Only the hand-off writes `cita:new` from this page; the quote's own draft is untouched.
-	await page.addInitScript(() => {
-		const put = Object.getOwnPropertyDescriptor(IDBObjectStore.prototype, 'put')?.value as (
-			this: IDBObjectStore,
-			value: unknown,
-			key?: IDBValidKey
-		) => IDBRequest<IDBValidKey>;
-		IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
-			if ((value as { key?: string }).key === 'cita:new') {
-				throw new DOMException('full', 'QuotaExceededError');
-			}
-			return put.call(this, value, key);
-		};
-	});
+	await failDraftWrite(page, 'cita:new');
 	await page.goto('/servicios');
 	await chip(page, 'Acrílico').click();
 
 	await convertButton(page).click();
 
-	await expect(page.getByRole('alert').filter({ hasText: es.quote_convert_failed })).toBeVisible();
+	await expect(page.getByRole('alert').filter({ hasText: es.cita_handoff_failed })).toBeVisible();
 	await expect(page).toHaveURL(/\/servicios$/);
 	await expect(quoteBlock(page)).toContainText('Acrílico');
-	expect(logs).toContain('code=quote_convert_failed');
+	expect(logs).toContain('code=cita_handoff_failed');
 	expect(logs.join('\n')).not.toContain('Acrílico');
 	await expect.poll(() => draftStored(page, 'cotizacion')).toBe(true);
 
 	// The message goes with her next pick.
 	await chip(page, 'Relleno').click();
-	await expect(page.getByRole('alert').filter({ hasText: es.quote_convert_failed })).toHaveCount(0);
+	await expect(page.getByRole('alert').filter({ hasText: es.cita_handoff_failed })).toHaveCount(0);
 });
 
 test('convert works offline', async ({ page }) => {

@@ -16,11 +16,13 @@
 	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import Card from '../../../lib/components/ui/Card.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
+	import NextAppointmentSheet from '../../../lib/components/NextAppointmentSheet.svelte';
 	import OverlapSheet from '../../../lib/components/OverlapSheet.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
 	import TextField from '../../../lib/components/ui/TextField.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
 	import { amountText, exponentOf, formatMoney, parseAmount } from '../../../lib/money';
+	import { canBookNext } from '../../../lib/nextVisit';
 	import { submitOnce } from '../../../lib/submit';
 	import { toaster } from '../../../lib/toaster.svelte';
 	import { formatDayLong, formatTime, todayIn } from '../../../lib/time';
@@ -42,6 +44,8 @@
 	let appt = $state<Appointment | null>(null);
 	let loadError = $state<ApiError | null>(null);
 	let editing = $state(false);
+	// The "Agendar próxima cita" sheet (next-appointment design).
+	let booking = $state(false);
 
 	// The cached copy shows at once (and is all there is offline); the server's answer replaces it.
 	async function load(want: string): Promise<void> {
@@ -63,6 +67,7 @@
 		const want = id;
 		untrack(() => {
 			editing = false;
+			booking = false;
 			void load(want);
 		});
 	});
@@ -270,6 +275,16 @@
 							{t(STATUS_LABEL[to])}
 						</ActionButton>
 					{/each}
+					{#if canBookNext(appt, data.clients)}
+						<ActionButton
+							variant="glass"
+							onclick={() => {
+								booking = true;
+							}}
+						>
+							{t('appointment_next')}
+						</ActionButton>
+					{/if}
 					<ActionButton
 						variant="ghost"
 						onclick={() => {
@@ -335,3 +350,14 @@
 		overlapping = null;
 	}}
 />
+
+{#if appt !== null && data !== null}
+	<NextAppointmentSheet
+		open={booking}
+		appointment={appt}
+		{data}
+		onclose={() => {
+			booking = false;
+		}}
+	/>
+{/if}

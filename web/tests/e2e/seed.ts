@@ -3,6 +3,7 @@
 // here. Every spec except `setup.spec.ts` calls `resetData` before each test and `closePool` after
 // all of them. Nothing in the release binary changes for this.
 import { randomUUID } from 'node:crypto';
+import type { test as base } from '@playwright/test';
 import pg from 'pg';
 import { ZONE, databaseUrl } from './env';
 
@@ -205,6 +206,19 @@ export async function insertService(name: string): Promise<string> {
 	return id;
 }
 
+/** The id of the active service called `name` (the setup services outlive `resetData`). */
+export async function serviceIdOf(name: string): Promise<string> {
+	const { rows } = await db().query<{ id: string }>(
+		'SELECT id FROM services WHERE name = $1 AND archived_at IS NULL',
+		[name]
+	);
+	const row = rows[0];
+	if (row === undefined) {
+		throw new Error(`seed: no active service "${name}"`);
+	}
+	return row.id;
+}
+
 /** Inserts an active come-back rule that counts late visits; `serviceId` null makes it a general
  *  rule for every service. Returns its id. */
 export async function insertComeBackRule(r: {
@@ -224,7 +238,7 @@ export async function insertComeBackRule(r: {
 /** Removes what a spec added on top of the setup data: the log, the appointments, every general
  *  rule and the given rules, templates and services. `resetData` keeps rules, templates and
  *  services, so a spec that adds them removes them in `afterEach`. */
-export async function deleteSpecRows(rows: {
+async function deleteSpecRows(rows: {
 	rules: string[];
 	templates: string[];
 	services: string[];
@@ -236,6 +250,34 @@ export async function deleteSpecRows(rows: {
 	);
 	await db().query('DELETE FROM message_templates WHERE id = ANY($1)', [rows.templates]);
 	await db().query('DELETE FROM services WHERE id = ANY($1)', [rows.services]);
+}
+
+/** The frame of a spec that adds rules, templates or services on top of the setup data, as hooks
+ *  on its `test`: before each test the data is reset and the client "Ana Rojas" is inserted; after
+ *  each, `deleteSpecRows` removes what the test pushed onto `added`; after all, the pool is closed.
+ *  `ana()` is her id in the running test. */
+export function ruleSpec(test: Pick<typeof base, 'beforeEach' | 'afterEach' | 'afterAll'>): {
+	added: { rules: string[]; templates: string[]; services: string[] };
+	ana: () => string;
+} {
+	const added = { rules: [] as string[], templates: [] as string[], services: [] as string[] };
+	let anaId = '';
+
+	test.beforeEach(async () => {
+		await resetData();
+		anaId = await insertClient({ name: 'Ana Rojas', phone: '+50688887777' });
+	});
+
+	test.afterEach(async () => {
+		await deleteSpecRows(added);
+		added.rules.length = 0;
+		added.templates.length = 0;
+		added.services.length = 0;
+	});
+
+	test.afterAll(closePool);
+
+	return { added, ana: () => anaId };
 }
 
 /** The handover_from of a rule (null when unset). */

@@ -695,6 +695,7 @@ Status changes:
     *   Changing `starts_at` without `ends_at` moves `ends_at` by the same amount.
     *   The overlap check counts only `scheduled` and `confirmed` appointments, and always leaves out the appointment being saved. It runs on every create, on an update that changes the times of a `scheduled` or `confirmed` appointment (a notes-only edit, or an edit of a cancelled one, skips it), and on "Reactivar". It takes no lock, so two saves at the same moment can both pass it (see "Accepted risks").
     *   An archived client or service cannot be put on an appointment (422 on `client_id` or `service_ids`). Lines already copied from a service archived later stay as they are, by the same keep rule. Only a newly added archived or unknown service is a 422.
+*   **Next appointment:** on a `scheduled` or `confirmed` appointment, the button "Agendar próxima cita" opens Nueva cita already filled from the come-back rules (the client, the services the rules say come next, the day, the same start time). It runs on the phone only: no route, table or handler. See [next-appointment.md](next-appointment.md).
 *   **Payment:** `paid_cents` is a column, because the export and future reports need a number. There is no built-in payment-method field; she can create a select attribute for it like any other.
 
 ### API
