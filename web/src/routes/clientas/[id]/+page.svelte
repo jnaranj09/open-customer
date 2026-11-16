@@ -19,6 +19,7 @@
 	import DuplicatePhone from '../../../lib/components/DuplicatePhone.svelte';
 	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import Card from '../../../lib/components/ui/Card.svelte';
+	import TextButton from '../../../lib/components/ui/TextButton.svelte';
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
@@ -76,7 +77,9 @@
 		});
 	});
 
+	// Archived ones too: an old value still shows as a fact. The hint counts only active ones.
 	const defs = $derived((data?.attributes ?? []).filter((a) => a.scope === 'client'));
+	const noActiveAttrs = $derived(defs.every((d) => d.archived));
 	const facts = $derived.by(() => {
 		const c = client;
 		if (c === null) {
@@ -267,6 +270,14 @@
 						</div>
 					{/if}
 				</dl>
+				{#if noActiveAttrs}
+					<Callout pad="trail" class="flex items-center gap-3 text-sm">
+						<p class="flex-1">{t('attributes_none_client')}</p>
+						<TextButton variant="accent" href={resolve('/ajustes/atributos')}>
+							{t('attributes_none_link')}
+						</TextButton>
+					</Callout>
+				{/if}
 
 				<div class="flex flex-wrap items-start gap-3">
 					<ActionButton

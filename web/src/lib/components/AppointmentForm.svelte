@@ -31,6 +31,7 @@
 	import ClientPicker from './ClientPicker.svelte';
 	import OverlapSheet from './OverlapSheet.svelte';
 	import ServicePicker from './ServicePicker.svelte';
+	import Callout from './ui/Callout.svelte';
 	import TextField from './ui/TextField.svelte';
 
 	// The booking form, shared by "Nueva cita" and the detail's edit mode (design doc item 75).
@@ -212,6 +213,9 @@
 					bind:value={() => attrValue(attr), setterFor(attr.key)}
 					error={fieldError(`attrs.${attr.key}`)}
 				/>
+			{:else}
+				<!-- No link to Atributos: an edit keeps no draft, so leaving would lose her changes. -->
+				<Callout as="p" class="text-sm">{t('attributes_none_appointment')}</Callout>
 			{/each}
 			<TextField
 				label={t('appointment_notes')}
