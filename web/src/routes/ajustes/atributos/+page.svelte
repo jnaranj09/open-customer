@@ -6,13 +6,16 @@
 	import AttributeSheet from '../../../lib/components/AttributeSheet.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
+	import { layout } from '../../../lib/layout';
 	import { toaster } from '../../../lib/toaster.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 
 	// Ajustes → Atributos (design doc item 77, CUJ 2 step 2): the attributes grouped by what they
 	// belong to (the client or each appointment), and a sheet to add one or edit the one she taps.
 	// The sheet follows the attribute by id, so the options it shows come from the refreshed cache.
+	// "Nuevo atributo" is a button in the header on wide and the floating "+" on compact.
 
 	const data = $derived(cache.snapshot);
 	const scopes = ['client', 'appointment'] as const;
@@ -49,7 +52,7 @@
 <div class="flex max-w-190 flex-col gap-4">
 	<header class="flex min-h-12 items-center justify-between gap-3">
 		<h1 class="text-3xl font-extrabold text-ink">{t('attributes_title')}</h1>
-		{#if data !== null}
+		{#if data !== null && layout.current === 'wide'}
 			<div class="w-44 shrink-0">
 				<WriteButton
 					variant="strong"
@@ -85,6 +88,20 @@
 				{@render rows(list)}
 			{/if}
 		{/each}
+		{#if layout.current === 'compact'}
+			<!-- The floating "+", as on Hoy; offline it fades, the offline banner says why. -->
+			<div class="fixed right-4 bottom-fab z-20">
+				<IconButton
+					variant="add"
+					icon="plus"
+					label={t('attributes_new')}
+					inert={cache.offline}
+					onclick={() => {
+						creating = true;
+					}}
+				/>
+			</div>
+		{/if}
 		{#if creating}
 			<AttributeSheet
 				onclose={() => {

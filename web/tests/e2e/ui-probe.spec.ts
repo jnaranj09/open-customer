@@ -293,7 +293,11 @@ const PROBES: Record<string, Probe> = {
 	},
 	'/ajustes/recordatorios': {
 		open: fixed('/ajustes/recordatorios'),
-		ready: es.rules_new,
+		// A rule's sentence: the "+" of the phone layout has no visible text.
+		ready: fill(es.rule_sentence_before, {
+			template: 'Recordatorio de cita',
+			offset: es.offset_before_one
+		}),
 		sheets: [{ name: 'new rule', open: button(es.rules_new) }],
 		feeds: [
 			bootFeed('rules', { bootstrap: ['rules'], text: es.due_no_rules_title }),

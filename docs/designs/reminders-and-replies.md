@@ -581,7 +581,8 @@ Enviar (bottom nav "Enviar")             Ajustes > Recordatorios
     Ajustes entry and its page over "Reglas de recordatorio".
     The h1s of the recordatorios page and the plantillas layout are removed. "Nueva regla" stays at
     the top of the Reglas page body; "Nueva plantilla" moves from the plantillas layout header to
-    the top of the Plantillas list.
+    the top of the Plantillas list. That is the wide layout: on compact, both are the floating "+"
+    (and so is "Nueva respuesta" on Respuestas), see [mobile-polish.md](mobile-polish.md) S1.
 *   The group changes `page.route.id` (for example `/ajustes/(reglas)/plantillas`):
     `web/src/lib/titles.ts` re-keys those routes, and the UI probe's `routesOnDisk` strips
     `(group)` segments.

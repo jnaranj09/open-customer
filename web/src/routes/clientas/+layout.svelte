@@ -1,13 +1,18 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { cache } from '../../lib/cache/store.svelte';
 	import ClientList from '../../lib/components/ClientList.svelte';
+	import IconButton from '../../lib/components/ui/IconButton.svelte';
+	import { t } from '../../lib/i18n';
 	import { layout } from '../../lib/layout';
 
 	// Clientas is master-detail (design doc "Screen layouts"): on wide the list (380 px) stays on the
 	// left while the client, the form or "Elige una clienta" fills the right. On compact the list is
 	// the screen at /clientas, and a client or a form replaces it. The list is always mounted, only
-	// hidden on compact, so her search and "Ver archivadas" survive a visit to a client.
+	// hidden on compact, so her search and "Ver archivadas" survive a visit to a client. On compact
+	// "Nueva clienta" is the floating "+", shown only while the list is the screen.
 	let { children }: { children: Snippet } = $props();
 
 	const onList = $derived(page.url.pathname.replace(/\/$/, '') === '/clientas');
@@ -22,3 +27,15 @@
 		<div class="min-w-0 flex-1">{@render children()}</div>
 	{/if}
 </div>
+{#if !wide && onList}
+	<!-- The floating "+", as on Hoy; offline it fades, the offline banner says why. -->
+	<div class="fixed right-4 bottom-fab z-20">
+		<IconButton
+			variant="add"
+			icon="plus"
+			label={t('clients_new')}
+			href={resolve('/clientas/nueva')}
+			inert={cache.offline}
+		/>
+	</div>
+{/if}

@@ -9,16 +9,19 @@
 	import Callout from '../../../lib/components/ui/Callout.svelte';
 	import Card from '../../../lib/components/ui/Card.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
+	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import TextField from '../../../lib/components/ui/TextField.svelte';
 	import WriteButton from '../../../lib/components/WriteButton.svelte';
 	import { t, type MessageKey } from '../../../lib/i18n';
+	import { layout } from '../../../lib/layout';
 	import { filterReplies } from '../../../lib/replies';
 	import { toaster } from '../../../lib/toaster.svelte';
 
 	// Enviar → Respuestas (reminders-and-replies design, "Quick replies"): her own messages in her
 	// order, a search over the title and the text, "Copiar" on each, and a sheet to add, edit, move,
 	// archive or restore one. The list is the cached copy, so search and copy work offline.
+	// "Nueva respuesta" is a button on top on wide and the floating "+" on compact.
 
 	const data = $derived(cache.snapshot);
 	const all = $derived(data?.quick_replies ?? []);
@@ -104,14 +107,16 @@
 	{#if data === null}
 		<p role="status" class="px-2 text-base text-ink-muted">{t('replies_loading')}</p>
 	{:else}
-		<div class="w-44">
-			<WriteButton
-				variant="strong"
-				onclick={() => {
-					editing = 'new';
-				}}>{t('replies_new')}</WriteButton
-			>
-		</div>
+		{#if layout.current === 'wide'}
+			<div class="w-44">
+				<WriteButton
+					variant="strong"
+					onclick={() => {
+						editing = 'new';
+					}}>{t('replies_new')}</WriteButton
+				>
+			</div>
+		{/if}
 		{#if all.length === 0}
 			<Card>
 				<EmptyState title={t('replies_empty_title')} body={t('replies_empty_body')} />
@@ -142,6 +147,20 @@
 					{@render rows(shownArchived)}
 				{/if}
 			{/if}
+		{/if}
+		{#if layout.current === 'compact'}
+			<!-- The floating "+", as on Hoy; offline it fades, the offline banner says why. -->
+			<div class="fixed right-4 bottom-fab z-20">
+				<IconButton
+					variant="add"
+					icon="plus"
+					label={t('replies_new')}
+					inert={cache.offline}
+					onclick={() => {
+						editing = 'new';
+					}}
+				/>
+			</div>
 		{/if}
 	{/if}
 </div>

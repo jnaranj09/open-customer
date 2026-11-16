@@ -1,7 +1,7 @@
 # Mobile polish: the floating "+", the empty attributes hint, and copy
 
 *   **Author:** jnaranj09
-*   **Status:** Planned on 2026-11-16. Stage S0 (design) done that day; S1-S3 not built.
+*   **Status:** Planned on 2026-11-16. Stages S0 (design) and S1 (the floating "+") built on 2026-11-16; S2-S3 not built.
 *   **Date:** 2026-11-16
 *   **Builds on:** [release-1.md](release-1.md) (the app as built),
     [quick-quotes.md](quick-quotes.md) (the floating "+" of Mis servicios, the Copiar button) and
@@ -71,7 +71,10 @@ For the last five, on compact (`layout.current === 'compact'`):
 *   Offline it is `inert` (faded); the offline banner says why (release-1 "Offline").
 *   Master-detail screens (Clientas, Plantillas) show the "+" only while the list is the screen, not
     over a client or a template **(agent)**. For Clientas the "+" goes in
-    `routes/clientas/+layout.svelte`, which already knows `onList` and `wide`.
+    `routes/clientas/+layout.svelte`, which already knows `onList` and `wide`. Plantillas keeps
+    its top button over a template: on the phone the list pane is hidden then, and on a compact
+    window wide enough for both panes (its container query) it is the only way to a new
+    template **(agent)**.
 *   The root layout's `pb-32` already keeps the last row clear of the "+".
 
 A shared wrapper is not added: the wrapper is one `div` with fixed classes, and Hoy and Mis servicios

@@ -6,7 +6,9 @@
 	import EmptyState from '../../../../lib/components/ui/EmptyState.svelte';
 	import RuleSentence from '../../../../lib/components/RuleSentence.svelte';
 	import RuleSheet from '../../../../lib/components/RuleSheet.svelte';
+	import IconButton from '../../../../lib/components/ui/IconButton.svelte';
 	import { t, type MessageKey } from '../../../../lib/i18n';
+	import { layout } from '../../../../lib/layout';
 	import { sortRules } from '../../../../lib/rules';
 	import { toaster } from '../../../../lib/toaster.svelte';
 	import WriteButton from '../../../../lib/components/WriteButton.svelte';
@@ -14,7 +16,8 @@
 	// Ajustes → Recordatorios, tab Reglas (design doc item 77, CUJ 2 steps 3 and 4): the rules as
 	// sentences, with a sheet to add one or edit the one she taps. Archived rules are listed apart, so
 	// she can restore one. With no template yet there is nothing to send, so the screen leads to
-	// Plantillas. The heading and the tabs are the group layout's.
+	// Plantillas. The heading and the tabs are the group layout's. "Nueva regla" is a button on top
+	// on wide and the floating "+" on compact.
 
 	const data = $derived(cache.snapshot);
 	const active = $derived(sortRules(data?.rules.filter((r) => !r.archived) ?? []));
@@ -31,7 +34,7 @@
 </script>
 
 <div class="flex max-w-190 flex-col gap-4">
-	{#if data !== null && hasTemplate}
+	{#if data !== null && hasTemplate && layout.current === 'wide'}
 		<div class="w-44">
 			<WriteButton
 				variant="strong"
@@ -64,6 +67,20 @@
 				<h2 class="px-2 text-sm font-bold text-ink-muted">{t('archived_heading_masculine')}</h2>
 				{@render rows(archived)}
 			{/if}
+		{/if}
+		{#if hasTemplate && layout.current === 'compact'}
+			<!-- The floating "+", as on Hoy; offline it fades, the offline banner says why. -->
+			<div class="fixed right-4 bottom-fab z-20">
+				<IconButton
+					variant="add"
+					icon="plus"
+					label={t('rules_new')}
+					inert={cache.offline}
+					onclick={() => {
+						editing = 'new';
+					}}
+				/>
+			</div>
 		{/if}
 		{#if editing !== null}
 			<RuleSheet
