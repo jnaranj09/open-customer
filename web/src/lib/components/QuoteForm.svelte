@@ -1,19 +1,17 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { Service } from '../api/schemas';
 	import { activeServiceIds, blankForm, removeService, tapService, type Line } from '../booking';
 	import { handOff } from '../cache/citaHandoff';
 	import { draftKey } from '../cache/drafts';
-	import { copiedFlag, copyText } from '../copy';
 	import { formDraft } from '../cache/formDraft.svelte';
 	import { t } from '../i18n';
 	import { layout } from '../layout';
 	import { formatMoney } from '../money';
 	import { QuoteDraftSchema, quoteText } from '../quote';
 	import { submitOnce } from '../submit';
-	import Icon from './icons/Icon.svelte';
+	import CopyButton from './CopyButton.svelte';
 	import ReplaceDraftPrompt from './ReplaceDraftPrompt.svelte';
 	import ServicePicker from './ServicePicker.svelte';
 	import Button from './ui/Button.svelte';
@@ -39,8 +37,6 @@
 		today: string;
 	} = $props();
 
-	/** How long the Copiar button says "Copiado". */
-
 	const activeIds = $derived(activeServiceIds(services));
 	const wide = $derived(layout.current === 'wide');
 
@@ -48,10 +44,6 @@
 	// The message above the text: at most one, and it goes with her next pick, copy or convert.
 	let message = $state<'none' | 'confirm_replace' | 'copy_failed' | 'convert_failed'>('none');
 	let converting = $state(false);
-	let copied = $state(false);
-	const copiedNote = copiedFlag((on) => {
-		copied = on;
-	});
 
 	const draft = formDraft(
 		draftKey('cotizacion', 'new'),
@@ -75,11 +67,8 @@
 		lines = next;
 	}
 
-	function copy(): void {
-		message = 'none';
-		copyText(text, copiedNote.show, () => {
-			message = 'copy_failed';
-		});
+	function copied(ok: boolean): void {
+		message = ok ? 'none' : 'copy_failed';
 	}
 
 	// Inside `submitOnce`, so a second tap while it runs does nothing. The quote is cleared only once
@@ -106,10 +95,6 @@
 		message = 'none';
 		void draft.startOver();
 	}
-
-	onDestroy(() => {
-		copiedNote.stop();
-	});
 </script>
 
 {#snippet notice()}
@@ -124,21 +109,14 @@
 			}}
 		/>
 	{:else if message === 'copy_failed'}
-		<Callout role="alert" class="text-sm">{t('quote_copy_failed')}</Callout>
+		<Callout role="alert" class="text-sm">{t('copy_failed')}</Callout>
 	{:else if message === 'convert_failed'}
 		<Callout role="alert" class="text-sm">{t('cita_handoff_failed')}</Callout>
 	{/if}
 {/snippet}
 
 {#snippet copyButton()}
-	<Button variant="strong" onclick={copy}>
-		{#if copied}
-			<Icon name="check" class="size-4.5" />
-			{t('quote_copied')}
-		{:else}
-			{t('quote_copy')}
-		{/if}
-	</Button>
+	<CopyButton {text} variant="strong" onresult={copied} />
 {/snippet}
 
 {#snippet convertButton()}
@@ -222,9 +200,6 @@
 		/>
 	</Card>
 {/snippet}
-
-<!-- A message for screen readers only: the copy needs no toast and no change on screen. -->
-<span class="sr-only" aria-live="polite">{copied ? t('quote_copied') : ''}</span>
 
 {#if services.length === 0 && !wide}
 	{@render noServices()}

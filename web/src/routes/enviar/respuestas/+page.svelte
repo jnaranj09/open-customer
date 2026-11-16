@@ -1,11 +1,9 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
 	import type { QuickReply } from '../../../lib/api/schemas';
 	import { cache } from '../../../lib/cache/store.svelte';
-	import { copiedFlag, copyText } from '../../../lib/copy';
 	import Icon from '../../../lib/components/icons/Icon.svelte';
+	import CopyButton from '../../../lib/components/CopyButton.svelte';
 	import ReplySheet from '../../../lib/components/ReplySheet.svelte';
-	import Button from '../../../lib/components/ui/Button.svelte';
 	import Callout from '../../../lib/components/ui/Callout.svelte';
 	import Card from '../../../lib/components/ui/Card.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
@@ -35,36 +33,13 @@
 
 	// The reply in the sheet; 'new' is the empty form.
 	let editing = $state<QuickReply | 'new' | null>(null);
-	// The reply whose "Copiar" just worked, and a failed copy.
-	let copiedId = $state<string | null>(null);
+	// A failed copy.
 	let copyFailed = $state(false);
-	let lastCopied: string | null = null;
-	const copiedNote = copiedFlag((on) => {
-		copiedId = on ? lastCopied : null;
-	});
-
-	function copy(reply: QuickReply): void {
-		copyFailed = false;
-		copyText(
-			reply.body,
-			() => {
-				lastCopied = reply.id;
-				copiedNote.show();
-			},
-			() => {
-				copyFailed = true;
-			}
-		);
-	}
 
 	function done(message: MessageKey): void {
 		editing = null;
 		toaster.say(message);
 	}
-
-	onDestroy(() => {
-		copiedNote.stop();
-	});
 </script>
 
 {#snippet rows(list: QuickReply[])}
@@ -81,27 +56,18 @@
 					/>
 				</div>
 				<div class="w-32 shrink-0">
-					<Button
+					<CopyButton
+						text={reply.body}
 						variant="glass"
-						onclick={() => {
-							copy(reply);
+						onresult={(ok) => {
+							copyFailed = !ok;
 						}}
-					>
-						{#if copiedId === reply.id}
-							<Icon name="check" class="size-4.5" />
-							{t('quote_copied')}
-						{:else}
-							{t('quote_copy')}
-						{/if}
-					</Button>
+					/>
 				</div>
 			</li>
 		{/each}
 	</Card>
 {/snippet}
-
-<!-- A message for screen readers only: the copy needs no toast. -->
-<span class="sr-only" aria-live="polite">{copiedId === null ? '' : t('quote_copied')}</span>
 
 <div class="flex max-w-190 flex-col gap-4">
 	{#if data === null}
@@ -124,7 +90,7 @@
 		{:else}
 			<TextField label={t('replies_search')} type="search" bind:value={query} autocomplete="off" />
 			{#if copyFailed}
-				<Callout role="alert" class="text-sm">{t('quote_copy_failed')}</Callout>
+				<Callout role="alert" class="text-sm">{t('copy_failed')}</Callout>
 			{/if}
 			{#if shown.length > 0}
 				{@render rows(shown)}

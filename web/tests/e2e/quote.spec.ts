@@ -29,7 +29,7 @@ const chip = (page: Page, name: string) =>
 		.getByRole('group', { name: es.appointment_services })
 		.getByRole('button', { name: new RegExp(`^${name}`) });
 
-const copyButton = (page: Page) => page.getByRole('button', { name: es.quote_copy, exact: true });
+const copyButton = (page: Page) => page.getByRole('button', { name: es.copy, exact: true });
 
 // As in offline.spec.ts: with the service worker blocked, Playwright's routing sees every request,
 // so `serverOff` really cuts the API.
@@ -80,7 +80,7 @@ test('CUJ Q1: she picks services, copies the quote and the button says Copiado',
 	expect(text).toContain('c/u');
 	await copyButton(page).click();
 
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toBe(text);
 	// The button's own label is the feedback (no toast), and it goes back.
 	await expect(copyButton(page)).toBeVisible();
@@ -92,7 +92,7 @@ test('CUJ R8: a service description is added at the end of the quote', async ({ 
 	await chip(page, 'Acrílico').click();
 	await chip(page, 'Relleno').click();
 	await copyButton(page).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	// No described service: the text is as before, with no blank line.
 	expect(await copied(page)).not.toContain('\n\n');
 
@@ -107,7 +107,7 @@ test('CUJ R8: a service description is added at the end of the quote', async ({ 
 	await chip(page, 'Acrílico').click();
 	await chip(page, 'Relleno').click();
 	await copyButton(page).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toMatch(
 		new RegExp(
 			`\\n\\n${fill(es.quote_detail_line, { name: 'Acrílico', description: 'Incluye limado y esmalte' })}$`
@@ -131,14 +131,14 @@ for (const mode of ['missing', 'throws', 'rejects'] as const) {
 
 		await copyButton(page).click();
 
-		await expect(page.getByRole('alert').filter({ hasText: es.quote_copy_failed })).toBeVisible();
-		await expect(page.getByRole('button', { name: es.quote_copied })).toHaveCount(0);
+		await expect(page.getByRole('alert').filter({ hasText: es.copy_failed })).toBeVisible();
+		await expect(page.getByRole('button', { name: es.copied })).toHaveCount(0);
 		expect(logs).toContain('code=clipboard_failed');
 		expect(logs.join('\n')).not.toContain('Acrílico');
 
 		// The message goes with her next pick.
 		await chip(page, 'Relleno').click();
-		await expect(page.getByRole('alert').filter({ hasText: es.quote_copy_failed })).toHaveCount(0);
+		await expect(page.getByRole('alert').filter({ hasText: es.copy_failed })).toHaveCount(0);
 	});
 }
 
@@ -176,7 +176,7 @@ test('offline the quote builds and copies', async ({ page }) => {
 
 	await copyButton(page).click();
 
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toBe(await quoteBlock(page).textContent());
 });
 
@@ -205,7 +205,7 @@ test.describe('wide', () => {
 		expect(text).toContain('Acrílico');
 		expect(text).not.toContain('×2');
 		await copyButton(page).click();
-		await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 		expect(await copied(page)).toBe(text);
 	});
 });

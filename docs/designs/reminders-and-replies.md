@@ -547,7 +547,8 @@ the name, through the export's formula-injection guard (`neutralize` in `interna
     and restore, and "Archivadas ({count})" for archived ones.
 *   Copy feedback ("Copiado") and the up/down buttons currently live inside `QuoteForm.svelte` and
     `OptionTree.svelte`; S5 moves them to `web/src/lib/copy.ts` and
-    `web/src/lib/components/MoveButtons.svelte`, used in all three places.
+    `web/src/lib/components/MoveButtons.svelte`, used in all three places. Mobile polish S3 then
+    moved the Copiar button itself into `web/src/lib/components/CopyButton.svelte`.
 *   Export: `respuestas.csv` (columns `titulo,texto,orden,archivada`; `orden` = position order
     starting at 1; `archivada` uses the existing `Yes` text, "sí", or empty) and `quick_replies` in
     `datos.json` with the `QuickReply` shape.
@@ -828,7 +829,7 @@ Set these values (keys unchanged). 45 texts, written to `.claude/rules/spanish-t
 | `business_icon_hint` | Para verlo, quita la app y agrégala otra vez |
 | `setup_icon_hint` | Imagen cuadrada para tu pantalla de inicio. Opcional |
 | `quote_empty` | Toca los servicios para cotizar |
-| `quote_copy_failed` | No se pudo copiar. Mantén presionado el texto |
+| `copy_failed` | No se pudo copiar. Mantén presionado el texto |
 | `draft_replace_prompt` | Ya tienes una cita sin guardar. ¿Reemplazarla? |
 | `cita_handoff_failed` | No se pudo crear la cita. Intenta de nuevo |
 | `status_timer` | Tarea diaria |
@@ -1242,7 +1243,7 @@ And the handover and rule texts (D17):
     "Mensaje", `reply_save` "Guardar respuesta", `reply_saved` "Respuesta guardada",
     `reply_created` "Respuesta creada", `reply_archive` "Archivar respuesta", `reply_archived`
     "Respuesta archivada", `reply_restore` "Restaurar respuesta", `reply_restored` "Respuesta
-    restaurada". Copy and move reuse `quote_copy`, `quote_copied`, `option_up` and `option_down`.
+    restaurada". Copy and move reuse `copy`, `copied`, `option_up` and `option_down`.
     `settings_templates` is removed (no entry uses it).
 
 #### 63. `web/tests/e2e/ui-probe.spec.ts`, `reminders.spec.ts`, `navigation.spec.ts`, `export.spec.ts`, `offline.spec.ts`, `setup.spec.ts` (Modify)

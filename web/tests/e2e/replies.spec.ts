@@ -65,8 +65,8 @@ test('CUJ R11: create, move, edit, archive, restore, search and copy', async ({ 
 
 	await page.getByLabel(es.replies_search, { exact: true }).fill('prec');
 	await expect.poll(() => titles(page)).toEqual(['Precios']);
-	await page.getByRole('button', { name: es.quote_copy, exact: true }).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await page.getByRole('button', { name: es.copy, exact: true }).click();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toBe('Uñas: 25 USD');
 
 	await page.getByLabel(es.replies_search, { exact: true }).fill('zz');
@@ -84,7 +84,7 @@ test('CUJ R6: offline she finds a reply by a part of its name and copies it', as
 	await page.reload();
 	await page.getByLabel(es.replies_search, { exact: true }).fill('direc');
 	await expect.poll(() => titles(page)).toEqual(['Dirección']);
-	await page.getByRole('button', { name: es.quote_copy, exact: true }).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await page.getByRole('button', { name: es.copy, exact: true }).click();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toBe('Calle 1, San José');
 });

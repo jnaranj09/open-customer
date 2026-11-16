@@ -74,7 +74,7 @@ Each goal has a check, and the stage that proves it (S0 to S4, Technical Plan se
     a check icon and "Copiado" for about 2 seconds (no toast). A message on the page and a manual way to copy if
     the phone refuses. A message on the page if convert fails.
     Check (S3, S4): e2e tests with a stubbed clipboard (success shows "Copiado" on the button;
-    missing API, synchronous throw, rejection show `quote_copy_failed`); the convert failure
+    missing API, synchronous throw, rejection show `copy_failed`); the convert failure
     through the `handOff` unit test.
 7.  **Servicios is one tap from every screen and opens on Cotizar.**
     Check (S3): e2e test: tap Servicios, land on Cotizar; the Mis servicios tab reaches the catalog.
@@ -328,9 +328,9 @@ a clipboard write only while it is handling the tap.
 
 One failure path covers three cases: `navigator.clipboard` missing (not a secure context), the call
 throwing at once, and the promise rejecting. On failure the message slot shows `copy_failed`
-(`quote_copy_failed`: press and hold the text to copy it), and the app logs
+(text `copy_failed`: press and hold the text to copy it), and the app logs
 `console.warn('code=clipboard_failed')`, never the text. On success there is no toast (owner, S0):
-the Copiar button's own label changes to a check icon and "Copiado" (`quote_copied`) for about 2
+the Copiar button's own label changes to a check icon and "Copiado" (`copied`) for about 2
 seconds, then goes back to "Copiar".
 
 **If the S0 iPhone test fails:** Copiar still ships and still tries, and a permanent hint
@@ -513,7 +513,7 @@ and the links. The catalog page moves once.
     frame's value and gives the most room; the S2 `tab-fit` probe is the real check.
 *   **iPhone clipboard test:** pending (owner). When it is done, record here: pass or fail, the iOS
     version, and that it ran in the installed PWA.
-*   **Wording** taken from the frames: `quote_empty`, `quote_copy_failed`, `quote_hold_hint` (item
+*   **Wording** taken from the frames: `quote_empty`, `copy_failed`, `quote_hold_hint` (item
     25), `draft_replace_prompt` and `cita_handoff_failed` (item 30).
 
 ## Risks
@@ -1038,7 +1038,7 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
         beside the Cotización panel (Technical Plan section 2, Layout). The text block
         (`Card as="p" pad="md"`, `whitespace-pre-line select-text`; inside the panel on wide);
         the message slot (`Callout`, the tagged union of Technical Plan section 2); when there are
-        lines, Copiar (`quote_copy`), Convertir en cita (`quote_convert`, S4, item 29) and Nueva
+        lines, Copiar (`copy`), Convertir en cita (`quote_convert`, S4, item 29) and Nueva
         cotización (`quote_new`, calls `startOver()`); `quote_empty` when there are none;
         the hold hint (`quote_hold_hint`) only if the S0 clipboard test failed.
     *   No active service: `EmptyState` rendered by `QuoteForm` itself at both widths
@@ -1048,8 +1048,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     *   Copiar: `navigator.clipboard.writeText(text)` called first, no await before it; missing
         API, synchronous throw and rejection → slot `copy_failed` and
         `console.warn('code=clipboard_failed')`; success → the button's label becomes the `check`
-        icon and `quote_copied` for about 2 seconds (no toast); a screen-reader-only `aria-live="polite"`
-        region holds `quote_copied` for the same time, so the change is announced.
+        icon and `copied` for about 2 seconds (no toast); a screen-reader-only `aria-live="polite"`
+        region holds `copied` for the same time, so the change is announced.
 
 ##### 23. `web/src/routes/servicios/+page.svelte` (Create)
 
@@ -1077,9 +1077,10 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     `quote_line`), `quote_total` ("Total: {amount}"), `quote_total_partial` ("Total: {amount} + lo que
     está a consultar"), `quote_duration` ("Duración aproximada: {duration}"), `duration_hours`
     ("{h} h"), `duration_hours_minutes` ("{h} h {m} min"), `quote_empty` ("Toca los servicios para
-    cotizar"), `quote_copy` ("Copiar"), `quote_copied`
-    ("Copiado", the button's label after a copy), `quote_copy_failed` ("No se pudo copiar. Mantén
-    presionado el texto"), `quote_new` ("Nueva cotización"),
+    cotizar"), `copy` ("Copiar"), `copied`
+    ("Copiado", the button's label after a copy), `copy_failed` ("No se pudo copiar. Mantén
+    presionado el texto"); the three were `quote_copy`, `quote_copied` and `quote_copy_failed` until
+    mobile polish S3 ([mobile-polish.md](mobile-polish.md)), `quote_new` ("Nueva cotización"),
     `quote_service_add` ("Agregar una copia de {name}", the wide stepper's "+"),
     `quote_col_count` ("Cantidad", the screen-reader-only header of the stepper column), and
     `quote_hold_hint` ("Para copiar, mantén presionado el texto de abajo y toca Copiar.") only if
@@ -1106,7 +1107,7 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
         text block's `textContent`, and contains "Acrílico", "Relleno ×2" and "c/u" (the exact
         format is proven by `quote.test.ts`; the spec cannot import `quoteText`, because
         `lib/i18n` imports `es.json` in a way Playwright's loader rejects, see `steps.ts`); the
-        Copiar button shows "Copiado"; each failing variant shows `quote_copy_failed`; "tap
+        Copiar button shows "Copiado"; each failing variant shows `copy_failed`; "tap
         Servicios lands on Cotizar"; "empty the quote, switch tabs, come back: still empty";
         offline (`serverOff`): the quote builds and copies; "Nueva cotización" empties the quote.
     *   Wide (1440 px viewport): pick with the table's stepper (Acrílico "+" twice, then "−" once),
