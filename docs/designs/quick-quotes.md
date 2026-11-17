@@ -1056,8 +1056,9 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     *   Copiar: `navigator.clipboard.writeText(text)` called first, no await before it; missing
         API, synchronous throw and rejection → the toast `copy_failed` and
         `console.warn('code=clipboard_failed')`; success → the button's label becomes the `check`
-        icon and `copied` for about 2 seconds, and the toast says `copied` (the toast is
-        `role="status"`, so the change is announced). Mobile polish S3 changed this (it was the
+        icon and `copied` for about 2 seconds, and the toast says `copied` (the toast's host is an
+        always-mounted polite live region, so the change is announced; mobile-polish.md
+        section 3). Mobile polish S3 changed this (it was the
         slot, no toast and a screen-reader-only live region) and moved the button into
         `CopyButton.svelte`.
 

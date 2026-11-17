@@ -275,17 +275,9 @@
 	{/if}
 {/if}
 
-<!-- The app's one toast (lib/toaster.svelte.ts): a new message replaces the one on screen. -->
-{#if toaster.current !== null}
-	{#key toaster.current.n}
-		<Toast
-			message={toaster.current.message}
-			{...toaster.current.action === undefined
-				? {}
-				: { actionLabel: toaster.current.action.label, onaction: toaster.current.action.run }}
-		/>
-	{/key}
-{/if}
+<!-- The app's one toast (lib/toaster.svelte.ts): a new message replaces the one on screen. Always
+     mounted: it is also the live region a screen reader announces the message from. -->
+<Toast toast={toaster.current} />
 
 <!-- Opens first on any app start while a send confirmation is stored (design doc "Sending flow"). -->
 {#if verdict?.kind === 'stay' && hasShell(path)}

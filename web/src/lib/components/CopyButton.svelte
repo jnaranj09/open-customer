@@ -10,17 +10,9 @@
 	// "Copiar" (mobile-polish design, section 3): writes `text` to the clipboard inside the tap
 	// (lib/copy.ts). A copy says "Copiado" twice: the button shows the check icon and "Copiado" for
 	// COPIED_MS, and the app's toast says it. A failure is the toast `copy_failed` (press and hold the
-	// text). The toast is `role="status"`, so it is also what a screen reader hears.
-	let {
-		text,
-		variant,
-		label = t('copy')
-	}: {
-		text: string;
-		variant: ButtonVariant;
-		/** The button's text before a copy. */
-		label?: string;
-	} = $props();
+	// text). The toast's host is the app's live region (Toast.svelte), so it is also what a screen
+	// reader hears, once.
+	let { text, variant }: { text: string; variant: ButtonVariant } = $props();
 
 	let copied = $state(false);
 	const copiedNote = copiedFlag((on) => {
@@ -50,6 +42,6 @@
 		<Icon name="check" class="size-4.5" />
 		{t('copied')}
 	{:else}
-		{label}
+		{t('copy')}
 	{/if}
 </Button>

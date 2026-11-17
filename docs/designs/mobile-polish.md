@@ -107,15 +107,20 @@ Today `lib/copy.ts` holds `copyText` and `copiedFlag`. `QuoteForm.svelte` and
 
 **New component `web/src/lib/components/CopyButton.svelte` (agent).** Five callers, so one owner:
 
-*   Props: `text`, `variant` (a `Button` variant), optional `label` (default "Copiar").
+*   Props: `text`, `variant` (a `Button` variant). The button always says "Copiar".
 *   On tap: `copyText(text, …)` inside the tap, nothing awaited before it (iOS rule, quick-quotes
     "Copiar").
 *   On success: the button shows the check icon and "Copiado" for `COPIED_MS`, and
     `toaster.say('copied')`.
 *   On failure: `toaster.say('copy_failed')` ("No se pudo copiar. Mantén presionado el texto"), and
     the log line `code=clipboard_failed` as today.
-*   The `Toast` is `role="status"`, so the `sr-only` live regions of QuoteForm and Respuestas are
-    removed. Two announcements of the same word would be noise.
+*   The toast is what a screen reader hears, so the `sr-only` live regions of QuoteForm and
+    Respuestas are removed. Two announcements of the same word would be noise. For that, the
+    toast's host (`Toast.svelte`, mounted once by the root layout) is a polite live region
+    (`role="status"`) that is always on the page and starts empty; each message is a new node put
+    into it, so a repeated "Copiado" is announced again. Some screen readers skip a live region
+    inserted with its text already in it, which is how the toast was drawn before (final review of
+    this branch). The owner's VoiceOver check is in `TASKS.md`.
 
 **Failure moves to the toast (agent).** Today a failure shows a `Callout` on the page. The new places
 (a due card, the phone row) have no message slot, and one place for both outcomes keeps the five
@@ -128,7 +133,7 @@ the same. `QuoteForm`'s `message` union loses `copy_failed`.
 | Cotizar | the quote text | `strong` (as today) | `QuoteForm.svelte` |
 | Respuestas rápidas | the reply body | `glass` (as today) | `routes/enviar/respuestas/+page.svelte` |
 | Para enviar card (new) | `item.text`, both kinds (reminder and booking prompt) | `glass`, in the actions row before Omitir | `components/ui/DueCard.svelte` |
-| Template preview (new) | the rendered preview text, shown only when there is one | `glass`, under the preview | `TemplatePreview.svelte` |
+| Template preview (new) | the rendered preview text, shown only while it matches the message (not while a newer preview loads, not after a failed one) | `glass`, under the preview | `TemplatePreview.svelte` |
 | Client phone (new) | `phone_e164` (works pasted in WhatsApp search and in other apps) | `ghost`, in the phone row | `routes/clientas/[id]/+page.svelte` |
 
 A card whose client has no phone (it shows "Agregar teléfono") also gets Copiar: she can still paste
