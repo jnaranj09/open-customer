@@ -1,5 +1,5 @@
 {
-  "version": "2.21",
+  "version": "2.22",
   "children": [
     {
       "type": "frame",
@@ -265,6 +265,167 @@
                   "fontSize": 14,
                   "fontWeight": "700",
                   "letterSpacing": 0.14
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "IIw2N",
+          "name": "Busy Label",
+          "fill": "$ink-muted",
+          "content": "Busy",
+          "fontFamily": "$font-sans",
+          "fontSize": 14,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "R2ZVk",
+          "name": "Buttons Busy Row",
+          "gap": "$space-4",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "Z1szH",
+              "name": "BusyDots",
+              "reusable": true,
+              "gap": "$space-1",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "VvheQ",
+                  "name": "Dot 1",
+                  "fill": "$ink",
+                  "width": 6,
+                  "height": 6
+                },
+                {
+                  "type": "ellipse",
+                  "id": "HaiW1",
+                  "name": "Dot 2",
+                  "fill": "$ink",
+                  "width": 6,
+                  "height": 6
+                },
+                {
+                  "type": "ellipse",
+                  "id": "Nqago",
+                  "name": "Dot 3",
+                  "fill": "$ink",
+                  "width": 6,
+                  "height": 6
+                }
+              ]
+            },
+            {
+              "id": "i9Bgk",
+              "type": "ref",
+              "ref": "nW210",
+              "name": "Busy Strong",
+              "width": 94,
+              "height": 45,
+              "children": [
+                {
+                  "id": "vPil0",
+                  "type": "ref",
+                  "ref": "Z1szH",
+                  "name": "Busy Dots",
+                  "descendants": {
+                    "VvheQ": {
+                      "fill": "$on-strong"
+                    },
+                    "HaiW1": {
+                      "fill": "$on-strong"
+                    },
+                    "Nqago": {
+                      "fill": "$on-strong"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "IxXZT",
+              "type": "ref",
+              "ref": "n0BZK",
+              "name": "Busy Glass",
+              "width": 94,
+              "height": 45,
+              "children": [
+                {
+                  "id": "lkLoz",
+                  "type": "ref",
+                  "ref": "Z1szH",
+                  "name": "Busy Dots",
+                  "descendants": {
+                    "VvheQ": {
+                      "fill": "$ink"
+                    },
+                    "HaiW1": {
+                      "fill": "$ink"
+                    },
+                    "Nqago": {
+                      "fill": "$ink"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "s7Kkzq",
+              "type": "ref",
+              "ref": "tkogg",
+              "name": "Busy Ghost",
+              "width": 94,
+              "height": 45,
+              "children": [
+                {
+                  "id": "U4uzN0",
+                  "type": "ref",
+                  "ref": "Z1szH",
+                  "name": "Busy Dots",
+                  "descendants": {
+                    "VvheQ": {
+                      "fill": "$accent-text"
+                    },
+                    "HaiW1": {
+                      "fill": "$accent-text"
+                    },
+                    "Nqago": {
+                      "fill": "$accent-text"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "B885Y",
+              "type": "ref",
+              "ref": "pLIix",
+              "name": "Busy Danger",
+              "width": 94,
+              "height": 45,
+              "children": [
+                {
+                  "id": "qsOXP",
+                  "type": "ref",
+                  "ref": "Z1szH",
+                  "name": "Busy Dots",
+                  "descendants": {
+                    "VvheQ": {
+                      "fill": "$on-strong"
+                    },
+                    "HaiW1": {
+                      "fill": "$on-strong"
+                    },
+                    "Nqago": {
+                      "fill": "$on-strong"
+                    }
+                  }
                 }
               ]
             }

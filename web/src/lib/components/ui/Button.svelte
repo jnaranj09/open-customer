@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import BusyDots from './BusyDots.svelte';
 	import { buttonClasses, type ButtonVariant } from './buttonStyle';
 
-	// A disabled button always says why (ui.md). `busy` needs no reason: its spinner is the reason.
+	// A disabled button always says why (ui.md). `busy` needs no reason: its dots are the reason.
 	// The reason shows under the button (`disabledReason`), or, when many buttons share one reason
 	// (the cards of a list), once elsewhere on the screen: `reasonId` is that line's id.
 	type Props = {
@@ -41,15 +42,22 @@
 		disabled={off}
 		aria-busy={busy}
 		aria-describedby={disabled ? reasonId : undefined}
-		class="{buttonClasses(variant)} w-full disabled:cursor-not-allowed disabled:opacity-60"
+		class="{buttonClasses(variant)} relative w-full {disabled
+			? 'cursor-not-allowed opacity-60'
+			: busy
+				? 'cursor-progress'
+				: ''}"
 	>
+		<!-- Busy: the label stays (its width and the accessible name), unseen; the dots sit over it,
+		     so nothing moves and the button keeps its full color (faded means disabled). -->
+		<span class="inline-flex items-center justify-center gap-2 {busy ? 'opacity-0' : ''}">
+			{@render children()}
+		</span>
 		{#if busy}
-			<span
-				class="size-4 animate-spin rounded-pill border-2 border-current border-t-transparent"
-				aria-hidden="true"
-			></span>
+			<span class="absolute inset-0 flex items-center justify-center">
+				<BusyDots />
+			</span>
 		{/if}
-		{@render children()}
 	</button>
 	{#if disabled && sharedReasonId === undefined}
 		<p id={reasonId} class="text-center text-sm text-ink-muted">{disabledReason}</p>
