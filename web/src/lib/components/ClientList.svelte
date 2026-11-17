@@ -8,6 +8,7 @@
 	import { cache } from '../cache/store.svelte';
 	import { visibleClients } from '../clients';
 	import { t } from '../i18n';
+	import { layout } from '../layout';
 	import { formatPhone } from '../phone';
 	import { submitOnce } from '../submit';
 	import Button from './ui/Button.svelte';
@@ -19,6 +20,8 @@
 	// The client list (design doc item 76): the search box over the cached clients, online and
 	// offline, and "Ver archivadas", which loads the archived ones (online only) and searches them
 	// with the same function. The list state lives here, so it stays while she opens a client.
+	// "Nueva clienta" sits beside the title on wide only; on compact the Clientas layout draws the
+	// floating "+".
 	let { selectedId }: { selectedId: string | null } = $props();
 
 	let query = $state('');
@@ -94,9 +97,11 @@
 <div class="flex flex-col gap-4">
 	<header class="flex items-center gap-3">
 		<h1 class="flex-1 text-3xl font-extrabold text-ink">{t('nav_clients')}</h1>
-		<WriteLink href={resolve('/clientas/nueva')} variant="ghost" width="w-44">
-			{t('clients_new')}
-		</WriteLink>
+		{#if layout.current === 'wide'}
+			<WriteLink href={resolve('/clientas/nueva')} variant="ghost" width="w-44">
+				{t('clients_new')}
+			</WriteLink>
+		{/if}
 	</header>
 
 	<TextField

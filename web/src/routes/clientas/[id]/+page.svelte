@@ -16,9 +16,11 @@
 	import Button from '../../../lib/components/ui/Button.svelte';
 	import BottomSheet from '../../../lib/components/ui/BottomSheet.svelte';
 	import ClientForm from '../../../lib/components/ClientForm.svelte';
+	import CopyButton from '../../../lib/components/CopyButton.svelte';
 	import DuplicatePhone from '../../../lib/components/DuplicatePhone.svelte';
 	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import Card from '../../../lib/components/ui/Card.svelte';
+	import TextButton from '../../../lib/components/ui/TextButton.svelte';
 	import ListRow from '../../../lib/components/ui/ListRow.svelte';
 	import LoadFailure from '../../../lib/components/LoadFailure.svelte';
 	import PhotoSection from '../../../lib/components/PhotoSection.svelte';
@@ -76,7 +78,9 @@
 		});
 	});
 
+	// Archived ones too: an old value still shows as a fact. The hint counts only active ones.
 	const defs = $derived((data?.attributes ?? []).filter((a) => a.scope === 'client'));
+	const noActiveAttrs = $derived(defs.every((d) => d.archived));
 	const facts = $derived.by(() => {
 		const c = client;
 		if (c === null) {
@@ -249,9 +253,14 @@
 				{/if}
 				<dl class="flex flex-col gap-1 text-base">
 					{#if client.phone_e164 !== null}
-						<div class="flex gap-2">
+						<!-- Copiar is its own <dd>, so the number's holds only the number. When the row is
+						     too narrow, it wraps to a line of its own. -->
+						<div class="flex flex-wrap items-center gap-x-2 gap-y-2">
 							<dt class="font-bold text-ink">{t('client_phone')}:</dt>
-							<dd class="text-ink">{formatPhone(client.phone_e164)}</dd>
+							<dd class="whitespace-nowrap text-ink">{formatPhone(client.phone_e164)}</dd>
+							<dd class="w-32">
+								<CopyButton text={client.phone_e164} variant="ghost" />
+							</dd>
 						</div>
 					{/if}
 					{#each facts as fact (fact.label)}
@@ -267,6 +276,14 @@
 						</div>
 					{/if}
 				</dl>
+				{#if noActiveAttrs}
+					<Callout pad="trail" class="flex items-center gap-3 text-sm">
+						<p class="flex-1">{t('attributes_none_client')}</p>
+						<TextButton variant="accent" href={resolve('/ajustes/atributos')}>
+							{t('attributes_none_link')}
+						</TextButton>
+					</Callout>
+				{/if}
 
 				<div class="flex flex-wrap items-start gap-3">
 					<ActionButton

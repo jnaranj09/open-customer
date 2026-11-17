@@ -7,19 +7,25 @@
 	import { cache } from '../../../../lib/cache/store.svelte';
 	import EmptyState from '../../../../lib/components/ui/EmptyState.svelte';
 	import ListRow from '../../../../lib/components/ui/ListRow.svelte';
+	import IconButton from '../../../../lib/components/ui/IconButton.svelte';
 	import { t } from '../../../../lib/i18n';
+	import { layout } from '../../../../lib/layout';
 	import WriteLink from '../../../../lib/components/WriteLink.svelte';
 
 	// Ajustes → Recordatorios, tab Plantillas (design doc item 77): the list of message templates,
-	// with "Nueva plantilla" on top, and the open template or the new-template form beside it. The two panes follow the width this page is
-	// given (a container query), not the window: with room they sit side by side; narrower, the
-	// list is one screen and the editor the next. The page has no shell of its own: the Ajustes
-	// layout and the group layout (heading and tabs) frame it.
+	// with "Nueva plantilla" on top, and the open template or the new-template form beside it. The
+	// two panes follow the width this page is given (a container query), not the window: with room
+	// they sit side by side; narrower, the list is one screen and the editor the next. The page has
+	// no shell of its own: the Ajustes layout and the group layout (heading and tabs) frame it.
+	// On compact, at the list's own URL, "Nueva plantilla" is the floating "+" instead (never over a
+	// template). Over a template the button on top stays: on a phone the list pane is hidden then,
+	// and on a compact window wide enough for both panes it is the only way to a new template.
 	let { children }: { children: Snippet } = $props();
 
 	const templates = $derived(cache.snapshot?.templates ?? []);
 	const active = $derived(templates.filter((x) => !x.archived));
 	const archived = $derived(templates.filter((x) => x.archived));
+	const compact = $derived(layout.current === 'compact');
 	const onList = $derived(
 		page.url.pathname.replace(/\/$/, '') === resolve('/ajustes/(reglas)/plantillas')
 	);
@@ -46,15 +52,17 @@
 				? 'w-full'
 				: 'hidden @3xl:flex'}"
 		>
-			<div class="flex">
-				<WriteLink
-					href={resolve('/ajustes/(reglas)/plantillas/nueva')}
-					variant="strong"
-					width="w-44"
-				>
-					{t('templates_new')}
-				</WriteLink>
-			</div>
+			{#if !(compact && onList)}
+				<div class="flex">
+					<WriteLink
+						href={resolve('/ajustes/(reglas)/plantillas/nueva')}
+						variant="strong"
+						width="w-44"
+					>
+						{t('templates_new')}
+					</WriteLink>
+				</div>
+			{/if}
 
 			{#if cache.snapshot === null}
 				<p role="status" class="px-2 text-base text-ink-muted">{t('templates_loading')}</p>
@@ -75,3 +83,15 @@
 		</div>
 	</div>
 </div>
+{#if compact && onList}
+	<!-- The floating "+", as on Hoy; offline it fades, the offline banner says why. -->
+	<div class="fixed right-4 bottom-fab z-20">
+		<IconButton
+			variant="add"
+			icon="plus"
+			label={t('templates_new')}
+			href={resolve('/ajustes/(reglas)/plantillas/nueva')}
+			inert={cache.offline}
+		/>
+	</div>
+{/if}

@@ -16,12 +16,14 @@
 	import Button from './Button.svelte';
 	import { OFFLINE_REASON_ID } from './offlineReason';
 	import WriteButton from '../WriteButton.svelte';
+	import CopyButton from '../CopyButton.svelte';
 	import { buttonClasses } from './buttonStyle';
 
 	// A due item with its actions: the client, its label (where it comes from; reminders-and-replies
 	// design, "Row label"), the full message and Enviar / Omitir, or the booking prompt (CUJ 5) with
 	// "Agregar a la cita", "Enviar mensaje" and "Omitir". A client without a phone gets "Agregar
-	// teléfono" in place of the send button.
+	// teléfono" in place of the send button. "Copiar" before "Omitir" copies the message (both
+	// modes, with or without a phone), to paste it by hand.
 	let {
 		item,
 		zone,
@@ -128,6 +130,9 @@
 					{t('due_add_phone')}
 				</a>
 			{/if}
+		</div>
+		<div class="min-w-40 flex-1">
+			<CopyButton text={item.text} variant="glass" />
 		</div>
 		<div class="min-w-40 flex-1">
 			<Button

@@ -1,5 +1,6 @@
-// Copy to the clipboard with a short "Copiado" (the quote text, a quick reply). The components keep
-// their own `copied` state; this file holds the clipboard call and the timer.
+// Copy to the clipboard with a short "Copiado", for every Copiar of the app (see `CopyButton`, its
+// one caller). `CopyButton` keeps the `copied` state; this file holds the clipboard call and the
+// timer.
 
 /** How long "Copiado" shows after a copy. */
 export const COPIED_MS = 2000;

@@ -2,13 +2,16 @@
 // Servicios. She picks services, reads the quote, taps Copiar, or turns it into a Nueva cita. It
 // builds on the services `setup.spec.ts` creates (Acrílico, Relleno, Pedicure, all priced);
 // `resetData` leaves no client. The clipboard is stubbed: the spec reads what was written, and
-// three variants refuse the write.
+// three variants refuse the write (mobile polish S3: both outcomes also show in the toast).
 import { expect, test, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
 import {
+	COPY_REFUSALS,
 	copied,
+	copyFrom,
+	copyRefused,
 	draftStored,
 	failDraftWrite,
 	fill,
@@ -29,7 +32,7 @@ const chip = (page: Page, name: string) =>
 		.getByRole('group', { name: es.appointment_services })
 		.getByRole('button', { name: new RegExp(`^${name}`) });
 
-const copyButton = (page: Page) => page.getByRole('button', { name: es.quote_copy, exact: true });
+const copyButton = (page: Page) => page.getByRole('button', { name: es.copy, exact: true });
 
 // As in offline.spec.ts: with the service worker blocked, Playwright's routing sees every request,
 // so `serverOff` really cuts the API.
@@ -65,7 +68,7 @@ test('tapping Servicios lands on Cotizar, which asks for services to be picked',
 	await expect(page.getByRole('button', { name: es.quote_new })).toHaveCount(0);
 });
 
-test('CUJ Q1: she picks services, copies the quote and the button says Copiado', async ({
+test('CUJ Q1: she picks services, copies the quote, and the button and the toast say Copiado', async ({
 	page
 }) => {
 	await stubClipboard(page, 'ok');
@@ -78,11 +81,8 @@ test('CUJ Q1: she picks services, copies the quote and the button says Copiado',
 	expect(text).toContain('Acrílico');
 	expect(text).toContain('Relleno ×2');
 	expect(text).toContain('c/u');
-	await copyButton(page).click();
-
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
-	expect(await copied(page)).toBe(text);
-	// The button's own label is the feedback (no toast), and it goes back.
+	expect(await copyFrom(page, page)).toBe(text);
+	// The button's label goes back.
 	await expect(copyButton(page)).toBeVisible();
 });
 
@@ -92,7 +92,7 @@ test('CUJ R8: a service description is added at the end of the quote', async ({ 
 	await chip(page, 'Acrílico').click();
 	await chip(page, 'Relleno').click();
 	await copyButton(page).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	// No described service: the text is as before, with no blank line.
 	expect(await copied(page)).not.toContain('\n\n');
 
@@ -107,7 +107,7 @@ test('CUJ R8: a service description is added at the end of the quote', async ({ 
 	await chip(page, 'Acrílico').click();
 	await chip(page, 'Relleno').click();
 	await copyButton(page).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toMatch(
 		new RegExp(
 			`\\n\\n${fill(es.quote_detail_line, { name: 'Acrílico', description: 'Incluye limado y esmalte' })}$`
@@ -115,8 +115,8 @@ test('CUJ R8: a service description is added at the end of the quote', async ({ 
 	);
 });
 
-for (const mode of ['missing', 'throws', 'rejects'] as const) {
-	test(`the phone refuses the copy (${mode}): a message says to press and hold`, async ({
+for (const mode of COPY_REFUSALS) {
+	test(`the phone refuses the copy (${mode}): the toast says to press and hold`, async ({
 		page
 	}) => {
 		const logs: string[] = [];
@@ -129,16 +129,10 @@ for (const mode of ['missing', 'throws', 'rejects'] as const) {
 		await page.goto('/servicios');
 		await chip(page, 'Acrílico').click();
 
-		await copyButton(page).click();
+		await copyRefused(page, page);
 
-		await expect(page.getByRole('alert').filter({ hasText: es.quote_copy_failed })).toBeVisible();
-		await expect(page.getByRole('button', { name: es.quote_copied })).toHaveCount(0);
 		expect(logs).toContain('code=clipboard_failed');
 		expect(logs.join('\n')).not.toContain('Acrílico');
-
-		// The message goes with her next pick.
-		await chip(page, 'Relleno').click();
-		await expect(page.getByRole('alert').filter({ hasText: es.quote_copy_failed })).toHaveCount(0);
 	});
 }
 
@@ -176,7 +170,7 @@ test('offline the quote builds and copies', async ({ page }) => {
 
 	await copyButton(page).click();
 
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toBe(await quoteBlock(page).textContent());
 });
 
@@ -205,7 +199,7 @@ test.describe('wide', () => {
 		expect(text).toContain('Acrílico');
 		expect(text).not.toContain('×2');
 		await copyButton(page).click();
-		await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 		expect(await copied(page)).toBe(text);
 	});
 });

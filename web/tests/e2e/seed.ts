@@ -99,6 +99,21 @@ export async function insertClient(c: {
 	return id;
 }
 
+/** Archives every active attribute of both scopes and returns their ids. The setup attributes
+ *  outlive `resetData`, so a spec that calls this gives the ids to `restoreAttributes` in
+ *  `afterEach`. */
+export async function archiveAttributes(): Promise<string[]> {
+	const { rows } = await db().query<{ id: string }>(
+		'UPDATE attribute_definitions SET archived_at = now() WHERE archived_at IS NULL RETURNING id'
+	);
+	return rows.map((r) => r.id);
+}
+
+/** Makes the attributes `ids` active again. */
+export async function restoreAttributes(ids: string[]): Promise<void> {
+	await db().query('UPDATE attribute_definitions SET archived_at = NULL WHERE id = ANY($1)', [ids]);
+}
+
 type ServiceRow = { id: string; name: string; price_cents: string | null; duration_min: number };
 
 /** Inserts an appointment of `clientId` with the active services named in `services` (in order;

@@ -7,9 +7,13 @@
 	import { cache } from '../cache/store.svelte';
 	import { t } from '../i18n';
 	import ClientPicker from './ClientPicker.svelte';
+	import CopyButton from './CopyButton.svelte';
 
 	// What the message looks like, rendered by the server (one renderer), 300 ms after the last
 	// change. "Vista previa con:" picks the sample client or one of hers (design doc item 70).
+	// "Copiar" under it copies the rendered text, only while that text matches the body: it is not
+	// drawn while a newer render is on its way or after the last one failed (offline included), so
+	// she never copies old wording.
 	let { body }: { body: string } = $props();
 
 	let mode = $state<'sample' | 'client'>('sample');
@@ -19,6 +23,7 @@
 	let updating = $state(false);
 
 	const clients = $derived(cache.snapshot?.clients ?? []);
+	const copyable = $derived(text !== null && !updating && failure === null ? text : null);
 
 	// Timers and the server are outside systems, so this is an effect. A change before the answer
 	// comes marks that answer stale: it is dropped, never shown after a newer one.
@@ -90,6 +95,11 @@
 			{text}
 		{/if}
 	</div>
+	{#if copyable !== null}
+		<div class="w-32">
+			<CopyButton text={copyable} variant="glass" />
+		</div>
+	{/if}
 	{#if failure !== null}
 		<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
 	{:else if updating && text !== null}

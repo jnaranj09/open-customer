@@ -227,6 +227,38 @@ Left for the owner from the code review (small, not fixed):
 - The wording "En 21 días · 3 dic" counts from the visit. On a visit of 21 days ago it reads "En 21
   días · <today>". A wording call ("A los 21 días · 3 dic").
 
+## Mobile polish (built; owner's check NOT RUN)
+
+Stages S0 to S3 of `docs/designs/mobile-polish.md`: the floating "+" on the phone for every create
+action, the hint when no attributes exist, and one `CopyButton` (Copiar in five places, "Copiado"
+in the toast too). Ran: the CLAUDE.md gate and `make image image-scan dast` in the final review
+(at efa7dd8, all green), fault injection on every guard the branch adds, and `make e2e-docker`
+(green apart from the next-appointment flakes below). The review fixes after it (the template
+preview hides Copiar while its text is old; the toast's host is an always-mounted live region)
+ran `make lint test` and `make e2e-docker`. NOT RUN: CI on the branch; the `web-design-guidelines`
+review and the screenshots of Plantillas, Reglas and Respuestas with the "+" (ui.md stage 6).
+
+NOT RUN, the owner's check on the phone (installed app, VoiceOver on for the last two steps):
+
+- The floating "+" on Clientas, Plantillas, Reglas, Atributos and Respuestas: it opens the form or
+  sheet, on Clientas it is not drawn over the form, and offline it is faded.
+- The hint with no attributes: Nueva clienta, Nueva cita and the client detail.
+- Copiar in the five places (Cotizar, Respuestas, a Para enviar card, the template preview, the
+  client's phone): the button and the toast say "Copiado", and the pasted text is right.
+- VoiceOver hears "Copiado" once per copy, also on a second copy in a row.
+- VoiceOver reads the floating "+" by its name on the five screens.
+
+Left for the owner from the final review (not fixed):
+
+- The client detail hint wraps to 3 lines at 393 px and repeats its link ("Créalos en Ajustes ›
+  Atributos" next to "Crear atributos"); a wording and layout call.
+- The floating "+" wrapper is repeated in 7 places; a `FloatingAdd.svelte` would hold its offline
+  fade and position.
+- `archiveAttributes` and `restoreAttributes` in the e2e `seed.ts` have one caller each.
+- A copy no longer clears Cotizar's message slot (documented in `docs/designs/quick-quotes.md`).
+- `next-appointment.spec.ts` CUJ N3 and N4 are flaky (N3 also on the base of this branch), which
+  keeps `make e2e-docker` and CI's `make e2e` red now and then; not from this branch.
+
 ## Found, not fixed (owner decides)
 
 App bugs and rule breaks seen during setup. Setup tasks never fix app code; each line becomes its

@@ -15,8 +15,9 @@ through `TASKS.md` in order.
 "Build order"). `docs/designs/quick-quotes.md` for the Servicios place and quotes, built in its
 stages S1-S4. `docs/designs/reminders-and-replies.md` for general rules, row labels and quick
 replies, built in its stages S1-S5. `docs/designs/next-appointment.md` for the "Agendar próxima
-cita" button on an appointment, built in its stages S1-S2. `docs/designs/devsecops.md` for the
-security pipeline;
+cita" button on an appointment, built in its stages S1-S2. `docs/designs/mobile-polish.md` for the
+floating "+" on every create screen, the empty attributes hint and copy, built in its stages S0-S3.
+`docs/designs/devsecops.md` for the security pipeline;
 `docs/threat-model.md` lists every threat and its check. A change that makes a doc false fixes the
 doc in the same change.
 

@@ -3,7 +3,15 @@
 import { expect, test, type Page } from '@playwright/test';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { closePool, insertReply, resetData } from './seed';
-import { copied, fill, serverOff, stubClipboard } from './steps';
+import {
+	COPY_REFUSALS,
+	copied,
+	copyFrom,
+	copyRefused,
+	fill,
+	serverOff,
+	stubClipboard
+} from './steps';
 
 // As in offline.spec.ts: with the service worker blocked, routing sees every request.
 test.use({ serviceWorkers: 'block' });
@@ -65,9 +73,7 @@ test('CUJ R11: create, move, edit, archive, restore, search and copy', async ({ 
 
 	await page.getByLabel(es.replies_search, { exact: true }).fill('prec');
 	await expect.poll(() => titles(page)).toEqual(['Precios']);
-	await page.getByRole('button', { name: es.quote_copy, exact: true }).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
-	expect(await copied(page)).toBe('Uñas: 25 USD');
+	expect(await copyFrom(page, page)).toBe('Uñas: 25 USD');
 
 	await page.getByLabel(es.replies_search, { exact: true }).fill('zz');
 	await expect(page.getByText(es.replies_no_results)).toBeVisible();
@@ -84,7 +90,18 @@ test('CUJ R6: offline she finds a reply by a part of its name and copies it', as
 	await page.reload();
 	await page.getByLabel(es.replies_search, { exact: true }).fill('direc');
 	await expect.poll(() => titles(page)).toEqual(['Dirección']);
-	await page.getByRole('button', { name: es.quote_copy, exact: true }).click();
-	await expect(page.getByRole('button', { name: es.quote_copied, exact: true })).toBeVisible();
+	await page.getByRole('button', { name: es.copy, exact: true }).click();
+	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
 	expect(await copied(page)).toBe('Calle 1, San José');
 });
+
+for (const mode of COPY_REFUSALS) {
+	test(`a refused copy (${mode}) says to press and hold in the toast`, async ({ page }) => {
+		await insertReply({ title: 'Dirección', body: 'Calle 1, San José' });
+		await stubClipboard(page, mode);
+		await page.goto('/enviar/respuestas');
+
+		await copyRefused(page, page);
+		expect(await copied(page)).toBeNull();
+	});
+}

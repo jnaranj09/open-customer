@@ -23,6 +23,7 @@
 	import AttributeField from './AttributeField.svelte';
 	import DuplicatePhone from './DuplicatePhone.svelte';
 	import FormCard from './FormCard.svelte';
+	import Callout from './ui/Callout.svelte';
 	import TextField from './ui/TextField.svelte';
 
 	// "Nueva clienta" and the detail's edit mode (design doc item 76): name and phone first, then the
@@ -154,6 +155,9 @@
 				bind:value={() => attrValue(attr.key, attr.type === 'multiselect'), setterFor(attr.key)}
 				error={fieldError(`attrs.${attr.key}`)}
 			/>
+		{:else}
+			<!-- No link to Atributos: an edit keeps no draft, so leaving would lose her changes. -->
+			<Callout as="p" class="self-start text-sm">{t('attributes_none_client')}</Callout>
 		{/each}
 		<TextField label={t('client_notes')} bind:value={form.notes} error={fieldError('notes')} />
 	</div>
