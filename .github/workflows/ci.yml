@@ -134,25 +134,25 @@ jobs:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy
       - name: Upload SARIF (app image)
         if: ${{ !cancelled() && hashFiles('trivy-sarif/app.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         with:
           sarif_file: trivy-sarif/app.sarif
           category: trivy-app
       - name: Upload SARIF (backup image)
         if: ${{ !cancelled() && hashFiles('trivy-sarif/backup.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         with:
           sarif_file: trivy-sarif/backup.sarif
           category: trivy-backup
       - name: Upload SARIF (postgres image)
         if: ${{ !cancelled() && hashFiles('trivy-sarif/postgres.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         with:
           sarif_file: trivy-sarif/postgres.sarif
           category: trivy-postgres
       - name: Upload SARIF (cloudflared image)
         if: ${{ !cancelled() && hashFiles('trivy-sarif/cloudflared.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         with:
           sarif_file: trivy-sarif/cloudflared.sarif
           category: trivy-cloudflared
@@ -189,7 +189,7 @@ jobs:
         if: ${{ !cancelled() }}
       - name: Upload SARIF (zizmor)
         if: ${{ !cancelled() && hashFiles('zizmor-sarif/zizmor.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         with:
           sarif_file: zizmor-sarif/zizmor.sarif
           category: zizmor
@@ -199,7 +199,7 @@ jobs:
         if: ${{ !cancelled() }}
       - name: Upload SARIF (semgrep)
         if: ${{ !cancelled() && hashFiles('semgrep-sarif/semgrep.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         with:
           sarif_file: semgrep-sarif/semgrep.sarif
           category: semgrep
