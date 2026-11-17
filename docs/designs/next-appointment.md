@@ -248,7 +248,7 @@ Top to bottom:
     page behind (axe needs 4.5:1; see `TASKS.md`, "Found, not fixed").
 5.  A button "Usar esta fecha". It is off with the reason "Elige el día" (the existing
     `appointment_day_needed`; a `Button` cannot be off without a reason) while "Otra fecha" is
-    selected and the field holds no real day. It shows the busy spinner while the draft is
+    selected and the field holds no real day. It shows the busy dots while the draft is
     written.
 6.  The message slot: the replace question (CUJ N4) or the write error. The question is the
     block Cotizar shows today; it becomes one feature component, `ReplaceDraftPrompt.svelte`, that

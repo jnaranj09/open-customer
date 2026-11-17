@@ -180,3 +180,29 @@ body {
 	--tw-content: attr(data-placeholder);
 	content: var(--tw-content);
 }
+
+/* The busy dots (`ui/BusyDots`, the .pen's `BusyDots`): each dot fades in turn. With reduced motion
+   they stand still at full strength; the button's aria-busy still says it is working. */
+@keyframes busy-dot {
+	0%,
+	80%,
+	100% {
+		opacity: 0.35;
+	}
+	40% {
+		opacity: 1;
+	}
+}
+
+@utility busy-dot {
+	animation: busy-dot 1.2s ease-in-out infinite;
+	&:nth-child(2) {
+		animation-delay: 0.15s;
+	}
+	&:nth-child(3) {
+		animation-delay: 0.3s;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+	}
+}

@@ -1150,7 +1150,7 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
     the existing `cancel`; `'ok'` → the draft's `clear()`, then `goto(resolve('/citas/nueva'))`;
     `'failed'` → slot `convert_failed`. The slot's `confirm_replace` shows `draft_replace_prompt`
     above the two buttons side by side, as in the S0 frame; the two buttons of the text block sit side
-    by side on the phone and stacked on wide, and show the busy spinner while the hand-off runs.
+    by side on the phone and stacked on wide, and show the busy dots while the hand-off runs.
 
 ##### 30. `web/src/lib/i18n/es.json` (Modify)
 
