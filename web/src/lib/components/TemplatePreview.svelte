@@ -7,9 +7,11 @@
 	import { cache } from '../cache/store.svelte';
 	import { t } from '../i18n';
 	import ClientPicker from './ClientPicker.svelte';
+	import CopyButton from './CopyButton.svelte';
 
 	// What the message looks like, rendered by the server (one renderer), 300 ms after the last
 	// change. "Vista previa con:" picks the sample client or one of hers (design doc item 70).
+	// "Copiar" under it copies the rendered text, while there is one.
 	let { body }: { body: string } = $props();
 
 	let mode = $state<'sample' | 'client'>('sample');
@@ -90,6 +92,11 @@
 			{text}
 		{/if}
 	</div>
+	{#if text !== null}
+		<div class="w-32">
+			<CopyButton {text} variant="glass" />
+		</div>
+	{/if}
 	{#if failure !== null}
 		<p role="alert" class="text-sm text-error">{errorText(failure)}</p>
 	{:else if updating && text !== null}

@@ -113,3 +113,30 @@ export async function stubClipboard(page: Page, mode: ClipboardMode): Promise<vo
 
 export const copied = (page: Page): Promise<string | null> =>
 	page.evaluate(() => (window as unknown as { copied: string | null }).copied);
+
+/** The ways `stubClipboard` refuses a copy. */
+export const COPY_REFUSALS = ['missing', 'throws', 'rejects'] as const;
+
+/** The app's toast (`Toast.svelte`, a `status`) while it says exactly `text`. */
+const toast = (page: Page, text: string): Locator =>
+	page.getByRole('status').filter({ has: page.getByText(text, { exact: true }) });
+
+/** Taps the one "Copiar" in `scope` with the clipboard stubbed `ok`: the button and the toast both
+ *  say "Copiado". Returns what the clipboard got. */
+export async function copyFrom(page: Page, scope: Page | Locator): Promise<string> {
+	await scope.getByRole('button', { name: es.copy, exact: true }).click();
+	await expect(scope.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
+	await expect(toast(page, es.copied)).toBeVisible();
+	const text = await copied(page);
+	expect(text).not.toBeNull();
+	return text ?? '';
+}
+
+/** Taps the one "Copiar" in `scope` with a refusing clipboard: the toast says `copy_failed`, the
+ *  button never says "Copiado", and no message is left on the page. */
+export async function copyRefused(page: Page, scope: Page | Locator): Promise<void> {
+	await scope.getByRole('button', { name: es.copy, exact: true }).click();
+	await expect(toast(page, es.copy_failed)).toBeVisible();
+	await expect(scope.getByRole('button', { name: es.copied })).toHaveCount(0);
+	await expect(page.getByRole('alert')).toHaveCount(0);
+}

@@ -70,12 +70,13 @@ Each goal has a check, and the stage that proves it (S0 to S4, Technical Plan se
     before it is replaced.
     Check (S4): e2e tests for convert into an empty Nueva cita and over an unsaved one; unit tests
     of `handOff` for all three results, including a failed write.
-6.  **Every tap ends in something she can see.** After a copy the Copiar button itself shows
-    a check icon and "Copiado" for about 2 seconds (no toast). A message on the page and a manual way to copy if
-    the phone refuses. A message on the page if convert fails.
-    Check (S3, S4): e2e tests with a stubbed clipboard (success shows "Copiado" on the button;
-    missing API, synchronous throw, rejection show `copy_failed`); the convert failure
-    through the `handOff` unit test.
+6.  **Every tap ends in something she can see.** After a copy the Copiar button shows a check
+    icon and "Copiado" for about 2 seconds, and the toast says "Copiado" (mobile polish S3,
+    [mobile-polish.md](mobile-polish.md); it was the button alone before). If the phone refuses, the toast says so
+    and the text can be copied by hand. A message on the page if convert fails.
+    Check (S3, S4): e2e tests with a stubbed clipboard (success shows "Copiado" on the button and
+    in the toast; missing API, synchronous throw, rejection show `copy_failed` in the toast); the
+    convert failure through the `handOff` unit test.
 7.  **Servicios is one tap from every screen and opens on Cotizar.**
     Check (S3): e2e test: tap Servicios, land on Cotizar; the Mis servicios tab reaches the catalog.
 8.  **Five places fit on her phone.**
@@ -140,7 +141,8 @@ All data below is made up.
     *   "Diseño sencillo" shows as one line with ×2 and the price of one copy.
     *   "Cejas" says "precio a consultar", and the total says it leaves something out.
     *   The duration line says "2 h 30 min".
-    *   The Copiar button shows a check icon and "Copiado" for about 2 seconds.
+    *   The Copiar button shows a check icon and "Copiado" for about 2 seconds, and the toast says
+        "Copiado".
     *   The quote stays on the page. If she leaves and comes back, it is still there.
 
 ### CUJ Q2: The client books from the quote
@@ -171,9 +173,9 @@ All data below is made up.
 
 *   **Given**: A quote is open, and iOS refuses the clipboard write.
 *   **When**: She taps **Copiar**.
-*   **Then**: A message above the text tells her to press and hold the text to copy it by hand. It
-    stays until her next pick, copy or convert. The text can be selected the normal iOS way. Nothing
-    is logged except a code.
+*   **Then**: The toast tells her to press and hold the text to copy it by hand (until mobile
+    polish S3 a message above the text said it). The text can be selected the normal iOS way.
+    Nothing is logged except a code.
 
 ## Technical Plan (Architecture)
 
@@ -293,8 +295,10 @@ minutes, and the page shows no text when there are no lines.
     iOS press-and-hold, so it is both the preview and the manual way to copy. On wide the
     Cotización panel is the `Card` and the text is a plain paragraph inside it.
 *   **The message slot.** One `Callout` above the text block shows at most one message, from a
-    tagged union `none | confirm_replace | copy_failed | convert_failed`. The two failures use
-    `role="alert"`. The slot goes back to `none` on her next pick, copy or convert.
+    tagged union `none | confirm_replace | convert_failed`. The failure uses `role="alert"`. The
+    slot goes back to `none` on her next pick or convert. A copy's outcome is the toast (mobile
+    polish S3, [mobile-polish.md](mobile-polish.md); the union had `copy_failed` and a copy also cleared the slot
+    before).
 *   **States.**
     *   Loading: while `cache.snapshot` is null, only the page's `services_loading` status line,
         at both widths (Mounting, above). `QuoteForm` is not mounted yet. The `cargando · 1440`
@@ -327,11 +331,13 @@ The text is already built (a `$derived` value) when she taps. The click handler 
 a clipboard write only while it is handling the tap.
 
 One failure path covers three cases: `navigator.clipboard` missing (not a secure context), the call
-throwing at once, and the promise rejecting. On failure the message slot shows `copy_failed`
-(text `copy_failed`: press and hold the text to copy it), and the app logs
-`console.warn('code=clipboard_failed')`, never the text. On success there is no toast (owner, S0):
-the Copiar button's own label changes to a check icon and "Copiado" (`copied`) for about 2
-seconds, then goes back to "Copiar".
+throwing at once, and the promise rejecting. On failure the toast says `copy_failed` (press and
+hold the text to copy it), and the app logs `console.warn('code=clipboard_failed')`, never the
+text. On success the Copiar button's own label changes to a check icon and "Copiado" (`copied`)
+for about 2 seconds, then goes back to "Copiar", and the toast says "Copiado". Until mobile polish
+S3 ([mobile-polish.md](mobile-polish.md)) there was no toast (owner, S0; the toast is the owner's
+S3 decision) and the failure was a message in the slot (moved to the toast by the agent in S3);
+the button is now `CopyButton.svelte`, shared with the other Copiar buttons.
 
 **If the S0 iPhone test fails:** Copiar still ships and still tries, and a permanent hint
 (`quote_hold_hint`) sits above the text block telling her to press and hold to copy. The frame for
@@ -717,7 +723,9 @@ Through a marker field in the Nueva cita draft, a `?de=cotizacion` flag, or on e
 *   **Cons**: A sheet needs its own frame, focus handling and probe states. The toast has one tone
     and hides itself, so a press-and-hold instruction would vanish while she needs it.
 *   **Reason for Rejection**: One inline message slot (section 2). Cotizar shows no toast at all:
-    success shows on the Copiar button (section 3, owner).
+    success shows on the Copiar button (section 3, owner). Mobile polish S3
+    ([mobile-polish.md](mobile-polish.md)) later moved the copy's success and failure to the toast;
+    the confirm and the convert failure stay in the slot.
 
 ### D. The quote text and its rules
 
@@ -1046,10 +1054,12 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
         `appointment_services_empty_action`, `href={resolve('/servicios/catalogo')}`), instead of
         the picker or the table; on wide the panel shows `quote_empty`.
     *   Copiar: `navigator.clipboard.writeText(text)` called first, no await before it; missing
-        API, synchronous throw and rejection → slot `copy_failed` and
+        API, synchronous throw and rejection → the toast `copy_failed` and
         `console.warn('code=clipboard_failed')`; success → the button's label becomes the `check`
-        icon and `copied` for about 2 seconds (no toast); a screen-reader-only `aria-live="polite"`
-        region holds `copied` for the same time, so the change is announced.
+        icon and `copied` for about 2 seconds, and the toast says `copied` (the toast is
+        `role="status"`, so the change is announced). Mobile polish S3 changed this (it was the
+        slot, no toast and a screen-reader-only live region) and moved the button into
+        `CopyButton.svelte`.
 
 ##### 23. `web/src/routes/servicios/+page.svelte` (Create)
 
@@ -1107,7 +1117,8 @@ overflow (section 6), not by a red commit. The gate applies to every commit.
         text block's `textContent`, and contains "Acrílico", "Relleno ×2" and "c/u" (the exact
         format is proven by `quote.test.ts`; the spec cannot import `quoteText`, because
         `lib/i18n` imports `es.json` in a way Playwright's loader rejects, see `steps.ts`); the
-        Copiar button shows "Copiado"; each failing variant shows `copy_failed`; "tap
+        Copiar button and the toast show "Copiado"; each failing variant shows `copy_failed` in the
+        toast (mobile polish S3); "tap
         Servicios lands on Cotizar"; "empty the quote, switch tabs, come back: still empty";
         offline (`serverOff`): the quote builds and copies; "Nueva cotización" empties the quote.
     *   Wide (1440 px viewport): pick with the table's stepper (Acrílico "+" twice, then "−" once),

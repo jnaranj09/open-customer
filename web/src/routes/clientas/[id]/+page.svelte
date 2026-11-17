@@ -16,6 +16,7 @@
 	import Button from '../../../lib/components/ui/Button.svelte';
 	import BottomSheet from '../../../lib/components/ui/BottomSheet.svelte';
 	import ClientForm from '../../../lib/components/ClientForm.svelte';
+	import CopyButton from '../../../lib/components/CopyButton.svelte';
 	import DuplicatePhone from '../../../lib/components/DuplicatePhone.svelte';
 	import IconButton from '../../../lib/components/ui/IconButton.svelte';
 	import Card from '../../../lib/components/ui/Card.svelte';
@@ -252,9 +253,14 @@
 				{/if}
 				<dl class="flex flex-col gap-1 text-base">
 					{#if client.phone_e164 !== null}
-						<div class="flex gap-2">
+						<!-- Copiar is its own <dd>, so the number's holds only the number. When the row is
+						     too narrow, it wraps to a line of its own. -->
+						<div class="flex flex-wrap items-center gap-x-2 gap-y-2">
 							<dt class="font-bold text-ink">{t('client_phone')}:</dt>
-							<dd class="text-ink">{formatPhone(client.phone_e164)}</dd>
+							<dd class="whitespace-nowrap text-ink">{formatPhone(client.phone_e164)}</dd>
+							<dd class="w-32">
+								<CopyButton text={client.phone_e164} variant="ghost" />
+							</dd>
 						</div>
 					{/if}
 					{#each facts as fact (fact.label)}

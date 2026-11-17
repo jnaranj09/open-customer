@@ -41,8 +41,9 @@
 	const wide = $derived(layout.current === 'wide');
 
 	let lines = $state<Line[]>([]);
-	// The message above the text: at most one, and it goes with her next pick, copy or convert.
-	let message = $state<'none' | 'confirm_replace' | 'copy_failed' | 'convert_failed'>('none');
+	// The message above the text: at most one, and it goes with her next pick or convert. A copy's
+	// outcome is the toast (CopyButton), not this slot.
+	let message = $state<'none' | 'confirm_replace' | 'convert_failed'>('none');
 	let converting = $state(false);
 
 	const draft = formDraft(
@@ -65,10 +66,6 @@
 	function setLines(next: Line[]): void {
 		message = 'none';
 		lines = next;
-	}
-
-	function copied(ok: boolean): void {
-		message = ok ? 'none' : 'copy_failed';
 	}
 
 	// Inside `submitOnce`, so a second tap while it runs does nothing. The quote is cleared only once
@@ -108,15 +105,13 @@
 				message = 'none';
 			}}
 		/>
-	{:else if message === 'copy_failed'}
-		<Callout role="alert" class="text-sm">{t('copy_failed')}</Callout>
 	{:else if message === 'convert_failed'}
 		<Callout role="alert" class="text-sm">{t('cita_handoff_failed')}</Callout>
 	{/if}
 {/snippet}
 
 {#snippet copyButton()}
-	<CopyButton {text} variant="strong" onresult={copied} />
+	<CopyButton {text} variant="strong" />
 {/snippet}
 
 {#snippet convertButton()}

@@ -4,7 +4,6 @@
 	import Icon from '../../../lib/components/icons/Icon.svelte';
 	import CopyButton from '../../../lib/components/CopyButton.svelte';
 	import ReplySheet from '../../../lib/components/ReplySheet.svelte';
-	import Callout from '../../../lib/components/ui/Callout.svelte';
 	import Card from '../../../lib/components/ui/Card.svelte';
 	import EmptyState from '../../../lib/components/ui/EmptyState.svelte';
 	import IconButton from '../../../lib/components/ui/IconButton.svelte';
@@ -33,8 +32,6 @@
 
 	// The reply in the sheet; 'new' is the empty form.
 	let editing = $state<QuickReply | 'new' | null>(null);
-	// A failed copy.
-	let copyFailed = $state(false);
 
 	function done(message: MessageKey): void {
 		editing = null;
@@ -56,13 +53,7 @@
 					/>
 				</div>
 				<div class="w-32 shrink-0">
-					<CopyButton
-						text={reply.body}
-						variant="glass"
-						onresult={(ok) => {
-							copyFailed = !ok;
-						}}
-					/>
+					<CopyButton text={reply.body} variant="glass" />
 				</div>
 			</li>
 		{/each}
@@ -89,9 +80,6 @@
 			</Card>
 		{:else}
 			<TextField label={t('replies_search')} type="search" bind:value={query} autocomplete="off" />
-			{#if copyFailed}
-				<Callout role="alert" class="text-sm">{t('copy_failed')}</Callout>
-			{/if}
 			{#if shown.length > 0}
 				{@render rows(shown)}
 			{:else if active.length > 0}

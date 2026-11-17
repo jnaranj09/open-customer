@@ -2,13 +2,16 @@
 // Servicios. She picks services, reads the quote, taps Copiar, or turns it into a Nueva cita. It
 // builds on the services `setup.spec.ts` creates (Acrílico, Relleno, Pedicure, all priced);
 // `resetData` leaves no client. The clipboard is stubbed: the spec reads what was written, and
-// three variants refuse the write.
+// three variants refuse the write (mobile polish S3: both outcomes also show in the toast).
 import { expect, test, type Page } from '@playwright/test';
 import { DB_NAME } from '../../src/lib/cache/db';
 import es from '../../src/lib/i18n/es.json' with { type: 'json' };
 import { businessDate, closePool, insertClient, resetData } from './seed';
 import {
+	COPY_REFUSALS,
 	copied,
+	copyFrom,
+	copyRefused,
 	draftStored,
 	failDraftWrite,
 	fill,
@@ -65,7 +68,7 @@ test('tapping Servicios lands on Cotizar, which asks for services to be picked',
 	await expect(page.getByRole('button', { name: es.quote_new })).toHaveCount(0);
 });
 
-test('CUJ Q1: she picks services, copies the quote and the button says Copiado', async ({
+test('CUJ Q1: she picks services, copies the quote, and the button and the toast say Copiado', async ({
 	page
 }) => {
 	await stubClipboard(page, 'ok');
@@ -78,11 +81,8 @@ test('CUJ Q1: she picks services, copies the quote and the button says Copiado',
 	expect(text).toContain('Acrílico');
 	expect(text).toContain('Relleno ×2');
 	expect(text).toContain('c/u');
-	await copyButton(page).click();
-
-	await expect(page.getByRole('button', { name: es.copied, exact: true })).toBeVisible();
-	expect(await copied(page)).toBe(text);
-	// The button's own label is the feedback (no toast), and it goes back.
+	expect(await copyFrom(page, page)).toBe(text);
+	// The button's label goes back.
 	await expect(copyButton(page)).toBeVisible();
 });
 
@@ -115,8 +115,8 @@ test('CUJ R8: a service description is added at the end of the quote', async ({ 
 	);
 });
 
-for (const mode of ['missing', 'throws', 'rejects'] as const) {
-	test(`the phone refuses the copy (${mode}): a message says to press and hold`, async ({
+for (const mode of COPY_REFUSALS) {
+	test(`the phone refuses the copy (${mode}): the toast says to press and hold`, async ({
 		page
 	}) => {
 		const logs: string[] = [];
@@ -129,16 +129,10 @@ for (const mode of ['missing', 'throws', 'rejects'] as const) {
 		await page.goto('/servicios');
 		await chip(page, 'Acrílico').click();
 
-		await copyButton(page).click();
+		await copyRefused(page, page);
 
-		await expect(page.getByRole('alert').filter({ hasText: es.copy_failed })).toBeVisible();
-		await expect(page.getByRole('button', { name: es.copied })).toHaveCount(0);
 		expect(logs).toContain('code=clipboard_failed');
 		expect(logs.join('\n')).not.toContain('Acrílico');
-
-		// The message goes with her next pick.
-		await chip(page, 'Relleno').click();
-		await expect(page.getByRole('alert').filter({ hasText: es.copy_failed })).toHaveCount(0);
 	});
 }
 

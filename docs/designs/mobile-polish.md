@@ -1,7 +1,7 @@
 # Mobile polish: the floating "+", the empty attributes hint, and copy
 
 *   **Author:** jnaranj09
-*   **Status:** Planned on 2026-11-16. Stages S0 (design), S1 (the floating "+") and S2 (the attributes hint) built on 2026-11-16; S3 not built.
+*   **Status:** Planned on 2026-11-16. All stages built on 2026-11-16: S0 (design), S1 (the floating "+"), S2 (the attributes hint) and S3 (copy). The owner's check on the phone is pending.
 *   **Date:** 2026-11-16
 *   **Builds on:** [release-1.md](release-1.md) (the app as built),
     [quick-quotes.md](quick-quotes.md) (the floating "+" of Mis servicios, the Copiar button) and

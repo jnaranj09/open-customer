@@ -234,7 +234,8 @@ Labels follow "Row label". Dates are in the business time zone.
 *   **When**: she opens Enviar › Respuestas, creates "Dirección" and "Precios", moves "Precios" up,
     edits its text, archives "Dirección", opens "Archivadas (1)" and restores it.
 *   **Then**: the list shows her order; search "prec" finds "Precios"; "Copiar" puts the text on the
-    clipboard and shows "Copiado".
+    clipboard and shows "Copiado" on the button and in the toast; a refused copy shows `copy_failed`
+    in the toast (mobile polish S3, [mobile-polish.md](mobile-polish.md)).
 
 ### CUJ R12: Tabs and old URLs
 

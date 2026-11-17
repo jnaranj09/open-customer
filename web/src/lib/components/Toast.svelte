@@ -18,6 +18,9 @@
 	// lives at the top of the screen on a layer above it (z-60): it never covers a sheet's buttons,
 	// and a toast raised while a sheet is open (an "Omitir" undo) stays visible and tappable. For
 	// that it is its own live layer of <body>, outside the page a sheet makes inert.
+	//
+	// Padding (mobile-polish design, section 5): even (`message`) for a toast that is only text, as
+	// in the design; `trail` leaves room on the right for the action button.
 	let gone = $state(false);
 
 	$effect(() => {
@@ -45,7 +48,7 @@
 		<Card
 			variant="solid"
 			radius="pill"
-			pad="trail"
+			pad={actionLabel === undefined ? 'message' : 'trail'}
 			class="pointer-events-auto mt-4 flex min-h-tap items-center gap-4 text-ink"
 		>
 			<p class="text-sm">{message}</p>
