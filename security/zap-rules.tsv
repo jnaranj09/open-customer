@@ -43,6 +43,7 @@
 10045	FAIL	Source Code Disclosure - /WEB-INF Folder (Active); High
 10047	WARN	HTTPS Content Available via HTTP (Active); Low
 10048	FAIL	Remote Code Execution - Shell Shock (Active); High
+10049	WARN	Storable and Cacheable Content, Storable but Non-Cacheable Content (Passive); Informational
 10050	WARN	Retrieved from Cache (Passive); Informational
 10052	FAIL	X-ChromeLogger-Data (XCOLD) Header Information Leak (Passive); Medium
 10054	WARN	Cookie without SameSite Attribute (Passive); Low
@@ -52,6 +53,7 @@
 10058	WARN	GET for POST (Active); Informational
 10061	WARN	X-AspNet-Version Response Header (Passive); Low
 10062	FAIL	PII Disclosure (Passive); High
+10063	WARN	Permissions Policy Header Not Set (Passive); Low
 10096	WARN	Timestamp Disclosure (Passive); Low
 10097	FAIL	Hash Disclosure (Passive); High
 10098	FAIL	Cross-Domain Misconfiguration (Passive); Medium
@@ -102,6 +104,7 @@
 90001	FAIL	Insecure JSF ViewState (Passive); Medium
 90002	FAIL	Java Serialization Object (Passive); Medium
 90003	FAIL	Sub Resource Integrity Attribute Missing (Passive); Medium
+90004	WARN	Cross-Origin-Embedder, -Opener and -Resource-Policy Header Missing or Invalid (Passive); Low
 90011	WARN	Charset Mismatch (Passive); Informational
 90017	FAIL	XSLT Injection (Active); Medium
 90019	FAIL	Server Side Code Injection (Active); High
