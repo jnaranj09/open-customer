@@ -37,7 +37,7 @@
 		"eslint": "10.14.0",
 		"eslint-plugin-better-tailwindcss": "4.10.0",
 		"eslint-plugin-playwright": "2.12.2",
-		"eslint-plugin-svelte": "3.24.0",
+		"eslint-plugin-svelte": "3.24.1",
 		"fake-indexeddb": "6.2.7",
 		"globals": "17.14.0",
 		"jscpd": "^5.4.2",
